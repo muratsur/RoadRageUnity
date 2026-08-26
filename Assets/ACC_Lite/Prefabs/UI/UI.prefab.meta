@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 80f5b76b30e762441a5033b486c5db19
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Prefabs/UI/UI.prefab
+  uploadId: 466643

@@ -1,0 +1,22 @@
+{
+    "name": "com.epicleaderboard.unity",
+    "version": "1.0.0",
+    "description": "EpicLeaderboard adds online leaderboards to your Unity game in 5 minutes. Built simple enough for game jams, scalable enough for production.",
+    "displayName": "EpicLeaderboard",
+    "unity": "2022.3",
+    "documentationUrl": "https://epicleaderboard.com/docs/unity/",
+    "changelogUrl": "https://epicleaderboard.com/changelog",
+    "licensesUrl": "https://epicleaderboard.com/licensing",
+    "keywords": [
+        "online",
+        "leaderboard",
+        "competition", 
+        "ranking",
+        "networking"
+    ],
+    "author": {
+        "name": "JR",
+        "email": "support@epicleaderboard.com",
+        "url": "https://epicleaderboard.com"
+    }
+}

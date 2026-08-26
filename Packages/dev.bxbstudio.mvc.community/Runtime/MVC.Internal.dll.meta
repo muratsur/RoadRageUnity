@@ -1,0 +1,40 @@
+fileFormatVersion: 2
+guid: dcb5d2e822b80e8429fbca2aa9adf040
+PluginImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  iconMap: {}
+  executionOrder: {}
+  defineConstraints: []
+  isPreloaded: 0
+  isOverridable: 0
+  isExplicitlyReferenced: 0
+  validateReferences: 1
+  platformData:
+  - first:
+      Any: 
+    second:
+      enabled: 1
+      settings: {}
+  - first:
+      Editor: Editor
+    second:
+      enabled: 0
+      settings:
+        DefaultValueInitialized: true
+  - first:
+      Windows Store Apps: WindowsStoreApps
+    second:
+      enabled: 0
+      settings:
+        CPU: AnyCPU
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 304216
+  packageName: 'Multiversal Vehicle Controller: Community - Car Physics Controller'
+  packageVersion: 1.5.0
+  assetPath: Packages/dev.bxbstudio.mvc.community/Runtime/MVC.Internal.dll
+  uploadId: 977392

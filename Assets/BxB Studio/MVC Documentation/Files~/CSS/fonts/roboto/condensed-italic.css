@@ -1,0 +1,18 @@
+@font-face
+{
+	font-family: "Roboto";
+	font-weight: 300;
+	font-style: italic;
+	font-stretch: condensed;
+	font-display: swap;
+	src: url(RobotoCondensed-LightItalic.ttf) format("truetype");
+}
+@font-face
+{
+	font-family: "Roboto";
+	font-weight: 700;
+	font-style: italic;
+	font-stretch: condensed;
+	font-display: swap;
+	src: url(RobotoCondensed-BoldItalic.ttf) format("truetype");
+}

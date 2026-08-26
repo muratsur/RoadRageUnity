@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: ef23ff07de56b284e851f00cd1dbf5cc
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/Scripts/Helper/JsonHelper.cs
+  uploadId: 920364

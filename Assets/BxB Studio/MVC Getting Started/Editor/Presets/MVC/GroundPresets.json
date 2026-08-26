@@ -1,0 +1,163 @@
+﻿{
+    "grounds": [
+        {
+            "name": "Asphalt",
+            "frictionStiffness": 1.0,
+            "damagedWheelStiffness": 0.4000000059604645,
+            "wheelDampingRate": 1.0,
+            "wheelBurnoutDampingRate": 0.10000000149011612,
+            "isOffRoad": false,
+            "particleEffect": {
+                "path": "Assets/BxB Studio/MVC/Prefabs/VFX/VehicleTireAsphaltSmoke.prefab",
+                "guid": "e41d13b1d4405c644b0f0fd6d9877752"
+            },
+            "flatWheelParticleEffect": {
+                "path": "Assets/BxB Studio/MVC/Prefabs/VFX/VehicleRimAsphaltSparks.prefab",
+                "guid": "32eae3f7df71ec14c930830d523a8458"
+            },
+            "wheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleTireAsphaltMark.mat",
+                "guid": "a40163ab3fd55ec47839357b815c3297"
+            },
+            "markMaterialTiling": 4.0,
+            "flatWheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleRimAsphaltMark.mat",
+                "guid": "e386cc05bea58f74b8a256e59ee94f0f"
+            },
+            "flatWheelMarkMaterialTiling": 1.0,
+            "useSpeedEmission": false,
+            "speedEmissionFullSpeed": 80.0,
+            "forwardSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltSkid_Forward.wav",
+                "guid": "9cffa87722b739342ab15969766b1005"
+            },
+            "brakingSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltSkid_Sideways.wav",
+                "guid": "93b9f5f2dfb21d340a36931f165d6fb0"
+            },
+            "sidewaysSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltSkid_Sideways.wav",
+                "guid": "93b9f5f2dfb21d340a36931f165d6fb0"
+            },
+            "rollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltRoll.wav",
+                "guid": "56d7a6f7375a25d49b4403cc627664a9"
+            },
+            "flatSkidSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltFlatSkid.wav",
+                "guid": "2f7d892e29c0adc4780c88b154a1f741"
+            },
+            "flatRollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/AsphaltFlatRoll.wav",
+                "guid": "bfff940736b5401459a3ce4e58548aa5"
+            },
+            "volume": 1.0
+        },
+        {
+            "name": "Dirt",
+            "frictionStiffness": 0.7599999904632568,
+            "damagedWheelStiffness": 0.38100001215934756,
+            "wheelDampingRate": 0.8149999976158142,
+            "wheelBurnoutDampingRate": 0.10000000149011612,
+            "isOffRoad": true,
+            "particleEffect": {
+                "path": "",
+                "guid": ""
+            },
+            "flatWheelParticleEffect": {
+                "path": "",
+                "guid": ""
+            },
+            "wheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleTireDirtMark.mat",
+                "guid": "86bb6860a94b43f46a34e8afeb80becb"
+            },
+            "markMaterialTiling": 4.0,
+            "flatWheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleRimDirtMark.mat",
+                "guid": "cbe8053e508028749b941a1078235742"
+            },
+            "flatWheelMarkMaterialTiling": 1.0,
+            "useSpeedEmission": true,
+            "speedEmissionFullSpeed": 80.0,
+            "forwardSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "brakingSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "sidewaysSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "rollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtRoll.wav",
+                "guid": "d797def3b6eb2de408c303be184936b3"
+            },
+            "flatSkidSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "flatRollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtRoll.wav",
+                "guid": "d797def3b6eb2de408c303be184936b3"
+            },
+            "volume": 1.0
+        },
+        {
+            "name": "Grass",
+            "frictionStiffness": 0.7599999904632568,
+            "damagedWheelStiffness": 0.38100001215934756,
+            "wheelDampingRate": 0.8149999976158142,
+            "wheelBurnoutDampingRate": 0.10000000149011612,
+            "isOffRoad": true,
+            "particleEffect": {
+                "path": "",
+                "guid": ""
+            },
+            "flatWheelParticleEffect": {
+                "path": "",
+                "guid": ""
+            },
+            "wheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleTireGrassMark.mat",
+                "guid": "e7c967cd90d691a43afbc8ce78e93a6b"
+            },
+            "markMaterialTiling": 4.0,
+            "flatWheelMarkMaterial": {
+                "path": "Assets/BxB Studio/MVC/Materials/SRP/VFX/VehicleRimGrassMark.mat",
+                "guid": "70335ad81239804459d15dc2ff0d3346"
+            },
+            "flatWheelMarkMaterialTiling": 1.0,
+            "useSpeedEmission": true,
+            "speedEmissionFullSpeed": 80.0,
+            "forwardSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "brakingSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "sidewaysSkid": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "rollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtRoll.wav",
+                "guid": "d797def3b6eb2de408c303be184936b3"
+            },
+            "flatSkidSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtSkid.wav",
+                "guid": "01df09a27887c72479caf2b8b1877f84"
+            },
+            "flatRollingSound": {
+                "path": "Assets/BxB Studio/MVC/Resources/Audio/SFX/Tires/DirtRoll.wav",
+                "guid": "d797def3b6eb2de408c303be184936b3"
+            },
+            "volume": 1.0
+        }
+    ]
+}

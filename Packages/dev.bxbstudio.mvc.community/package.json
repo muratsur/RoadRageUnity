@@ -1,0 +1,21 @@
+{
+  "displayName": "Multiversal Vehicle Controller Community",
+  "name": "dev.bxbstudio.mvc.community",
+  "description": "Revolutionize Game Development and Unleash Realistic Racing, Arcade and Simulation Games with 40+ Beginner-Friendly Tools & Cutting-Edge Features!",
+  "version": "1.5.0",
+  "unity": "2022.3",
+  "unityRelease": "62f3",
+  "dependencies": {
+    "com.unity.ai.navigation": "1.1.7",
+    "com.unity.entities": "1.4.3",
+    "dev.bxbstudio.utilities": "1.1.13",
+    "dev.bxbstudio.inputs-manager": "1.1.16"
+  },
+  "documentationUrl": "https://mvc.gg/docs",
+  "changelogUrl": "https://mvc.gg/changelog",
+  "author": {
+    "name": "BxB Studio",
+    "email": "contact@mvc.gg",
+    "url": "https://mvc.gg"
+  }
+}

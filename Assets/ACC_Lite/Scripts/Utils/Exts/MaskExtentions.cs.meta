@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 981d207de6e7a8c439069a473236e0fc
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Scripts/Utils/Exts/MaskExtentions.cs
+  uploadId: 466643

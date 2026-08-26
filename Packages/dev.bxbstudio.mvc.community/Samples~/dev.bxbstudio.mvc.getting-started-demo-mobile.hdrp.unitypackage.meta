@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: b44982df418ebce40d60f5d5622edb07
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 304216
+  packageName: 'Multiversal Vehicle Controller: Community - Car Physics Controller'
+  packageVersion: 1.5.0
+  assetPath: Packages/dev.bxbstudio.mvc.community/Samples~/dev.bxbstudio.mvc.getting-started-demo-mobile.hdrp.unitypackage
+  uploadId: 977392

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 5799ead5c8462e045a981f2ca41e80a5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Materials/Cars/WheelWhiteMate.mat
+  uploadId: 466643

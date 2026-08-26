@@ -1,0 +1,17 @@
+@media screen and (max-width: 800px)
+{
+	body > div#page-loader
+	{
+		--progress-bar-height: .5rem;
+	}
+	body > header:not(#download-header) > div.header-content-container > div.header-content > div.content-text
+	{
+		font-size: 1.75rem !important;
+		font-weight: 600;
+		line-height: 1.75rem !important;
+	}
+	body > .background div.title, body > .background div.sub-title, body > .background div.paragraph
+	{
+		max-width: 25rem;
+	}
+}

@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: d767f08d213b4f845af46e34f3e3fd66
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/UI/LeaderboardPanel.cs
+  uploadId: 920364

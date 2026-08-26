@@ -1,0 +1,23 @@
+# ninja log v5
+11	1825	8073144314938878	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	7981d45c822b2e02
+86	515	8073144301817126	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	28b34f7b4241f45a
+520	730	8073144303793357	C:/Users/Murat/Projects/RoadRageUnity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/134o6k2p/obj/arm64-v8a/libswappywrapper.so	9e6463ec12505185
+48	1655	8073144313247759	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	31fd8e7a9832d505
+71	1770	8073144314379299	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	87b4e089dbe612c8
+20	1661	8073144313308132	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	190e1b829423ba2e
+60	1704	8073144313716341	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	cdbb0b75891cbfcf
+1	1675	8073144313459811	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	5861a60855e836e5
+38	1686	8073144313585231	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	2d15036dfd2c9a35
+27	1809	8073144314808138	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	58f734cbd55002b7
+1825	1906	8073144315754090	C:/Users/Murat/Projects/RoadRageUnity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/134o6k2p/obj/arm64-v8a/libgame.so	c448ce2854e1a5ce
+115	438	8075201509549762	FramePacing/CMakeFiles/swappywrapper.dir/UnitySwappyWrapper.cpp.o	28b34f7b4241f45a
+439	853	8075201513438865	C:/Users/Murat/Projects/RoadRageUnity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/134o6k2p/obj/arm64-v8a/libswappywrapper.so	9e6463ec12505185
+73	1737	8075201522487509	GameActivity/CMakeFiles/game.dir/UGAInputKeyEvent.cpp.o	31fd8e7a9832d505
+63	1747	8075201522588854	GameActivity/CMakeFiles/game.dir/UGAEntry.cpp.o	2d15036dfd2c9a35
+53	1748	8075201522568808	GameActivity/CMakeFiles/game.dir/UGAConfiguration.cpp.o	190e1b829423ba2e
+94	1775	8075201522929809	GameActivity/CMakeFiles/game.dir/UGAInputMotionEvent.cpp.o	cdbb0b75891cbfcf
+20	1778	8075201522935493	GameActivity/CMakeFiles/game.dir/UGADebug.cpp.o	5861a60855e836e5
+104	1841	8075201523578816	GameActivity/CMakeFiles/game.dir/UGASoftKeyboard.cpp.o	87b4e089dbe612c8
+84	1892	8075201524043546	GameActivity/CMakeFiles/game.dir/UGAInput.cpp.o	58f734cbd55002b7
+43	1933	8075201524446031	GameActivity/CMakeFiles/game.dir/UGAApplication.cpp.o	7981d45c822b2e02
+1934	2060	8075201525716170	C:/Users/Murat/Projects/RoadRageUnity/Library/Bee/Android/Prj/IL2CPP/Gradle/unityLibrary/build/intermediates/cxx/Debug/134o6k2p/obj/arm64-v8a/libgame.so	c448ce2854e1a5ce

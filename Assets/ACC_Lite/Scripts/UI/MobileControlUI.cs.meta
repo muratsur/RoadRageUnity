@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 9330491a2a246c44db12c1ef2a0516ee
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Scripts/UI/MobileControlUI.cs
+  uploadId: 466643

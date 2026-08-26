@@ -1,0 +1,560 @@
+aside#docs-aside-nav
+{
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 16rem;
+	height: calc(100% - 2rem);
+	padding: 1rem 0;
+	border-right: .0625rem solid rgba(255, 255, 255, .125);
+}
+aside#docs-aside-nav > div.logo
+{
+	width: calc(100% - 3.5rem);
+	height: 2rem;
+	margin-bottom: .5rem;
+	padding-left: 3.5rem;
+	background-image: url(../Images/logos/m-x32.png);
+	background-size: 2rem;
+	background-position: 1rem center;
+	background-repeat: no-repeat;
+	color: white;
+	font-size: 1.5rem;
+	line-height: 2rem;
+}
+aside#docs-aside-nav > div.search-container
+{
+	width: 100%;
+	margin-bottom: 1rem;
+}
+aside#docs-aside-nav > div.tabs-container
+{
+	position: relative;
+	width: 100%;
+	height: calc(100% - 5.5rem);
+	overflow-x: hidden;
+	overflow-y: hidden;
+}
+aside#docs-aside-nav > div.tabs-container:hover
+{
+	overflow-y: overlay;
+}
+aside#docs-aside-nav > div.tabs-container > div.tab
+{
+	position: relative;
+	width: calc(100% - 2.25rem);
+	height: 1rem;
+	margin-left: auto;
+	padding: .75rem .5rem .75rem 1.25rem;
+	line-height: 1rem;
+	color: rgb(192, 192, 192);
+	transition: width .25s ease-in-out, height .25s ease-in-out, margin-bottom .25s ease-in-out, padding-top .25s ease-in-out, padding-bottom .25s ease-in-out;
+	cursor: pointer;
+	overflow: hidden;
+}
+aside#docs-aside-nav > div.tabs-container > div.tab[data-hidden="true"]
+{
+	color: rgb(210, 210, 210);
+}
+body.searching > aside#docs-aside-nav > div.tabs-container > div.tab
+{
+	display: block !important;
+}
+aside#docs-aside-nav > div.tabs-container > div.tab::before
+{
+	position: absolute;
+	top: 50%;
+	left: 0;
+	width: .25rem;
+	height: 2.5rem;
+	background-color: rgb(80, 80, 80);
+	font-size: 0;
+	transform: translateY(-50%);
+	content: "\0a00";
+}
+aside#docs-aside-nav > div.tabs-container > div.tab.parent
+{
+    background-color: rgba(255, 255, 255, .01171875);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab:hover
+{
+	background-color: rgba(255, 255, 255, .03125);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab:active,
+aside#docs-aside-nav > div.tabs-container > div.tab.active
+{
+	/*border-right: .5rem solid rgb(25, 94, 155);
+	padding-right: 0;*/
+	background-color: rgba(25, 94, 155, .125);
+	color: rgb(25, 94, 155);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab:active
+{
+	background-color: rgba(0, 0, 0, .125);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab:hover::before,
+aside#docs-aside-nav > div.tabs-container > div.tab:active::before,
+aside#docs-aside-nav > div.tabs-container > div.tab.active::before,
+aside#docs-aside-nav > div.tabs-container > div.tab.parent::before
+{
+	background-color: rgb(25, 94, 155);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab:not(:last-of-type)
+{
+	margin-bottom: .5rem;
+}
+aside#docs-aside-nav > div.tabs-container > div.tab.hide-tab
+{
+	height: 0;
+	margin-bottom: 0;
+	padding-top: 0;
+	padding-bottom: 0;
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-parent]
+{
+	width: calc(100% - 3.5rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-parent]
+{
+	width: calc(100% - 4.75rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-parent]
+{
+	width: calc(100% - 6rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-parent]
+{
+	width: calc(100% - 7.25rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-parent]
+{
+	width: calc(100% - 8.5rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-child-parent]
+{
+	width: calc(100% - 9.75rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-child-child-parent]
+{
+	width: calc(100% - 11rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-child-child-child-parent]
+{
+	width: calc(100% - 12.25rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-child-child-child-child-parent]
+{
+	width: calc(100% - 13.5rem);
+}
+body:not(.searching) > aside#docs-aside-nav > div.tabs-container > div.tab[data-child-child-child-child-child-child-child-child-child-parent]
+{
+	width: calc(100% - 14.75rem);
+}
+aside#docs-aside-nav > div.tabs-container > div.tab > div.text
+{
+	max-width: 100%;
+	text-transform: capitalize;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+div#docs-sections-container
+{
+	width: calc(100% - 16.0625rem);
+	margin-left: 16.0625rem;
+	overflow: visible;
+}
+div#docs-sections-container > div.versions-selector
+{
+	width: max-content;
+	margin-right: 2.5rem;
+	margin-left: .5rem;
+	padding: 1.625rem 0 0;
+}
+div#docs-sections-container > div.versions-selector > div.input-container[data-tooltip]
+{
+	--tooltip-left: unset;
+	--tooltip-right: 0;
+	--tooltip-transform: unset;
+}
+div#docs-sections-container > div.versions-selector > div.input-container[data-tooltip]#docs-version-select
+{
+	--tooltip-top: calc(100% + 2.75rem);
+}
+div#docs-sections-container > div.versions-selector > div.input-container[data-tooltip]#docs-physics-model-select
+{
+	--tooltip-top: calc(100%);
+}
+div#docs-sections-container > div.versions-selector > div.input-container[data-tooltip]::after
+{
+	text-align: center;
+}
+div#docs-sections-container > div.versions-selector div.enumerator
+{
+	width: 9rem;
+}
+div#docs-sections-container > div.links-container
+{
+	width: max-content;
+	padding: 2rem 0 0;
+}
+div#docs-sections-container > div.links-container > a
+{
+	margin: 0 1rem;
+}
+div#docs-sections-container > section
+{
+	width: calc(100% - 6rem);
+	margin: 3rem 0;
+	padding: 3rem;
+}
+div#docs-sections-container > section:first-of-type
+{
+	margin-top: 0;
+	padding-top: 6rem;
+}
+div#docs-sections-container > section:not(:first-of-type)
+{
+	border-top: .0625rem solid rgba(255, 255, 255, .125);
+}
+div#docs-sections-container > section[data-level="1"],
+div#docs-sections-container > section[data-level="2"],
+div#docs-sections-container > section[data-level="3"],
+div#docs-sections-container > section[data-level="4"],
+div#docs-sections-container > section[data-level="5"],
+div#docs-sections-container > section[data-level="6"],
+div#docs-sections-container > section[data-level="7"],
+div#docs-sections-container > section[data-level="8"],
+div#docs-sections-container > section[data-level="9"],
+div#docs-sections-container > section[data-level="10"]
+{
+	margin-left: 3rem;
+	margin-right: 3rem;
+	padding-left: 0;
+	padding-right: 0;
+}
+div#docs-sections-container > section[data-hidden="true"]
+{
+	margin-top: 0;
+	margin-bottom: 0;
+	padding-top: 0;
+	padding-bottom: 0;
+	display: block;
+}
+div#docs-sections-container > section[data-hidden="true"] + section
+{
+	border: unset;
+}
+div#docs-sections-container > section[data-hidden="true"] *
+{
+	display: none;
+}
+div#docs-sections-container > section [data-tooltip]
+{
+	--tooltip-top: calc(100% + .25rem);
+	white-space: nowrap;
+}
+div#docs-sections-container > section [data-tooltip]:not(a)
+{
+	cursor: help;
+}
+div#docs-sections-container > section img
+{
+	position: relative;
+	margin: 0 auto;
+	border: .125rem solid transparent;
+	border-radius: .5rem;
+	background-color: rgba(255, 255, 255, .03125);
+	background-size: contain;
+	background-position: center;
+	background-repeat: no-repeat;
+	cursor: zoom-in;
+	display: block;
+}
+div#docs-sections-container > section:not(:last-of-type) div.title,
+div#docs-sections-container > section:not(:last-of-type) div.sub-title
+{
+	position: relative;
+	cursor: pointer;
+}
+div#docs-sections-container > section div.sub-title
+{
+	margin-top: 0;
+	margin-bottom: 0;
+	padding-top: 2rem;
+	padding-bottom: 1rem;
+}
+div#docs-sections-container > section div.title::before,
+div#docs-sections-container > section div.sub-title::before
+{
+	position: absolute;
+	left: -1.5rem;
+	font-size: 1rem;
+	color: rgb(25, 94, 155);
+	display: none;
+}
+div#docs-sections-container > section div.title:hover::before,
+div#docs-sections-container > section div.sub-title:hover::before
+{
+	display: block;
+}
+div#docs-sections-container > section .comment
+{
+	color: gray;
+	font-style: italic;
+}
+div#docs-sections-container > section table
+{
+	width: calc(100% - 4rem);
+	margin: 0 2rem 2rem;
+	border-spacing: 0;
+	color: rgb(192, 192, 192);
+}
+div#docs-sections-container > section div.title.offset-margin,
+div#docs-sections-container > section div.sub-title.offset-margin,
+div#docs-sections-container > section div.paragraph.offset-margin,
+div#docs-sections-container > section table.offset-margin
+{
+	margin-left: 4rem;
+}
+div#docs-sections-container > section table.offset-margin
+{
+	width: calc(100% - 6rem);
+}
+div#docs-sections-container > section table tr:first-of-type td
+{
+	background-color: rgba(255, 255, 255, .125);
+	border: unset;
+}
+div#docs-sections-container > section table tr:not(:first-of-type) td
+{
+	border-top: unset;
+}
+div#docs-sections-container > section table tr td:not(:first-of-type)
+{
+	border-left: unset;
+}
+div#docs-sections-container > section li::marker
+{
+	font-weight: 400;
+}
+div#docs-sections-container > section li:not(:last-of-type)
+{
+	margin-bottom: .5rem;
+}
+div#docs-sections-container > section table td
+{
+	padding: .5rem 1rem;
+	vertical-align: top;
+	overflow-wrap: anywhere;
+	border: .25px solid rgba(255, 255, 255, .125);
+}
+div#docs-sections-container > section table td:first-of-type
+{
+	font-weight: 500;
+	/*width: 30%;*/
+}*/
+div#docs-sections-container > section table td:not(:first-of-type)
+{
+	border-left: unset;
+}
+/*div#docs-sections-container > section table td:last-of-type
+{
+	width: 70%;
+}*/
+div#docs-sections-container > section img:hover
+{
+	border-color: rgb(25, 94, 155);
+}
+div#docs-sections-container > section img:active,
+div#docs-sections-container > section img:focus
+{
+	box-shadow: 0 0 .5rem rgb(11, 56, 96);
+	border-color: rgb(25, 94, 155);
+}
+div#docs-sections-container > section img.icon-spin6.spin-before::before
+{
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	color: white;
+	font-size: 1.5rem;
+	line-height: 1.5rem;
+	transform: translate(-50%, -50%);
+}
+div#docs-sections-container > section:not(:last-of-type) *
+{
+	-webkit-user-select: text;
+	user-select: text;
+}
+div#docs-sections-container > section > iframe
+{
+	width: 512px;
+	height: 288px;
+	margin: 0 auto;
+	border: none;
+	display: block;
+}
+div#docs-sections-container > section div.docs-lead
+{
+	max-width: 64rem;
+	margin: 0 2rem 1.5rem;
+	font-size: 1.075rem;
+	line-height: 1.75;
+	color: rgb(224, 229, 235);
+}
+div#docs-sections-container > section span.docs-badge
+{
+	margin-left: .75rem;
+	padding: .125rem 0.5rem;
+	border: .0625rem solid rgba(255, 255, 255, .25);
+	border-radius: .25rem;
+	font-size: 1rem;
+	font-weight: 400;
+	line-height: 1.25rem;
+	text-transform: unset;
+	color: white;
+	white-space: nowrap;
+	display: inline-block;
+	transform: translateY(-.25rem);
+}
+div#docs-sections-container > section span.docs-badge.pro
+{
+	background-color: rgb(96, 48, 0);
+}
+div#docs-sections-container > section div.docs-pro-scope
+{
+	margin: 0 2rem 1.25rem;
+	font-size: 1rem;
+	font-weight: 300;
+	line-height: 1.6;
+	color: rgb(224, 229, 235);
+}
+div#docs-sections-container > section div.docs-meta
+{
+	margin: 0 2rem 1.5rem;
+	padding: 1rem 1.25rem;
+	border-left: .2rem solid rgb(25, 94, 155);
+	border-radius: 0 .35rem .35rem 0;
+	background: rgba(25, 94, 155, .11);
+	color: rgb(192, 192, 192);
+}
+div#docs-sections-container > section div.docs-meta > div:not(:last-child)
+{
+	margin-bottom: .45rem;
+}
+div#docs-sections-container > section div.docs-meta strong
+{
+	color: white;
+}
+div#docs-sections-container > section ol.docs-steps
+{
+	margin: 0 2rem 2rem;
+	padding-left: 2rem;
+	color: rgb(192, 192, 192);
+}
+div#docs-sections-container > section ol.docs-steps > li
+{
+	padding-left: 0;
+	line-height: 1.65;
+}
+div#docs-sections-container > section ul.docs-checklist
+{
+	margin: 0 2rem 1.5rem;
+	padding: 1rem 1rem 1rem 2.5rem;
+	border: .0625rem solid rgba(255, 255, 255, .1);
+	border-radius: .4rem;
+	background: rgba(255, 255, 255, .025);
+	color: rgb(192, 192, 192);
+}
+div#docs-sections-container > section figure.docs-figure
+{
+	max-width: 64rem;
+	margin: 1.5rem auto 2rem;
+}
+div#docs-sections-container > section figure.docs-figure img
+{
+	width: 100%;
+	height: auto;
+	max-width: 100%;
+}
+div#docs-sections-container > section figure.docs-figure figcaption
+{
+	margin-top: .65rem;
+	color: rgb(151, 160, 170);
+	font-size: .875rem;
+	line-height: 1.5;
+	text-align: center;
+}
+div#docs-sections-container > section div.docs-related
+{
+	margin: 2rem 2rem 0;
+	padding-top: 1rem;
+	border-top: .0625rem solid rgba(255, 255, 255, .1);
+	color: rgb(192, 192, 192);
+	pointer-events: auto;
+}
+/*div#docs-sections-container > section table.docs-compact td:first-of-type
+{
+	width: 24%;
+}
+div#docs-sections-container > section table.docs-compact td:last-of-type
+{
+	width: 76%;
+}*/
+div#docs-sections-container > section > div.feedback-container
+{
+	margin: 5rem 2rem 0;
+}
+div#docs-sections-container > section div.feedback-message,
+div#docs-sections-container > section div.feedback-actions,
+div#docs-sections-container > section div.feedback-action
+{
+	display: inline-block;
+}
+div#docs-sections-container > section div.feedback-message
+{
+	color: white;
+text-align: justify;}
+div#docs-sections-container > section div.feedback-action
+{
+	margin-left: .5rem;
+	font-weight: 600;
+}
+div#docs-sections-container > section div.feedback-action:hover
+{
+	color: rgb(32 160 255);
+}
+div#docs-sections-container > section div.feedback-text-field-container
+{
+	display: none;
+}
+div#docs-sections-container > section div.feedback-text-field-container input
+{
+	width: 13rem;
+}
+div#docs-sections-container > section div.feedback-text-field-container > button.feedback-submit-button
+{
+	width: 2.75rem;
+}
+div#docs-sections-container > section div.feedback-text-field-container > div.input-container,
+div#docs-sections-container > section div.feedback-text-field-container > button.feedback-submit-button
+{
+	display: inline-block;
+}
+div#image-preview-container.window-container > div.window
+{
+	width: 100%;
+	background-repeat: no-repeat;
+	background-size: contain;
+	background-position: center;
+}
+section > div#news-letter-subscribe-form > div.input-container > input#news-letter-email-input
+{
+	width: 20rem;
+}
+/* Virtual Scrolling - hide section children when out of viewport */
+div#docs-sections-container > section.vs-hidden > *
+{
+	display: none !important;
+}

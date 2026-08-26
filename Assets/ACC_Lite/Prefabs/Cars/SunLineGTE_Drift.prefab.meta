@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: c3561634431fb8f40830bd4c3b642798
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Prefabs/Cars/SunLineGTE_Drift.prefab
+  uploadId: 466643

@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 24d8c3bc870e7d94d874dab1cb4576a5
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/UI/Prefabs/LeaderboardRow.prefab
+  uploadId: 920364

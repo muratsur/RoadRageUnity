@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 32858b4eef98666469bd318016194abd
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Scripts/Utils/Exts/MathExtentions.cs
+  uploadId: 466643

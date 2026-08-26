@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: bf4b34b0dcec5fe448c151bc55fd4335
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/package.json
+  uploadId: 920364

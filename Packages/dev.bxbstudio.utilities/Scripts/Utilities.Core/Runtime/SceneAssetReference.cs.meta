@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: ec1156f4656069147b2edbb192aa1820
+AssetOrigin:
+  serializedVersion: 1
+  productId: 304216
+  packageName: 'Multiversal Vehicle Controller: Community - Car Physics Controller'
+  packageVersion: 1.5.0
+  assetPath: Packages/dev.bxbstudio.utilities/Scripts/Utilities.Core/Runtime/SceneAssetReference.cs
+  uploadId: 977392

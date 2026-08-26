@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3023143f80410e345aef19db1f82c9ea
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Prefabs/Contreollers/FXController.prefab
+  uploadId: 466643

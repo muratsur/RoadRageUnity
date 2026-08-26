@@ -1,0 +1,10 @@
+﻿fileFormatVersion: 2
+guid: a261b033816646bcad0bb947a809d349
+timeCreated: 1777997592
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/Scripts/Helper/DebounceHelper.cs
+  uploadId: 920364

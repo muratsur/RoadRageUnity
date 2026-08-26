@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 2fc1aa85c1cb5f74f9dde22e63ac56ac
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Samples/Demo/DemoScene.unity
+  uploadId: 920364

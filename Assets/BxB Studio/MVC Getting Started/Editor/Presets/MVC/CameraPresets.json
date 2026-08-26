@@ -1,0 +1,400 @@
+﻿{
+    "cameras": [
+        {
+            "name": "Arcade",
+            "type": 0,
+            "pivotPosition": 0,
+            "followerFeatures": 61390,
+            "pivotFeatures": 61390,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": -1
+            },
+            "impactShaking": 1,
+            "impactAxes": -1,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": Infinity,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 90.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": false,
+            "orbitUsingMouseButton": true,
+            "orbitMouseButton": 1,
+            "skipDistantOrbit": true,
+            "orbitSkipAngle": 135.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 50.0,
+                "max": 80.0,
+                "overrideBorders": true,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 300.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": false,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        },
+        {
+            "name": "Normal",
+            "type": 0,
+            "pivotPosition": 0,
+            "followerFeatures": 41223,
+            "pivotFeatures": 41223,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "impactShaking": 0,
+            "impactAxes": -1,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": Infinity,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 75.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": true,
+            "orbitUsingMouseButton": false,
+            "orbitMouseButton": 1,
+            "skipDistantOrbit": true,
+            "orbitSkipAngle": 135.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 50.0,
+                "max": 50.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 300.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": false,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        },
+        {
+            "name": "Drift",
+            "type": 0,
+            "pivotPosition": 0,
+            "followerFeatures": 43806,
+            "pivotFeatures": 43806,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "impactShaking": 0,
+            "impactAxes": -1,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": Infinity,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 0.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": false,
+            "orbitUsingMouseButton": true,
+            "orbitMouseButton": 1,
+            "skipDistantOrbit": true,
+            "orbitSkipAngle": 135.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 50.0,
+                "max": 50.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 300.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": true,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        },
+        {
+            "name": "Bumper",
+            "type": 1,
+            "pivotPosition": 0,
+            "followerFeatures": 930,
+            "pivotFeatures": 930,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "impactShaking": 1,
+            "impactAxes": 0,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": 90.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 45.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": false,
+            "orbitUsingMouseButton": false,
+            "orbitMouseButton": 0,
+            "skipDistantOrbit": false,
+            "orbitSkipAngle": 150.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 50.0,
+                "max": 40.0,
+                "overrideBorders": true,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 300.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": false,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        },
+        {
+            "name": "Hood",
+            "type": 1,
+            "pivotPosition": 0,
+            "followerFeatures": 1007,
+            "pivotFeatures": 1007,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "impactShaking": 1,
+            "impactAxes": 0,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": 90.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 45.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": true,
+            "orbitUsingMouseButton": false,
+            "orbitMouseButton": 0,
+            "skipDistantOrbit": false,
+            "orbitSkipAngle": 150.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 50.0,
+                "max": 40.0,
+                "overrideBorders": true,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 350.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": false,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        },
+        {
+            "name": "First Person",
+            "type": 1,
+            "pivotPosition": 1,
+            "followerFeatures": 930,
+            "pivotFeatures": 930,
+            "pivotPoint": {
+                "x": 0,
+                "y": 0,
+                "z": 0
+            },
+            "impactShaking": 1,
+            "impactAxes": 0,
+            "orbitInterval": {
+                "x": {
+                    "min": -Infinity,
+                    "max": 90.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                },
+                "y": {
+                    "min": -90.0,
+                    "max": 30.0,
+                    "overrideBorders": false,
+                    "clampToZero": false
+                }
+            },
+            "invertXOrbit": false,
+            "invertYOrbit": false,
+            "orbitUsingMouseButton": true,
+            "orbitMouseButton": 1,
+            "skipDistantOrbit": false,
+            "orbitSkipAngle": 150.0,
+            "orbitTimeout": 10.0,
+            "fieldOfViewInterval": {
+                "min": 80.0,
+                "max": 45.0,
+                "overrideBorders": true,
+                "clampToZero": false
+            },
+            "shakeSpeedInterval": {
+                "min": 200.0,
+                "max": 300.0,
+                "overrideBorders": false,
+                "clampToZero": false
+            },
+            "tiltAngle": 10.0,
+            "invertTiltAngle": false,
+            "tiltDamping": 10.0,
+            "offRoadShakeSpeedThreshold": 100.0,
+            "speedPulseMultiplier": 1.0,
+            "speedPulseSpeedThreshold": 300.0,
+            "speedPulseClampVelocity": true,
+            "speedPulseFuelPedal": true,
+            "gearPulseMultiplier": 1.0,
+            "sidewaysSlipPulseMultiplier": 1.0,
+            "steeringSidePulseSteerAngleThreshold": 30.0,
+            "steeringSidePulseMultiplier": 1.0,
+            "pulseSpeed": 1.0,
+            "showcaseDistanceMultiplier": 2.0,
+            "showcaseHeightMultiplier": 1.0,
+            "showcaseTimeout": 30.0,
+            "showcaseSpeed": 1.0,
+            "showcaseFieldOfView": 15.0,
+            "showcaseHeightRandomization": 0.0
+        }
+    ]
+}

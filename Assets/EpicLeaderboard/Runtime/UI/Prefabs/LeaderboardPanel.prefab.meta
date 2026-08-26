@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 74ac33d57f7d7f84bb6f40e5569e182e
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/UI/Prefabs/LeaderboardPanel.prefab
+  uploadId: 920364

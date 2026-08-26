@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: a5b169273fd795d44829a9ad6bb8e14d
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 100100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Prefabs/Contreollers/Camera.prefab
+  uploadId: 466643

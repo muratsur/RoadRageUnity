@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 186eeecbbbd46654aaba83625e8dbd22
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/Scripts/Core/EpicLeaderboardClient.cs
+  uploadId: 920364

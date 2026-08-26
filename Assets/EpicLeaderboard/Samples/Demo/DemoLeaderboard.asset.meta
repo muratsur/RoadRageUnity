@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 2dd82d9d5a495f04ca84a25dd93b2012
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Samples/Demo/DemoLeaderboard.asset
+  uploadId: 920364

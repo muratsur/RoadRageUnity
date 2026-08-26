@@ -1,0 +1,21 @@
+fileFormatVersion: 2
+guid: d529d3e53b427de419e36639af802885
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - game: {fileID: 11400000, guid: d23b319effc90f34f811ff9619d173d5, type: 2}
+  - board: {fileID: 11400000, guid: 2dd82d9d5a495f04ca84a25dd93b2012, type: 2}
+  - leaderboardUI: {instanceID: 0}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Samples/Demo/DemoController.cs
+  uploadId: 920364

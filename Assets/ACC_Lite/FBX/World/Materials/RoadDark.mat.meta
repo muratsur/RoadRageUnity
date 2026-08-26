@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 1d268579e3483244d917ededf80287a6
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/FBX/World/Materials/RoadDark.mat
+  uploadId: 466643

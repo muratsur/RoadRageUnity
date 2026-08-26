@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 0bd1904299763b94681eed43cf40e784
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/UI/Prefabs/SubmitScorePanel.prefab
+  uploadId: 920364

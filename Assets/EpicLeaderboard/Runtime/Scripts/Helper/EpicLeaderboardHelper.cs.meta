@@ -1,0 +1,10 @@
+﻿fileFormatVersion: 2
+guid: bfb0768c54e243bbad3bda5aa5b22a1c
+timeCreated: 1779331277
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/Scripts/Helper/EpicLeaderboardHelper.cs
+  uploadId: 920364

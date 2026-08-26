@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 5283a9d6a46c7c94a997862ab68926eb
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Shaders/AlphaColorMask.shader
+  uploadId: 466643

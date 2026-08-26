@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 45d2fcf7f8ba489478b6f4476783d018
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 145489
+  packageName: Arcade Car Controller (Lite version)
+  packageVersion: 1.5.02
+  assetPath: Assets/ACC_Lite/Scripts/Game/VisualAndSounds/CarSoundController.cs
+  uploadId: 466643

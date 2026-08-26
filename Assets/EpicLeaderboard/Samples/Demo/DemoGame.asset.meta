@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d23b319effc90f34f811ff9619d173d5
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 11400000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Samples/Demo/DemoGame.asset
+  uploadId: 920364

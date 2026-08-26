@@ -1,0 +1,18 @@
+fileFormatVersion: 2
+guid: 2fc331d0f8da4ce4aa1f18452bdccffd
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences: []
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/UI/LeaderboardRow.cs
+  uploadId: 920364

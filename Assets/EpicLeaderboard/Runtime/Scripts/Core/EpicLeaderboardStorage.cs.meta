@@ -1,0 +1,10 @@
+﻿fileFormatVersion: 2
+guid: 312f3cce6e704eeb87dd72b64ec768cb
+timeCreated: 1777116359
+AssetOrigin:
+  serializedVersion: 1
+  productId: 381634
+  packageName: EpicLeaderboard
+  packageVersion: 1.0
+  assetPath: Assets/EpicLeaderboard/Runtime/Scripts/Core/EpicLeaderboardStorage.cs
+  uploadId: 920364
