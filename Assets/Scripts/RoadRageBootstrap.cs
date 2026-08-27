@@ -2293,15 +2293,10 @@ namespace RoadRage.UnityRemake
             // Wall furniture mounted safely flush against tunnel walls (zero lane intrusion)
             ScatterBand(10f, 12.8f, 13.3f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
-                    d, l, Random.Range(2.5f, 6.5f), new Vector3(0f, s > 0 ? -90f : 90f, 0f),
-                    Vector3.one * Random.Range(0.6f, 0.95f), "Wall Pipe", true));
             ScatterBand(18f, 12.9f, 13.4f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pillar", materials["Sewer Concrete"],
                     d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one * Random.Range(0.85f, 1.15f), "Tunnel Pillar", true));
-            ScatterBand(34f, 13.0f, 13.5f, (d, l, s) =>
-                PlaceBiomeModelOnRoad("Sewers", "SM_arch", materials["Sewer Concrete"],
-                    d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one, "Side Arch", true));
 
             for (var z = SegBegin(-12f, 18f); z < segEnd; z += 18f)
@@ -2310,12 +2305,9 @@ namespace RoadRage.UnityRemake
                 {
                     PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
                         z + 5f, -13.0f, 3.2f, new Vector3(0f, 90f, 0f), Vector3.one * 0.78f, "Wall-Mounted Sewer Pipe", true);
-                    CreateLocalLight(RoadPath.Point(z, ((int)(z / 18f)) % 4 == 0 ? -10.8f : 10.8f, 6.3f),
-                        new Color(0.2f, 1f, 0.56f), 13f, 14f);
                 }
             }
         }
-
         private void BuildTireDistrict()
         {
             Random.InitState(1908 ^ chunkSeed);
@@ -2325,7 +2317,6 @@ namespace RoadRage.UnityRemake
             // Industrial yard clutter along the sidewalk, and a second building row behind
             // the frontage so the street has depth rather than a single facade line.
             var yardProps = new[] { "SM_TireShelf", "SM_AirCompressor", "SM_Workbench", "SM_TireMachine" };
-            ScatterBand(11f, 14.5f, 17.5f, (d, l, s) =>
             {
                 var prop = PlaceBiomeModelOnRoad("TireRepair", yardProps[Random.Range(0, yardProps.Length)],
                     materials["Garage Equipment"], d, l, 0.05f,
@@ -4226,6 +4217,12 @@ namespace RoadRage.UnityRemake
             var chase = cameraObject.AddComponent<ChaseCamera>();
             chase.target = car;
             chase.player = car.GetComponent<ArcadeCarController>();
+
+            var takedownDirector = cameraObject.AddComponent<RoadRage.RoadRageTakedownDirector>();
+            takedownDirector.BindCameraAndPlayer(camera, car);
+
+            var audioBridge = cameraObject.AddComponent<RoadRage.RoadRageAudioBridge>();
+
             if (reflectionProbe != null)
             {
                 // Cubemap capture is axis-aligned regardless of transform rotation, so
@@ -4556,6 +4553,16 @@ namespace RoadRage.UnityRemake
             var desiredRotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(0f, steer * 9f, -steer * 4f);
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             TrafficCarController.ResolvePlayerCollision(this);
+
+            if (RoadRage.RoadRageAudioBridge.Instance != null)
+            {
+                RoadRage.RoadRageAudioBridge.Instance.UpdateEngineAudio(SpeedKph, 150f * car.Speed, throttle, false);
+            }
+        }
+
+        public void RefillNitro()
+        {
+            SpeedKph = Mathf.Min(SpeedKph + 25f, 220f);
         }
 
         public bool ApplyTrafficImpact(TrafficCarController traffic, float longitudinalGap, float lateralGap)
@@ -4610,6 +4617,15 @@ namespace RoadRage.UnityRemake
             var audioVfx = GetComponent<RoadRageAudioAndVFX>();
             if (audioVfx != null)
                 audioVfx.PlayCrashImpact(contactPoint, traffic.IsViolator);
+
+            if (traffic.IsViolator || SpeedKph >= 60f)
+            {
+                if (RoadRage.RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
+                {
+                    var impactNormal = (traffic.transform.position - transform.position).normalized;
+                    RoadRage.RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);
+                }
+            }
 
             if (sideSwipe)
                 SpeedKph = Mathf.Max(28f, SpeedKph - 22f * absorb);
@@ -4668,6 +4684,14 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
+            if (RoadRage.RoadRageTakedownDirector.Instance != null &&
+                RoadRage.RoadRageTakedownDirector.Instance.TryGetTakedownCameraPose(out var takedownPos, out var takedownRot))
+            {
+                transform.position = Vector3.Lerp(transform.position, takedownPos, Time.unscaledDeltaTime * 12f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, takedownRot, Time.unscaledDeltaTime * 12f);
+                return;
+            }
+
             if (target == null) return;
 			var desired = target.position + target.up * Rise - target.forward * Trail;
             var next = (transform.position - desired).sqrMagnitude > 2500f
