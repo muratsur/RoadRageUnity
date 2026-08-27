@@ -1,3 +1,4 @@
+#pragma warning disable 0618, 0619
 ﻿#if UNITY_ADDRESSABLES_EXIST
     // The Addressables package depends on the ScriptableBuildPipeline package
     #define UNITY_SCRIPTABLEBUILDPIPELINE_EXIST

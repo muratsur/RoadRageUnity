@@ -1,3 +1,4 @@
+#pragma warning disable 0618, 0619
 /* ======================================================================================== */
 /* FMOD Core API - DSP header file.                                                         */
 /* Copyright (c), Firelight Technologies Pty, Ltd. 2004-2026.                               */

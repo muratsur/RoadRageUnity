@@ -1,3 +1,4 @@
+#pragma warning disable 0618, 0619
 ﻿using System;
 using System.Linq;
 using System.Text;

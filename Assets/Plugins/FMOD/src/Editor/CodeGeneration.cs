@@ -1,3 +1,4 @@
+#pragma warning disable 0618, 0619
 ﻿#if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
