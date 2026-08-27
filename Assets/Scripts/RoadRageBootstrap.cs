@@ -1224,15 +1224,18 @@ namespace RoadRage.UnityRemake
             var isCity = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3 || biomeIndex == 9;
             if (isCity)
             {
-                // Clean, solid, flat foundation for urban buildings, sidewalks, and estates (zero bumpy dips)
-                BuildRibbon($"{Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    -150f, 150f, 0.0f, materials[groundName], sampleStep: 6f, displace: 0f);
+                // Flanking solid foundations on left and right sides (leaves central highway 100% clean with zero z-fighting)
+                BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
+                    -150f, -1.0f, -0.02f, materials[groundName], sampleStep: 6f, displace: 0f, relative: true);
+                BuildRibbon($"Right {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
+                    1.0f, 150f, -0.02f, materials[groundName], sampleStep: 6f, displace: 0f, relative: true);
             }
             else
             {
-                BuildRibbon($"{Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    -150f, 150f, -0.5f, materials[groundName], sampleStep: 5f,
-                    displace: 4.5f, lateralSegments: 26);
+                BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
+                    -150f, -1.0f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
+                BuildRibbon($"Right {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
+                    1.0f, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
             }
             // Main Asphalt Highway
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, materials["Road"], relative: true));
@@ -3604,14 +3607,6 @@ namespace RoadRage.UnityRemake
                     NormalizeModelHeight(villa, Random.Range(7.5f, 11.5f), 0.05f);
                     EnsureOutsideRoad(villa, villaDist, side);
                 }
-
-                // Natural Sandstone Boulders embedded into the slope cut
-                var rockDist = z + 9f;
-                var rockLat = side * Random.Range(15.5f, 24f);
-                var rockMesh = rocks[BlockHash(block, 11) % rocks.Length];
-                var rock = PlaceBiomeModelOnRoad("RedCanyon", rockMesh, materials["Hills Ground"], rockDist, rockLat, 0f,
-                    new Vector3(-90f, Random.Range(0f, 360f), 0f), Vector3.one, "Hillside Sandstone");
-                if (rock != null) NormalizeModelHeight(rock, Random.Range(4.5f, 9.5f), 0.05f);
 
                 // Valley Garden Shade Trees
                 Piece("tree/SM_tree", materials["Hills Bark"], z + 14f, side * Random.Range(17f, 34f), 0f, 7f, 12f, "Valley Tree");
