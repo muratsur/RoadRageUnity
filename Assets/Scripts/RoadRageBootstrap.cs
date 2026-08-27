@@ -258,12 +258,10 @@ namespace RoadRage.UnityRemake
 			Time.timeScale = 1f;
 		}
 
-		private string pendingBiome;
-
 		public void SelectBiome(string nextBiome)
 		{
-			pendingBiome = nextBiome;
-			ClosePicker();
+			Time.timeScale = 1f;
+			ReloadBiome(nextBiome);
 		}
 
         public void ReloadBiome(string nextBiome)
@@ -271,25 +269,46 @@ namespace RoadRage.UnityRemake
             Debug.Log($"[BIOME] Reloading biome to: {nextBiome}");
             requestedBiome = nextBiome;
             biomeName = nextBiome;
+            pendingBiome = null;
             PlayerPrefs.SetString("ROAD_RAGE_BIOME", nextBiome);
             PlayerPrefs.Save();
 
-            // 1. Destroy all active streamed chunks
+            // 1. Destroy all active streamed chunks immediately hiding them
             foreach (var pair in liveChunks)
             {
-                if (pair.Value != null) Destroy(pair.Value);
+                if (pair.Value != null)
+                {
+                    pair.Value.name = "OldChunk_Disposed";
+                    pair.Value.SetActive(false);
+                    Destroy(pair.Value);
+                }
             }
             liveChunks.Clear();
             stale.Clear();
 
             // 2. Destroy old Sun and Post-Processing Volumes
-            if (sunLight != null) Destroy(sunLight.gameObject);
+            if (sunLight != null)
+            {
+                sunLight.gameObject.name = "OldSun_Disposed";
+                sunLight.gameObject.SetActive(false);
+                Destroy(sunLight.gameObject);
+            }
             var oldVolumes = FindObjectsByType<Volume>(FindObjectsInactive.Include);
-            foreach (var vol in oldVolumes) Destroy(vol.gameObject);
+            foreach (var vol in oldVolumes)
+            {
+                vol.gameObject.name = "OldVol_Disposed";
+                vol.gameObject.SetActive(false);
+                Destroy(vol.gameObject);
+            }
 
             // 4. Destroy old traffic
             var oldTraffic = GameObject.Find("Living Highway Traffic");
-            if (oldTraffic != null) Destroy(oldTraffic);
+            if (oldTraffic != null)
+            {
+                oldTraffic.name = "OldTraffic_Disposed";
+                oldTraffic.SetActive(false);
+                Destroy(oldTraffic);
+            }
 
             // 5. Rebuild materials dictionary for new biome
             materials.Clear();
@@ -349,14 +368,6 @@ namespace RoadRage.UnityRemake
 
 		private void Update()
 		{
-			if (!string.IsNullOrEmpty(pendingBiome))
-			{
-				var next = pendingBiome;
-				pendingBiome = null;
-				ReloadBiome(next);
-				return;
-			}
-
 			if (car != null)
 			{
 				var controller = car.GetComponent<ArcadeCarController>();
@@ -4907,8 +4918,15 @@ namespace RoadRage.UnityRemake
             if (!string.IsNullOrEmpty(GameState.Message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.32f, 400f, 40f),
                     GameState.Message, titleStyle);
-            GUI.Label(new Rect(Screen.width - 260f, 24f, 230f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
+            GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
             
+            var pauseRect = new Rect(Screen.width - 130f, 20f, 110f, 44f);
+            if (GUI.Button(pauseRect, world.PickerOpen ? "RESUME" : "PAUSE", buttonStyle) || PointerPressedInRect(pauseRect))
+            {
+                if (world.PickerOpen) world.ClosePicker();
+                else world.OpenPicker();
+            }
+
             var biomeRect = new Rect(Screen.width * 0.5f - 92f, 22f, 184f, 48f);
             if (GUI.Button(biomeRect, "BIOMES", buttonStyle) || PointerPressedInRect(biomeRect)) world.OpenPicker();
 
