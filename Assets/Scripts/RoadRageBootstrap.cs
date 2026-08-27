@@ -4887,17 +4887,21 @@ namespace RoadRage.UnityRemake
                 return;
             }
             var garageRect = new Rect(Screen.width * 0.5f - 250f, 24f, 150f, 44f);
-            if ((GUI.Button(garageRect, "GARAGE", buttonStyle) || PointerPressedInRect(garageRect)) && Time.unscaledTime - lastClickTime >= 0.22f)
+            var garageMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && garageRect.Contains(Event.current.mousePosition);
+            if (GUI.Button(garageRect, "GARAGE", buttonStyle) || garageMouseDown || PointerPressedInRect(garageRect))
             {
-                lastClickTime = Time.unscaledTime;
+                if (Event.current != null && Event.current.isMouse) Event.current.Use();
                 garageOpen = true;
+                return;
             }
 
             var missionsRect = new Rect(Screen.width * 0.5f + 100f, 24f, 150f, 44f);
-            if ((GUI.Button(missionsRect, "MISSIONS", buttonStyle) || PointerPressedInRect(missionsRect)) && Time.unscaledTime - lastClickTime >= 0.22f)
+            var missionsMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && missionsRect.Contains(Event.current.mousePosition);
+            if (GUI.Button(missionsRect, "MISSIONS", buttonStyle) || missionsMouseDown || PointerPressedInRect(missionsRect))
             {
-                lastClickTime = Time.unscaledTime;
+                if (Event.current != null && Event.current.isMouse) Event.current.Use();
                 missionsOpen = true;
+                return;
             }
 
             GUI.Label(new Rect(28f, 22f, 520f, 44f), "ROAD RAGE  /  UNITY REMAKE", titleStyle);
@@ -4929,18 +4933,22 @@ namespace RoadRage.UnityRemake
             GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
             
             var pauseRect = new Rect(Screen.width - 130f, 20f, 110f, 44f);
-            if ((GUI.Button(pauseRect, world.PickerOpen ? "RESUME" : "PAUSE", buttonStyle) || PointerPressedInRect(pauseRect)) && Time.unscaledTime - lastClickTime >= 0.22f)
+            var pauseMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && pauseRect.Contains(Event.current.mousePosition);
+            if (GUI.Button(pauseRect, world.PickerOpen ? "RESUME" : "PAUSE", buttonStyle) || pauseMouseDown || PointerPressedInRect(pauseRect))
             {
-                lastClickTime = Time.unscaledTime;
+                if (Event.current != null && Event.current.isMouse) Event.current.Use();
                 if (world.PickerOpen) world.ClosePicker();
                 else world.OpenPicker();
+                return;
             }
 
             var biomeRect = new Rect(Screen.width * 0.5f - 92f, 22f, 184f, 48f);
-            if ((GUI.Button(biomeRect, "BIOMES", buttonStyle) || PointerPressedInRect(biomeRect)) && Time.unscaledTime - lastClickTime >= 0.22f)
+            var biomeMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && biomeRect.Contains(Event.current.mousePosition);
+            if (GUI.Button(biomeRect, "BIOMES", buttonStyle) || biomeMouseDown || PointerPressedInRect(biomeRect))
             {
-                lastClickTime = Time.unscaledTime;
+                if (Event.current != null && Event.current.isMouse) Event.current.Use();
                 world.OpenPicker();
+                return;
             }
 
             if (GameState.RunOver)
@@ -5172,15 +5180,12 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        private static float lastClickTime;
-
         private static bool PointerPressedInRect(Rect rect)
         {
-            if (Time.unscaledTime - lastClickTime < 0.22f) return false;
             try
             {
                 var mouse = UnityEngine.InputSystem.Mouse.current;
-                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                if (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.leftButton.wasReleasedThisFrame))
                 {
                     var pos = mouse.position.ReadValue();
                     var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
@@ -5191,7 +5196,7 @@ namespace RoadRage.UnityRemake
                 if (touch != null)
                 {
                     var primary = touch.primaryTouch;
-                    if (primary.press.wasPressedThisFrame)
+                    if (primary.press.wasPressedThisFrame || primary.press.wasReleasedThisFrame)
                     {
                         var pos = primary.position.ReadValue();
                         var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
@@ -5199,7 +5204,7 @@ namespace RoadRage.UnityRemake
                     }
                     foreach (var t in touch.touches)
                     {
-                        if (t.press.wasPressedThisFrame)
+                        if (t.press.wasPressedThisFrame || t.press.wasReleasedThisFrame)
                         {
                             var pos = t.position.ReadValue();
                             var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
@@ -5209,7 +5214,7 @@ namespace RoadRage.UnityRemake
                 }
 
                 var ptr = UnityEngine.InputSystem.Pointer.current;
-                if (ptr != null && ptr.press.wasPressedThisFrame)
+                if (ptr != null && (ptr.press.wasPressedThisFrame || ptr.press.wasReleasedThisFrame))
                 {
                     var pos = ptr.position.ReadValue();
                     var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
@@ -5252,13 +5257,19 @@ namespace RoadRage.UnityRemake
 
                 var digit = (i + 1) % 10;
                 var label = isCurrent ? $"▶ [{digit}] {playable[i]}" : (isSelected ? $"★ [{digit}] {playable[i]}" : $"[{digit}] {playable[i]}");
-                var clicked = (GUI.Button(rect, label, buttonStyle) || PointerPressedInRect(rect)) && (Time.unscaledTime - lastClickTime >= 0.22f);
-                if (clicked)
+                
+                var isMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && rect.Contains(Event.current.mousePosition);
+                var isBtnClicked = GUI.Button(rect, label, buttonStyle);
+                var isTouchClicked = PointerPressedInRect(rect);
+
+                if (isBtnClicked || isMouseDown || isTouchClicked)
                 {
-                    lastClickTime = Time.unscaledTime;
+                    if (Event.current != null && Event.current.isMouse) Event.current.Use();
                     pickerCursorIndex = i;
                     Debug.Log($"[BIOME] Card clicked: {playable[i]}");
                     world.SelectBiome(playable[i]);
+                    GUI.backgroundColor = previousColor;
+                    return;
                 }
                 GUI.backgroundColor = previousColor;
             }
@@ -5275,10 +5286,12 @@ namespace RoadRage.UnityRemake
             var closeWidth = Mathf.Min(panelWidth * 0.4f, 260f);
             var closeTop = gridTop + rows * (cardHeight + gap) + 14f;
             var driveRect = new Rect(Screen.width * 0.5f - closeWidth * 0.5f, closeTop, closeWidth, 52f);
-            if ((GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle) || PointerPressedInRect(driveRect)) && (Time.unscaledTime - lastClickTime >= 0.22f))
+            var driveMouseDown = Event.current != null && Event.current.isMouse && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && driveRect.Contains(Event.current.mousePosition);
+            if (GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle) || driveMouseDown || PointerPressedInRect(driveRect))
             {
-                lastClickTime = Time.unscaledTime;
+                if (Event.current != null && Event.current.isMouse) Event.current.Use();
                 world.ClosePicker();
+                return;
             }
         }
 
