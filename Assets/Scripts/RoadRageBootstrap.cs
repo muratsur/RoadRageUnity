@@ -95,6 +95,11 @@ namespace RoadRage.UnityRemake
             }
             Instance = this;
 
+            foreach (var oldHud in FindObjectsByType<RoadRageHUD>(FindObjectsInactive.Include))
+            {
+                Destroy(oldHud);
+            }
+
             if (FindAnyObjectByType<AudioListener>() == null)
                 gameObject.AddComponent<AudioListener>();
 
@@ -4807,6 +4812,18 @@ namespace RoadRage.UnityRemake
         private bool missionsOpen;
         private int garageBrowse = -1;
 
+        public static RoadRageHUD Instance { get; private set; }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(this);
+                return;
+            }
+            Instance = this;
+        }
+
         private RoadRageBootstrap World => world != null ? world : RoadRageBootstrap.Instance;
         private ArcadeCarController Car => car != null ? car : (World != null && World.PlayerCar != null ? World.PlayerCar.GetComponent<ArcadeCarController>() : null);
 
@@ -4977,8 +4994,8 @@ namespace RoadRage.UnityRemake
             var right = GUI.RepeatButton(new Rect(36f + size, bottom, size, size), "RIGHT", buttonStyle);
             var brake = GUI.RepeatButton(new Rect(Screen.width - size * 2.25f - 38f, bottom, size, size), "BRAKE", buttonStyle);
             var gas = GUI.RepeatButton(new Rect(Screen.width - size - 24f, bottom, size, size), "GAS", buttonStyle);
-            car.TouchSteer = left ? -1f : right ? 1f : 0f;
-            car.TouchThrottle = gas ? 1f : brake ? -1f : 0f;
+            c.TouchSteer = left ? -1f : right ? 1f : 0f;
+            c.TouchThrottle = gas ? 1f : brake ? -1f : 0f;
         }
 
         /// Garage: browse the catalogue, buy/select a car, and spend cash on the three
