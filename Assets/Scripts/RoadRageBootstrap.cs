@@ -346,11 +346,17 @@ namespace RoadRage.UnityRemake
 				}
 			}
 
-			// Escape / Start button toggles picker
-			if (GameInput.GetEscapePressed())
+			// Escape / Start button / B key toggles picker
+			if (GameInput.GetEscapePressed() || GameInput.GetBKeyPressed())
 			{
 				if (PickerOpen) ClosePicker();
 				else OpenPicker();
+			}
+
+			// N key cycles to next biome
+			if (GameInput.GetNKeyPressed())
+			{
+				NextBiome();
 			}
 
 			// Number keys 1-0 for instant biome hot-switching
@@ -5075,16 +5081,9 @@ namespace RoadRage.UnityRemake
                 if (isCurrent) GUI.backgroundColor = new Color(0.28f, 0.92f, 0.55f);
                 else if (isSelected) GUI.backgroundColor = new Color(0.35f, 0.70f, 1f);
 
-                var label = isCurrent ? $"▶  {playable[i]}" : (isSelected ? $"★  {playable[i]}" : playable[i]);
-                var clicked = GUI.Button(rect, label, buttonStyle);
-                if (!clicked && Event.current != null && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && rect.Contains(Event.current.mousePosition))
-                {
-                    clicked = true;
-                    Event.current.Use();
-                }
-                if (!clicked && MouseClicked(rect)) clicked = true;
-
-                if (clicked)
+                var digit = (i + 1) % 10;
+                var label = isCurrent ? $"▶ [{digit}] {playable[i]}" : (isSelected ? $"★ [{digit}] {playable[i]}" : $"[{digit}] {playable[i]}");
+                if (GUI.Button(rect, label, buttonStyle))
                 {
                     pickerCursorIndex = i;
                     Debug.Log($"[BIOME] Card clicked: {playable[i]}");
@@ -5105,14 +5104,10 @@ namespace RoadRage.UnityRemake
             var closeWidth = Mathf.Min(panelWidth * 0.4f, 260f);
             var closeTop = gridTop + rows * (cardHeight + gap) + 14f;
             var driveRect = new Rect(Screen.width * 0.5f - closeWidth * 0.5f, closeTop, closeWidth, 52f);
-            var driveClicked = GUI.Button(driveRect, "DRIVE (ESC / A)", buttonStyle) || MouseClicked(driveRect);
-            if (!driveClicked && Event.current != null && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && driveRect.Contains(Event.current.mousePosition))
+            if (GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle))
             {
-                driveClicked = true;
-                Event.current.Use();
-            }
-            if (driveClicked)
                 world.ClosePicker();
+            }
         }
 
         private static Rect CardRect(float left, float top, int index, int columns,
@@ -5134,6 +5129,39 @@ namespace RoadRage.UnityRemake
                 if (kb != null && kb.escapeKey.wasPressedThisFrame) return true;
                 var pad = UnityEngine.InputSystem.Gamepad.current;
                 if (pad != null && (pad.startButton.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame)) return true;
+            }
+            catch {}
+            return false;
+        }
+
+        public static bool GetBKeyPressed()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.bKey.wasPressedThisFrame) return true;
+            }
+            catch {}
+            return false;
+        }
+
+        public static bool GetNKeyPressed()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.nKey.wasPressedThisFrame) return true;
+            }
+            catch {}
+            return false;
+        }
+
+        public static bool GetGKeyPressed()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && kb.gKey.wasPressedThisFrame) return true;
             }
             catch {}
             return false;
