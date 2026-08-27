@@ -247,9 +247,12 @@ namespace RoadRage.UnityRemake
 			Time.timeScale = 1f;
 		}
 
+		private string pendingBiome;
+
 		public void SelectBiome(string nextBiome)
 		{
-			ReloadBiome(nextBiome);
+			pendingBiome = nextBiome;
+			ClosePicker();
 		}
 
         public void ReloadBiome(string nextBiome)
@@ -335,6 +338,14 @@ namespace RoadRage.UnityRemake
 
 		private void Update()
 		{
+			if (!string.IsNullOrEmpty(pendingBiome))
+			{
+				var next = pendingBiome;
+				pendingBiome = null;
+				ReloadBiome(next);
+				return;
+			}
+
 			if (car != null)
 			{
 				var controller = car.GetComponent<ArcadeCarController>();
@@ -5199,9 +5210,12 @@ namespace RoadRage.UnityRemake
 
                 var digit = (i + 1) % 10;
                 var label = isCurrent ? $"▶ [{digit}] {playable[i]}" : (isSelected ? $"★ [{digit}] {playable[i]}" : $"[{digit}] {playable[i]}");
-                var clicked = GUI.Button(rect, label, buttonStyle) || PointerPressedInRect(rect);
+                var mouseOver = Event.current != null && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp) && rect.Contains(Event.current.mousePosition);
+                var clicked = GUI.Button(rect, label, buttonStyle) || mouseOver || PointerPressedInRect(rect);
                 if (clicked)
                 {
+                    if (Event.current != null && (Event.current.type == EventType.MouseDown || Event.current.type == EventType.MouseUp))
+                        Event.current.Use();
                     pickerCursorIndex = i;
                     Debug.Log($"[BIOME] Card clicked: {playable[i]}");
                     world.SelectBiome(playable[i]);
