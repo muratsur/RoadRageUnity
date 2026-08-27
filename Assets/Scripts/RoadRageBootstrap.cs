@@ -260,7 +260,7 @@ namespace RoadRage.UnityRemake
 
 		public void SelectBiome(string nextBiome)
 		{
-			Time.timeScale = 1f;
+			ClosePicker();
 			ReloadBiome(nextBiome);
 		}
 
@@ -365,6 +365,8 @@ namespace RoadRage.UnityRemake
             ClosePicker();
         }
 
+		private float lastToggleTime;
+
 		private void Update()
 		{
 			if (car != null)
@@ -378,9 +380,10 @@ namespace RoadRage.UnityRemake
 				}
 			}
 
-			// Escape / Start button / B key toggles picker
-			if (GameInput.GetEscapePressed() || GameInput.GetBKeyPressed())
+			// Escape / Start button / B key toggles picker with 350ms unscaled debounce
+			if ((GameInput.GetEscapePressed() || GameInput.GetBKeyPressed()) && Time.unscaledTime - lastToggleTime > 0.35f)
 			{
+				lastToggleTime = Time.unscaledTime;
 				if (PickerOpen) ClosePicker();
 				else OpenPicker();
 			}
@@ -5166,10 +5169,6 @@ namespace RoadRage.UnityRemake
             {
                 Debug.Log($"[BIOME] Selected with gamepad/keyboard: {playable[pickerCursorIndex]}");
                 world.SelectBiome(playable[pickerCursorIndex]);
-            }
-            if (cancel)
-            {
-                world.ClosePicker();
             }
         }
 
