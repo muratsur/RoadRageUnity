@@ -2293,10 +2293,15 @@ namespace RoadRage.UnityRemake
             // Wall furniture mounted safely flush against tunnel walls (zero lane intrusion)
             ScatterBand(10f, 12.8f, 13.3f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
+                    d, l, Random.Range(2.5f, 6.5f), new Vector3(0f, s > 0 ? -90f : 90f, 0f),
+                    Vector3.one * Random.Range(0.6f, 0.95f), "Wall Pipe", true));
             ScatterBand(18f, 12.9f, 13.4f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pillar", materials["Sewer Concrete"],
                     d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one * Random.Range(0.85f, 1.15f), "Tunnel Pillar", true));
+            ScatterBand(34f, 13.0f, 13.5f, (d, l, s) =>
+                PlaceBiomeModelOnRoad("Sewers", "SM_arch", materials["Sewer Concrete"],
+                    d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one, "Side Arch", true));
 
             for (var z = SegBegin(-12f, 18f); z < segEnd; z += 18f)
@@ -2305,9 +2310,12 @@ namespace RoadRage.UnityRemake
                 {
                     PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
                         z + 5f, -13.0f, 3.2f, new Vector3(0f, 90f, 0f), Vector3.one * 0.78f, "Wall-Mounted Sewer Pipe", true);
+                    CreateLocalLight(RoadPath.Point(z, ((int)(z / 18f)) % 4 == 0 ? -10.8f : 10.8f, 6.3f),
+                        new Color(0.2f, 1f, 0.56f), 13f, 14f);
                 }
             }
         }
+
         private void BuildTireDistrict()
         {
             Random.InitState(1908 ^ chunkSeed);
@@ -2317,6 +2325,7 @@ namespace RoadRage.UnityRemake
             // Industrial yard clutter along the sidewalk, and a second building row behind
             // the frontage so the street has depth rather than a single facade line.
             var yardProps = new[] { "SM_TireShelf", "SM_AirCompressor", "SM_Workbench", "SM_TireMachine" };
+            ScatterBand(8.5f, 12f, 15f, (d, l, s) =>
             {
                 var prop = PlaceBiomeModelOnRoad("TireRepair", yardProps[Random.Range(0, yardProps.Length)],
                     materials["Garage Equipment"], d, l, 0.05f,
