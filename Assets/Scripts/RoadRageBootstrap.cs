@@ -71,6 +71,7 @@ namespace RoadRage.UnityRemake
 			};
 	}
 		public string BiomeName => biomeName;
+		public Transform PlayerCar => car;
 		public static IReadOnlyList<string> PlayableBiomes =>
 			System.Array.ConvertAll(ActiveBiomes, i => Biomes[i]);
 		public static IReadOnlyList<string> LockedBiomes => ComingSoon;
@@ -4806,6 +4807,9 @@ namespace RoadRage.UnityRemake
         private bool missionsOpen;
         private int garageBrowse = -1;
 
+        private RoadRageBootstrap World => world != null ? world : RoadRageBootstrap.Instance;
+        private ArcadeCarController Car => car != null ? car : (World != null && World.PlayerCar != null ? World.PlayerCar.GetComponent<ArcadeCarController>() : null);
+
         public void Initialize(ArcadeCarController controller, RoadRageBootstrap bootstrap)
         {
             car = controller;
@@ -4870,8 +4874,9 @@ namespace RoadRage.UnityRemake
         {
             if (HideForCapture) return;
             EnsureStyles();
-            if (car == null || world == null) return;
-            if (world.PickerOpen)
+            var w = World;
+            if (w == null) return;
+            if (w.PickerOpen)
             {
                 DrawPicker();
                 return;
@@ -4886,6 +4891,9 @@ namespace RoadRage.UnityRemake
                 DrawMissions();
                 return;
             }
+            var c = Car;
+            if (c == null) return;
+
             var garageRect = new Rect(Screen.width * 0.5f - 250f, 24f, 150f, 44f);
             if (GUI.Button(garageRect, "GARAGE", buttonStyle))
             {
@@ -4902,7 +4910,7 @@ namespace RoadRage.UnityRemake
 
             GUI.Label(new Rect(28f, 22f, 520f, 44f), "ROAD RAGE  /  UNITY REMAKE", titleStyle);
             GUI.Label(new Rect(30f, 62f, 620f, 32f),
-                $"{world.BiomeNameAt(car.RoadDistance)}  |  {WeatherSystem.Label(world.Weather)}  |  {car.SpeedKph:0} km/h  |  {car.DistanceKm:0.00} km",
+                $"{w.BiomeNameAt(c.RoadDistance)}  |  {WeatherSystem.Label(w.Weather)}  |  {c.SpeedKph:0} km/h  |  {c.DistanceKm:0.00} km",
                 readoutStyle);
             // Integrity bar - the run's clock. Without a visible failure state the player
             // has no reason to judge targets rather than ram everything.
@@ -4929,17 +4937,17 @@ namespace RoadRage.UnityRemake
             GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
             
             var pauseRect = new Rect(Screen.width - 130f, 20f, 110f, 44f);
-            if (GUI.Button(pauseRect, world.PickerOpen ? "RESUME" : "PAUSE", buttonStyle))
+            if (GUI.Button(pauseRect, w.PickerOpen ? "RESUME" : "PAUSE", buttonStyle))
             {
-                if (world.PickerOpen) world.ClosePicker();
-                else world.OpenPicker();
+                if (w.PickerOpen) w.ClosePicker();
+                else w.OpenPicker();
                 return;
             }
 
             var biomeRect = new Rect(Screen.width * 0.5f - 92f, 22f, 184f, 48f);
             if (GUI.Button(biomeRect, "BIOMES", buttonStyle))
             {
-                world.OpenPicker();
+                w.OpenPicker();
                 return;
             }
 
