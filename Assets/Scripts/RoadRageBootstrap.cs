@@ -76,16 +76,24 @@ namespace RoadRage.UnityRemake
 		public static IReadOnlyList<string> LockedBiomes => ComingSoon;
 		public bool PickerOpen { get; private set; }
 
+        public static RoadRageBootstrap Instance { get; private set; }
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureWorld()
         {
-            // Always create the new scene's world. During a synchronous reload Unity can still
-            // report the outgoing bootstrap for one frame, which previously left a blank scene.
+            if (FindAnyObjectByType<RoadRageBootstrap>() != null) return;
             new GameObject("Road Rage Unity Bootstrap").AddComponent<RoadRageBootstrap>();
         }
 
         private void Awake()
         {
+            if (Instance != null && Instance != this)
+            {
+                Destroy(gameObject);
+                return;
+            }
+            Instance = this;
+
 			biomeName = ResolveBiome();
 			Time.timeScale = 1f;
             Application.targetFrameRate = 120;
@@ -152,7 +160,7 @@ namespace RoadRage.UnityRemake
                 weatherSystem.Configure(activeWeather, car, particleMaterial);
             }
 			gameObject.AddComponent<RoadRageHUD>().Initialize(car.GetComponent<ArcadeCarController>(), this);
-			if (string.IsNullOrEmpty(CommandLineValue("-biome=")))
+			if (HasCommandLineFlag("-picker"))
 				OpenPicker();
 			var screenshotPath = CommandLineValue("-shot=");
 			if (!string.IsNullOrEmpty(screenshotPath))
