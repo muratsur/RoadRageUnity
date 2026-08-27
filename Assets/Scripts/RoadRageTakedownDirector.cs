@@ -1,7 +1,7 @@
 using System.Collections;
 using UnityEngine;
 
-namespace RoadRage
+namespace RoadRage.UnityRemake
 {
     /// <summary>
     /// Burnout-style Takedown Director:

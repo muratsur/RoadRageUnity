@@ -1,6 +1,6 @@
 using UnityEngine;
 
-namespace RoadRage
+namespace RoadRage.UnityRemake
 {
     /// <summary>
     /// High-performance audio bridge with support for procedural synthesis,

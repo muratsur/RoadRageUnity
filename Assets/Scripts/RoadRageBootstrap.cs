@@ -4227,10 +4227,10 @@ namespace RoadRage.UnityRemake
             chase.target = car;
             chase.player = car.GetComponent<ArcadeCarController>();
 
-            var takedownDirector = cameraObject.AddComponent<RoadRage.RoadRageTakedownDirector>();
+            var takedownDirector = cameraObject.AddComponent<RoadRageTakedownDirector>();
             takedownDirector.BindCameraAndPlayer(camera, car);
 
-            var audioBridge = cameraObject.AddComponent<RoadRage.RoadRageAudioBridge>();
+            var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             if (reflectionProbe != null)
             {
@@ -4563,9 +4563,9 @@ namespace RoadRage.UnityRemake
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             TrafficCarController.ResolvePlayerCollision(this);
 
-            if (RoadRage.RoadRageAudioBridge.Instance != null)
+            if (RoadRageAudioBridge.Instance != null)
             {
-                RoadRage.RoadRageAudioBridge.Instance.UpdateEngineAudio(SpeedKph, 150f * car.Speed, throttle, false);
+                RoadRageAudioBridge.Instance.UpdateEngineAudio(SpeedKph, 150f * car.Speed, throttle, false);
             }
         }
 
@@ -4629,10 +4629,10 @@ namespace RoadRage.UnityRemake
 
             if (traffic.IsViolator || SpeedKph >= 60f)
             {
-                if (RoadRage.RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
+                if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
                 {
                     var impactNormal = (traffic.transform.position - transform.position).normalized;
-                    RoadRage.RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);
+                    RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);
                 }
             }
 
@@ -4693,8 +4693,8 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
-            if (RoadRage.RoadRageTakedownDirector.Instance != null &&
-                RoadRage.RoadRageTakedownDirector.Instance.TryGetTakedownCameraPose(out var takedownPos, out var takedownRot))
+            if (RoadRageTakedownDirector.Instance != null &&
+                RoadRageTakedownDirector.Instance.TryGetTakedownCameraPose(out var takedownPos, out var takedownRot))
             {
                 transform.position = Vector3.Lerp(transform.position, takedownPos, Time.unscaledDeltaTime * 12f);
                 transform.rotation = Quaternion.Slerp(transform.rotation, takedownRot, Time.unscaledDeltaTime * 12f);
