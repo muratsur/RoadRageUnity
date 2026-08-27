@@ -94,6 +94,9 @@ namespace RoadRage.UnityRemake
             }
             Instance = this;
 
+            if (FindAnyObjectByType<AudioListener>() == null)
+                gameObject.AddComponent<AudioListener>();
+
 			biomeName = ResolveBiome();
 			Time.timeScale = 1f;
             Application.targetFrameRate = 120;
@@ -4241,7 +4244,8 @@ namespace RoadRage.UnityRemake
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = Color.Lerp(mood.Sky, mood.Equator, 0.35f);
             ApplyCityShotCameraPreset(camera);
-            cameraObject.AddComponent<AudioListener>();
+            if (FindAnyObjectByType<AudioListener>() == null)
+                cameraObject.AddComponent<AudioListener>();
             var chase = cameraObject.AddComponent<ChaseCamera>();
             chase.target = car;
             chase.player = car.GetComponent<ArcadeCarController>();
