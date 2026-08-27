@@ -1235,7 +1235,6 @@ namespace RoadRage.UnityRemake
             var hasCityCurbs = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3;
             if (hasCityCurbs)
             {
-                // Raised Concrete Curbs (height +0.14m)
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];
                 BuildRibbon("Left City Curb", -1.24f, -1.20f, 0.14f, curbMat, relative: true);
                 BuildRibbon("Right City Curb", 1.20f, 1.24f, 0.14f, curbMat, relative: true);
