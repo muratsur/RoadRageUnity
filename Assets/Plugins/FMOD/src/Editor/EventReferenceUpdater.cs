@@ -12,6 +12,10 @@ using UnityEngine;
 using UnityEngine.SceneManagement;
 #if UNITY_INPUTSYSTEM_EXIST
 using UnityEngine.InputSystem;
+using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+
 #endif
 
 namespace FMODUnity

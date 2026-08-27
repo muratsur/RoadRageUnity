@@ -9,6 +9,10 @@ using System.IO;
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
+using TreeView = UnityEditor.IMGUI.Controls.TreeView<int>;
+using TreeViewItem = UnityEditor.IMGUI.Controls.TreeViewItem<int>;
+using TreeViewState = UnityEditor.IMGUI.Controls.TreeViewState<int>;
+
 
 namespace FMODUnity
 {
