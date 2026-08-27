@@ -1232,8 +1232,8 @@ namespace RoadRage.UnityRemake
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, materials["Road"], relative: true));
 
             // Road Edge & Terrain Integration per Biome Type:
-            var isCity = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3;
-            if (isCity)
+            var hasCityCurbs = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3;
+            if (hasCityCurbs)
             {
                 // Raised Concrete Curbs (height +0.14m)
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];
