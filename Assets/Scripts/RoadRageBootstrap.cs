@@ -269,7 +269,6 @@ namespace RoadRage.UnityRemake
             Debug.Log($"[BIOME] Reloading biome to: {nextBiome}");
             requestedBiome = nextBiome;
             biomeName = nextBiome;
-            pendingBiome = null;
             PlayerPrefs.SetString("ROAD_RAGE_BIOME", nextBiome);
             PlayerPrefs.Save();
 
