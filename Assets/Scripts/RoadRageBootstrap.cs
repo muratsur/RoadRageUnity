@@ -4850,10 +4850,14 @@ namespace RoadRage.UnityRemake
                 DrawMissions();
                 return;
             }
-            if (GUI.Button(new Rect(Screen.width * 0.5f - 250f, 24f, 150f, 44f), "GARAGE", buttonStyle))
+            var garageRect = new Rect(Screen.width * 0.5f - 250f, 24f, 150f, 44f);
+            if (GUI.Button(garageRect, "GARAGE", buttonStyle) || PointerPressedInRect(garageRect))
                 garageOpen = true;
-            if (GUI.Button(new Rect(Screen.width * 0.5f + 100f, 24f, 150f, 44f), "MISSIONS", buttonStyle))
+
+            var missionsRect = new Rect(Screen.width * 0.5f + 100f, 24f, 150f, 44f);
+            if (GUI.Button(missionsRect, "MISSIONS", buttonStyle) || PointerPressedInRect(missionsRect))
                 missionsOpen = true;
+
             GUI.Label(new Rect(28f, 22f, 520f, 44f), "ROAD RAGE  /  UNITY REMAKE", titleStyle);
             GUI.Label(new Rect(30f, 62f, 620f, 32f),
                 $"{world.BiomeNameAt(car.RoadDistance)}  |  {WeatherSystem.Label(world.Weather)}  |  {car.SpeedKph:0} km/h  |  {car.DistanceKm:0.00} km",
@@ -4881,7 +4885,9 @@ namespace RoadRage.UnityRemake
                 GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.32f, 400f, 40f),
                     GameState.Message, titleStyle);
             GUI.Label(new Rect(Screen.width - 260f, 24f, 230f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
-            if (GUI.Button(new Rect(Screen.width * 0.5f - 92f, 22f, 184f, 48f), "BIOMES", buttonStyle)) world.OpenPicker();
+            
+            var biomeRect = new Rect(Screen.width * 0.5f - 92f, 22f, 184f, 48f);
+            if (GUI.Button(biomeRect, "BIOMES", buttonStyle) || PointerPressedInRect(biomeRect)) world.OpenPicker();
 
             if (GameState.RunOver)
             {
@@ -5116,14 +5122,43 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        private static bool MouseClicked(Rect rect)
+        private static bool PointerPressedInRect(Rect rect)
         {
             try
             {
                 var mouse = UnityEngine.InputSystem.Mouse.current;
-                if (mouse != null && mouse.leftButton.wasPressedThisFrame)
+                if (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.leftButton.isPressed))
                 {
                     var pos = mouse.position.ReadValue();
+                    var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
+                    if (rect.Contains(imguiPos)) return true;
+                }
+
+                var touch = UnityEngine.InputSystem.Touchscreen.current;
+                if (touch != null)
+                {
+                    var primary = touch.primaryTouch;
+                    if (primary.press.wasPressedThisFrame || primary.press.isPressed)
+                    {
+                        var pos = primary.position.ReadValue();
+                        var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
+                        if (rect.Contains(imguiPos)) return true;
+                    }
+                    foreach (var t in touch.touches)
+                    {
+                        if (t.press.wasPressedThisFrame || t.press.isPressed)
+                        {
+                            var pos = t.position.ReadValue();
+                            var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
+                            if (rect.Contains(imguiPos)) return true;
+                        }
+                    }
+                }
+
+                var ptr = UnityEngine.InputSystem.Pointer.current;
+                if (ptr != null && (ptr.press.wasPressedThisFrame || ptr.press.isPressed))
+                {
+                    var pos = ptr.position.ReadValue();
                     var imguiPos = new Vector2(pos.x, Screen.height - pos.y);
                     if (rect.Contains(imguiPos)) return true;
                 }
@@ -5164,7 +5199,8 @@ namespace RoadRage.UnityRemake
 
                 var digit = (i + 1) % 10;
                 var label = isCurrent ? $"▶ [{digit}] {playable[i]}" : (isSelected ? $"★ [{digit}] {playable[i]}" : $"[{digit}] {playable[i]}");
-                if (GUI.Button(rect, label, buttonStyle))
+                var clicked = GUI.Button(rect, label, buttonStyle) || PointerPressedInRect(rect);
+                if (clicked)
                 {
                     pickerCursorIndex = i;
                     Debug.Log($"[BIOME] Card clicked: {playable[i]}");
@@ -5185,7 +5221,7 @@ namespace RoadRage.UnityRemake
             var closeWidth = Mathf.Min(panelWidth * 0.4f, 260f);
             var closeTop = gridTop + rows * (cardHeight + gap) + 14f;
             var driveRect = new Rect(Screen.width * 0.5f - closeWidth * 0.5f, closeTop, closeWidth, 52f);
-            if (GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle))
+            if (GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle) || PointerPressedInRect(driveRect))
             {
                 world.ClosePicker();
             }
