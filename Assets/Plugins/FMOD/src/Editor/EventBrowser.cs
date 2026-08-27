@@ -1633,7 +1633,8 @@ namespace FMODUnity
 
                 SceneView.duringSceneGui += SceneUpdate;
 
-                EditorApplication.hierarchyWindowItemOnGUI += HierarchyUpdate;
+                // EditorApplication.hierarchyWindowItemOnGUI is deprecated in Unity 6
+                // EditorApplication.hierarchyWindowItemOnGUI += HierarchyUpdate;
 
                 if (isStandaloneWindow)
                 {
@@ -1672,6 +1673,7 @@ namespace FMODUnity
         }
 
         // This is an event handler on the hierachy view to handle dragging our objects from the browser
+        /*
         private void HierarchyUpdate(int instance, Rect rect)
         {
             if (Event.current.type == EventType.DragPerform && rect.Contains(Event.current.mousePosition))
@@ -1714,6 +1716,7 @@ namespace FMODUnity
                 }
             }
         }
+        */
 
         // This is an event handler on the scene view to handle dragging our objects from the browser
         // and creating new gameobjects
