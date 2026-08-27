@@ -5176,19 +5176,21 @@ namespace RoadRage.UnityRemake
             if (confirm && pickerCursorIndex >= 0 && pickerCursorIndex < playable.Count)
             {
                 Debug.Log($"[BIOME] Selected with gamepad/keyboard: {playable[pickerCursorIndex]}");
-                world.SelectBiome(playable[pickerCursorIndex]);
+                var w = World;
+                if (w != null) w.SelectBiome(playable[pickerCursorIndex]);
             }
         }
 
         private void Update()
         {
-            if (world == null || !world.PickerOpen) return;
+            var w = World;
+            if (w == null || !w.PickerOpen) return;
 
             Vector2? pressPos = null;
             try
             {
                 var touch = UnityEngine.InputSystem.Touchscreen.current;
-                if (touch != null && (touch.primaryTouch.press.wasPressedThisFrame || touch.primaryTouch.press.wasReleasedThisFrame))
+                if (touch != null && (touch.primaryTouch.press.wasPressedThisFrame || touch.primaryTouch.press.isPressed || touch.primaryTouch.press.wasReleasedThisFrame))
                 {
                     var p = touch.primaryTouch.position.ReadValue();
                     pressPos = new Vector2(p.x, Screen.height - p.y);
@@ -5196,7 +5198,7 @@ namespace RoadRage.UnityRemake
                 else
                 {
                     var mouse = UnityEngine.InputSystem.Mouse.current;
-                    if (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.leftButton.wasReleasedThisFrame))
+                    if (mouse != null && (mouse.leftButton.wasPressedThisFrame || mouse.leftButton.isPressed || mouse.leftButton.wasReleasedThisFrame))
                     {
                         var p = mouse.position.ReadValue();
                         pressPos = new Vector2(p.x, Screen.height - p.y);
@@ -5204,7 +5206,7 @@ namespace RoadRage.UnityRemake
                     else
                     {
                         var ptr = UnityEngine.InputSystem.Pointer.current;
-                        if (ptr != null && (ptr.press.wasPressedThisFrame || ptr.press.wasReleasedThisFrame))
+                        if (ptr != null && (ptr.press.wasPressedThisFrame || ptr.press.isPressed || ptr.press.wasReleasedThisFrame))
                         {
                             var p = ptr.position.ReadValue();
                             pressPos = new Vector2(p.x, Screen.height - p.y);
@@ -5235,7 +5237,7 @@ namespace RoadRage.UnityRemake
                     {
                         Debug.Log($"[BIOME] Card tapped in Update: {playable[i]}");
                         pickerCursorIndex = i;
-                        world.SelectBiome(playable[i]);
+                        w.SelectBiome(playable[i]);
                         return;
                     }
                 }
@@ -5245,7 +5247,7 @@ namespace RoadRage.UnityRemake
                 var driveRect = new Rect(Screen.width * 0.5f - closeWidth * 0.5f, closeTop, closeWidth, 52f);
                 if (driveRect.Contains(pos))
                 {
-                    world.ClosePicker();
+                    w.ClosePicker();
                     return;
                 }
             }
@@ -5253,6 +5255,8 @@ namespace RoadRage.UnityRemake
 
         private void DrawPicker()
         {
+            var w = World;
+            if (w == null) return;
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), dimTexture);
 
             var playable = RoadRageBootstrap.PlayableBiomes;
@@ -5275,7 +5279,7 @@ namespace RoadRage.UnityRemake
             for (var i = 0; i < playable.Count; i++)
             {
                 var rect = CardRect(left, gridTop, i, columns, cardWidth, cardHeight, gap);
-                var isCurrent = playable[i] == world.BiomeName;
+                var isCurrent = playable[i] == w.BiomeName;
                 var isSelected = pickerCursorIndex == i;
                 var previousColor = GUI.backgroundColor;
                 if (isCurrent) GUI.backgroundColor = new Color(0.28f, 0.92f, 0.55f);
@@ -5288,7 +5292,7 @@ namespace RoadRage.UnityRemake
                 {
                     pickerCursorIndex = i;
                     Debug.Log($"[BIOME] Card clicked in GUI.Button: {playable[i]}");
-                    world.SelectBiome(playable[i]);
+                    w.SelectBiome(playable[i]);
                     GUI.backgroundColor = previousColor;
                     return;
                 }
@@ -5309,7 +5313,7 @@ namespace RoadRage.UnityRemake
             var driveRect = new Rect(Screen.width * 0.5f - closeWidth * 0.5f, closeTop, closeWidth, 52f);
             if (GUI.Button(driveRect, "DRIVE (ESC / B)", buttonStyle))
             {
-                world.ClosePicker();
+                w.ClosePicker();
                 return;
             }
         }
