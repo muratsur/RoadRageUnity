@@ -543,8 +543,42 @@ namespace RoadRage.UnityRemake
 			vehicle.SetTexture("_BumpMap", Texture("vehicle_normal"));
 			vehicle.EnableKeyword("_NORMALMAP");
 			MakeMaterial("Hideout Tank", new Color(0.12f, 0.22f, 0.18f), 0.72f, 0.32f);
-			var racerAtlas = MakeMaterial("Street Racer Atlas", Color.white, 0.18f, 0.58f);
-			racerAtlas.mainTexture = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_01_A");
+			var racerAtlasTex = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_01_A");
+			var racerLightsTex = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_Emissive_01");
+
+			var racerAtlas = MakeMaterial("Street Racer Atlas", Color.white, 0.25f, 0.75f);
+			if (racerAtlasTex != null)
+			{
+				racerAtlas.mainTexture = racerAtlasTex;
+				if (racerAtlas.HasProperty("_BaseMap")) racerAtlas.SetTexture("_BaseMap", racerAtlasTex);
+			}
+			if (racerLightsTex != null)
+			{
+				racerAtlas.SetTexture("_EmissionMap", racerLightsTex);
+				racerAtlas.SetColor("_EmissionColor", new Color(2.4f, 2.3f, 2.1f));
+				racerAtlas.EnableKeyword("_EMISSION");
+				racerAtlas.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+			}
+
+			var racerChassis = MakeMaterial("Street Racer Chassis", Color.white, 0.20f, 0.55f);
+			if (racerAtlasTex != null)
+			{
+				racerChassis.mainTexture = racerAtlasTex;
+				if (racerChassis.HasProperty("_BaseMap")) racerChassis.SetTexture("_BaseMap", racerAtlasTex);
+			}
+			if (racerLightsTex != null)
+			{
+				racerChassis.SetTexture("_EmissionMap", racerLightsTex);
+				racerChassis.SetColor("_EmissionColor", new Color(2.4f, 2.3f, 2.1f));
+				racerChassis.EnableKeyword("_EMISSION");
+				racerChassis.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+			}
+
+			var racerGlass = MakeMaterial("Street Racer Glass", new Color(0.06f, 0.09f, 0.12f), 0.0f, 0.96f);
+			racerGlass.SetFloat("_Smoothness", 0.96f);
+			materials["Street Racer Atlas"] = racerAtlas;
+			materials["Street Racer Chassis"] = racerChassis;
+			materials["Street Racer Glass"] = racerGlass;
 
             BiomeSurface(BiomeMaterial("Snow Ground", "IceStation", "T_snow_D", "T_snow_N", Color.white, 0f, 0.12f), "IceStation", "T_snow_MSO", 0.4f);
             BiomeSurface(BiomeMaterial("Ice Station", "IceStation", "T_trim_01_D", "T_trim_01_N", new Color(0.88f, 0.96f, 1f), 0.5f, 0.58f, "T_trim_01_E"), "IceStation", "T_trim_01_MSO");
@@ -4085,16 +4119,33 @@ namespace RoadRage.UnityRemake
             if (prefab == null) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
             if (prefab != null)
             {
+                var liveries = new[]
+                {
+                    "Vehicles/PolygonStreetRacer_Texture_01_A",
+                    "Vehicles/PolygonStreetRacer_Veh_Tex_07_Race_Yellow",
+                    "Vehicles/PolygonStreetRacer_Veh_Tex_13_Race_Blue",
+                    "Vehicles/PolygonStreetRacer_Veh_Tex_RR_Orange",
+                    "Vehicles/PolygonStreetRacer_Veh_Tex_03_Carbon_Fibre",
+                    "Vehicles/PolygonStreetRacer_Veh_Tex_24_Rust"
+                };
+                var chosenLiveryTex = Resources.Load<Texture2D>(liveries[Mathf.Abs(name.GetHashCode()) % liveries.Length])
+                                      ?? materials["Street Racer Atlas"].mainTexture;
+
                 var paint = new Material(materials["Street Racer Atlas"]) { name = $"{name} Paint" };
-                paint.color = tint;
-                if (paint.HasProperty("_BaseColor")) paint.SetColor("_BaseColor", tint);
-                // Traffic lights up too, so night biomes read as a road full of cars
-                // rather than silhouettes.
+                if (chosenLiveryTex != null)
+                {
+                    paint.mainTexture = chosenLiveryTex;
+                    if (paint.HasProperty("_BaseMap")) paint.SetTexture("_BaseMap", chosenLiveryTex);
+                }
+                paint.color = Color.white;
+                if (paint.HasProperty("_BaseColor")) paint.SetColor("_BaseColor", Color.white);
+
+                // Traffic headlights & tail lights
                 var trafficLights = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_Emissive_01");
                 if (trafficLights != null)
                 {
                     paint.SetTexture("_EmissionMap", trafficLights);
-                    paint.SetColor("_EmissionColor", new Color(2.2f, 2.0f, 1.9f));
+                    paint.SetColor("_EmissionColor", new Color(2.4f, 2.3f, 2.1f));
                     paint.EnableKeyword("_EMISSION");
                     paint.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
                 }
@@ -4112,9 +4163,18 @@ namespace RoadRage.UnityRemake
                     for (var i = 0; i < assigned.Length; i++)
                     {
                         var slot = source[i] != null ? source[i].name.ToLowerInvariant() : string.Empty;
-                        assigned[i] = slot.Contains("glass") ? materials["Street Racer Glass"]
-                            : slot.Contains("livery") ? paint
-                            : materials["Street Racer Chassis"];
+                        if (slot.Contains("glass") || slot.Contains("window"))
+                        {
+                            assigned[i] = materials["Street Racer Glass"];
+                        }
+                        else if (slot.Contains("livery") || slot.Contains("paint") || slot.Contains("tex_16") || slot.Contains("texture_01") || i == 0)
+                        {
+                            assigned[i] = paint;
+                        }
+                        else
+                        {
+                            assigned[i] = materials["Street Racer Chassis"];
+                        }
                     }
                     renderer.sharedMaterials = assigned;
                 }
