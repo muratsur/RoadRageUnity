@@ -68,6 +68,7 @@ namespace RoadRage.UnityRemake
 
             var emission = ps.emission;
             emission.rateOverTime = 40f;
+            emission.enabled = false;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
@@ -76,6 +77,7 @@ namespace RoadRage.UnityRemake
 
             var r = go.GetComponent<ParticleSystemRenderer>();
             r.material = mat;
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             return ps;
         }
 
@@ -177,8 +179,18 @@ namespace RoadRage.UnityRemake
             continuousBurnTimer = 0f;
             nearMissesDuringBurn = 0;
 
-            if (leftFlameFx != null) leftFlameFx.Play();
-            if (rightFlameFx != null) rightFlameFx.Play();
+            if (leftFlameFx != null)
+            {
+                var em = leftFlameFx.emission;
+                em.enabled = true;
+                leftFlameFx.Play();
+            }
+            if (rightFlameFx != null)
+            {
+                var em = rightFlameFx.emission;
+                em.enabled = true;
+                rightFlameFx.Play();
+            }
 
             if (RoadRageAudioBridge.Instance != null)
             {
@@ -189,8 +201,18 @@ namespace RoadRage.UnityRemake
         private void StopBoosting()
         {
             IsBoosting = false;
-            if (leftFlameFx != null) leftFlameFx.Stop();
-            if (rightFlameFx != null) rightFlameFx.Stop();
+            if (leftFlameFx != null)
+            {
+                var em = leftFlameFx.emission;
+                em.enabled = false;
+                leftFlameFx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            }
+            if (rightFlameFx != null)
+            {
+                var em = rightFlameFx.emission;
+                em.enabled = false;
+                rightFlameFx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            }
             if (BoostAmount < MaxBoost) BurnoutChain = 0;
         }
 

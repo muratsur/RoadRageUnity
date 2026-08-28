@@ -2942,45 +2942,49 @@ namespace RoadRage.UnityRemake
                 {
                     var facing = side > 0f ? -90f : 90f;
                     var facadeDistance = z + (side > 0 ? 2f : -3f);
-                    var facadeLateral = side * Random.Range(15.5f, 19.5f);
+                    var facadeLateral = side * Random.Range(22.5f, 28.5f);
                     var facade = PlaceBiomeModelOnRoad("HongKong", facades[BlockHash(block, side) % facades.Length],
                         materials["Kowloon Building"], facadeDistance, facadeLateral, 0f,
                         new Vector3(-90f, facing, 0f), Vector3.one, "Kowloon Facade");
                     if (facade != null)
                     {
                         NormalizeModelHeight(facade, Random.Range(20f, 38f));
-                        EnsureOutsideRoad(facade, facadeDistance, side);
                     }
 
                     var moduleDistance = z + (side > 0 ? 10f : -9f);
                     var module = PlaceBiomeModelOnRoad("HongKong", streetModules[BlockHash(block, side * 3) % streetModules.Length],
-                        materials["Kowloon Street Detail"], moduleDistance, side * Random.Range(15.0f, 18.0f), 0f,
+                        materials["Kowloon Street Detail"], moduleDistance, side * Random.Range(21.0f, 25.0f), 0f,
                         new Vector3(-90f, facing, 0f), Vector3.one, "Kowloon Street Front");
                     if (module != null)
                     {
                         NormalizeModelHeight(module, Random.Range(10f, 18f));
-                        EnsureOutsideRoad(module, moduleDistance, side);
                     }
 
                     // Wall-mounted glowing neon signs attached to building facades
-                    var signDistance = z + (side > 0 ? 6f : -5f);
-                    var sign = PlaceBiomeModelOnRoad("HongKong", signs[BlockHash(block, side * 5) % signs.Length],
-                        materials["Kowloon Sign"], signDistance, side * 13.6f, 4.5f,
-                        new Vector3(-90f, facing, 0f), Vector3.one, "Wall Mounted Neon Sign", false);
-                    if (sign != null)
+                    if (block % 2 == 0)
                     {
-                        NormalizeModelHeight(sign, Random.Range(2.4f, 4.0f), 4.5f);
-                        CreateLocalLight(RoadPath.Point(signDistance, side * 12.0f, 4.8f),
-                            signGlow[BlockHash(block, side * 7) % signGlow.Length], 10f, 15f);
+                        var signDistance = z + (side > 0 ? 6f : -5f);
+                        var sign = PlaceBiomeModelOnRoad("HongKong", signs[BlockHash(block, side * 5) % signs.Length],
+                            materials["Kowloon Sign"], signDistance, side * 19.5f, 4.5f,
+                            new Vector3(-90f, facing, 0f), Vector3.one, "Wall Mounted Neon Sign", false);
+                        if (sign != null)
+                        {
+                            NormalizeModelHeight(sign, Random.Range(2.4f, 4.0f), 4.5f);
+                            CreateLocalLight(RoadPath.Point(signDistance, side * 18.5f, 4.8f),
+                                signGlow[BlockHash(block, side * 7) % signGlow.Length], 4f, 8f);
+                        }
                     }
 
                     // Grounded sidewalk street lamps
-                    var lamp = PlaceBiomeModelOnRoad("HongKong", "Lamp/SM_lamp", materials["Kowloon Props"],
-                        z + 14f, side * 12.8f, 0.14f, new Vector3(-90f, facing, 0f), Vector3.one, "Street Lamp");
-                    if (lamp != null)
+                    if (block % 3 == 0)
                     {
-                        NormalizeModelHeight(lamp, 6.4f, 0.14f);
-                        CreateLocalLight(RoadPath.Point(z + 14f, side * 12.8f, 5.5f), new Color(1f, 0.82f, 0.55f), 9f, 15f);
+                        var lamp = PlaceBiomeModelOnRoad("HongKong", "Lamp/SM_lamp", materials["Kowloon Props"],
+                            z + 14f, side * 18.2f, 0.14f, new Vector3(-90f, facing, 0f), Vector3.one, "Street Lamp");
+                        if (lamp != null)
+                        {
+                            NormalizeModelHeight(lamp, 6.4f, 0.14f);
+                            CreateLocalLight(RoadPath.Point(z + 14f, side * 18.2f, 5.5f), new Color(1f, 0.82f, 0.55f), 4f, 8f);
+                        }
                     }
                 }
             }
@@ -3226,8 +3230,8 @@ namespace RoadRage.UnityRemake
             light.type = LightType.Point;
             light.transform.position = position;
             light.color = color;
-            light.intensity = intensity;
-            light.range = range;
+            light.intensity = Mathf.Clamp(intensity * 0.18f, 0.4f, 1.8f);
+            light.range = Mathf.Clamp(range * 0.70f, 3.5f, 10.0f);
             light.shadows = LightShadows.None;
         }
 
@@ -4049,21 +4053,21 @@ namespace RoadRage.UnityRemake
         {
             var driver = new GameObject("Visible Driver").transform;
             driver.SetParent(vehicle, false);
-            driver.localPosition = new Vector3(-0.43f, 0f, -0.26f);
+            driver.localPosition = new Vector3(-0.43f, -0.28f, -0.26f);
             var torso = Primitive(PrimitiveType.Capsule, "Driver Torso", Vector3.zero,
-                new Vector3(0.29f, 0.36f, 0.29f), materials["Driver Jacket"], driver);
-            torso.transform.localPosition = new Vector3(0f, 0.58f, -0.02f);
+                new Vector3(0.26f, 0.32f, 0.26f), materials["Driver Jacket"], driver);
+            torso.transform.localPosition = new Vector3(0f, 0.35f, -0.02f);
             var head = Primitive(PrimitiveType.Sphere, "Driver Head", Vector3.zero,
-                new Vector3(0.24f, 0.28f, 0.24f), materials["Driver Skin"], driver);
-            head.transform.localPosition = new Vector3(0f, 1.12f, 0.08f);
+                new Vector3(0.20f, 0.22f, 0.20f), materials["Driver Skin"], driver);
+            head.transform.localPosition = new Vector3(0f, 0.64f, 0.04f);
             var hair = Primitive(PrimitiveType.Sphere, "Driver Hair", Vector3.zero,
-                new Vector3(0.245f, 0.13f, 0.25f), materials["Driver Hair"], driver);
-            hair.transform.localPosition = new Vector3(0f, 1.30f, 0.05f);
-            foreach (var armX in new[] { -0.19f, 0.19f })
+                new Vector3(0.205f, 0.10f, 0.21f), materials["Driver Hair"], driver);
+            hair.transform.localPosition = new Vector3(0f, 0.72f, 0.03f);
+            foreach (var armX in new[] { -0.16f, 0.16f })
             {
                 var arm = Primitive(PrimitiveType.Cylinder, "Driver Arm", Vector3.zero,
-                    new Vector3(0.075f, 0.30f, 0.075f), materials["Driver Jacket"], driver);
-                arm.transform.localPosition = new Vector3(armX, 0.69f, 0.30f);
+                    new Vector3(0.065f, 0.26f, 0.065f), materials["Driver Jacket"], driver);
+                arm.transform.localPosition = new Vector3(armX, 0.44f, 0.22f);
                 arm.transform.localRotation = Quaternion.Euler(65f, 0f, armX < 0f ? -16f : 16f);
             }
         }
