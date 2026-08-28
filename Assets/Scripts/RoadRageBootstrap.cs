@@ -328,7 +328,9 @@ namespace RoadRage.UnityRemake
             if (globalHorizonSky != null) Destroy(globalHorizonSky);
             EnsureGlobalHorizonSky(biomeIndex);
 
-            // 8. Reset player car
+            // 8. Reset player car & pursuit
+            if (RoadRagePolicePursuitDirector.Instance != null)
+                RoadRagePolicePursuitDirector.Instance.ResetPursuit();
             GameState.Integrity = GameState.MaxIntegrity;
             if (car != null)
             {
@@ -4281,6 +4283,9 @@ namespace RoadRage.UnityRemake
             var aftertouchDirector = cameraObject.AddComponent<RoadRageAftertouchDirector>();
             aftertouchDirector.BindCameraAndPlayer(camera, car);
 
+            var policeDirector = cameraObject.AddComponent<RoadRagePolicePursuitDirector>();
+            policeDirector.BindPlayer(car, camera);
+
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             if (reflectionProbe != null)
@@ -4659,6 +4664,8 @@ namespace RoadRage.UnityRemake
                     _ => "TAILGATER",
                 };
                 GameState.Award(sideSwipe ? 150 : 250, label);
+                if (RoadRagePolicePursuitDirector.Instance != null)
+                    RoadRagePolicePursuitDirector.Instance.AddHeat(0.35f);
                 // Even a clean takedown costs a little integrity - runs must end.
                 GameState.ApplyDamage((sideSwipe ? 1.5f : 3f) * absorb);
             }
@@ -4971,6 +4978,18 @@ namespace RoadRage.UnityRemake
             if (!string.IsNullOrEmpty(GameState.Message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.32f, 400f, 40f),
                     GameState.Message, titleStyle);
+
+            if (RoadRagePolicePursuitDirector.Instance != null && RoadRagePolicePursuitDirector.Instance.IsPursuitActive)
+            {
+                var heat = RoadRagePolicePursuitDirector.Instance.HeatLevel;
+                var stars = new string('★', heat) + new string('☆', 5 - heat);
+                var heatText = $"🚨 WANTED: {stars}  (HEAT {heat})";
+                var flash = Mathf.Sin(Time.unscaledTime * 8f) > 0f;
+                var prevColor = titleStyle.normal.textColor;
+                titleStyle.normal.textColor = flash ? new Color(1f, 0.25f, 0.2f) : new Color(0.2f, 0.65f, 1f);
+                GUI.Label(new Rect(Screen.width * 0.5f - 180f, 76f, 360f, 36f), heatText, titleStyle);
+                titleStyle.normal.textColor = prevColor;
+            }
             GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
             
             var pauseRect = new Rect(Screen.width - 130f, 20f, 110f, 44f);
