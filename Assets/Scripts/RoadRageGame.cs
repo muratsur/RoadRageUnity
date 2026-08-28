@@ -86,6 +86,13 @@ namespace RoadRage.UnityRemake
         public static int InnocentsHit;
         public static int RunStartScore;
 
+        // ---- Aftertouch & Crashbreaker state ----
+        public static bool IsAftertouchActive;
+        public static int AftertouchTakedowns;
+        public static int PileupDamage;
+        public static bool CrashbreakerReady;
+        public static bool CrashbreakerUsed;
+
         // ---- persisted ----
         public static int Cash;
         public static int UpgradeEngine;
@@ -184,12 +191,18 @@ namespace RoadRage.UnityRemake
             RunDistanceKm = 0f;
             Combo = 0;
             RunStartScore = Score;
+            IsAftertouchActive = false;
+            AftertouchTakedowns = 0;
+            PileupDamage = 0;
+            CrashbreakerReady = false;
+            CrashbreakerUsed = false;
         }
 
         public static int AwardCash(float completionFraction, int runStartScore)
         {
             var points = Mathf.Max(0, Score - runStartScore);
-            var earned = (int)(points * 0.1f) + (int)(completionFraction * 1200f) + 150;
+            var pileupBonus = Mathf.RoundToInt(PileupDamage * 0.05f) + (AftertouchTakedowns * 400);
+            var earned = (int)(points * 0.1f) + (int)(completionFraction * 1200f) + 150 + pileupBonus;
             Cash += earned;
             BumpDaily("cash", earned);
             Save();

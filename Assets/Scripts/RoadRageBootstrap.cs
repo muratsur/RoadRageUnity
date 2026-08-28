@@ -4278,6 +4278,9 @@ namespace RoadRage.UnityRemake
             var takedownDirector = cameraObject.AddComponent<RoadRageTakedownDirector>();
             takedownDirector.BindCameraAndPlayer(camera, car);
 
+            var aftertouchDirector = cameraObject.AddComponent<RoadRageAftertouchDirector>();
+            aftertouchDirector.BindCameraAndPlayer(camera, car);
+
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             if (reflectionProbe != null)
@@ -4675,6 +4678,17 @@ namespace RoadRage.UnityRemake
             if (audioVfx != null)
                 audioVfx.PlayCrashImpact(contactPoint, traffic.IsViolator);
 
+            if (GameState.Integrity <= 0f && !GameState.IsAftertouchActive)
+            {
+                if (RoadRageAftertouchDirector.Instance != null)
+                {
+                    var tumbleVel = transform.forward * (SpeedKph / 3.6f * 0.92f) + (traffic.transform.position - transform.position).normalized * 7.5f + Vector3.up * 8.5f;
+                    var tumbleTorque = new Vector3(Random.Range(-18f, 18f), Random.Range(12f, 28f), Random.Range(-30f, 30f));
+                    RoadRageAftertouchDirector.Instance.TriggerAftertouch(transform, this, tumbleVel, tumbleTorque);
+                    return true;
+                }
+            }
+
             if (traffic.IsViolator || SpeedKph >= 60f)
             {
                 if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
@@ -4974,21 +4988,54 @@ namespace RoadRage.UnityRemake
                 return;
             }
 
+            if (GameState.IsAftertouchActive)
+            {
+                GUI.Label(new Rect(0f, 22f, Screen.width, 44f), "💥 IMPACT TIME — AFTERTOUCH 💥", pickerTitleStyle);
+                GUI.Label(new Rect(0f, 66f, Screen.width, 32f),
+                    $"STEER YOUR WRECK INTO TRAFFIC!   PILEUP: ${GameState.PileupDamage:N0}   TAKEDOWNS: {GameState.AftertouchTakedowns}", readoutStyle);
+
+                if (GameState.CrashbreakerReady)
+                {
+                    var cbWidth = Mathf.Min(340f, Screen.width * 0.6f);
+                    var cbRect = new Rect(Screen.width * 0.5f - cbWidth * 0.5f, Screen.height * 0.72f, cbWidth, 60f);
+                    var prevBg = GUI.backgroundColor;
+                    GUI.backgroundColor = new Color(1f, 0.28f, 0.08f, 0.95f);
+                    if (GUI.Button(cbRect, "💥 CRASHBREAKER (SPACE / TAP)", buttonStyle))
+                    {
+                        if (RoadRageAftertouchDirector.Instance != null)
+                            RoadRageAftertouchDirector.Instance.DetonateCrashbreaker();
+                    }
+                    GUI.backgroundColor = prevBg;
+                }
+
+                var atSize = Mathf.Clamp(Screen.height * 0.14f, 84f, 136f);
+                var atBottom = Screen.height - atSize - 24f;
+                var atLeft = GUI.RepeatButton(new Rect(24f, atBottom, atSize, atSize), "◄ STEER", buttonStyle);
+                var atRight = GUI.RepeatButton(new Rect(36f + atSize, atBottom, atSize, atSize), "STEER ►", buttonStyle);
+                if (RoadRageAftertouchDirector.Instance != null)
+                {
+                    RoadRageAftertouchDirector.Instance.TouchAftertouchSteer = atLeft ? -1f : atRight ? 1f : 0f;
+                }
+                return;
+            }
+
             if (GameState.RunOver)
             {
                 GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), dimTexture);
-                GUI.Label(new Rect(0f, Screen.height * 0.26f, Screen.width, 60f), "RUN OVER", pickerTitleStyle);
-                GUI.Label(new Rect(0f, Screen.height * 0.36f, Screen.width, 140f),
-                    $"SCORE {GameState.Score}\n{GameState.Takedowns} TAKEDOWNS   " +
-                    $"{GameState.InnocentsHit} INNOCENTS HIT\n{GameState.RunDistanceKm:0.00} KM\n\n" +
-                    $"BANKED  ${GameState.LastRunCash:N0}", pickerTitleStyle);
-                if (GUI.Button(new Rect(Screen.width * 0.5f - 210f, Screen.height * 0.68f, 200f, 56f),
+                GUI.Label(new Rect(0f, Screen.height * 0.18f, Screen.width, 50f), "💥 CRASH SUMMARY 💥", pickerTitleStyle);
+                GUI.Label(new Rect(0f, Screen.height * 0.28f, Screen.width, 220f),
+                    $"FINAL SCORE: {GameState.Score:N0}   •   {GameState.Takedowns} TAKEDOWNS\n" +
+                    $"💥 PILEUP DAMAGE: ${GameState.PileupDamage:N0}\n" +
+                    $"🔥 AFTERTOUCH TAKEDOWNS: {GameState.AftertouchTakedowns}\n" +
+                    $"{GameState.RunDistanceKm:0.00} KM TRAVELLED   •   {GameState.InnocentsHit} INNOCENTS\n\n" +
+                    $"TOTAL CASH BANKED: ${GameState.LastRunCash:N0}", pickerTitleStyle);
+                if (GUI.Button(new Rect(Screen.width * 0.5f - 210f, Screen.height * 0.72f, 200f, 56f),
                         "DRIVE AGAIN", buttonStyle))
                 {
                     GameState.BeginRun();
-                    world.ReloadBiome(world.BiomeName);
+                    w.ReloadBiome(w.BiomeName);
                 }
-                if (GUI.Button(new Rect(Screen.width * 0.5f + 10f, Screen.height * 0.68f, 200f, 56f),
+                if (GUI.Button(new Rect(Screen.width * 0.5f + 10f, Screen.height * 0.72f, 200f, 56f),
                         "GARAGE", buttonStyle))
                     garageOpen = true;
                 return;
