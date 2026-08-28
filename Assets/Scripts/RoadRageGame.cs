@@ -98,6 +98,9 @@ namespace RoadRage.UnityRemake
         public static int UpgradeEngine;
         public static int UpgradeArmour;
         public static int UpgradeBoost;
+        public static int TuningTires; // 0: Grip, 1: Drift
+        public static int TuningInduction; // 0: Supercharger, 1: Turbocharger
+        public static int TuningRamBar; // 0: Stock, 1: Heavy Push-Bar, 2: Battering Ram
         public static List<int> OwnedCars = new() { 0 };
         public static int SelectedCar;
 
@@ -304,6 +307,9 @@ namespace RoadRage.UnityRemake
             PlayerPrefs.SetInt("rr_up_engine", UpgradeEngine);
             PlayerPrefs.SetInt("rr_up_armor", UpgradeArmour);
             PlayerPrefs.SetInt("rr_up_boost", UpgradeBoost);
+            PlayerPrefs.SetInt("rr_tune_tires", TuningTires);
+            PlayerPrefs.SetInt("rr_tune_induct", TuningInduction);
+            PlayerPrefs.SetInt("rr_tune_rambar", TuningRamBar);
             PlayerPrefs.SetString("rr_owned_cars", string.Join(",", OwnedCars));
             PlayerPrefs.SetInt("rr_selected_car", SelectedCar);
             PlayerPrefs.Save();
@@ -326,6 +332,9 @@ namespace RoadRage.UnityRemake
             UpgradeEngine = PlayerPrefs.GetInt("rr_up_engine", 0);
             UpgradeArmour = PlayerPrefs.GetInt("rr_up_armor", 0);
             UpgradeBoost = PlayerPrefs.GetInt("rr_up_boost", 0);
+            TuningTires = PlayerPrefs.GetInt("rr_tune_tires", 0);
+            TuningInduction = PlayerPrefs.GetInt("rr_tune_induct", 0);
+            TuningRamBar = PlayerPrefs.GetInt("rr_tune_rambar", 0);
             OwnedCars = ParseInts(PlayerPrefs.GetString("rr_owned_cars", "0"));
             if (OwnedCars.Count == 0) OwnedCars.Add(0);
             SelectedCar = PlayerPrefs.GetInt("rr_selected_car", 0);

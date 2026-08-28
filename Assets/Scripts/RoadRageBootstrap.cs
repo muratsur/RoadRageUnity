@@ -4289,6 +4289,8 @@ namespace RoadRage.UnityRemake
             var boostDirector = cameraObject.AddComponent<RoadRageBoostDirector>();
             boostDirector.BindPlayer(car, camera);
 
+            cameraObject.AddComponent<RoadRageHapticsDirector>();
+
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             if (reflectionProbe != null)
@@ -4591,17 +4593,24 @@ namespace RoadRage.UnityRemake
             var steer = SteerInput;
             var throttle = Mathf.Clamp(GameInput.GetThrottle() + TouchThrottle, -1f, 1f);
 
-            // Car choice and engine upgrades scale top speed and how hard it pulls.
+            // Car choice, engine upgrades, and tuning parts scale performance.
             var car = GameState.CurrentCar;
             var enginePower = 1f + GameState.UpgradeEngine * 0.05f;
+            var isTurbo = GameState.TuningInduction == 1;
+            var isDrift = GameState.TuningTires == 1;
+
+            var topSpeedBonus = isTurbo ? 22f : 0f;
+            var accelBonus = !isTurbo ? 1.22f : 1.0f; // Supercharger launch punch
             var isBoosting = RoadRageBoostDirector.Instance != null && RoadRageBoostDirector.Instance.IsBoosting;
             var boostMult = isBoosting ? 1.52f : 1.0f;
             var boostAccel = isBoosting ? 2.8f : 1.0f;
 
-            var targetSpeed = (throttle < -0.1f ? 30f : throttle > 0.1f ? 150f * car.Speed * enginePower : 88f * car.Speed) * boostMult;
-            var accelRate = (throttle < 0f ? 75f : 35f) * car.Acceleration * enginePower * boostAccel;
+            var targetSpeed = ((throttle < -0.1f ? 30f : throttle > 0.1f ? (150f * car.Speed + topSpeedBonus) * enginePower : 88f * car.Speed)) * boostMult;
+            var accelRate = (throttle < 0f ? 75f : 35f) * car.Acceleration * enginePower * accelBonus * boostAccel;
             SpeedKph = Mathf.MoveTowards(SpeedKph, targetSpeed, Time.deltaTime * accelRate);
-            lateralVelocity = Mathf.Lerp(lateralVelocity, steer * 10f, 1f - Mathf.Exp(-7f * Time.deltaTime));
+
+            var steerSpeed = isDrift ? 13.5f : 10.5f;
+            lateralVelocity = Mathf.Lerp(lateralVelocity, steer * steerSpeed, 1f - Mathf.Exp(-7f * Time.deltaTime));
             var forwardTravel = SpeedKph / 3.6f * Time.deltaTime;
             totalDistance += forwardTravel;
 
@@ -4644,8 +4653,14 @@ namespace RoadRage.UnityRemake
             var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
 
             // Armour is the reason to drive a truck: it cuts how much speed an impact
-            // scrubs off and how far you get shoved. Upgrades stack on top of the chassis.
-            var armour = GameState.CurrentCar.Armour * (1f + GameState.UpgradeArmour * 0.06f);
+            // scrubs off and how far you get shoved. Upgrades and ram bars stack on top of the chassis.
+            var ramArmorBonus = GameState.TuningRamBar switch
+            {
+                2 => 1.65f, // Titanium Battering Ram
+                1 => 1.30f, // Steel Push-Bar
+                _ => 1.0f
+            };
+            var armour = GameState.CurrentCar.Armour * (1f + GameState.UpgradeArmour * 0.06f) * ramArmorBonus;
             // Must be allowed above 1 or sub-1 armour (the bikes) would clamp to baseline
             // and their fragility would be cosmetic only.
             var absorb = Mathf.Clamp(1f / Mathf.Max(0.25f, armour), 0.28f, 1.75f);
@@ -5185,6 +5200,59 @@ namespace RoadRage.UnityRemake
                 if (GUI.Button(rect, label, maxed || GameState.Cash < cost ? lockedStyle : buttonStyle) && !maxed)
                     GameState.BuyUpgrade(key);
             }
+
+            // ---- Right side panel: Performance Tuning ----
+            var rightPanelW = Mathf.Max(240f, w * 0.24f);
+            var rightX = w - rightPanelW;
+            GUI.DrawTexture(new Rect(rightX, 0f, rightPanelW, h), dimTexture);
+            var tuneY = h * 0.16f;
+            GUI.Label(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 32f), "PERFORMANCE TUNING", titleStyle);
+            tuneY += 38f;
+
+            // 1. Forced Induction Tuning
+            var inductLabel = GameState.TuningInduction == 0 ? "SUPERCHARGER" : "TURBOCHARGER";
+            if (GUI.Button(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 42f), $"INDUCTION: {inductLabel}", buttonStyle))
+            {
+                GameState.TuningInduction = (GameState.TuningInduction + 1) % 2;
+                GameState.Save();
+            }
+            tuneY += 46f;
+            var inductDesc = GameState.TuningInduction == 0 ? "⚡ +22% Launch Acceleration" : "🔥 +22 km/h Top Speed";
+            GUI.Label(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 24f), inductDesc, readoutStyle);
+            tuneY += 30f;
+
+            // 2. Tire Compound Tuning
+            var tireLabel = GameState.TuningTires == 0 ? "RACING GRIP" : "DRIFT COMPOUND";
+            if (GUI.Button(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 42f), $"TIRES: {tireLabel}", buttonStyle))
+            {
+                GameState.TuningTires = (GameState.TuningTires + 1) % 2;
+                GameState.Save();
+            }
+            tuneY += 46f;
+            var tireDesc = GameState.TuningTires == 0 ? "🎯 Laser-Sharp Lane Control" : "💨 Power-Slide Drift Boost";
+            GUI.Label(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 24f), tireDesc, readoutStyle);
+            tuneY += 30f;
+
+            // 3. Ramming Bar Tuning
+            var ramName = GameState.TuningRamBar switch
+            {
+                2 => "TITANIUM RAM",
+                1 => "STEEL PUSH-BAR",
+                _ => "STOCK BUMPER"
+            };
+            if (GUI.Button(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 42f), $"RAM: {ramName}", buttonStyle))
+            {
+                GameState.TuningRamBar = (GameState.TuningRamBar + 1) % 3;
+                GameState.Save();
+            }
+            tuneY += 46f;
+            var ramDesc = GameState.TuningRamBar switch
+            {
+                2 => "💥 +65% Ram Power / Heavy Armor",
+                1 => "🛡️ +30% Takedown Power",
+                _ => "Standard Bumper"
+            };
+            GUI.Label(new Rect(rightX + 16f, tuneY, rightPanelW - 32f, 24f), ramDesc, readoutStyle);
 
             // ---- Bottom bar: browse, buy/select, back ----
             var barY = h * 0.90f;
