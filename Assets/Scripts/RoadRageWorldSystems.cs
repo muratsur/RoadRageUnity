@@ -67,6 +67,8 @@ namespace RoadRage.UnityRemake
             return tangent.normalized;
         }
 
+        public static Vector3 Tangent(float distance) => Forward(distance);
+
         /// True tangent including gradient, so vehicles pitch nose-up climbing.
         public static Vector3 ForwardPitched(float distance) =>
             (Center(distance + 0.6f) - Center(distance - 0.6f)).normalized;

@@ -25,7 +25,7 @@ namespace RoadRage.UnityRemake
         private float aftertouchTimer;
         private float slowRestTimer;
         private const float MaxAftertouchDuration = 5.5f;
-        private readonly HashSet<int> impactedTrafficIds = new();
+        private readonly HashSet<TrafficCarController> impactedTraffic = new();
 
         public float TouchAftertouchSteer { get; set; }
 
@@ -129,7 +129,7 @@ namespace RoadRage.UnityRemake
             GameState.CrashbreakerUsed = false;
             GameState.AftertouchTakedowns = 0;
             GameState.PileupDamage = 12500; // Base vehicle write-off cost
-            impactedTrafficIds.Clear();
+            impactedTraffic.Clear();
             aftertouchTimer = 0f;
             slowRestTimer = 0f;
 
@@ -185,7 +185,7 @@ namespace RoadRage.UnityRemake
 
             // 2. Apply Aftertouch Lateral Steering Impulses
             // Steers the sliding wreck smoothly across highway lanes into traffic
-            var roadHeading = RoadPath.Tangent(playerController != null ? playerController.RoadDistance : 0f);
+            var roadHeading = RoadPath.Forward(playerController != null ? playerController.RoadDistance : 0f);
             var roadRight = Vector3.Cross(Vector3.up, roadHeading).normalized;
 
             var steerForce = roadRight * (steer * 9500f * playerRb.mass * Time.fixedDeltaTime);
@@ -275,9 +275,9 @@ namespace RoadRage.UnityRemake
             foreach (var col in colliders)
             {
                 var traffic = col.GetComponentInParent<TrafficCarController>();
-                if (traffic != null && !impactedTrafficIds.Contains(traffic.GetInstanceID()))
+                if (traffic != null && !impactedTraffic.Contains(traffic))
                 {
-                    impactedTrafficIds.Add(traffic.GetInstanceID());
+                    impactedTraffic.Add(traffic);
                     vehiclesBlown++;
 
                     var trb = traffic.GetComponent<Rigidbody>();
@@ -312,9 +312,9 @@ namespace RoadRage.UnityRemake
             foreach (var hit in hits)
             {
                 var traffic = hit.GetComponentInParent<TrafficCarController>();
-                if (traffic != null && !impactedTrafficIds.Contains(traffic.GetInstanceID()))
+                if (traffic != null && !impactedTraffic.Contains(traffic))
                 {
-                    impactedTrafficIds.Add(traffic.GetInstanceID());
+                    impactedTraffic.Add(traffic);
                     var trb = traffic.GetComponent<Rigidbody>();
                     if (trb == null) trb = traffic.gameObject.AddComponent<Rigidbody>();
                     trb.isKinematic = false;
