@@ -669,7 +669,8 @@ namespace RoadRage.UnityRemake
                 billboard.SetColor("_EmissionColor", new Color(1.9f, 1.3f, 2.4f));
                 billboard.EnableKeyword("_EMISSION");
             }
-            MakeMaterial("City Palm", new Color(0.055f, 0.09f, 0.075f), 0f, 0.16f);
+            BiomeSurface(BiomeMaterial("City Palm", "Synthwave", "T_palm_tree_D", "T_palm_tree_N", Color.white, 0.1f, 0.35f), "Synthwave", "T_palm_tree_MSO");
+            materials["Palm Frond"] = materials["City Palm"];
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
 
             var sand = BiomeSurface(BiomeMaterial("Canyon Sand", "RedCanyon", "T_sand_D", "T_sand_N", new Color(0.94f, 0.76f, 0.55f), 0f, 0.08f), "RedCanyon", "T_sand_MSO", 0.4f);
