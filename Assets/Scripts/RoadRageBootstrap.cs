@@ -100,9 +100,6 @@ namespace RoadRage.UnityRemake
                 DestroyImmediate(oldHud);
             }
 
-            if (FindAnyObjectByType<AudioListener>() == null)
-                gameObject.AddComponent<AudioListener>();
-
 			biomeName = ResolveBiome();
 			Time.timeScale = 1f;
             Application.targetFrameRate = 120;
@@ -4254,7 +4251,15 @@ namespace RoadRage.UnityRemake
 
         private void BuildCamera()
         {
-            foreach (var oldCamera in FindObjectsByType<Camera>(FindObjectsInactive.Exclude)) Destroy(oldCamera.gameObject);
+            foreach (var oldCamera in FindObjectsByType<Camera>(FindObjectsInactive.Include))
+            {
+                DestroyImmediate(oldCamera.gameObject);
+            }
+            foreach (var oldListener in FindObjectsByType<AudioListener>(FindObjectsInactive.Include))
+            {
+                DestroyImmediate(oldListener);
+            }
+
             var cameraObject = new GameObject("Cinematic Chase Camera");
             var camera = cameraObject.AddComponent<Camera>();
             var mood = Mood();
@@ -4265,8 +4270,7 @@ namespace RoadRage.UnityRemake
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = Color.Lerp(mood.Sky, mood.Equator, 0.35f);
             ApplyCityShotCameraPreset(camera);
-            if (FindAnyObjectByType<AudioListener>() == null)
-                cameraObject.AddComponent<AudioListener>();
+            cameraObject.AddComponent<AudioListener>();
             var chase = cameraObject.AddComponent<ChaseCamera>();
             chase.target = car;
             chase.player = car.GetComponent<ArcadeCarController>();
