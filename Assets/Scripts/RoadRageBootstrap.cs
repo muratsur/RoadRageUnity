@@ -148,10 +148,18 @@ namespace RoadRage.UnityRemake
             startDistance = Mathf.Max(0f, startKm * 1000f);
             ApplyCityRenderPreset(hadStartOverride);
 
-            // Strip any stray point/spot lights or halo objects from imported scenes
+            // Strip any stray point/spot lights or halo/flare objects from imported scenes
             foreach (var l in FindObjectsByType<Light>(FindObjectsInactive.Include))
             {
+                l.flare = null;
                 if (l.type != LightType.Directional) DestroyImmediate(l.gameObject);
+            }
+            foreach (var c in FindObjectsByType<Component>(FindObjectsInactive.Include))
+            {
+                if (c != null && (c.GetType().Name == "FlareLayer" || c.GetType().Name.Contains("LensFlare") || c.GetType().Name.Contains("Halo")))
+                {
+                    DestroyImmediate(c);
+                }
             }
             RenderSettings.haloStrength = 0f;
             RenderSettings.flareStrength = 0f;
@@ -997,6 +1005,7 @@ namespace RoadRage.UnityRemake
             var sun = new GameObject("Sun").AddComponent<Light>();
             sunLight = sun;
             sun.type = LightType.Directional;
+            sun.flare = null;
             sun.color = mood.SunColor;
             sun.intensity = mood.SunIntensity * weather.SunScale;
             sun.shadows = LightShadows.Soft;
@@ -4265,6 +4274,8 @@ namespace RoadRage.UnityRemake
 
             var cameraObject = new GameObject("Cinematic Chase Camera");
             var camera = cameraObject.AddComponent<Camera>();
+            var flareLayer = cameraObject.GetComponent("FlareLayer");
+            if (flareLayer != null) DestroyImmediate(flareLayer);
             var mood = Mood();
             camera.fieldOfView = 64f;
             camera.nearClipPlane = 0.12f;
