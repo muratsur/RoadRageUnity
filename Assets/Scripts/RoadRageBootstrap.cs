@@ -877,10 +877,10 @@ namespace RoadRage.UnityRemake
                 new Color(0.52f, 0.55f, 0.64f), 0.1f, 0.3f, null), "CyberpunkCity", "T_concrete_building_MSO");
 
             var hologram = MakeMaterial("Cyber Hologram", new Color(0.22f, 0.86f, 1f), 0.1f, 0.85f);
-            hologram.SetColor("_EmissionColor", new Color(0.45f, 1.5f, 1.9f));
+            hologram.SetColor("_EmissionColor", new Color(0.45f, 1.0f, 1.2f));
             hologram.EnableKeyword("_EMISSION");
             var neonStrip = MakeMaterial("Cyber Neon Strip", new Color(1f, 0.22f, 0.62f), 0.2f, 0.8f);
-            neonStrip.SetColor("_EmissionColor", new Color(4.2f, 0.9f, 2.4f));
+            neonStrip.SetColor("_EmissionColor", new Color(1.1f, 0.4f, 0.8f));
             neonStrip.EnableKeyword("_EMISSION");
 
             BiomeSurface(BiomeMaterial("Kowloon Building", "HongKong", "T_building_modules_D", "T_building_modules_N",
@@ -890,12 +890,12 @@ namespace RoadRage.UnityRemake
             var kowloonSkyline = BiomeSurface(BiomeMaterial("Kowloon Skyline", "HongKong", "T_building_modules_D",
                 "T_building_modules_N", new Color(0.62f, 0.60f, 0.58f), 0.12f, 0.36f, "T_building_modules_E"),
                 "HongKong", "T_building_modules_MSO");
-            kowloonSkyline.SetColor("_EmissionColor", new Color(2.6f, 2.2f, 1.8f));
+            kowloonSkyline.SetColor("_EmissionColor", new Color(1.0f, 1.0f, 1.0f));
             BiomeSurface(BiomeMaterial("Kowloon Building B", "HongKong", "T_building_modules_02_D", "T_building_modules_02_N",
                 new Color(0.60f, 0.58f, 0.56f), 0.12f, 0.36f, "T_building_modules_02_E"), "HongKong", "T_building_modules_02_MSO");
             var kowloonSign = BiomeSurface(BiomeMaterial("Kowloon Sign", "HongKong", "T_chinese_signs_D", "T_chinese_signs_N",
                 Color.white, 0.15f, 0.55f, "T_chinese_signs_E"), "HongKong", "T_chinese_signs_MSO");
-            kowloonSign.SetColor("_EmissionColor", new Color(3.8f, 1.6f, 1.4f));
+            kowloonSign.SetColor("_EmissionColor", new Color(1.1f, 1.0f, 1.0f));
             BiomeSurface(BiomeMaterial("Kowloon Food", "HongKong", "T_food_market_D", "T_food_market_N",
                 new Color(0.82f, 0.78f, 0.7f), 0.18f, 0.4f), "HongKong", "T_food_market_MSO");
             BiomeSurface(BiomeMaterial("Kowloon Produce", "HongKong", "T_vegatables_D", "T_vegatables_N",
@@ -944,37 +944,14 @@ namespace RoadRage.UnityRemake
             foreach (var name in new[] { "Road", "Shoulder" })
             {
                 if (!materials.TryGetValue(name, out var material)) continue;
-                // Cap well under 1: smoothness 1 is a perfect mirror with no diffuse term,
-                // which turns the road black whenever the probe cubemap is dark.
-                var dry = name == "Road" ? 0.55f : 0.45f;
-                material.SetFloat("_Smoothness", Mathf.Lerp(dry, 0.82f, wetness));
-                material.SetColor("_BaseColor", material.GetColor("_BaseColor") * Mathf.Lerp(1f, 0.62f, wetness));
+                var dry = name == "Road" ? 0.25f : 0.15f;
+                material.SetFloat("_Smoothness", Mathf.Lerp(dry, 0.40f, wetness));
+                material.SetColor("_BaseColor", material.GetColor("_BaseColor") * Mathf.Lerp(1f, 0.82f, wetness));
             }
         }
 
-        /// URP 17.5 has no screen-space reflections, so nearby neon has to be captured
-        /// into a realtime probe. It rides with the camera and refreshes on a timer -
-        /// every-frame capture costs six extra render passes and is not worth it at speed.
         private void BuildReflectionProbe()
         {
-            var probeObject = new GameObject("Street Reflection Probe");
-            var probe = probeObject.AddComponent<ReflectionProbe>();
-            probe.mode = ReflectionProbeMode.Realtime;
-            probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
-            // Time slicing spreads one capture over several frames, which leaves the
-            // cubemap black on the first frames - fine in motion, wrong for screenshots.
-            probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.NoTimeSlicing;
-            probe.resolution = 64;
-            probe.hdr = true;
-            probe.shadowDistance = 0f;
-            probe.cullingMask = ~0;
-            probe.importance = 2;
-            probe.clearFlags = ReflectionProbeClearFlags.Skybox;
-            probe.size = new Vector3(220f, 90f, 220f);
-            probe.boxProjection = false;
-            probe.nearClipPlane = 0.6f;
-            probe.farClipPlane = 220f;
-            reflectionProbe = probe;
         }
 
         private void BuildLighting()
@@ -997,10 +974,6 @@ namespace RoadRage.UnityRemake
 
             ApplyRoadWetness(Mathf.Clamp01(mood.RoadWetness + weather.WetnessAdd));
             ApplyPlatformQuality();
-            // The realtime probe costs six scene captures per refresh. Desktop absorbs
-            // it (1.2-2.6 ms/frame total); phones do not, and the wet-road smoothness
-            // still reads against the skybox reflection without it.
-            if (!Application.isMobilePlatform) BuildReflectionProbe();
 
             var sun = new GameObject("Sun").AddComponent<Light>();
             sunLight = sun;
