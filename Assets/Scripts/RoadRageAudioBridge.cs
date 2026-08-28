@@ -107,6 +107,20 @@ namespace RoadRage.UnityRemake
             sfxSource.PlayOneShot(CreateProceduralStingerClip(), 0.9f);
         }
 
+        public void PlayNitro()
+        {
+            if (sfxSource == null) return;
+            sfxSource.pitch = Random.Range(1.3f, 1.55f);
+            sfxSource.PlayOneShot(CreateProceduralChirpClip(), 0.85f);
+        }
+
+        public void PlayNearMissChirp()
+        {
+            if (sfxSource == null) return;
+            sfxSource.pitch = Random.Range(1.6f, 1.9f);
+            sfxSource.PlayOneShot(CreateProceduralChirpClip(), 0.5f);
+        }
+
         public void SetSlowMotionFilter(bool enabled)
         {
             targetLowPassCutoff = enabled ? 850f : 22000f;

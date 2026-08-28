@@ -1,0 +1,263 @@
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+
+namespace RoadRage.UnityRemake
+{
+    /// <summary>
+    /// Burnout Boost & Infinite Boost Chain Director:
+    /// Manages the risk/reward Nitro boost tank, near-miss detection, oncoming lane charge,
+    /// high-speed FOV speed warp, exhaust flame VFX, and Burnout chain refills.
+    /// </summary>
+    public sealed class RoadRageBoostDirector : MonoBehaviour
+    {
+        public static RoadRageBoostDirector Instance { get; private set; }
+
+        public float BoostAmount { get; private set; } = 40f; // 0 to 100
+        public const float MaxBoost = 100f;
+        public bool IsBoosting { get; private set; }
+        public int BurnoutChain { get; private set; } = 0;
+        public bool IsFullBoost => BoostAmount >= MaxBoost;
+
+        private Transform playerCar;
+        private ArcadeCarController playerController;
+        private Camera mainCamera;
+        private float originalFov = 64f;
+        private float nearMissCooldown;
+        private float continuousBurnTimer;
+        private int nearMissesDuringBurn;
+        private bool startedBurnAtMax;
+
+        private ParticleSystem leftFlameFx;
+        private ParticleSystem rightFlameFx;
+
+        public bool TouchNitroPressed { get; set; }
+
+        private void Awake()
+        {
+            if (Instance != null && Instance != this)
+            {
+                DestroyImmediate(this);
+                return;
+            }
+            Instance = this;
+            InitializeExhaustVfx();
+        }
+
+        private void InitializeExhaustVfx()
+        {
+            var particleMat = Resources.Load<Material>("WeatherParticle") 
+                ?? new Material(Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default"));
+
+            leftFlameFx = CreateFlameEmitter("Left Exhaust Flame", particleMat);
+            rightFlameFx = CreateFlameEmitter("Right Exhaust Flame", particleMat);
+        }
+
+        private ParticleSystem CreateFlameEmitter(string name, Material mat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.25f;
+            main.startSpeed = 16f;
+            main.startSize = 0.35f;
+            main.startColor = new Color(0.15f, 0.75f, 1f, 0.95f); // Cyan Nitro Flame
+            main.maxParticles = 150;
+            main.playOnAwake = false;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 40f;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 8f;
+            shape.radius = 0.08f;
+
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.material = mat;
+            return ps;
+        }
+
+        public void BindPlayer(Transform player, Camera cam)
+        {
+            playerCar = player;
+            mainCamera = cam;
+            if (cam != null) originalFov = cam.fieldOfView;
+            if (player != null)
+            {
+                playerController = player.GetComponent<ArcadeCarController>();
+                if (leftFlameFx != null)
+                {
+                    leftFlameFx.transform.SetParent(player, false);
+                    leftFlameFx.transform.localPosition = new Vector3(-0.55f, 0.32f, -2.1f);
+                    leftFlameFx.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+                if (rightFlameFx != null)
+                {
+                    rightFlameFx.transform.SetParent(player, false);
+                    rightFlameFx.transform.localPosition = new Vector3(0.55f, 0.32f, -2.1f);
+                    rightFlameFx.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+            }
+        }
+
+        public void AddBoost(float amount, string reason = "")
+        {
+            if (IsBoosting && BoostAmount >= MaxBoost) return;
+            BoostAmount = Mathf.Clamp(BoostAmount + amount, 0f, MaxBoost);
+            if (!string.IsNullOrEmpty(reason))
+            {
+                GameState.Show($"{reason}  +{amount:0}% BOOST");
+            }
+        }
+
+        private void Update()
+        {
+            if (playerCar == null || playerController == null || GameState.RunOver || GameState.IsAftertouchActive)
+            {
+                if (IsBoosting) StopBoosting();
+                return;
+            }
+
+            // 1. Detect Boost Input (Shift, Gamepad Button East / Right Trigger, Touch)
+            var kb = UnityEngine.InputSystem.Keyboard.current;
+            var pad = UnityEngine.InputSystem.Gamepad.current;
+            var boostInput = (kb != null && (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed || kb.spaceKey.isPressed)) ||
+                             (pad != null && (pad.buttonEast.isPressed || pad.rightTrigger.isPressed)) ||
+                             TouchNitroPressed;
+
+            if (boostInput && BoostAmount > 0f)
+            {
+                if (!IsBoosting) StartBoosting();
+                // Drain boost: burns full tank in ~4.5 seconds
+                BoostAmount = Mathf.Max(0f, BoostAmount - Time.deltaTime * 22f);
+                continuousBurnTimer += Time.deltaTime;
+
+                if (BoostAmount <= 0f)
+                {
+                    OnBoostDepleted();
+                }
+            }
+            else if (IsBoosting)
+            {
+                StopBoosting();
+            }
+
+            // 2. Passive Boost Accumulation through Dangerous Driving
+            if (!IsBoosting)
+            {
+                // Oncoming Wrong-Way Driving charges boost!
+                if (playerController.LateralOffset < -1.5f && playerController.SpeedKph > 65f)
+                {
+                    AddBoost(Time.deltaTime * 12.5f);
+                }
+                // High Speed charges modest boost
+                if (playerController.SpeedKph > 140f)
+                {
+                    AddBoost(Time.deltaTime * 4.5f);
+                }
+            }
+
+            // 3. Near-Miss Scanner
+            DetectNearMisses();
+
+            // 4. Dynamic Camera FOV Speed Warp during Boost
+            if (mainCamera != null)
+            {
+                var targetFov = IsBoosting ? originalFov + 14f : originalFov;
+                mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, targetFov, Time.deltaTime * 5.5f);
+            }
+        }
+
+        private void StartBoosting()
+        {
+            IsBoosting = true;
+            startedBurnAtMax = BoostAmount >= 95f;
+            continuousBurnTimer = 0f;
+            nearMissesDuringBurn = 0;
+
+            if (leftFlameFx != null) leftFlameFx.Play();
+            if (rightFlameFx != null) rightFlameFx.Play();
+
+            if (RoadRageAudioBridge.Instance != null)
+            {
+                RoadRageAudioBridge.Instance.PlayNitro();
+            }
+        }
+
+        private void StopBoosting()
+        {
+            IsBoosting = false;
+            if (leftFlameFx != null) leftFlameFx.Stop();
+            if (rightFlameFx != null) rightFlameFx.Stop();
+            if (BoostAmount < MaxBoost) BurnoutChain = 0;
+        }
+
+        private void OnBoostDepleted()
+        {
+            // Check for Burnout Chain: if started at 100% and racked up near-misses / takedowns during the burn
+            if (startedBurnAtMax && (nearMissesDuringBurn >= 2 || continuousBurnTimer >= 3.8f))
+            {
+                BurnoutChain++;
+                BoostAmount = MaxBoost; // Instant Refill!
+                GameState.Award(1200 * BurnoutChain, $"🔥 BURNOUT x{BurnoutChain} CHAIN!");
+                GameState.Show($"🔥 BURNOUT x{BurnoutChain} CHAIN! 100% BOOST REFILLED!");
+                
+                if (RoadRageAudioBridge.Instance != null)
+                {
+                    RoadRageAudioBridge.Instance.PlayTakedownStinger();
+                }
+                // Keep boosting!
+                startedBurnAtMax = true;
+                continuousBurnTimer = 0f;
+                nearMissesDuringBurn = 0;
+                return;
+            }
+
+            StopBoosting();
+        }
+
+        private void DetectNearMisses()
+        {
+            if (nearMissCooldown > 0f)
+            {
+                nearMissCooldown -= Time.deltaTime;
+                return;
+            }
+
+            var origin = playerCar.position;
+            var hits = Physics.OverlapSphere(origin, 3.8f);
+
+            foreach (var hit in hits)
+            {
+                var traffic = hit.GetComponentInParent<TrafficCarController>();
+                if (traffic != null && !traffic.IsWreck && playerController.SpeedKph > 75f)
+                {
+                    var lateralDist = Mathf.Abs(traffic.LaneOffset - playerController.LateralOffset);
+                    var longDist = Mathf.Abs(traffic.RoadDistance - playerController.RoadDistance);
+
+                    if (lateralDist < 2.6f && lateralDist > 0.8f && longDist < 4.2f)
+                    {
+                        nearMissCooldown = 0.55f;
+                        AddBoost(20f, "⚡ NEAR MISS!");
+                        GameState.Award(150, "⚡ NEAR MISS");
+                        GameState.BumpDaily("nearmiss", 1f);
+                        if (IsBoosting) nearMissesDuringBurn++;
+
+                        if (RoadRageAudioBridge.Instance != null)
+                        {
+                            RoadRageAudioBridge.Instance.PlayNearMissChirp();
+                        }
+                        break;
+                    }
+                }
+            }
+        }
+
+        public void RefillBoostMax()
+        {
+            BoostAmount = MaxBoost;
+        }
+    }
+}

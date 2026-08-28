@@ -4286,6 +4286,9 @@ namespace RoadRage.UnityRemake
             var policeDirector = cameraObject.AddComponent<RoadRagePolicePursuitDirector>();
             policeDirector.BindPlayer(car, camera);
 
+            var boostDirector = cameraObject.AddComponent<RoadRageBoostDirector>();
+            boostDirector.BindPlayer(car, camera);
+
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             if (reflectionProbe != null)
@@ -4591,8 +4594,12 @@ namespace RoadRage.UnityRemake
             // Car choice and engine upgrades scale top speed and how hard it pulls.
             var car = GameState.CurrentCar;
             var enginePower = 1f + GameState.UpgradeEngine * 0.05f;
-            var targetSpeed = throttle < -0.1f ? 30f : throttle > 0.1f ? 150f * car.Speed * enginePower : 88f * car.Speed;
-            var accelRate = (throttle < 0f ? 75f : 35f) * car.Acceleration * enginePower;
+            var isBoosting = RoadRageBoostDirector.Instance != null && RoadRageBoostDirector.Instance.IsBoosting;
+            var boostMult = isBoosting ? 1.52f : 1.0f;
+            var boostAccel = isBoosting ? 2.8f : 1.0f;
+
+            var targetSpeed = (throttle < -0.1f ? 30f : throttle > 0.1f ? 150f * car.Speed * enginePower : 88f * car.Speed) * boostMult;
+            var accelRate = (throttle < 0f ? 75f : 35f) * car.Acceleration * enginePower * boostAccel;
             SpeedKph = Mathf.MoveTowards(SpeedKph, targetSpeed, Time.deltaTime * accelRate);
             lateralVelocity = Mathf.Lerp(lateralVelocity, steer * 10f, 1f - Mathf.Exp(-7f * Time.deltaTime));
             var forwardTravel = SpeedKph / 3.6f * Time.deltaTime;
@@ -4666,6 +4673,8 @@ namespace RoadRage.UnityRemake
                 GameState.Award(sideSwipe ? 150 : 250, label);
                 if (RoadRagePolicePursuitDirector.Instance != null)
                     RoadRagePolicePursuitDirector.Instance.AddHeat(0.35f);
+                if (RoadRageBoostDirector.Instance != null)
+                    RoadRageBoostDirector.Instance.AddBoost(50f, "TAKEDOWN BOOST");
                 // Even a clean takedown costs a little integrity - runs must end.
                 GameState.ApplyDamage((sideSwipe ? 1.5f : 3f) * absorb);
             }
@@ -4971,6 +4980,25 @@ namespace RoadRage.UnityRemake
                 Texture2D.whiteTexture);
             GUI.color = prev;
 
+            // Nitro Boost Meter Bar
+            if (RoadRageBoostDirector.Instance != null)
+            {
+                var boostRect = new Rect(30f, 150f, barW, 11f);
+                GUI.DrawTexture(boostRect, dimTexture);
+                var bFrac = Mathf.Clamp01(RoadRageBoostDirector.Instance.BoostAmount / RoadRageBoostDirector.MaxBoost);
+                var isFull = RoadRageBoostDirector.Instance.IsFullBoost;
+                var isBurning = RoadRageBoostDirector.Instance.IsBoosting;
+                var boostColor = isFull ? new Color(1f, 0.85f, 0.2f) : isBurning ? new Color(1f, 0.45f, 0.1f) : new Color(0.15f, 0.8f, 1f);
+                var prevC = GUI.color;
+                GUI.color = boostColor;
+                GUI.DrawTexture(new Rect(boostRect.x, boostRect.y, boostRect.width * bFrac, boostRect.height), Texture2D.whiteTexture);
+                GUI.color = prevC;
+
+                var chain = RoadRageBoostDirector.Instance.BurnoutChain;
+                var boostLabel = chain > 0 ? $"🔥 BURNOUT x{chain}" : (isFull ? "★ NITRO READY" : (isBurning ? "🔥 BOOSTING" : "NITRO"));
+                GUI.Label(new Rect(35f + barW, 146f, 180f, 20f), boostLabel, readoutStyle);
+            }
+
             GUI.Label(new Rect(30f, 96f, 520f, 32f),
                 $"SCORE {GameState.Score:N0}   ${GameState.Cash:N0}   {GameState.Takedowns} TAKEDOWNS", readoutStyle);
             if (GameState.Combo > 0)
@@ -5064,10 +5092,15 @@ namespace RoadRage.UnityRemake
             var bottom = Screen.height - size - 24f;
             var left = GUI.RepeatButton(new Rect(24f, bottom, size, size), "LEFT", buttonStyle);
             var right = GUI.RepeatButton(new Rect(36f + size, bottom, size, size), "RIGHT", buttonStyle);
+            var nitro = GUI.RepeatButton(new Rect(Screen.width - size * 3.5f - 52f, bottom, size * 1.15f, size), "NITRO", buttonStyle);
             var brake = GUI.RepeatButton(new Rect(Screen.width - size * 2.25f - 38f, bottom, size, size), "BRAKE", buttonStyle);
             var gas = GUI.RepeatButton(new Rect(Screen.width - size - 24f, bottom, size, size), "GAS", buttonStyle);
             c.TouchSteer = left ? -1f : right ? 1f : 0f;
             c.TouchThrottle = gas ? 1f : brake ? -1f : 0f;
+            if (RoadRageBoostDirector.Instance != null)
+            {
+                RoadRageBoostDirector.Instance.TouchNitroPressed = nitro;
+            }
         }
 
         /// Garage: browse the catalogue, buy/select a car, and spend cash on the three
