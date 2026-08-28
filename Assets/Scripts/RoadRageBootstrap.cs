@@ -148,6 +148,14 @@ namespace RoadRage.UnityRemake
             startDistance = Mathf.Max(0f, startKm * 1000f);
             ApplyCityRenderPreset(hadStartOverride);
 
+            // Strip any stray point/spot lights or halo objects from imported scenes
+            foreach (var l in FindObjectsByType<Light>(FindObjectsInactive.Include))
+            {
+                if (l.type != LightType.Directional) DestroyImmediate(l.gameObject);
+            }
+            RenderSettings.haloStrength = 0f;
+            RenderSettings.flareStrength = 0f;
+
             BuildMaterials();
             BuildLighting();
             UpdateStreaming(startDistance);
@@ -993,7 +1001,7 @@ namespace RoadRage.UnityRemake
             sun.intensity = mood.SunIntensity * weather.SunScale;
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.82f;
-            sun.transform.rotation = Quaternion.Euler(38f, -32f, 0f);
+            sun.transform.rotation = Quaternion.Euler(54f, 32f, 0f);
             RenderSettings.sun = sun;
 
 			var volume = new GameObject($"{biomeName} Post Processing").AddComponent<Volume>();
@@ -1001,8 +1009,8 @@ namespace RoadRage.UnityRemake
 			volume.priority = 10f;
 			volume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
 			var bloom = volume.profile.Add<Bloom>();
-			bloom.intensity.Override(mood.BloomIntensity);
-			bloom.threshold.Override(mood.BloomThreshold);
+			bloom.intensity.Override(0f);
+			bloom.active = false;
 			// Without tonemapping every HDR highlight clips flat, which is a large part
 			// of the "plastic toy" read. ACES gives filmic rolloff on the bright end.
 			var tonemap = volume.profile.Add<Tonemapping>();
@@ -1047,73 +1055,71 @@ namespace RoadRage.UnityRemake
             {
                 FogDensity = 0.0045f, Fog = new Color(0.62f, 0.75f, 0.86f),
                 Sky = new Color(0.68f, 0.82f, 0.96f), Equator = new Color(0.48f, 0.60f, 0.72f),
-                Ground = new Color(0.28f, 0.36f, 0.44f), SunColor = new Color(0.82f, 0.91f, 1f),
-                SunIntensity = 1.18f, PostExposure = -0.18f, BloomIntensity = 0.32f, BloomThreshold = 1.05f, RoadWetness = 0.0f
+                Ground = new Color(0.28f, 0.36f, 0.44f), SunColor = new Color(0.92f, 0.96f, 1f),
+                SunIntensity = 1.18f, PostExposure = -0.18f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
             2 => new BiomeMood // SEWER TUNNEL
             {
-                // Ambient carries this biome: with correct non-metal surfaces the old
-                // 0.08 sun left the tunnel unreadably black.
                 FogDensity = 0.014f, Fog = new Color(0.05f, 0.10f, 0.08f),
                 Sky = new Color(0.13f, 0.26f, 0.19f), Equator = new Color(0.10f, 0.20f, 0.14f),
-                Ground = new Color(0.04f, 0.08f, 0.06f), SunColor = new Color(1f, 0.88f, 0.70f),
-                SunIntensity = 0.62f, PostExposure = 0.34f, BloomIntensity = 0.42f, BloomThreshold = 0.95f, RoadWetness = 0.55f
+                Ground = new Color(0.04f, 0.08f, 0.06f), SunColor = new Color(0.85f, 0.92f, 0.88f),
+                SunIntensity = 0.62f, PostExposure = 0.34f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.55f
             },
             3 => new BiomeMood // TIRE DISTRICT
             {
-                FogDensity = 0.0065f, Fog = new Color(0.38f, 0.31f, 0.25f),
-                Sky = new Color(0.56f, 0.46f, 0.36f), Equator = new Color(0.36f, 0.28f, 0.21f),
-                Ground = new Color(0.16f, 0.12f, 0.09f), SunColor = new Color(1f, 0.82f, 0.62f),
-                SunIntensity = 1.35f, PostExposure = 0.42f, BloomIntensity = 0.32f, BloomThreshold = 1.05f, RoadWetness = 0.3f
+                FogDensity = 0.0065f, Fog = new Color(0.38f, 0.38f, 0.40f),
+                Sky = new Color(0.52f, 0.56f, 0.62f), Equator = new Color(0.32f, 0.35f, 0.38f),
+                Ground = new Color(0.14f, 0.14f, 0.14f), SunColor = new Color(0.95f, 0.95f, 0.95f),
+                SunIntensity = 1.35f, PostExposure = 0.35f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.3f
             },
             4 => new BiomeMood // ALIEN BIOMASS
             {
                 FogDensity = 0.015f, Fog = new Color(0.13f, 0.05f, 0.17f),
                 Sky = new Color(0.20f, 0.07f, 0.28f), Equator = new Color(0.09f, 0.20f, 0.14f),
-                Ground = new Color(0.04f, 0.07f, 0.05f), SunColor = new Color(0.64f, 0.38f, 1f),
-                SunIntensity = 0.95f, PostExposure = 0.30f, BloomIntensity = 0.42f, BloomThreshold = 0.95f, RoadWetness = 0.22f
+                Ground = new Color(0.04f, 0.07f, 0.05f), SunColor = new Color(0.72f, 0.55f, 1f),
+                SunIntensity = 0.95f, PostExposure = 0.30f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.22f
             },
-            5 => new BiomeMood // NEON CITY - vibrant synthwave night, bright neon glow and illuminated asphalt
+            5 => new BiomeMood // NEON CITY
             {
                 FogDensity = 0.0035f, Fog = new Color(0.12f, 0.08f, 0.24f),
                 Sky = new Color(0.32f, 0.16f, 0.52f), Equator = new Color(0.38f, 0.18f, 0.46f),
-                Ground = new Color(0.14f, 0.08f, 0.22f), SunColor = new Color(0.92f, 0.65f, 1f),
-                SunIntensity = 1.35f, PostExposure = 0.42f, BloomIntensity = 0.85f, BloomThreshold = 0.72f, RoadWetness = 0.65f
+                Ground = new Color(0.14f, 0.08f, 0.22f), SunColor = new Color(0.85f, 0.70f, 1f),
+                SunIntensity = 1.25f, PostExposure = 0.35f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.65f
             },
-            6 => new BiomeMood // RED CANYON - blown-out desert noon
+            6 => new BiomeMood // RED CANYON
             {
-                FogDensity = 0.0038f, Fog = new Color(0.78f, 0.56f, 0.40f),
-                Sky = new Color(0.86f, 0.70f, 0.55f), Equator = new Color(0.62f, 0.38f, 0.26f),
-                Ground = new Color(0.24f, 0.13f, 0.08f), SunColor = new Color(1f, 0.83f, 0.60f),
-                SunIntensity = 1.62f, PostExposure = 0.16f, BloomIntensity = 0.38f, BloomThreshold = 1.15f, RoadWetness = 0.0f
+                FogDensity = 0.0038f, Fog = new Color(0.68f, 0.65f, 0.62f),
+                Sky = new Color(0.72f, 0.78f, 0.88f), Equator = new Color(0.55f, 0.48f, 0.42f),
+                Ground = new Color(0.24f, 0.18f, 0.14f), SunColor = new Color(1f, 0.98f, 0.92f),
+                SunIntensity = 1.50f, PostExposure = 0.16f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
-            7 => new BiomeMood // BROOKLYN - humid morning city road with realistic depth
+            7 => new BiomeMood // BROOKLYN
             {
                 FogDensity = 0.0075f, Fog = new Color(0.30f, 0.43f, 0.55f),
                 Sky = new Color(0.41f, 0.60f, 0.78f), Equator = new Color(0.23f, 0.34f, 0.43f),
-                Ground = new Color(0.16f, 0.18f, 0.16f), SunColor = new Color(1f, 0.94f, 0.83f),
-                SunIntensity = 1.42f, PostExposure = 0.22f, BloomIntensity = 0.34f, BloomThreshold = 0.98f, RoadWetness = 0.08f
+                Ground = new Color(0.16f, 0.18f, 0.16f), SunColor = new Color(0.98f, 0.98f, 0.95f),
+                SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.08f
             },
-            9 => new BiomeMood // HOLLYWOOD HILLS - warm vibrant California sunshine & golden haze
+            9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
-                FogDensity = 0.0022f, Fog = new Color(0.85f, 0.82f, 0.76f),
-                Sky = new Color(0.68f, 0.82f, 0.98f), Equator = new Color(0.72f, 0.68f, 0.58f),
-                Ground = new Color(0.42f, 0.38f, 0.28f), SunColor = new Color(1f, 0.95f, 0.84f),
-                SunIntensity = 1.65f, PostExposure = 0.18f, BloomIntensity = 0.40f, BloomThreshold = 1.02f, RoadWetness = 0.0f
+                FogDensity = 0.0015f, Fog = new Color(0.75f, 0.85f, 0.95f),
+                Sky = new Color(0.60f, 0.78f, 0.98f), Equator = new Color(0.65f, 0.72f, 0.78f),
+                Ground = new Color(0.35f, 0.35f, 0.35f), SunColor = new Color(1f, 1f, 1f),
+                SunIntensity = 1.45f, PostExposure = 0.15f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
-            8 => new BiomeMood // MANHATTAN - cinematic late-evening wet skyline
+            8 => new BiomeMood // MANHATTAN
             {
                 FogDensity = 0.009f, Fog = new Color(0.055f, 0.086f, 0.13f),
                 Sky = new Color(0.09f, 0.12f, 0.23f), Equator = new Color(0.09f, 0.16f, 0.29f),
-                Ground = new Color(0.04f, 0.05f, 0.08f), SunColor = new Color(0.54f, 0.68f, 1f),
-                SunIntensity = 0.9f, PostExposure = 0.12f, BloomIntensity = 0.58f, BloomThreshold = 0.82f, RoadWetness = 0.62f
+                Ground = new Color(0.04f, 0.05f, 0.08f), SunColor = new Color(0.65f, 0.75f, 1f),
+                SunIntensity = 0.9f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.62f
             },
             _ => new BiomeMood // GREENWOOD
             {
                 FogDensity = 0.0065f, Fog = new Color(0.33f, 0.47f, 0.43f),
                 Sky = new Color(0.40f, 0.55f, 0.62f), Equator = new Color(0.20f, 0.34f, 0.28f),
-                Ground = new Color(0.075f, 0.11f, 0.075f), SunColor = new Color(1f, 0.88f, 0.70f),
-                SunIntensity = 1.45f, PostExposure = 0.12f, BloomIntensity = 0.32f, BloomThreshold = 1.05f, RoadWetness = 0.1f
+                Ground = new Color(0.075f, 0.11f, 0.075f), SunColor = new Color(0.98f, 0.98f, 0.95f),
+                SunIntensity = 1.40f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.1f
             }
         };
 
@@ -3463,11 +3469,11 @@ namespace RoadRage.UnityRemake
         {
             if (sunLight != null)
             {
-                sunLight.color = new Color(1f, 0.98f, 0.94f);
-                sunLight.intensity = 2.0f;
+                sunLight.color = new Color(1f, 1f, 1f);
+                sunLight.intensity = 1.45f;
                 sunLight.shadows = LightShadows.Soft;
-                sunLight.shadowStrength = 0.80f;
-                sunLight.transform.rotation = Quaternion.Euler(32f, -38f, 0f);
+                sunLight.shadowStrength = 0.75f;
+                sunLight.transform.rotation = Quaternion.Euler(58f, 35f, 0f);
             }
             RenderSettings.ambientLight = new Color(0.55f, 0.58f, 0.64f);
         }
@@ -3487,7 +3493,7 @@ namespace RoadRage.UnityRemake
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.fogDensity = 0.0012f;
-            RenderSettings.fogColor = new Color(0.82f, 0.88f, 0.96f);
+            RenderSettings.fogColor = new Color(0.72f, 0.82f, 0.94f);
         }
 
         private void ApplyHillsRoadToneProfile()
