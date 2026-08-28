@@ -90,14 +90,14 @@ namespace RoadRage.UnityRemake
         {
             if (Instance != null && Instance != this)
             {
-                Destroy(gameObject);
+                DestroyImmediate(gameObject);
                 return;
             }
             Instance = this;
 
             foreach (var oldHud in FindObjectsByType<RoadRageHUD>(FindObjectsInactive.Include))
             {
-                Destroy(oldHud);
+                DestroyImmediate(oldHud);
             }
 
             if (FindAnyObjectByType<AudioListener>() == null)
@@ -255,6 +255,7 @@ namespace RoadRage.UnityRemake
 		{
 			PickerOpen = true;
 			Time.timeScale = 0f;
+			lastToggleTime = Time.unscaledTime;
 		}
 
 		public void ClosePicker()
@@ -262,6 +263,7 @@ namespace RoadRage.UnityRemake
 			pickerSeen = true;
 			PickerOpen = false;
 			Time.timeScale = 1f;
+			lastToggleTime = Time.unscaledTime;
 		}
 
 		public void SelectBiome(string nextBiome)
@@ -4818,7 +4820,7 @@ namespace RoadRage.UnityRemake
         {
             if (Instance != null && Instance != this)
             {
-                Destroy(this);
+                DestroyImmediate(this);
                 return;
             }
             Instance = this;
