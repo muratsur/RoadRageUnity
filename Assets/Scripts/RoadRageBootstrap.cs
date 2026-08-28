@@ -338,6 +338,9 @@ namespace RoadRage.UnityRemake
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance;
+                    controller.SpeedKph = 0f;
+                    controller.TouchThrottle = 0f;
+                    controller.TouchSteer = 0f;
                 }
                 car.position = RoadPath.Point(startDistance + 5f, 0f, 0.4f);
                 car.rotation = RoadPath.Rotation(startDistance + 5f);
@@ -3106,33 +3109,14 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        /// Cyberpunk and DemoCity street clutter dressed onto NEON CITY's sidewalks.
+        /// Cyberpunk architectural detail dressed onto NEON CITY's building walls.
         private void DressNeonSidewalk(float distance, float side, int block)
         {
             var facing = side > 0f ? -90f : 90f;
-            var pick = BlockHash(block, 21) % 4;
-            var clutter = pick == 0 ? "Trashbag/SM_trashbag_group_01"
-                : pick == 1 ? "Crates/SM_crate_01"
-                : pick == 2 ? "Trashcan/SM_trashcan_01"
-                : "Buildings/DemoCity/bench";
-            var clutterMaterial = pick == 0 ? materials["Cyber Trash"]
-                : pick == 1 ? materials["Cyber Crate"] : materials["Cyber Props"];
-            var piece = PlaceBiomeModelOnRoad("CyberpunkCity", clutter, clutterMaterial,
-                distance, side * 20.8f, 0.05f, new Vector3(-90f, facing, 0f), Vector3.one, "Sidewalk Clutter");
-            if (piece != null) NormalizeModelHeight(piece, Random.Range(0.8f, 1.5f), 0.05f);
-
-            // Highway US Speed Limit Signs
-            if (block % 6 == 0)
-            {
-                var sign = PlaceBiomeModelOnRoad("Props", "Signs/Sign Post 1", materials["City Props"],
-                    distance + 4f, side * 18.2f, 0.05f, new Vector3(0f, facing + 90f, 0f), Vector3.one, "Speed Limit Sign");
-                if (sign != null) NormalizeModelHeight(sign, 3.2f, 0.05f);
-            }
-
             if (block % 2 != 0) return;
             var aircon = PlaceBiomeModelOnRoad("CyberpunkCity", "Aircon/SM_aircon_01", materials["Cyber Props"],
-                distance + 6f, side * 27.5f, 2.6f, new Vector3(-90f, facing, 0f), Vector3.one, "Wall Aircon");
-            if (aircon != null) NormalizeModelHeight(aircon, 1.1f, 2.6f);
+                distance + 6f, side * 28.5f, 3.2f, new Vector3(-90f, facing, 0f), Vector3.one, "Wall Aircon");
+            if (aircon != null) NormalizeModelHeight(aircon, 1.1f, 3.2f);
         }
 
         private void BuildCityOverpass(float distance, int block)
@@ -3226,13 +3210,8 @@ namespace RoadRage.UnityRemake
 
         private void CreateLocalLight(Vector3 position, Color color, float intensity, float range)
         {
-            var light = Adopt(new GameObject("Biome Accent Light")).AddComponent<Light>();
-            light.type = LightType.Point;
-            light.transform.position = position;
-            light.color = color;
-            light.intensity = Mathf.Clamp(intensity * 0.18f, 0.4f, 1.8f);
-            light.range = Mathf.Clamp(range * 0.70f, 3.5f, 10.0f);
-            light.shadows = LightShadows.None;
+            // Point light discs completely removed per design across all biomes.
+            // Atmospheric lighting is provided cleanly by Directional Sun, Sky Ambient, Emissive Maps, and Reflection Probes.
         }
 
         /// ScatterBand wants a GameObject-returning spawn; the lamp builder returns void.
@@ -4502,7 +4481,7 @@ namespace RoadRage.UnityRemake
 
     public sealed class ArcadeCarController : MonoBehaviour
     {
-        public float SpeedKph { get; private set; } = 82f;
+        public float SpeedKph { get; internal set; } = 0f;
 
         /// Measured from the spawned vehicle so collision matches the mesh.
         public float HalfLength { get; internal set; } = 2.5f;
@@ -4580,7 +4559,8 @@ namespace RoadRage.UnityRemake
             if (CinematicPilot) DriveCinematically();
 
             var steer = SteerInput;
-            var throttle = Mathf.Clamp(GameInput.GetThrottle() + TouchThrottle, -1f, 1f);
+            var rawThrottle = GameInput.GetThrottle() + TouchThrottle;
+            var throttle = Mathf.Clamp(rawThrottle, -1f, 1f);
 
             // Car choice, engine upgrades, and tuning parts scale performance.
             var car = GameState.CurrentCar;
@@ -4589,13 +4569,32 @@ namespace RoadRage.UnityRemake
             var isDrift = GameState.TuningTires == 1;
 
             var topSpeedBonus = isTurbo ? 22f : 0f;
-            var accelBonus = !isTurbo ? 1.22f : 1.0f; // Supercharger launch punch
+            var accelBonus = !isTurbo ? 1.25f : 1.0f; // Supercharger launch punch
             var isBoosting = RoadRageBoostDirector.Instance != null && RoadRageBoostDirector.Instance.IsBoosting;
             var boostMult = isBoosting ? 1.52f : 1.0f;
             var boostAccel = isBoosting ? 2.8f : 1.0f;
 
-            var targetSpeed = ((throttle < -0.1f ? 30f : throttle > 0.1f ? (150f * car.Speed + topSpeedBonus) * enginePower : 88f * car.Speed)) * boostMult;
-            var accelRate = (throttle < 0f ? 75f : 35f) * car.Acceleration * enginePower * accelBonus * boostAccel;
+            float targetSpeed;
+            float accelRate;
+
+            if (throttle > 0.05f || CinematicPilot)
+            {
+                var maxSpeed = (150f * car.Speed + topSpeedBonus) * enginePower * boostMult;
+                targetSpeed = maxSpeed * Mathf.Max(0.2f, throttle);
+                accelRate = 38f * car.Acceleration * enginePower * accelBonus * boostAccel;
+            }
+            else if (throttle < -0.05f)
+            {
+                targetSpeed = 0f;
+                accelRate = 80f * car.Acceleration;
+            }
+            else
+            {
+                // No throttle given: smoothly coast down to standing stop (0 km/h)
+                targetSpeed = 0f;
+                accelRate = 18f;
+            }
+
             SpeedKph = Mathf.MoveTowards(SpeedKph, targetSpeed, Time.deltaTime * accelRate);
 
             var steerSpeed = isDrift ? 13.5f : 10.5f;
@@ -4641,6 +4640,20 @@ namespace RoadRage.UnityRemake
             nextImpactTime = Time.time + 0.85f;
             var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
 
+            // Physical anti-penetration pushback: separate the two vehicle hulls so they NEVER pass inside each other!
+            var minLongitudinal = (HalfLength + traffic.HalfLength) * 0.98f;
+            if (Mathf.Abs(longitudinalGap) < minLongitudinal)
+            {
+                var delta = Mathf.Sign(longitudinalGap) * (minLongitudinal - Mathf.Abs(longitudinalGap));
+                RoadDistance += delta * 0.6f;
+            }
+            var minLateral = (HalfWidth + traffic.HalfWidth) * 0.92f;
+            if (Mathf.Abs(lateralGap) < minLateral)
+            {
+                var deltaLat = Mathf.Sign(lateralGap) * (minLateral - Mathf.Abs(lateralGap));
+                LateralOffset -= deltaLat * 0.75f;
+            }
+
             // Armour is the reason to drive a truck: it cuts how much speed an impact
             // scrubs off and how far you get shoved. Upgrades and ram bars stack on top of the chassis.
             var ramArmorBonus = GameState.TuningRamBar switch
@@ -4650,13 +4663,8 @@ namespace RoadRage.UnityRemake
                 _ => 1.0f
             };
             var armour = GameState.CurrentCar.Armour * (1f + GameState.UpgradeArmour * 0.06f) * ramArmorBonus;
-            // Must be allowed above 1 or sub-1 armour (the bikes) would clamp to baseline
-            // and their fragility would be cosmetic only.
             var absorb = Mathf.Clamp(1f / Mathf.Max(0.25f, armour), 0.28f, 1.75f);
 
-            // The judgement call. Ramming a violator is the job; ramming an ordinary
-            // driver is the failure state. Armour buys forgiveness for misjudgements,
-            // which is what makes the truck progression mean something.
             if (traffic.IsWreck)
             {
                 GameState.Combo = 0;
@@ -4679,7 +4687,6 @@ namespace RoadRage.UnityRemake
                     RoadRagePolicePursuitDirector.Instance.AddHeat(0.35f);
                 if (RoadRageBoostDirector.Instance != null)
                     RoadRageBoostDirector.Instance.AddBoost(50f, "TAKEDOWN BOOST");
-                // Even a clean takedown costs a little integrity - runs must end.
                 GameState.ApplyDamage((sideSwipe ? 1.5f : 3f) * absorb);
             }
             else
@@ -4688,8 +4695,6 @@ namespace RoadRage.UnityRemake
                 GameState.InnocentsHit++;
                 GameState.Score = Mathf.Max(0, GameState.Score - 200);
                 GameState.Show("INNOCENT DRIVER  -200");
-                // 26 against 100 integrity meant four innocent hits ended a run, on
-                // two-lane roads where they are often unavoidable. 14 gives seven.
                 GameState.ApplyDamage(14f * absorb);
             }
             var contactPoint = transform.position + transform.forward * 2.2f + Vector3.up * 0.6f;
@@ -5010,6 +5015,15 @@ namespace RoadRage.UnityRemake
             if (!string.IsNullOrEmpty(GameState.Message))
                 GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.32f, 400f, 40f),
                     GameState.Message, titleStyle);
+            else if (c.SpeedKph < 4f && c.DistanceKm < 0.05f)
+            {
+                var pulse = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * 5f);
+                var prevC = titleStyle.normal.textColor;
+                titleStyle.normal.textColor = new Color(0.2f, 0.95f, 0.4f, pulse);
+                GUI.Label(new Rect(Screen.width * 0.5f - 280f, Screen.height * 0.32f, 560f, 44f),
+                    "🚦 READY! PRESS [GAS] / [W] TO DRIVE", titleStyle);
+                titleStyle.normal.textColor = prevC;
+            }
 
             if (RoadRagePolicePursuitDirector.Instance != null && RoadRagePolicePursuitDirector.Instance.IsPursuitActive)
             {

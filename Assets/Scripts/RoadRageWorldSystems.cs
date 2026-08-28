@@ -222,6 +222,14 @@ namespace RoadRage.UnityRemake
 
         private void Update()
         {
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                // Dynamic physics takedown or crash active: let PhysX drive the tumble and do not snap to road
+                RoadDistance = transform.position.z;
+                return;
+            }
+
             Recycle();
             UpdateOffenceBehaviour(Time.deltaTime);
             if (!IsWreck)
@@ -241,10 +249,6 @@ namespace RoadRage.UnityRemake
                     // Tailgaters deliberately close the gap; speeders do not yield.
                     if (Violation == Offence.Tailgating && !other.IsWreck) continue;
 
-                    // Lane offsets are fractions of the carriageway, so on a narrow road
-                    // all six lanes compress into ~4 m and a fixed 2.25 m footprint made
-                    // every car block every other one. The result was a single queue that
-                    // deadlocked within seconds of spawning.
                     var laneSpacing = Mathf.Max(1.2f, RoadPath.HalfWidthAt(RoadDistance) * 0.5f);
                     var lateralFootprint = Mathf.Min(other.IsWreck ? 4.0f : 2.25f,
                                                      laneSpacing * (other.IsWreck ? 1.4f : 0.8f));
@@ -253,9 +257,6 @@ namespace RoadRage.UnityRemake
                     if (gap <= 0.05f || gap >= 38f) continue;
 
                     var obstacleSpeed = other.IsWreck ? 0f : other.currentSpeedKph;
-                    // Follow at the obstacle's speed rather than stopping dead. Only a
-                    // genuinely stationary obstacle (a wreck) brings traffic to a halt,
-                    // otherwise a close gap froze the whole queue permanently.
                     var safeSpeed = gap < 10f
                         ? obstacleSpeed * 0.9f
                         : Mathf.Lerp(Mathf.Max(obstacleSpeed * 0.9f, 18f), Mathf.Max(24f, obstacleSpeed),
@@ -270,9 +271,6 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                // Carry the impact momentum, slide out of the lane and slew round before
-                // coming to rest. A wreck used to freeze on the spot the instant it was
-                // hit, which is what made impacts read as clipping rather than collision.
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 42f * Time.deltaTime);
                 laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget, 7f * Time.deltaTime);
                 WreckYaw = Mathf.MoveTowards(WreckYaw, wreckYawTarget, 70f * Time.deltaTime);
