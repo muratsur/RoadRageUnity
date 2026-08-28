@@ -337,10 +337,11 @@ namespace RoadRage.UnityRemake
                 var controller = car.GetComponent<ArcadeCarController>();
                 if (controller != null)
                 {
-                    controller.RoadDistance = startDistance;
+                    controller.RoadDistance = startDistance + 5f;
                     controller.SpeedKph = 0f;
                     controller.TouchThrottle = 0f;
                     controller.TouchSteer = 0f;
+                    controller.CountdownTimer = 3.2f;
                 }
                 car.position = RoadPath.Point(startDistance + 5f, 0f, 0.4f);
                 car.rotation = RoadPath.Rotation(startDistance + 5f);
@@ -4074,12 +4075,11 @@ namespace RoadRage.UnityRemake
                 new Color(0.94f, 0.72f, 0.10f), new Color(0.12f, 0.68f, 0.43f),
                 new Color(0.72f, 0.18f, 0.78f), new Color(0.80f, 0.82f, 0.86f)
             };
-            // Spawn relative to where the player actually starts. Fixed world distances
-            // meant that starting anywhere but 0 left every car behind the player, and
-            // they all recycled to the far end of the visible range at once.
-            var spread = new[] { -55f, -20f, 25f, 60f, 95f, 135f, 175f, 210f, 250f, 290f, 330f, 370f };
-            var distances = new float[spread.Length];
-            for (var i = 0; i < spread.Length; i++) distances[i] = startDistance + 30f + spread[i];
+            // Clear 65-meter safety corridor in front of player (player spawns at startDistance + 5f)
+            // No traffic spawned within [startDistance - 35m .. startDistance + 65m] to prevent launch collisions
+            var forwardSpread = new[] { 72f, 105f, 145f, 185f, 225f, 265f, 305f, 350f, 395f, 440f, 485f, 530f };
+            var distances = new float[forwardSpread.Length];
+            for (var i = 0; i < forwardSpread.Length; i++) distances[i] = startDistance + forwardSpread[i];
             // Fractions of half-width, so cars sit in lanes on any road profile.
             var lanes = new[] { -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f, -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f };
             // Twelve cars on a six-lane highway is traffic; the same twelve on a two-lane
@@ -4091,9 +4091,6 @@ namespace RoadRage.UnityRemake
             for (var i = 0; i < Mathf.Min(distances.Length, trafficCount); i++)
             {
                 var direction = lanes[i] < 0f ? 1f : -1f;
-                // Was 62-88 against a player who cruises at 88, so nothing ever felt
-                // fast and overtakes never happened. Same-direction traffic now spans
-                // slow trucks to cars quicker than the player; oncoming is faster still.
                 var speed = direction > 0f ? 68f + i % 5 * 14f : 95f + i % 4 * 15f;
                 var violatorEvery = ArcadeCarController.CinematicPilot ? 2 : 3;
                 var offence = i % violatorEvery == 1
@@ -4483,6 +4480,7 @@ namespace RoadRage.UnityRemake
     public sealed class ArcadeCarController : MonoBehaviour
     {
         public float SpeedKph { get; internal set; } = 0f;
+        public float CountdownTimer { get; set; } = 3.2f;
 
         /// Measured from the spawned vehicle so collision matches the mesh.
         public float HalfLength { get; internal set; } = 2.5f;
@@ -4554,6 +4552,16 @@ namespace RoadRage.UnityRemake
 
         private void Update()
         {
+            if (CountdownTimer > 0f)
+            {
+                CountdownTimer -= Time.deltaTime;
+                SpeedKph = 0f;
+                lateralVelocity = 0f;
+                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
+                transform.rotation = RoadPath.Rotation(RoadDistance);
+                return;
+            }
+
             // -autosteer weaves across the lanes so the unattended verification run
             // actually collides with traffic; without input it just holds its own lane.
             if (autoSteer) TouchSteer = Mathf.Sin(Time.time * 0.8f) * 1.2f;
@@ -5013,9 +5021,34 @@ namespace RoadRage.UnityRemake
                 $"SCORE {GameState.Score:N0}   ${GameState.Cash:N0}   {GameState.Takedowns} TAKEDOWNS", readoutStyle);
             if (GameState.Combo > 0)
                 GUI.Label(new Rect(30f, 130f, 520f, 34f), $"x{GameState.ComboMultiplier} COMBO", titleStyle);
-            if (!string.IsNullOrEmpty(GameState.Message))
+            if (c.CountdownTimer > 0f)
+            {
+                var digit = Mathf.CeilToInt(c.CountdownTimer);
+                var countdownColor = digit switch
+                {
+                    3 => new Color(1f, 0.85f, 0.2f), // Gold
+                    2 => new Color(1f, 0.55f, 0.1f), // Orange
+                    _ => new Color(1f, 0.25f, 0.2f)  // Coral Red
+                };
+                var prevC = pickerTitleStyle.normal.textColor;
+                pickerTitleStyle.normal.textColor = countdownColor;
+                GUI.Label(new Rect(Screen.width * 0.5f - 150f, Screen.height * 0.26f, 300f, 90f),
+                    $"{digit}", pickerTitleStyle);
+                pickerTitleStyle.normal.textColor = prevC;
+            }
+            else if (c.CountdownTimer > -0.9f)
+            {
+                var prevC = pickerTitleStyle.normal.textColor;
+                pickerTitleStyle.normal.textColor = new Color(0.25f, 1f, 0.45f);
+                GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.26f, 400f, 90f),
+                    "GO! 🚀", pickerTitleStyle);
+                pickerTitleStyle.normal.textColor = prevC;
+            }
+            else if (!string.IsNullOrEmpty(GameState.Message))
+            {
                 GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.32f, 400f, 40f),
                     GameState.Message, titleStyle);
+            }
             else if (c.SpeedKph < 4f && c.DistanceKm < 0.05f)
             {
                 var pulse = 0.7f + 0.3f * Mathf.Sin(Time.unscaledTime * 5f);

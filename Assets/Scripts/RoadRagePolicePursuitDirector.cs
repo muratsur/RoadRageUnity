@@ -207,33 +207,29 @@ namespace RoadRage.UnityRemake
             root.transform.rotation = RoadPath.Rotation(targetDist);
 
             var halfWidth = RoadPath.HalfWidthAt(targetDist);
-            // Spawn 2 barricade vehicles with red/blue emergency flares
+            // Spawn 2 modern barricade cruisers with high-visibility emergency LED lights
             for (var i = -1; i <= 1; i += 2)
             {
                 var lane = i * (halfWidth * 0.45f);
-                var barObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                barObj.name = "Barricade Cruiser";
-                barObj.transform.SetParent(root.transform, false);
-                barObj.transform.localPosition = new Vector3(lane, 0.6f, 0f);
-                barObj.transform.localScale = new Vector3(2.2f, 1.3f, 4.4f);
-
-                var r = barObj.GetComponent<Renderer>();
-                r.material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                var prefab = Resources.Load<GameObject>("Vehicles/SK_Veh_Preset_Sedan_01");
+                GameObject barObj;
+                if (prefab != null)
                 {
-                    color = new Color(0.08f, 0.12f, 0.18f)
-                };
+                    barObj = Instantiate(prefab, root.transform);
+                    barObj.transform.localPosition = new Vector3(lane, 0.45f, 0f);
+                    barObj.transform.localRotation = Quaternion.Euler(0f, i > 0 ? 165f : 195f, 0f);
+                    barObj.transform.localScale = Vector3.one * 0.96f;
+                }
+                else
+                {
+                    barObj = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                    barObj.transform.SetParent(root.transform, false);
+                    barObj.transform.localPosition = new Vector3(lane, 0.6f, 0f);
+                    barObj.transform.localScale = new Vector3(2.2f, 1.3f, 4.4f);
+                }
+                barObj.name = "Barricade Cruiser";
 
-                // Flashing red/blue strobe light
-                var lightGo = new GameObject("Emergency Strobe");
-                lightGo.transform.SetParent(barObj.transform, false);
-                lightGo.transform.localPosition = new Vector3(0f, 0.9f, 0f);
-                var light = lightGo.AddComponent<Light>();
-                light.type = LightType.Point;
-                light.range = 14f;
-                light.intensity = 4.5f;
-                light.color = i > 0 ? Color.red : Color.blue;
-
-                var rb = barObj.AddComponent<Rigidbody>();
+                var rb = barObj.GetComponent<Rigidbody>() ?? barObj.AddComponent<Rigidbody>();
                 rb.mass = 2800f;
             }
 
@@ -294,68 +290,123 @@ namespace RoadRage.UnityRemake
             BuildLightbars();
         }
 
+        private Material redLedMat;
+        private Material blueLedMat;
+        private Renderer[] redLeds;
+        private Renderer[] blueLeds;
+
         private void BuildPoliceMesh()
         {
-            // Police body box or mesh
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.transform.SetParent(transform, false);
-            body.transform.localPosition = new Vector3(0f, 0.6f, 0f);
-            body.transform.localScale = new Vector3(2.0f, 1.25f, 4.4f);
-
-            var r = body.GetComponent<Renderer>();
-            var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+            var modelName = unitHeatLevel >= 4 ? "SK_Veh_Preset_Muscle_01" : "SK_Veh_Preset_Sedan_01";
+            var prefab = Resources.Load<GameObject>($"Vehicles/{modelName}");
+            if (prefab != null)
             {
-                color = new Color(0.05f, 0.08f, 0.14f) // Police Dark Navy
-            };
-            r.material = mat;
+                var vehicleInstance = Instantiate(prefab, transform);
+                vehicleInstance.name = "Police Interceptor Model";
+                vehicleInstance.transform.localPosition = new Vector3(0f, 0.45f, 0f);
+                vehicleInstance.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                vehicleInstance.transform.localScale = Vector3.one * 0.96f;
 
-            // White doors accent
-            var doors = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            doors.transform.SetParent(body.transform, false);
-            doors.transform.localPosition = new Vector3(0f, 0.05f, 0f);
-            doors.transform.localScale = new Vector3(1.02f, 0.75f, 0.55f);
-            var dMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                var renderers = vehicleInstance.GetComponentsInChildren<Renderer>();
+                var paintMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                {
+                    color = new Color(0.04f, 0.06f, 0.10f) // Dark Police Interceptor Navy
+                };
+                if (paintMat.HasProperty("_Smoothness")) paintMat.SetFloat("_Smoothness", 0.85f);
+                if (paintMat.HasProperty("_Metallic")) paintMat.SetFloat("_Metallic", 0.65f);
+
+                var livery = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_01_A");
+                if (livery != null) paintMat.mainTexture = livery;
+
+                foreach (var rend in renderers)
+                {
+                    rend.material = paintMat;
+                }
+            }
+            else
             {
-                color = Color.white
+                // Fallback procedural cruiser
+                var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                body.transform.SetParent(transform, false);
+                body.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+                body.transform.localScale = new Vector3(2.0f, 1.25f, 4.4f);
+                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                {
+                    color = new Color(0.04f, 0.06f, 0.10f)
+                };
+                body.GetComponent<Renderer>().material = mat;
+            }
+
+            // Heavy Front Push-Bumper
+            var bullbar = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            bullbar.name = "Police Bullbar";
+            bullbar.transform.SetParent(transform, false);
+            bullbar.transform.localPosition = new Vector3(0f, 0.55f, 2.3f);
+            bullbar.transform.localScale = new Vector3(1.7f, 0.55f, 0.18f);
+            var barMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+            {
+                color = new Color(0.12f, 0.12f, 0.12f)
             };
-            doors.GetComponent<Renderer>().material = dMat;
-            Destroy(doors.GetComponent<Collider>());
+            bullbar.GetComponent<Renderer>().material = barMat;
+            Destroy(bullbar.GetComponent<Collider>());
         }
 
         private void BuildLightbars()
         {
-            var lightbar = new GameObject("Lightbar");
-            lightbar.transform.SetParent(transform, false);
-            lightbar.transform.localPosition = new Vector3(0f, 1.35f, 0f);
+            var lightbarRoot = new GameObject("Police LED Lightbar");
+            lightbarRoot.transform.SetParent(transform, false);
+            lightbarRoot.transform.localPosition = new Vector3(0f, 1.48f, -0.15f);
 
-            var redGo = new GameObject("Red Light");
-            redGo.transform.SetParent(lightbar.transform, false);
-            redGo.transform.localPosition = new Vector3(-0.45f, 0f, 0f);
-            redStrobe = redGo.AddComponent<Light>();
-            redStrobe.type = LightType.Point;
-            redStrobe.range = 10f;
-            redStrobe.intensity = 5f;
-            redStrobe.color = Color.red;
+            var barFrame = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            barFrame.name = "Lightbar Frame";
+            barFrame.transform.SetParent(lightbarRoot.transform, false);
+            barFrame.transform.localScale = new Vector3(1.15f, 0.10f, 0.22f);
+            barFrame.GetComponent<Renderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { color = new Color(0.05f, 0.05f, 0.05f) };
+            Destroy(barFrame.GetComponent<Collider>());
 
-            var blueGo = new GameObject("Blue Light");
-            blueGo.transform.SetParent(lightbar.transform, false);
-            blueGo.transform.localPosition = new Vector3(0.45f, 0f, 0f);
-            blueStrobe = blueGo.AddComponent<Light>();
-            blueStrobe.type = LightType.Point;
-            blueStrobe.range = 10f;
-            blueStrobe.intensity = 5f;
-            blueStrobe.color = Color.blue;
+            redLedMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            redLedMat.color = Color.red;
+            redLedMat.EnableKeyword("_EMISSION");
+            redLedMat.SetColor("_EmissionColor", Color.red * 4.5f);
+
+            blueLedMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
+            blueLedMat.color = Color.blue;
+            blueLedMat.EnableKeyword("_EMISSION");
+            blueLedMat.SetColor("_EmissionColor", Color.blue * 4.5f);
+
+            var r1 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            r1.transform.SetParent(lightbarRoot.transform, false);
+            r1.transform.localPosition = new Vector3(-0.35f, 0.02f, 0f);
+            r1.transform.localScale = new Vector3(0.35f, 0.12f, 0.20f);
+            r1.GetComponent<Renderer>().material = redLedMat;
+            Destroy(r1.GetComponent<Collider>());
+
+            var b1 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            b1.transform.SetParent(lightbarRoot.transform, false);
+            b1.transform.localPosition = new Vector3(0.35f, 0.02f, 0f);
+            b1.transform.localScale = new Vector3(0.35f, 0.12f, 0.20f);
+            b1.GetComponent<Renderer>().material = blueLedMat;
+            Destroy(b1.GetComponent<Collider>());
+
+            redLeds = new[] { r1.GetComponent<Renderer>() };
+            blueLeds = new[] { b1.GetComponent<Renderer>() };
         }
 
         private void Update()
         {
             if (isWrecked) return;
 
-            // 1. Alternate Emergency Strobes
-            strobeTimer += Time.deltaTime * 10f;
+            // 1. Alternate High-Intensity LED Emergency Strobes (Shader Emission)
+            strobeTimer += Time.deltaTime * 12f;
             var isRed = Mathf.Sin(strobeTimer) > 0f;
-            if (redStrobe != null) redStrobe.enabled = isRed;
-            if (blueStrobe != null) blueStrobe.enabled = !isRed;
+            if (redLedMat != null)
+            {
+                redLedMat.SetColor("_EmissionColor", isRed ? Color.red * 5.5f : Color.black);
+            }
+            if (blueLedMat != null)
+            {
+                blueLedMat.SetColor("_EmissionColor", !isRed ? new Color(0.1f, 0.5f, 1f) * 5.5f : Color.black);
+            }
 
             if (targetPlayer == null) return;
 

@@ -60,9 +60,8 @@ namespace RoadRage.UnityRemake
             lowPassFilter = gameObject.AddComponent<AudioLowPassFilter>();
             lowPassFilter.cutoffFrequency = 22000f;
 
-            // Generate procedural engine idle clip if none assigned
-            engineSource.clip = CreateProceduralEngineClip();
-            engineSource.Play();
+            // Engine loop starts silent (no continuous buzz at rest)
+            engineSource.volume = 0f;
         }
 
         private void Update()
@@ -78,12 +77,15 @@ namespace RoadRage.UnityRemake
             if (engineSource == null) return;
 
             var speedRatio = Mathf.Clamp01(speedKph / Mathf.Max(1f, maxSpeedKph));
-            var targetPitch = Mathf.Lerp(0.75f, 2.25f, speedRatio);
+            var targetPitch = Mathf.Lerp(0.8f, 2.1f, speedRatio);
             if (isNitro) targetPitch *= 1.25f;
 
             engineSource.pitch = Mathf.Lerp(engineSource.pitch, targetPitch, Time.unscaledDeltaTime * 6f);
-            var targetVol = Mathf.Lerp(0.35f, 0.85f, Mathf.Max(Mathf.Abs(throttle), speedRatio));
-            engineSource.volume = Mathf.Lerp(engineSource.volume, targetVol, Time.unscaledDeltaTime * 8f);
+            var isMoving = speedKph > 2f || Mathf.Abs(throttle) > 0.1f;
+            var targetVol = isMoving ? Mathf.Lerp(0.15f, 0.65f, Mathf.Max(Mathf.Abs(throttle), speedRatio)) : 0f;
+            engineSource.volume = Mathf.Lerp(engineSource.volume, targetVol, Time.unscaledDeltaTime * 10f);
+            if (isMoving && !engineSource.isPlaying && engineSource.clip != null) engineSource.Play();
+            else if (!isMoving && engineSource.volume < 0.02f && engineSource.isPlaying) engineSource.Stop();
         }
 
         public void PlayTurboFlutter()
