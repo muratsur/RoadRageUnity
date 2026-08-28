@@ -976,6 +976,8 @@ namespace RoadRage.UnityRemake
             RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
             RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
             RenderSettings.ambientGroundColor = mood.Ground;
+            RenderSettings.haloStrength = 0f;
+            RenderSettings.flareStrength = 0f;
 
             ApplyRoadWetness(Mathf.Clamp01(mood.RoadWetness + weather.WetnessAdd));
             ApplyPlatformQuality();

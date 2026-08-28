@@ -54,20 +54,25 @@ namespace RoadRage.UnityRemake
         private static AudioClip CreateProceduralSirenClip()
         {
             var sampleRate = 44100;
-            var duration = 2.4f;
+            var duration = 3.6f;
             var samples = Mathf.CeilToInt(sampleRate * duration);
             var data = new float[samples];
 
             for (var i = 0; i < samples; i++)
             {
                 var t = (float)i / sampleRate;
-                // Dual-tone wailing siren (650Hz to 950Hz oscillation)
-                var freq = Mathf.Lerp(650f, 980f, (Mathf.Sin(t * Mathf.PI * 1.8f) + 1f) * 0.5f);
+                // Modern Electronic Interceptor Wail Siren (520Hz to 1180Hz smooth harmonic sweep)
+                var sweep = (Mathf.Sin(t * Mathf.PI * 1.6f) + 1f) * 0.5f;
+                var freq = Mathf.Lerp(520f, 1180f, sweep);
                 var phase = t * freq * 2f * Mathf.PI;
-                data[i] = Mathf.Sin(phase) * 0.28f + (Mathf.PingPong(phase, 1f) - 0.5f) * 0.12f;
+                var fst = Mathf.Sin(phase);
+                var snd = Mathf.Sin(phase * 2f) * 0.35f;
+                var thd = Mathf.Sin(phase * 3f) * 0.15f;
+                var hornBody = Mathf.Clamp(fst * 1.25f, -0.7f, 0.7f);
+                data[i] = (hornBody * 0.55f + snd + thd) * 0.32f;
             }
 
-            var clip = AudioClip.Create("ProceduralPoliceSiren", samples, 1, sampleRate, false);
+            var clip = AudioClip.Create("ModernPoliceInterceptorSiren", samples, 1, sampleRate, false);
             clip.SetData(data, 0);
             return clip;
         }
@@ -295,6 +300,16 @@ namespace RoadRage.UnityRemake
         private Renderer[] redLeds;
         private Renderer[] blueLeds;
 
+        private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
+        {
+            var renderers = visual.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
+            var bounds = renderers[0].bounds;
+            for (var i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            var horizontalLength = Mathf.Max(bounds.size.x, bounds.size.z);
+            if (horizontalLength > 0.01f) visual.transform.localScale *= targetLength / horizontalLength;
+        }
+
         private void BuildPoliceMesh()
         {
             var modelName = unitHeatLevel >= 4 ? "SK_Veh_Preset_Muscle_01" : "SK_Veh_Preset_Sedan_01";
@@ -303,9 +318,10 @@ namespace RoadRage.UnityRemake
             {
                 var vehicleInstance = Instantiate(prefab, transform);
                 vehicleInstance.name = "Police Interceptor Model";
-                vehicleInstance.transform.localPosition = new Vector3(0f, 0.45f, 0f);
-                vehicleInstance.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
-                vehicleInstance.transform.localScale = Vector3.one * 0.96f;
+                vehicleInstance.transform.localPosition = Vector3.zero;
+                // Synty models use Z-up coordinates in FBX; local rotation must be (0, 0, 90)
+                vehicleInstance.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                vehicleInstance.transform.localScale = Vector3.one;
 
                 var renderers = vehicleInstance.GetComponentsInChildren<Renderer>();
                 var paintMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
@@ -322,6 +338,8 @@ namespace RoadRage.UnityRemake
                 {
                     rend.material = paintMat;
                 }
+                foreach (var col in vehicleInstance.GetComponentsInChildren<Collider>()) Destroy(col);
+                NormalizeVehicleVisual(vehicleInstance, 4.8f);
             }
             else
             {
@@ -355,12 +373,12 @@ namespace RoadRage.UnityRemake
         {
             var lightbarRoot = new GameObject("Police LED Lightbar");
             lightbarRoot.transform.SetParent(transform, false);
-            lightbarRoot.transform.localPosition = new Vector3(0f, 1.48f, -0.15f);
+            lightbarRoot.transform.localPosition = new Vector3(0f, 1.45f, -0.1f);
 
             var barFrame = GameObject.CreatePrimitive(PrimitiveType.Cube);
             barFrame.name = "Lightbar Frame";
             barFrame.transform.SetParent(lightbarRoot.transform, false);
-            barFrame.transform.localScale = new Vector3(1.15f, 0.10f, 0.22f);
+            barFrame.transform.localScale = new Vector3(1.15f, 0.08f, 0.22f);
             barFrame.GetComponent<Renderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { color = new Color(0.05f, 0.05f, 0.05f) };
             Destroy(barFrame.GetComponent<Collider>());
 
@@ -454,17 +472,24 @@ namespace RoadRage.UnityRemake
         {
             if (isWrecked) return;
 
-            // Check if player rammed the cop at high speed or if cop side-swiped
             var playerSpeed = targetPlayer != null ? targetPlayer.SpeedKph : 0f;
-            if (playerSpeed >= 80f) // Takedown on the cop!
+            var isBoosting = RoadRageBoostDirector.Instance != null && RoadRageBoostDirector.Instance.IsBoosting;
+
+            if (playerSpeed >= 55f || isBoosting) // Takedown on the cop!
             {
                 WreckCop();
             }
             else
             {
-                // Cop rams player and inflicts damage
-                GameState.ApplyDamage(8f);
+                // Elastic bounce-back so cop never clips or drives sideways inside player
+                var pushAwayDir = Mathf.Sign(LateralOffset - targetPlayer.LateralOffset);
+                if (Mathf.Abs(pushAwayDir) < 0.1f) pushAwayDir = 1f;
+                LateralOffset += pushAwayDir * 2.2f;
+                SpeedKph = Mathf.Max(30f, SpeedKph - 15f);
+
+                GameState.ApplyDamage(6f);
                 GameState.Show("⚠️ POLICE RAMMED YOU!");
+                if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.6f);
             }
         }
 
