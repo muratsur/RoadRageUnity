@@ -1066,12 +1066,12 @@ namespace RoadRage.UnityRemake
                 Ground = new Color(0.04f, 0.07f, 0.05f), SunColor = new Color(0.64f, 0.38f, 1f),
                 SunIntensity = 0.95f, PostExposure = 0.30f, BloomIntensity = 0.42f, BloomThreshold = 0.95f, RoadWetness = 0.22f
             },
-            5 => new BiomeMood // NEON CITY - night, so the neon carries the scene
+            5 => new BiomeMood // NEON CITY - vibrant synthwave night, bright neon glow and illuminated asphalt
             {
-                FogDensity = 0.0105f, Fog = new Color(0.075f, 0.055f, 0.145f),
-                Sky = new Color(0.21f, 0.15f, 0.38f), Equator = new Color(0.24f, 0.11f, 0.33f),
-                Ground = new Color(0.055f, 0.038f, 0.10f), SunColor = new Color(0.60f, 0.56f, 1f),
-                SunIntensity = 0.88f, PostExposure = 0.26f, BloomIntensity = 0.95f, BloomThreshold = 0.78f, RoadWetness = 0.72f
+                FogDensity = 0.0035f, Fog = new Color(0.12f, 0.08f, 0.24f),
+                Sky = new Color(0.32f, 0.16f, 0.52f), Equator = new Color(0.38f, 0.18f, 0.46f),
+                Ground = new Color(0.14f, 0.08f, 0.22f), SunColor = new Color(0.92f, 0.65f, 1f),
+                SunIntensity = 1.35f, PostExposure = 0.42f, BloomIntensity = 0.85f, BloomThreshold = 0.72f, RoadWetness = 0.65f
             },
             6 => new BiomeMood // RED CANYON - blown-out desert noon
             {
@@ -1862,16 +1862,15 @@ namespace RoadRage.UnityRemake
             model.transform.localScale *= targetSpan / span;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y);
+            var dist = bounds.center.z;
+            var roadRight = RoadPath.Right(dist);
+            var roadCenter = RoadPath.Point(dist, 0f, 0f);
+            var proj = Vector3.Dot(bounds.center - roadCenter, roadRight);
+            if (Mathf.Abs(proj) > 0.01f)
+                EnsureOutsideRoad(model, dist, Mathf.Sign(proj));
         }
 
         /// Scales a model to a target height and sits its base on the ground.
-        ///
-        /// "Ground" is the model's own placed position, NOT world zero. The road carries
-        /// elevation (RoadPath.CenterY, +/-12 m), so the previous absolute version sank
-        /// every prop into a hillside and floated it over a dip - which is why the
-        /// Hollywood Hills verge looked empty while 295 objects were spawning correctly.
-        /// The groundHeight argument is retained only for call-site readability; the
-        /// caller has already applied it via RoadPath.Point(distance, lateral, height).
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f)
         {
             if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.01f) return;
@@ -1879,6 +1878,12 @@ namespace RoadRage.UnityRemake
             model.transform.localScale *= targetHeight / bounds.size.y;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
+            var dist = bounds.center.z;
+            var roadRight = RoadPath.Right(dist);
+            var roadCenter = RoadPath.Point(dist, 0f, 0f);
+            var proj = Vector3.Dot(bounds.center - roadCenter, roadRight);
+            if (Mathf.Abs(proj) > 0.01f)
+                EnsureOutsideRoad(model, dist, Mathf.Sign(proj));
         }
 
         /// The garage was a grid of text buttons over the running world. This builds an
@@ -2176,8 +2181,7 @@ namespace RoadRage.UnityRemake
                     n.Contains("Paint") || n.Contains("Verge") || n.Contains("Walkway") ||
                     n.Contains("Sidewalk") || n.Contains("Gateway") || n.Contains("Portal") ||
                     n.Contains("Tunnel") || n.Contains("Ceiling") || n.Contains("Overpass") ||
-                    n.Contains("Bridge") || n.Contains("Wire") || n.Contains("Sign") ||
-                    n.Contains("Bench") || n.Contains("Floor") || n.Contains("Terrain"))
+                    n.Contains("Bridge") || n.Contains("Wire") || n.Contains("Floor") || n.Contains("Terrain"))
                     continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
@@ -2568,27 +2572,14 @@ namespace RoadRage.UnityRemake
         private void BuildNeonCity()
         {
             Random.InitState(60814 ^ chunkSeed);
-            BuildRibbon("Left Neon Sidewalk", -17.6f, -RoadPath.HalfWidth - RoadPath.ShoulderWidth, 0.07f, materials["Sidewalk"]);
-            BuildRibbon("Right Neon Sidewalk", RoadPath.HalfWidth + RoadPath.ShoulderWidth, 17.6f, 0.07f, materials["Sidewalk"]);
+            // Sidewalk ribbons flanking outside the 6-lane carriageway and shoulder (16.8m to 24.0m)
+            BuildRibbon("Left Neon Sidewalk", -24.0f, -16.8f, 0.08f, materials["Sidewalk"]);
+            BuildRibbon("Right Neon Sidewalk", 16.8f, 24.0f, 0.08f, materials["Sidewalk"]);
+            BuildRibbon("Left Kerb Glow", -17.0f, -16.8f, 0.12f, materials["City Neon"]);
+            BuildRibbon("Right Kerb Glow", 16.8f, 17.0f, 0.12f, materials["City Neon"]);
 
-            // Palm-lined boulevard with parked traffic and a deep skyline.
-            ScatterBand(12f, 15f, 18f, (d, l, s) =>
-            {
-                var palm = PlaceBiomeModelOnRoad("Synthwave", $"Tree/SM_palm_tree_0{Random.Range(1, 4)}",
-                    materials["Palm Frond"], d, l, 0f, new Vector3(-90f, Random.Range(0f, 360f), 0f),
-                    Vector3.one, "Boulevard Palm");
-                if (palm != null) NormalizeModelHeight(palm, Random.Range(9f, 15f));
-                return palm;
-            });
-            ScatterBand(19f, 14.5f, 16.5f, (d, l, s) =>
-            {
-                var parked = PlaceBiomeModelOnRoad("Synthwave", $"Car/SM_car_0{Random.Range(1, 3)}",
-                    materials["City Car Paint"], d, l, 0.05f,
-                    new Vector3(-90f, s > 0 ? 0f : 180f, 0f), Vector3.one, "Parked Car");
-                if (parked != null) NormalizeModelHeight(parked, 1.5f, 0.05f);
-                return parked;
-            });
-            ScatterBand(16f, 52f, 110f, (d, l, s) =>
+            // Distant skyline buildings far off in the horizon (65m to 130m out)
+            ScatterBand(16f, 65f, 130f, (d, l, s) =>
             {
                 var far = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
                     materials["City Skyline"], d, l, 0f,
@@ -2596,8 +2587,6 @@ namespace RoadRage.UnityRemake
                 if (far != null) NormalizeModelHeight(far, Random.Range(35f, 90f));
                 return far;
             });
-            BuildRibbon("Left Kerb Glow", -17.85f, -17.6f, 0.1f, materials["City Neon"]);
-            BuildRibbon("Right Kerb Glow", 17.6f, 17.85f, 0.1f, materials["City Neon"]);
 
             var towers = new[]
             {
@@ -2617,15 +2606,12 @@ namespace RoadRage.UnityRemake
                 "Advertisements/SM_advertisement_05"
             };
             var palms = new[] { "Tree/SM_palm_tree_01", "Tree/SM_palm_tree_02", "Tree/SM_palm_tree_03" };
-            var parkedCars = new[] { "Car/SM_car_01", "Car/SM_car_02", "Car/SM_car_B" };
             var neonPalette = new[]
             {
                 new Color(1f, 0.18f, 0.62f), new Color(0.18f, 0.86f, 1f),
                 new Color(0.72f, 0.25f, 1f), new Color(1f, 0.62f, 0.12f)
             };
 
-            // Derived from absolute distance so the pattern stays aligned to the world
-            // rather than restarting at every streamed chunk boundary.
             for (var z = SegBegin(0f, 24f); z < segEnd; z += 24f)
             {
                 var block = Mathf.FloorToInt(z / 24f);
@@ -2639,12 +2625,11 @@ namespace RoadRage.UnityRemake
                     var frontagePack = isNyc ? "Buildings" : "Synthwave";
                     var frontageDistance = z + (side > 0 ? 4f : -5f) + Random.Range(-2.5f, 2.5f);
                     var tower = PlaceBiomeModelOnRoad(frontagePack, frontageMesh, materials["City Concrete"],
-                        frontageDistance, side * Random.Range(18.0f, 24.0f), 0f,
+                        frontageDistance, side * Random.Range(28.0f, 36.0f), 0f,
                         new Vector3(-90f, facing, 0f), Vector3.one, "Neon Tower");
                     if (tower != null)
                     {
-                        NormalizeModelHeight(tower, Random.Range(24f, 52f));
-                        EnsureOutsideRoad(tower, frontageDistance, side);
+                        NormalizeModelHeight(tower, Random.Range(28f, 58f));
                     }
 
                     var skylineName = block % 3 == 0
@@ -2652,29 +2637,30 @@ namespace RoadRage.UnityRemake
                         : towers[BlockHash(block, side * 5) % towers.Length];
                     var skylineDistance = z + Random.Range(-11f, 11f);
                     var skyline = PlaceBiomeModelOnRoad("Synthwave", skylineName, materials["City Skyline"],
-                        skylineDistance, side * Random.Range(46f, 74f), 0f,
+                        skylineDistance, side * Random.Range(55f, 90f), 0f,
                         new Vector3(-90f, facing, 0f), Vector3.one, "Neon Skyline");
                     if (skyline != null)
                     {
                         NormalizeModelHeight(skyline, Random.Range(38f, 82f));
-                        EnsureOutsideRoad(skyline, skylineDistance, side);
                     }
 
+                    // Street Lamps sitting safely on the sidewalk
                     var lampDistance = z + (side > 0 ? 11f : -7f);
                     var lamp = PlaceBiomeModelOnRoad("Synthwave", "Street_lamp/SM_street_lamp", materials["City Asphalt Trim"],
-                        lampDistance, side * 14.1f, 0f, new Vector3(-90f, facing, 0f), Vector3.one, "City Street Lamp");
+                        lampDistance, side * 18.5f, 0f, new Vector3(-90f, facing, 0f), Vector3.one, "City Street Lamp");
                     if (lamp != null)
                     {
                         NormalizeModelHeight(lamp, 8.4f);
-                        CreateLocalLight(RoadPath.Point(lampDistance, side * 14.1f, 7.6f),
-                            neonPalette[BlockHash(block, side * 7) % neonPalette.Length], 9f, 17f);
+                        CreateLocalLight(RoadPath.Point(lampDistance, side * 18.5f, 7.6f),
+                            neonPalette[BlockHash(block, side * 7) % neonPalette.Length], 10f, 20f);
                     }
 
+                    // Boulevard Palms sitting safely on the outer sidewalk
                     if (block % 2 == 0)
                     {
                         var palmDistance = z + (side > 0 ? 17f : -15f);
                         var palm = PlaceBiomeModelOnRoad("Synthwave", palms[BlockHash(block, side * 9) % palms.Length],
-                            materials["City Palm"], palmDistance, side * 15.8f, 0f,
+                            materials["City Palm"], palmDistance, side * 20.2f, 0f,
                             new Vector3(-90f, Random.Range(0f, 360f), 0f), Vector3.one, "Boulevard Palm");
                         if (palm != null) NormalizeModelHeight(palm, Random.Range(9f, 13f));
                     }
@@ -2686,35 +2672,34 @@ namespace RoadRage.UnityRemake
                     var facing = side > 0f ? -90f : 90f;
                     var signDistance = z + 8f;
                     var sign = PlaceBiomeModelOnRoad("Synthwave", "Road_sign/SM_road_sign", materials["City Sign"],
-                        signDistance, side * 13.4f, 0f, new Vector3(-90f, facing, 0f), Vector3.one, "Neon Road Sign");
+                        signDistance, side * 18.5f, 0f, new Vector3(-90f, facing, 0f), Vector3.one, "Neon Road Sign");
                     if (sign != null) NormalizeModelHeight(sign, 5.6f);
 
                     var billboardDistance = z + 18f;
                     var billboard = PlaceBiomeModelOnRoad("Synthwave", advertisements[BlockHash(block, 13) % advertisements.Length],
-                        materials["City Billboard"], billboardDistance, -side * 19f, 4f,
+                        materials["City Billboard"], billboardDistance, -side * 24.5f, 4f,
                         new Vector3(-90f, -facing, 0f), Vector3.one, "Neon Billboard");
                     if (billboard != null)
                     {
                         NormalizeModelHeight(billboard, 9f, 3.2f);
-                        EnsureOutsideRoad(billboard, billboardDistance, -side);
-                        CreateLocalLight(RoadPath.Point(billboardDistance, -side * 15f, 7f),
-                            neonPalette[BlockHash(block, 15) % neonPalette.Length], 12f, 21f);
+                        CreateLocalLight(RoadPath.Point(billboardDistance, -side * 24.5f, 7f),
+                            neonPalette[BlockHash(block, 15) % neonPalette.Length], 12f, 22f);
                     }
                 }
 
-                // Urban Bus Stops & Commercial Shopfronts (sitting flush on sidewalk)
+                // Urban Bus Stops & Commercial Shopfronts (sitting safely on sidewalk)
                 if (block % 4 == 2)
                 {
                     var side = block % 8 < 4 ? 1f : -1f;
                     var stopDistance = z + 6f;
                     var stop = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bus_stop",
-                        materials["City Props"], stopDistance, side * 14.5f, 0.14f,
+                        materials["City Props"], stopDistance, side * 19.8f, 0.14f,
                         new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "City Bus Stop");
                     if (stop != null) NormalizeModelHeight(stop, 3.2f, 0.14f);
 
                     var benchDistance = z + 12f;
                     var bench = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bench",
-                        materials["City Props"], benchDistance, side * 14.2f, 0.14f,
+                        materials["City Props"], benchDistance, side * 19.5f, 0.14f,
                         new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "City Bench");
                     if (bench != null) NormalizeModelHeight(bench, 1.0f, 0.14f);
                 }
@@ -3129,20 +3114,20 @@ namespace RoadRage.UnityRemake
             var clutterMaterial = pick == 0 ? materials["Cyber Trash"]
                 : pick == 1 ? materials["Cyber Crate"] : materials["Cyber Props"];
             var piece = PlaceBiomeModelOnRoad("CyberpunkCity", clutter, clutterMaterial,
-                distance, side * 15.4f, 0.05f, new Vector3(-90f, facing, 0f), Vector3.one, "Sidewalk Clutter");
+                distance, side * 20.8f, 0.05f, new Vector3(-90f, facing, 0f), Vector3.one, "Sidewalk Clutter");
             if (piece != null) NormalizeModelHeight(piece, Random.Range(0.8f, 1.5f), 0.05f);
 
             // Highway US Speed Limit Signs
             if (block % 6 == 0)
             {
                 var sign = PlaceBiomeModelOnRoad("Props", "Signs/Sign Post 1", materials["City Props"],
-                    distance + 4f, side * 12.8f, 0.05f, new Vector3(0f, facing + 90f, 0f), Vector3.one, "Speed Limit Sign");
+                    distance + 4f, side * 18.2f, 0.05f, new Vector3(0f, facing + 90f, 0f), Vector3.one, "Speed Limit Sign");
                 if (sign != null) NormalizeModelHeight(sign, 3.2f, 0.05f);
             }
 
             if (block % 2 != 0) return;
             var aircon = PlaceBiomeModelOnRoad("CyberpunkCity", "Aircon/SM_aircon_01", materials["Cyber Props"],
-                distance + 6f, side * 16.2f, 2.6f, new Vector3(-90f, facing, 0f), Vector3.one, "Wall Aircon");
+                distance + 6f, side * 27.5f, 2.6f, new Vector3(-90f, facing, 0f), Vector3.one, "Wall Aircon");
             if (aircon != null) NormalizeModelHeight(aircon, 1.1f, 2.6f);
         }
 
