@@ -5533,6 +5533,11 @@ namespace RoadRage.UnityRemake
                 if (pad != null && (pad.startButton.wasPressedThisFrame || pad.selectButton.wasPressedThisFrame)) return true;
             }
             catch {}
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.Escape)) return true;
+            }
+            catch {}
             return false;
         }
 
@@ -5542,6 +5547,11 @@ namespace RoadRage.UnityRemake
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
                 if (kb != null && kb.bKey.wasPressedThisFrame) return true;
+            }
+            catch {}
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.B)) return true;
             }
             catch {}
             return false;
@@ -5555,6 +5565,11 @@ namespace RoadRage.UnityRemake
                 if (kb != null && kb.nKey.wasPressedThisFrame) return true;
             }
             catch {}
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.N)) return true;
+            }
+            catch {}
             return false;
         }
 
@@ -5566,6 +5581,11 @@ namespace RoadRage.UnityRemake
                 if (kb != null && kb.gKey.wasPressedThisFrame) return true;
             }
             catch {}
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.G)) return true;
+            }
+            catch {}
             return false;
         }
 
@@ -5574,19 +5594,41 @@ namespace RoadRage.UnityRemake
             try
             {
                 var kb = UnityEngine.InputSystem.Keyboard.current;
-                if (kb == null) return false;
+                if (kb != null)
+                {
+                    var pressed = digit switch
+                    {
+                        1 => kb.digit1Key.wasPressedThisFrame || kb.numpad1Key.wasPressedThisFrame,
+                        2 => kb.digit2Key.wasPressedThisFrame || kb.numpad2Key.wasPressedThisFrame,
+                        3 => kb.digit3Key.wasPressedThisFrame || kb.numpad3Key.wasPressedThisFrame,
+                        4 => kb.digit4Key.wasPressedThisFrame || kb.numpad4Key.wasPressedThisFrame,
+                        5 => kb.digit5Key.wasPressedThisFrame || kb.numpad5Key.wasPressedThisFrame,
+                        6 => kb.digit6Key.wasPressedThisFrame || kb.numpad6Key.wasPressedThisFrame,
+                        7 => kb.digit7Key.wasPressedThisFrame || kb.numpad7Key.wasPressedThisFrame,
+                        8 => kb.digit8Key.wasPressedThisFrame || kb.numpad8Key.wasPressedThisFrame,
+                        9 => kb.digit9Key.wasPressedThisFrame || kb.numpad9Key.wasPressedThisFrame,
+                        0 => kb.digit0Key.wasPressedThisFrame || kb.numpad0Key.wasPressedThisFrame,
+                        _ => false
+                    };
+                    if (pressed) return true;
+                }
+            }
+            catch {}
+
+            try
+            {
                 return digit switch
                 {
-                    1 => kb.digit1Key.wasPressedThisFrame || kb.numpad1Key.wasPressedThisFrame,
-                    2 => kb.digit2Key.wasPressedThisFrame || kb.numpad2Key.wasPressedThisFrame,
-                    3 => kb.digit3Key.wasPressedThisFrame || kb.numpad3Key.wasPressedThisFrame,
-                    4 => kb.digit4Key.wasPressedThisFrame || kb.numpad4Key.wasPressedThisFrame,
-                    5 => kb.digit5Key.wasPressedThisFrame || kb.numpad5Key.wasPressedThisFrame,
-                    6 => kb.digit6Key.wasPressedThisFrame || kb.numpad6Key.wasPressedThisFrame,
-                    7 => kb.digit7Key.wasPressedThisFrame || kb.numpad7Key.wasPressedThisFrame,
-                    8 => kb.digit8Key.wasPressedThisFrame || kb.numpad8Key.wasPressedThisFrame,
-                    9 => kb.digit9Key.wasPressedThisFrame || kb.numpad9Key.wasPressedThisFrame,
-                    0 => kb.digit0Key.wasPressedThisFrame || kb.numpad0Key.wasPressedThisFrame,
+                    1 => Input.GetKeyDown(KeyCode.Alpha1) || Input.GetKeyDown(KeyCode.Keypad1),
+                    2 => Input.GetKeyDown(KeyCode.Alpha2) || Input.GetKeyDown(KeyCode.Keypad2),
+                    3 => Input.GetKeyDown(KeyCode.Alpha3) || Input.GetKeyDown(KeyCode.Keypad3),
+                    4 => Input.GetKeyDown(KeyCode.Alpha4) || Input.GetKeyDown(KeyCode.Keypad4),
+                    5 => Input.GetKeyDown(KeyCode.Alpha5) || Input.GetKeyDown(KeyCode.Keypad5),
+                    6 => Input.GetKeyDown(KeyCode.Alpha6) || Input.GetKeyDown(KeyCode.Keypad6),
+                    7 => Input.GetKeyDown(KeyCode.Alpha7) || Input.GetKeyDown(KeyCode.Keypad7),
+                    8 => Input.GetKeyDown(KeyCode.Alpha8) || Input.GetKeyDown(KeyCode.Keypad8),
+                    9 => Input.GetKeyDown(KeyCode.Alpha9) || Input.GetKeyDown(KeyCode.Keypad9),
+                    0 => Input.GetKeyDown(KeyCode.Alpha0) || Input.GetKeyDown(KeyCode.Keypad0),
                     _ => false
                 };
             }
@@ -5614,6 +5656,16 @@ namespace RoadRage.UnityRemake
                 }
             }
             catch {}
+
+            try
+            {
+                if (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.LeftArrow)) steer -= 1f;
+                if (Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.RightArrow)) steer += 1f;
+                var axis = Input.GetAxisRaw("Horizontal");
+                if (Mathf.Abs(axis) > 0.1f) steer += axis;
+            }
+            catch {}
+
             return Mathf.Clamp(steer, -1f, 1f);
         }
 
@@ -5642,6 +5694,16 @@ namespace RoadRage.UnityRemake
                 }
             }
             catch {}
+
+            try
+            {
+                if (Input.GetKey(KeyCode.W) || Input.GetKey(KeyCode.UpArrow)) throttle += 1f;
+                if (Input.GetKey(KeyCode.S) || Input.GetKey(KeyCode.DownArrow) || Input.GetKey(KeyCode.Space)) throttle -= 1f;
+                var axis = Input.GetAxisRaw("Vertical");
+                if (Mathf.Abs(axis) > 0.1f) throttle += axis;
+            }
+            catch {}
+
             return Mathf.Clamp(throttle, -1f, 1f);
         }
     }
