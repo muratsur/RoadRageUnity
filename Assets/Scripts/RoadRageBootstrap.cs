@@ -1664,6 +1664,17 @@ namespace RoadRage.UnityRemake
                 return null;
             }
             var model = Adopt(Instantiate(prefab));
+            foreach (var l in model.GetComponentsInChildren<Light>(true))
+            {
+                DestroyImmediate(l.gameObject == model ? l : l.gameObject);
+            }
+            foreach (var b in model.GetComponentsInChildren<Behaviour>(true))
+            {
+                if (b == null) continue;
+                var typeName = b.GetType().Name;
+                if (typeName.Contains("Halo") || typeName.Contains("Flare") || typeName.Contains("LensFlare") || typeName.Contains("Light"))
+                    DestroyImmediate(b);
+            }
             foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
             {
                 // One-shot diagnostic: dump the real submesh material names so the
@@ -4028,6 +4039,14 @@ namespace RoadRage.UnityRemake
 					}
                     renderer.sharedMaterials = assigned;
                 }
+                foreach (var l in racerVisual.GetComponentsInChildren<Light>(true)) DestroyImmediate(l.gameObject == racerVisual ? l : l.gameObject);
+                foreach (var b in racerVisual.GetComponentsInChildren<Behaviour>(true))
+                {
+                    if (b == null) continue;
+                    var typeName = b.GetType().Name;
+                    if (typeName.Contains("Halo") || typeName.Contains("Flare") || typeName.Contains("LensFlare") || typeName.Contains("Light"))
+                        DestroyImmediate(b);
+                }
             }
             BuildDriver(car);
             foreach (var collider in car.GetComponentsInChildren<Collider>()) Destroy(collider);
@@ -4188,6 +4207,14 @@ namespace RoadRage.UnityRemake
                     renderer.sharedMaterials = assigned;
                 }
                 foreach (var collider in visual.GetComponentsInChildren<Collider>()) Destroy(collider);
+                foreach (var l in visual.GetComponentsInChildren<Light>(true)) DestroyImmediate(l.gameObject == visual ? l : l.gameObject);
+                foreach (var b in visual.GetComponentsInChildren<Behaviour>(true))
+                {
+                    if (b == null) continue;
+                    var typeName = b.GetType().Name;
+                    if (typeName.Contains("Halo") || typeName.Contains("Flare") || typeName.Contains("LensFlare") || typeName.Contains("Light"))
+                        DestroyImmediate(b);
+                }
                 NormalizeVehicleVisual(visual, 4.75f);
             }
             var controller = root.gameObject.AddComponent<TrafficCarController>();
