@@ -5478,7 +5478,7 @@ namespace RoadRage.UnityRemake
             var activeBiome = World != null ? World.BiomeName : "Tire District";
             var centerReadoutStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(14 * s) };
             GUI.Label(new Rect(statX, 34f, statW, 22f),
-                $"TRACK: {activeBiome.ToUpper()}  •  WEATHER: {WeatherSystem.Label(World != null ? World.Weather : WeatherType.Clear).ToUpper()}",
+                $"TRACK: {activeBiome.ToUpper()}  •  WEATHER: {WeatherSystem.Label(World != null ? World.Weather : WeatherKind.Clear).ToUpper()}",
                 centerReadoutStyle);
 
             // Right: Settings Toggle Button

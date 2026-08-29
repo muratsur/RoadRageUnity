@@ -70,6 +70,18 @@ namespace RoadRage.UnityRemake
 
         // ---- run state (not persisted) ----
         public static int Score;
+        public static int HighScore
+        {
+            get => PlayerPrefs.GetInt("RR_HIGHSCORE", 125000);
+            set
+            {
+                if (value > PlayerPrefs.GetInt("RR_HIGHSCORE", 125000))
+                {
+                    PlayerPrefs.SetInt("RR_HIGHSCORE", value);
+                    PlayerPrefs.Save();
+                }
+            }
+        }
         public static int Combo;
         public static float ComboTimer;
         public static string Message = string.Empty;
