@@ -10,11 +10,9 @@ namespace RoadRage.UnityRemake
         public bool IsTransitioningToRace { get; private set; }
 
         private float showcaseOrbitAngle = 35f;
+        private float transitionStartAngle = 35f;
         private float transitionProgress = 0f;
-        private const float TransitionDuration = 0.85f;
-
-        private Vector3 transitionStartPos;
-        private Quaternion transitionStartRot;
+        private const float TransitionDuration = 0.75f;
 
         private void Awake()
         {
@@ -55,17 +53,12 @@ namespace RoadRage.UnityRemake
 
         public void LaunchRun()
         {
-            if (!IsLandingActive) return;
+            if (!IsLandingActive && !IsTransitioningToRace) return;
 
             IsLandingActive = false;
             IsTransitioningToRace = true;
             transitionProgress = 0f;
-
-            if (Camera.main != null)
-            {
-                transitionStartPos = Camera.main.transform.position;
-                transitionStartRot = Camera.main.transform.rotation;
-            }
+            transitionStartAngle = showcaseOrbitAngle;
 
             if (RoadRageAudioBridge.Instance != null)
             {
@@ -118,29 +111,45 @@ namespace RoadRage.UnityRemake
             var carPos = car.position;
             var carRot = car.rotation;
 
-            // Low-slung dynamic hero angle looking at car body and grille
-            var focusPoint = carPos + Vector3.up * 0.60f;
-
-            var rad = showcaseOrbitAngle * Mathf.Deg2Rad;
-            var radius = 4.7f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.35f);
-            var height = 0.85f + 0.18f * Mathf.Sin(Time.unscaledTime * 0.5f);
-
-            var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
-            var targetShowcasePos = focusPoint + (carRot * localOffset);
-            var targetShowcaseRot = Quaternion.LookRotation(focusPoint - targetShowcasePos);
-
             if (IsLandingActive)
             {
+                var focusPoint = carPos + Vector3.up * 0.65f;
+                var rad = showcaseOrbitAngle * Mathf.Deg2Rad;
+                var radius = 4.7f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.35f);
+                var height = 0.95f + 0.18f * Mathf.Sin(Time.unscaledTime * 0.5f);
+
+                var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
+                var targetShowcasePos = focusPoint + (carRot * localOffset);
+
+                var floor = carPos.y + 0.65f;
+                if (targetShowcasePos.y < floor) targetShowcasePos.y = floor;
+
                 cameraPos = targetShowcasePos;
-                cameraRot = targetShowcaseRot;
+                cameraRot = Quaternion.LookRotation(focusPoint - targetShowcasePos, car.up);
                 return true;
             }
 
             if (IsTransitioningToRace)
             {
                 var t = Mathf.SmoothStep(0f, 1f, transitionProgress);
-                cameraPos = Vector3.Lerp(transitionStartPos, targetShowcasePos, 1f - t);
-                cameraRot = Quaternion.Slerp(transitionStartRot, targetShowcaseRot, 1f - t);
+                var delta = Mathf.DeltaAngle(transitionStartAngle, 180f);
+                var currentAngle = transitionStartAngle + delta * t;
+                var rad = currentAngle * Mathf.Deg2Rad;
+
+                // Expand radius and lift height smoothly from showcase pose to chase camera pose
+                var radius = Mathf.Lerp(4.7f, 8.2f, t);
+                var height = Mathf.Lerp(0.95f, 4.7f, t);
+
+                var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
+                var targetPos = carPos + (carRot * localOffset);
+
+                var floor = carPos.y + 0.65f;
+                if (targetPos.y < floor) targetPos.y = floor;
+
+                var lookTarget = carPos + car.up * Mathf.Lerp(0.65f, 1.2f, t) + car.forward * Mathf.Lerp(0f, 9f, t);
+
+                cameraPos = targetPos;
+                cameraRot = Quaternion.LookRotation(lookTarget - targetPos, car.up);
                 return true;
             }
 

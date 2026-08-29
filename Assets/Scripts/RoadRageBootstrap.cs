@@ -4824,7 +4824,7 @@ namespace RoadRage.UnityRemake
         private Vector3 ConstrainToCorridor(Vector3 position)
         {
             if (player == null) return position;
-            var distance = player.RoadDistance - Trail;
+            var distance = RoadPath.Wrap(player.RoadDistance - Trail);
             var centre = RoadPath.Center(distance);
             var right = RoadPath.Right(distance);
 
