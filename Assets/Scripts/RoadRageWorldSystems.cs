@@ -121,6 +121,52 @@ namespace RoadRage.UnityRemake
         public enum Offence { None, Weaving, Speeding, WrongWay, Tailgating }
         public Offence Violation { get; private set; }
 
+        public enum VehicleRole { Standard, FuelTanker, CarHauler }
+        public VehicleRole Role { get; set; } = VehicleRole.Standard;
+        public bool HasDetonated { get; private set; }
+
+        public void DetonateTanker()
+        {
+            if (HasDetonated) return;
+            HasDetonated = true;
+            IsWreck = true;
+            WreckYaw = Random.Range(-45f, 45f);
+
+            var blastPos = transform.position + Vector3.up * 1.2f;
+            CrashEffects.Active?.PlayAt(blastPos);
+
+            if (RoadRageAudioBridge.Instance != null)
+            {
+                RoadRageAudioBridge.Instance.PlayCrash(1.0f);
+            }
+            if (RoadRageHapticsDirector.Instance != null)
+            {
+                RoadRageHapticsDirector.Instance.TriggerHeavyCrashHaptic(1.0f);
+            }
+
+            GameState.Award(4000, "💥 TANKER MASSIVE EXPLOSION!");
+            if (RoadRageBoostDirector.Instance != null)
+            {
+                RoadRageBoostDirector.Instance.AddBoost(100f, "TANKER CHAIN REACTION");
+            }
+
+            // Chain reaction blast to surrounding traffic
+            for (var i = ActiveCars.Count - 1; i >= 0; i--)
+            {
+                var other = ActiveCars[i];
+                if (other != null && other != this && !other.IsWreck)
+                {
+                    var d = Mathf.Abs(RoadPath.SignedDelta(RoadDistance, other.RoadDistance));
+                    if (d < 28f)
+                    {
+                        other.Crash(Random.Range(-1.5f, 1.5f), 140f);
+                        GameState.Award(1500, "💥 TANKER BLAST WIPEOUT!");
+                        GameState.Takedowns++;
+                    }
+                }
+            }
+        }
+
         /// Measured from the spawned mesh. The collision test used fixed 4.3 m / 2.05 m
         /// radii sized for a small car; with a 7.2 m truck against a 5.0 m car the meshes
         /// overlapped by ~1.8 m before the hit registered, which is the clipping.
@@ -448,6 +494,18 @@ namespace RoadRage.UnityRemake
                 var lateralReach = (player.HalfWidth + traffic.HalfWidth) * (traffic.IsWreck ? 1.15f : 0.92f);
                 if (Mathf.Abs(lateral) > lateralReach) continue;
 
+                // Special Vehicle: Car Hauler ramp jump from behind
+                if (traffic.Role == VehicleRole.CarHauler && longitudinal > 0.4f && Mathf.Abs(lateral) < 1.4f && player.SpeedKph > 35f)
+                {
+                    player.LaunchAirtime(17.5f);
+                    GameState.Award(2000, "🚀 CAR HAULER MEGA-JUMP!");
+                    if (RoadRageAudioBridge.Instance != null)
+                    {
+                        RoadRageAudioBridge.Instance.PlayTurboFlutter();
+                    }
+                    continue;
+                }
+
                 // 1. Continuous physical anti-penetration resolution (runs every frame to prevent any mesh clipping)
                 var overlapLong = reach - Mathf.Abs(longitudinal);
                 if (longitudinal > 0f) // Player is behind traffic: shove traffic car forward
@@ -468,6 +526,12 @@ namespace RoadRage.UnityRemake
                 if (Mathf.Abs(latSign) < 0.01f) latSign = 1f;
                 traffic.laneDrift += latSign * overlapLat * 0.65f;
                 player.LateralOffset -= latSign * overlapLat * 0.35f;
+
+                // Special Vehicle: Explosive Fuel Tanker Detonation
+                if (traffic.Role == VehicleRole.FuelTanker && player.SpeedKph > 30f && !traffic.HasDetonated)
+                {
+                    traffic.DetonateTanker();
+                }
 
                 // 2. Trigger gameplay impact & damage/score events
                 var speedAtImpact = player.SpeedKph;

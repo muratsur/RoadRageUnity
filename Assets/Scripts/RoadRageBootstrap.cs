@@ -4130,8 +4130,22 @@ namespace RoadRage.UnityRemake
                 var offence = i % violatorEvery == 1
                     ? OffenceCycle[(i / violatorEvery) % OffenceCycle.Length]
                     : TrafficCarController.Offence.None;
-                CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", models[i % models.Length],
-                    palette[i % palette.Length], distances[i], lanes[i], speed, direction, false, 0f, offence);
+
+                var role = TrafficCarController.VehicleRole.Standard;
+                var model = models[i % models.Length];
+                if (i == 4 || i == 9)
+                {
+                    role = TrafficCarController.VehicleRole.FuelTanker;
+                    model = "SK_Veh_Preset_Truck_01";
+                }
+                else if (i == 6 || i == 11)
+                {
+                    role = TrafficCarController.VehicleRole.CarHauler;
+                    model = "SK_Veh_Preset_Truck_03";
+                }
+
+                CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", model,
+                    palette[i % palette.Length], distances[i], lanes[i], speed, direction, false, 0f, offence, role);
             }
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length}");
@@ -4141,7 +4155,8 @@ namespace RoadRage.UnityRemake
 
         private TrafficCarController CreateTrafficVehicle(Transform parent, string name, string modelName,
             Color tint, float distance, float lane, float speed, float direction, bool wreck, float wreckYaw,
-            TrafficCarController.Offence offence = TrafficCarController.Offence.None)
+            TrafficCarController.Offence offence = TrafficCarController.Offence.None,
+            TrafficCarController.VehicleRole role = TrafficCarController.VehicleRole.Standard)
         {
             var root = new GameObject(name).transform;
             root.SetParent(parent, false);
@@ -4225,8 +4240,11 @@ namespace RoadRage.UnityRemake
                 NormalizeVehicleVisual(visual, 4.75f);
             }
             var controller = root.gameObject.AddComponent<TrafficCarController>();
+            controller.Role = role;
             if (TryGetCombinedBounds(root.gameObject, out var tb))
                 controller.SetFootprint(tb.size.z * 0.5f, tb.size.x * 0.5f);
+            if (role == TrafficCarController.VehicleRole.CarHauler) controller.SetFootprint(4.8f, 1.4f);
+            else if (role == TrafficCarController.VehicleRole.FuelTanker) controller.SetFootprint(4.5f, 1.4f);
             controller.Initialize(distance, lane, speed, direction, wreck, wreckYaw, offence);
             return controller;
         }
@@ -4304,6 +4322,9 @@ namespace RoadRage.UnityRemake
 
             var hapticsDirector = cameraObject.AddComponent<RoadRageHapticsDirector>();
             hapticsDirector.BindPlayer(car);
+
+            var rampDirector = cameraObject.AddComponent<RoadRageRampDirector>();
+            rampDirector.BindPlayer(car);
 
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
@@ -4595,12 +4616,28 @@ namespace RoadRage.UnityRemake
         public bool IsBraking => (GameInput.GetThrottle() + TouchThrottle) < -0.1f;
         public float SteerInput => Mathf.Clamp(GameInput.GetSteer() + TouchSteer, -1f, 1f);
         public float LateralVelocity => lateralVelocity;
+        public bool IsAirborne => verticalOffset > 0.05f;
+        public float AirtimeDuration { get; private set; }
+
+        private float verticalOffset;
+        private float verticalVelocity;
         private float lateralVelocity;
         private float totalDistance;
         private float nextImpactTime;
         // Daily distance is written to PlayerPrefs, so it is batched rather than saved per frame.
         private float distanceSinceDailyBump;
         private static readonly bool autoSteer = RoadRageBootstrap.CommandLineValue("-autosteer") != null;
+
+        public void LaunchAirtime(float launchPower)
+        {
+            verticalVelocity = launchPower;
+            verticalOffset = 0.15f;
+            AirtimeDuration = 0f;
+            if (RoadRageHapticsDirector.Instance != null)
+            {
+                RoadRageHapticsDirector.Instance.TriggerLightHaptic(0.35f);
+            }
+        }
 
         private void Update()
         {
@@ -4609,6 +4646,8 @@ namespace RoadRage.UnityRemake
                 CountdownTimer = 3.0f;
                 SpeedKph = 0f;
                 lateralVelocity = 0f;
+                verticalOffset = 0f;
+                verticalVelocity = 0f;
                 transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
                 transform.rotation = RoadPath.Rotation(RoadDistance);
                 return;
@@ -4619,6 +4658,8 @@ namespace RoadRage.UnityRemake
                 CountdownTimer -= Time.deltaTime;
                 SpeedKph = 0f;
                 lateralVelocity = 0f;
+                verticalOffset = 0f;
+                verticalVelocity = 0f;
                 transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
                 transform.rotation = RoadPath.Rotation(RoadDistance);
                 return;
@@ -4673,6 +4714,33 @@ namespace RoadRage.UnityRemake
             var forwardTravel = SpeedKph / 3.6f * Time.deltaTime;
             totalDistance += forwardTravel;
 
+            // Airborne physics simulation
+            var airPitch = 0f;
+            if (verticalOffset > 0f || verticalVelocity > 0f)
+            {
+                AirtimeDuration += Time.deltaTime;
+                verticalOffset += verticalVelocity * Time.deltaTime;
+                verticalVelocity -= 26f * Time.deltaTime; // Gravity
+                airPitch = Mathf.Clamp(verticalVelocity * 1.8f, -14f, 22f);
+
+                if (verticalOffset <= 0f)
+                {
+                    verticalOffset = 0f;
+                    verticalVelocity = 0f;
+                    // Landing impact!
+                    if (AirtimeDuration > 0.45f)
+                    {
+                        var bonus = Mathf.RoundToInt(AirtimeDuration * 1200f);
+                        GameState.Award(bonus, $"🚀 AIRTIME STUNT ({AirtimeDuration:0.1}s)");
+                        if (RoadRageBoostDirector.Instance != null)
+                            RoadRageBoostDirector.Instance.AddBoost(40f, "AIRTIME STUNT");
+                        if (RoadRageHapticsDirector.Instance != null)
+                            RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.45f);
+                    }
+                    AirtimeDuration = 0f;
+                }
+            }
+
             // Distance points tick up as you drive; the oncoming side is worth double,
             // the risk/reward trade the shipped build uses to pull players across the line.
             GameState.Tick(Time.deltaTime);
@@ -4689,10 +4757,15 @@ namespace RoadRage.UnityRemake
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
             var edge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset + lateralVelocity * Time.deltaTime, -edge, edge);
-            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
-            var desiredRotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(0f, steer * 9f, -steer * 4f);
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f + verticalOffset);
+            var desiredRotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(-airPitch, steer * 9f, -steer * 4f);
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
-            TrafficCarController.ResolvePlayerCollision(this);
+            
+            // Only test ground collision if not flying high over cars
+            if (verticalOffset < 1.6f)
+            {
+                TrafficCarController.ResolvePlayerCollision(this);
+            }
 
             if (RoadRageAudioBridge.Instance != null)
             {
