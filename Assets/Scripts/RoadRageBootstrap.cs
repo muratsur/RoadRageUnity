@@ -3151,6 +3151,35 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Cyberpunk and DemoCity street clutter dressed onto NEON CITY's sidewalks.
+        private void DressNeonSidewalk(float distance, float side, int block)
+        {
+            var facing = side > 0f ? -90f : 90f;
+            var pick = BlockHash(block, 21) % 4;
+            var clutter = pick == 0 ? "Trashbag/SM_trashbag_group_01"
+                : pick == 1 ? "Crates/SM_crate_01"
+                : pick == 2 ? "Trashcan/SM_trashcan_01"
+                : "Buildings/DemoCity/bench";
+            var clutterMaterial = pick == 0 ? materials["Cyber Trash"]
+                : pick == 1 ? materials["Cyber Crate"] : materials["Cyber Props"];
+            var piece = PlaceBiomeModelOnRoad("CyberpunkCity", clutter, clutterMaterial,
+                distance, side * 15.4f, 0.05f, new Vector3(-90f, facing, 0f), Vector3.one, "Sidewalk Clutter");
+            if (piece != null) NormalizeModelHeight(piece, Random.Range(0.8f, 1.5f), 0.05f);
+
+            // Highway US Speed Limit Signs
+            if (block % 6 == 0)
+            {
+                var sign = PlaceBiomeModelOnRoad("Props", "Signs/Sign Post 1", materials["City Props"],
+                    distance + 4f, side * 12.8f, 0.05f, new Vector3(0f, facing + 90f, 0f), Vector3.one, "Speed Limit Sign");
+                if (sign != null) NormalizeModelHeight(sign, 3.2f, 0.05f);
+            }
+
+            if (block % 2 != 0) return;
+            var aircon = PlaceBiomeModelOnRoad("CyberpunkCity", "Aircon/SM_aircon_01", materials["Cyber Props"],
+                distance + 6f, side * 16.2f, 2.6f, new Vector3(-90f, facing, 0f), Vector3.one, "Wall Aircon");
+            if (aircon != null) NormalizeModelHeight(aircon, 1.1f, 2.6f);
+        }
+
         private void BuildCityOverpass(float distance, int block)
         {
             var overpass = PlaceBiomeModelOnRoad("Synthwave", block % 2 == 0 ? "Bridge/SM_bridge" : "Arch/SM_arch",
