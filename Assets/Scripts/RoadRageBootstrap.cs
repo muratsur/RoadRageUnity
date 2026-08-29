@@ -655,6 +655,13 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("Garage Equipment", "TireRepair", "T_TireMachine01_BC", "T_TireMachine01_N", Color.white, 0.48f, 0.38f), "TireRepair", "T_TireMachine01_MSO");
             BiomeSurface(BiomeMaterial("Garage Shelf", "TireRepair", "T_TireShelf_B", "T_TireShelf_N", Color.white, 0.35f, 0.32f), "TireRepair", "T_TireShelf_MSO");
             MakeMaterial("Industrial Ground", new Color(0.105f, 0.095f, 0.082f), 0.08f, 0.32f);
+            BiomeMaterial("Demo Facades", "DemoCity", "building_facades", "building_facades_nm", Color.white, 0.15f, 0.42f);
+            BiomeMaterial("Demo Highrise", "DemoCity", "highrise_facades", "highrise_facades_nm", Color.white, 0.18f, 0.55f, "highrise_facades_em");
+            BiomeMaterial("Demo Bases", "DemoCity", "building_bases", "building_bases_nm", Color.white, 0.12f, 0.38f);
+            BiomeMaterial("Demo Windows", "DemoCity", "building_windows_wet", "building_windows_wet_nm", new Color(0.85f, 0.92f, 1f), 0.35f, 0.85f);
+            BiomeMaterial("Demo Interior", "DemoCity", "building_interior", "building_interior_nm", Color.white, 0.15f, 0.40f);
+            BiomeMaterial("Demo Props", "DemoCity", "props_main", "props_main_nm", Color.white, 0.45f, 0.50f);
+            BiomeMaterial("Demo Fence", "DemoCity", "road_sideway_fences", "road_sideway_fences_nm", Color.white, 0.65f, 0.45f);
             BiomeSurface(BiomeMaterial("City Concrete", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.42f, 0.46f, 0.54f), 0.18f, 0.42f), "Synthwave", "T_concrete_MSO");
             BiomeSurface(BiomeMaterial("City Windows", "Synthwave", "T_window_02_D", "T_window_02_N", new Color(0.58f, 0.72f, 1f), 0.34f, 0.72f, "T_window_02_RE"), "Synthwave", "T_window_02_MSO");
             // Emissive skyline for distant towers - the pack's own RE sheet is flat grey,
@@ -1710,10 +1717,14 @@ namespace RoadRage.UnityRemake
                     }
                     else if (pack == "DemoCity")
                     {
-                        // Preserve original DemoCity PBR materials (facades, building bases, glass)
-                        assigned[i] = (i < renderer.sharedMaterials.Length && renderer.sharedMaterials[i] != null)
-                            ? renderer.sharedMaterials[i]
-                            : (material ?? materials["City Concrete"]);
+                        if (sourceName.Contains("highrise")) assigned[i] = materials["Demo Highrise"];
+                        else if (sourceName.Contains("base") || sourceName.Contains("sideway") || sourceName.Contains("concrete") || sourceName.Contains("wall")) assigned[i] = materials["Demo Bases"];
+                        else if (sourceName.Contains("window") || sourceName.Contains("glass")) assigned[i] = materials["Demo Windows"];
+                        else if (sourceName.Contains("interior")) assigned[i] = materials["Demo Interior"];
+                        else if (sourceName.Contains("prop") || sourceName.Contains("metal") || sourceName.Contains("lamp") || sourceName.Contains("bench")) assigned[i] = materials["Demo Props"];
+                        else if (sourceName.Contains("fence")) assigned[i] = materials["Demo Fence"];
+                        else if (sourceName.Contains("vegetation") || sourceName.Contains("tree")) assigned[i] = materials["City Palm"];
+                        else assigned[i] = materials["Demo Facades"];
                     }
                     else if (pack == "HollywoodHills")
                     {
