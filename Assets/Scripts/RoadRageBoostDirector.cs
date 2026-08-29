@@ -44,6 +44,8 @@ namespace RoadRage.UnityRemake
             InitializeExhaustVfx();
         }
 
+        private ParticleSystem speedStreaksFx;
+
         private void InitializeExhaustVfx()
         {
             var particleMat = Resources.Load<Material>("WeatherParticle") 
@@ -51,6 +53,7 @@ namespace RoadRage.UnityRemake
 
             leftFlameFx = CreateFlameEmitter("Left Exhaust Flame", particleMat);
             rightFlameFx = CreateFlameEmitter("Right Exhaust Flame", particleMat);
+            speedStreaksFx = CreateSpeedStreaksEmitter("Camera Speed Streaks", particleMat);
         }
 
         private ParticleSystem CreateFlameEmitter(string name, Material mat)
@@ -59,11 +62,39 @@ namespace RoadRage.UnityRemake
             go.transform.SetParent(transform, false);
             var ps = go.AddComponent<ParticleSystem>();
             var main = ps.main;
-            main.startLifetime = 0.25f;
-            main.startSpeed = 16f;
-            main.startSize = 0.35f;
-            main.startColor = new Color(0.15f, 0.75f, 1f, 0.95f); // Cyan Nitro Flame
-            main.maxParticles = 150;
+            main.startLifetime = 0.22f;
+            main.startSpeed = 22f;
+            main.startSize = 0.42f;
+            main.startColor = new Color(0.12f, 0.85f, 1f, 0.95f); // High-energy cyan plasma flame
+            main.maxParticles = 180;
+            main.playOnAwake = false;
+
+            var emission = ps.emission;
+            emission.rateOverTime = 55f;
+            emission.enabled = false;
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 6f;
+            shape.radius = 0.09f;
+
+            var r = go.GetComponent<ParticleSystemRenderer>();
+            r.material = mat;
+            ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            return ps;
+        }
+
+        private ParticleSystem CreateSpeedStreaksEmitter(string name, Material mat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(transform, false);
+            var ps = go.AddComponent<ParticleSystem>();
+            var main = ps.main;
+            main.startLifetime = 0.15f;
+            main.startSpeed = 45f;
+            main.startSize = 0.12f;
+            main.startColor = new Color(0.75f, 0.90f, 1f, 0.45f);
+            main.maxParticles = 80;
             main.playOnAwake = false;
 
             var emission = ps.emission;
@@ -71,9 +102,8 @@ namespace RoadRage.UnityRemake
             emission.enabled = false;
 
             var shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 8f;
-            shape.radius = 0.08f;
+            shape.shapeType = ParticleSystemShapeType.Circle;
+            shape.radius = 3.5f;
 
             var r = go.GetComponent<ParticleSystemRenderer>();
             r.material = mat;
@@ -85,7 +115,16 @@ namespace RoadRage.UnityRemake
         {
             playerCar = player;
             mainCamera = cam;
-            if (cam != null) originalFov = cam.fieldOfView;
+            if (cam != null)
+            {
+                originalFov = cam.fieldOfView;
+                if (speedStreaksFx != null)
+                {
+                    speedStreaksFx.transform.SetParent(cam.transform, false);
+                    speedStreaksFx.transform.localPosition = new Vector3(0f, 0f, 4.5f);
+                    speedStreaksFx.transform.localRotation = Quaternion.Euler(0f, 180f, 0f);
+                }
+            }
             if (player != null)
             {
                 playerController = player.GetComponent<ArcadeCarController>();
@@ -119,6 +158,7 @@ namespace RoadRage.UnityRemake
             if (playerCar == null || playerController == null || GameState.RunOver || GameState.IsAftertouchActive)
             {
                 if (IsBoosting) StopBoosting();
+                SetSpeedStreaksActive(false);
                 return;
             }
 
@@ -164,11 +204,29 @@ namespace RoadRage.UnityRemake
             // 3. Near-Miss Scanner
             DetectNearMisses();
 
-            // 4. Dynamic Camera FOV Speed Warp during Boost
+            // 4. Dynamic Camera FOV Speed Warp & Radial Speed Streaks
+            var speedBonus = Mathf.Clamp((playerController.SpeedKph - 110f) * 0.06f, 0f, 7f);
+            var boostBonus = IsBoosting ? 16f : 0f;
+            var targetFov = originalFov + speedBonus + boostBonus;
+
             if (mainCamera != null)
             {
-                var targetFov = IsBoosting ? originalFov + 14f : originalFov;
-                mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, targetFov, Time.deltaTime * 5.5f);
+                mainCamera.fieldOfView = Mathf.Lerp(mainCamera.fieldOfView, targetFov, Time.deltaTime * 7.5f);
+            }
+
+            var showStreaks = IsBoosting || playerController.SpeedKph > 185f;
+            SetSpeedStreaksActive(showStreaks);
+        }
+
+        private void SetSpeedStreaksActive(bool active)
+        {
+            if (speedStreaksFx == null) return;
+            var em = speedStreaksFx.emission;
+            if (em.enabled != active)
+            {
+                em.enabled = active;
+                if (active && !speedStreaksFx.isPlaying) speedStreaksFx.Play();
+                else if (!active && speedStreaksFx.isPlaying) speedStreaksFx.Stop();
             }
         }
 
@@ -192,6 +250,11 @@ namespace RoadRage.UnityRemake
                 rightFlameFx.Play();
             }
 
+            if (RoadRageHapticsDirector.Instance != null)
+            {
+                RoadRageHapticsDirector.Instance.TriggerLightHaptic(0.25f);
+            }
+
             if (RoadRageAudioBridge.Instance != null)
             {
                 RoadRageAudioBridge.Instance.PlayNitro();
@@ -200,6 +263,13 @@ namespace RoadRage.UnityRemake
 
         private void StopBoosting()
         {
+            if (IsBoosting)
+            {
+                if (RoadRageAudioBridge.Instance != null)
+                {
+                    RoadRageAudioBridge.Instance.PlayBackfirePop();
+                }
+            }
             IsBoosting = false;
             if (leftFlameFx != null)
             {

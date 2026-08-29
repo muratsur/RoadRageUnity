@@ -57,6 +57,13 @@ namespace RoadRage.UnityRemake
             crashSource.spatialBlend = 0f;
             crashSource.volume = 1f;
 
+            skidSource = gameObject.AddComponent<AudioSource>();
+            skidSource.loop = true;
+            skidSource.playOnAwake = false;
+            skidSource.spatialBlend = 0f;
+            skidSource.volume = 0f;
+            skidSource.clip = CreateProceduralSkidClip();
+
             lowPassFilter = gameObject.AddComponent<AudioLowPassFilter>();
             lowPassFilter.cutoffFrequency = 22000f;
 
@@ -64,12 +71,31 @@ namespace RoadRage.UnityRemake
             engineSource.volume = 0f;
         }
 
+        private AudioSource skidSource;
+
         private void Update()
         {
             // Smoothly interpolate low-pass filter for slow-motion effects
             currentLowPassCutoff = Mathf.Lerp(currentLowPassCutoff, targetLowPassCutoff, Time.unscaledDeltaTime * 8f);
             if (lowPassFilter != null)
                 lowPassFilter.cutoffFrequency = currentLowPassCutoff;
+        }
+
+        public void PlayTireSqueal(float intensity)
+        {
+            if (skidSource == null) return;
+            var targetVol = Mathf.Clamp01(intensity) * 0.75f;
+            skidSource.volume = Mathf.Lerp(skidSource.volume, targetVol, Time.deltaTime * 14f);
+            skidSource.pitch = Mathf.Lerp(0.85f, 1.25f, intensity);
+            if (targetVol > 0.05f && !skidSource.isPlaying) skidSource.Play();
+            else if (targetVol <= 0.05f && skidSource.isPlaying && skidSource.volume < 0.02f) skidSource.Stop();
+        }
+
+        public void PlayBackfirePop()
+        {
+            if (sfxSource == null) return;
+            sfxSource.pitch = Random.Range(0.9f, 1.3f);
+            sfxSource.PlayOneShot(CreateProceduralPopClip(), 0.75f);
         }
 
         public void UpdateEngineAudio(float speedKph, float maxSpeedKph, float throttle, bool isNitro)
@@ -202,6 +228,42 @@ namespace RoadRage.UnityRemake
                 data[i] = (bass * 0.5f + chord1 + chord2 + chord3) * envelope;
             }
             var clip = AudioClip.Create("ProceduralStinger", samples, 1, sampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateProceduralSkidClip()
+        {
+            var sampleRate = 44100;
+            var samples = sampleRate / 2; // 0.5 sec loop
+            var data = new float[samples];
+            for (var i = 0; i < samples; i++)
+            {
+                var t = (float)i / sampleRate;
+                var noise = (Random.value * 2f - 1f) * 0.4f;
+                var squeal1 = Mathf.Sin(2f * Mathf.PI * 1600f * t) * 0.25f;
+                var squeal2 = Mathf.Sin(2f * Mathf.PI * 2400f * t) * 0.15f;
+                data[i] = noise + squeal1 + squeal2;
+            }
+            var clip = AudioClip.Create("ProceduralSkidLoop", samples, 1, sampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
+        }
+
+        private static AudioClip CreateProceduralPopClip()
+        {
+            var sampleRate = 44100;
+            var samples = sampleRate / 6; // 0.16 sec pop
+            var data = new float[samples];
+            for (var i = 0; i < samples; i++)
+            {
+                var t = (float)i / sampleRate;
+                var env = Mathf.Exp(-t * 35f);
+                var boom = Mathf.Sin(2f * Mathf.PI * 90f * t);
+                var crack = (Random.value * 2f - 1f) * 0.8f;
+                data[i] = (boom * 0.6f + crack * 0.4f) * env;
+            }
+            var clip = AudioClip.Create("ProceduralPop", samples, 1, sampleRate, false);
             clip.SetData(data, 0);
             return clip;
         }

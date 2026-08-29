@@ -4299,6 +4299,9 @@ namespace RoadRage.UnityRemake
             var boostDirector = cameraObject.AddComponent<RoadRageBoostDirector>();
             boostDirector.BindPlayer(car, camera);
 
+            var skidDirector = cameraObject.AddComponent<RoadRageSkidmarkDirector>();
+            skidDirector.BindPlayer(car);
+
             cameraObject.AddComponent<RoadRageHapticsDirector>();
 
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
@@ -4769,8 +4772,18 @@ namespace RoadRage.UnityRemake
             if (audioVfx != null)
                 audioVfx.PlayCrashImpact(contactPoint, traffic.IsViolator);
 
+            if (RoadRageHapticsDirector.Instance != null)
+            {
+                RoadRageHapticsDirector.Instance.TriggerMediumHaptic(sideSwipe ? 0.45f : 0.75f);
+            }
+
             if (GameState.Integrity <= 0f && !GameState.IsAftertouchActive)
             {
+                if (RoadRageHapticsDirector.Instance != null)
+                {
+                    RoadRageHapticsDirector.Instance.TriggerHeavyCrashHaptic(1.0f);
+                }
+
                 if (RoadRageAftertouchDirector.Instance != null)
                 {
                     var tumbleVel = transform.forward * (SpeedKph / 3.6f * 0.92f) + (traffic.transform.position - transform.position).normalized * 7.5f + Vector3.up * 8.5f;
@@ -4867,7 +4880,16 @@ namespace RoadRage.UnityRemake
             var next = (transform.position - desired).sqrMagnitude > 2500f
                 ? desired
                 : Vector3.Lerp(transform.position, desired, 1f - Mathf.Exp(-7f * Time.deltaTime));
-            transform.position = ConstrainToCorridor(next);
+            
+            var shakeOffset = Vector3.zero;
+            var shakeRot = Quaternion.identity;
+            if (RoadRageHapticsDirector.Instance != null)
+            {
+                shakeOffset = RoadRageHapticsDirector.Instance.CurrentShakeOffset;
+                shakeRot = RoadRageHapticsDirector.Instance.CurrentShakeRotation;
+            }
+
+            transform.position = ConstrainToCorridor(next) + shakeOffset;
             if (LogCamera && player != null && Time.frameCount == 240)
             {
                 // Name whatever is sitting in the camera's corridor.
@@ -4894,8 +4916,8 @@ namespace RoadRage.UnityRemake
                           $"height={transform.position.y - c.y:0.0} " +
                           $"playerKm={player.RoadDistance / 1000f:0.00}");
             }
-            transform.rotation = Quaternion.Slerp(transform.rotation,
-                Quaternion.LookRotation(target.position + target.up * 1.2f + target.forward * 9f - transform.position),
+            var targetLook = Quaternion.LookRotation(target.position + target.up * 1.2f + target.forward * 9f - transform.position);
+            transform.rotation = Quaternion.Slerp(transform.rotation, targetLook * shakeRot,
                 1f - Mathf.Exp(-9f * Time.deltaTime));
         }
     }
