@@ -4665,7 +4665,7 @@ namespace RoadRage.UnityRemake
         public bool ApplyTrafficImpact(TrafficCarController traffic, float longitudinalGap, float lateralGap)
         {
             if (Time.time < nextImpactTime) return false;
-            nextImpactTime = Time.time + 0.85f;
+            nextImpactTime = Time.time + 0.35f;
             var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
 
             // Physical anti-penetration pushback: separate the two vehicle hulls so they NEVER pass inside each other!

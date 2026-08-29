@@ -262,7 +262,6 @@ namespace RoadRage.UnityRemake
                 var acceleration = desiredSpeed < currentSpeedKph ? 55f : 16f;
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, desiredSpeed, acceleration * Time.deltaTime);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
-                EnforceSeparation();
             }
             else
             {
@@ -272,44 +271,71 @@ namespace RoadRage.UnityRemake
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
+            ResolveTrafficCollisions();
             PlaceOnRoad();
         }
 
-        /// Speed control alone never prevented overlap: a car braking to zero still ends
-        /// up inside the one ahead when the gap closes faster than it can decelerate, and
-        /// recycled cars can spawn on top of each other. This is the hard constraint -
-        /// after moving, no two cars sharing a lane may occupy the same metre of road.
-        private const float CarLength = 4.9f;
-
-        private void EnforceSeparation()
+        private void ResolveTrafficCollisions()
         {
-            // Lane offsets are fractions of the carriageway, so on a narrow two-lane road
-            // every lane collapses to within ~2 m of every other. A fixed 2.1 m threshold
-            // therefore treated ALL cars - including oncoming - as sharing a lane, so they
-            // shoved each other every frame and mutually clamped to a stop. That was the
-            // shaking, stationary traffic in Greenwood.
-            var laneSpacing = Mathf.Max(1.2f, RoadPath.HalfWidthAt(RoadDistance) * 0.5f);
-            var sameLane = Mathf.Min(2.1f, laneSpacing * 0.8f);
-
             for (var i = ActiveCars.Count - 1; i >= 0; i--)
             {
                 var other = ActiveCars[i];
                 if (other == null) { ActiveCars.RemoveAt(i); continue; }
                 if (other == this) continue;
-                // Oncoming traffic passes; it must never be separated against.
-                if (!other.IsWreck && Mathf.Sign(other.Direction) != Mathf.Sign(Direction)) continue;
-                if (Mathf.Abs(other.LaneOffset - LaneOffset) > sameLane) continue;
 
-                var delta = other.RoadDistance - RoadDistance;
-                if (Mathf.Abs(delta) >= CarLength) continue;
+                var deltaDist = other.RoadDistance - RoadDistance;
+                var reach = (HalfLength + other.HalfLength) * 0.96f;
+                if (Mathf.Abs(deltaDist) > reach) continue;
 
-                // Only the car behind yields, and it moves at most a little per frame, so
-                // a queue settles instead of two cars trading pushes.
-                var behind = Mathf.Sign(delta) * Direction > 0f;
-                if (!behind) continue;
-                var overlap = CarLength - Mathf.Abs(delta);
-                RoadDistance -= Direction * Mathf.Min(overlap, 12f * Time.deltaTime);
-                if (!IsWreck) currentSpeedKph = Mathf.Min(currentSpeedKph, other.currentSpeedKph);
+                var deltaLat = other.LaneOffset - LaneOffset;
+                var latReach = (HalfWidth + other.HalfWidth) * (IsWreck || other.IsWreck ? 1.15f : 0.92f);
+                if (Mathf.Abs(deltaLat) > latReach) continue;
+
+                // 1. Instant anti-penetration pushback so vehicles NEVER clip inside each other
+                var overlapDist = reach - Mathf.Abs(deltaDist);
+                if (deltaDist > 0f)
+                {
+                    other.RoadDistance += overlapDist * 0.5f;
+                    RoadDistance -= overlapDist * 0.5f;
+                }
+                else
+                {
+                    RoadDistance += overlapDist * 0.5f;
+                    other.RoadDistance -= overlapDist * 0.5f;
+                }
+
+                var overlapLat = latReach - Mathf.Abs(deltaLat);
+                var latSign = Mathf.Sign(deltaLat);
+                if (Mathf.Abs(latSign) < 0.01f) latSign = 1f;
+                other.laneDrift += latSign * overlapLat * 0.5f;
+                laneDrift -= latSign * overlapLat * 0.5f;
+
+                // 2. Dynamic Kinetic Collision & Chain-Reaction Pileups
+                var relativeSpeed = Mathf.Abs(currentSpeedKph - other.currentSpeedKph);
+                if (IsWreck || other.IsWreck || relativeSpeed > 18f)
+                {
+                    if (!other.IsWreck)
+                    {
+                        other.Crash(deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
+                    }
+                    if (!IsWreck)
+                    {
+                        Crash(-deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
+                    }
+
+                    var contactPoint = (transform.position + other.transform.position) * 0.5f + Vector3.up * 0.4f;
+                    CrashEffects.Active?.PlayAt(contactPoint);
+
+                    GameState.PileupDamage += 2500;
+                    GameState.BumpDaily("pileup", 2500);
+                }
+                else
+                {
+                    if (deltaDist * Direction > 0f)
+                    {
+                        currentSpeedKph = Mathf.Min(currentSpeedKph, other.currentSpeedKph);
+                    }
+                }
             }
         }
 
@@ -362,42 +388,29 @@ namespace RoadRage.UnityRemake
 
         public static string StuckReport()
         {
-            var stuck = 0; var wreckBlocked = 0; var carBlocked = 0; var wrecks = 0;
+            var stuck = 0;
+            var wrecks = 0;
             foreach (var c in ActiveCars)
             {
                 if (c == null) continue;
-                if (c.IsWreck) { wrecks++; continue; }
-                if (c.currentSpeedKph > 5f) continue;
-                stuck++;
-                TrafficCarController blocker = null; var best = float.PositiveInfinity;
-                foreach (var o in ActiveCars)
-                {
-                    if (o == null || o == c) continue;
-                    if (Mathf.Sign(o.Direction) != Mathf.Sign(c.Direction) && !o.IsWreck) continue;
-                    if (Mathf.Abs(o.LaneOffset - c.LaneOffset) > 3f) continue;
-                    var gap = (o.RoadDistance - c.RoadDistance) * c.Direction;
-                    if (gap <= 0f || gap > 40f) continue;
-                    if (gap < best) { best = gap; blocker = o; }
-                }
-                if (blocker != null && blocker.IsWreck) wreckBlocked++;
-                else if (blocker != null) carBlocked++;
+                if (c.IsWreck) wrecks++;
+                else if (c.currentSpeedKph < 1f) stuck++;
             }
-            return $"stuck={stuck} behindWreck={wreckBlocked} behindCar={carBlocked} " +
-                   $"wrecks={wrecks} total={ActiveCars.Count}";
+            return $"stuck={stuck} wrecks={wrecks} total={ActiveCars.Count}";
         }
 
         public static TrafficCarController FindViolatorAhead(float from, float lookAhead)
         {
             TrafficCarController best = null;
-            var bestGap = float.PositiveInfinity;
-            for (var i = ActiveCars.Count - 1; i >= 0; i--)
+            var bestDist = float.PositiveInfinity;
+            for (var i = 0; i < ActiveCars.Count; i++)
             {
                 var car = ActiveCars[i];
-                if (car == null) { ActiveCars.RemoveAt(i); continue; }
+                if (car == null) continue;
                 if (!car.IsViolator) continue;
                 var gap = car.RoadDistance - from;
-                if (gap < 6f || gap > lookAhead) continue;
-                if (gap < bestGap) { bestGap = gap; best = car; }
+                if (gap < 4f || gap > lookAhead) continue;
+                if (gap < bestDist) { bestDist = gap; best = car; }
             }
             return best;
         }
@@ -429,20 +442,40 @@ namespace RoadRage.UnityRemake
                 }
 
                 var longitudinal = RoadPath.SignedDelta(player.RoadDistance, traffic.RoadDistance);
-                // Real footprints, not fixed radii: contact happens when the two hulls
-                // touch, which is where the visual impact is.
-                var reach = player.HalfLength + traffic.HalfLength;
+                var reach = (player.HalfLength + traffic.HalfLength) * 0.96f;
                 if (Mathf.Abs(longitudinal) > reach) continue;
                 var lateral = traffic.LaneOffset - player.LateralOffset;
-                // 0.9 keeps a sliver of squeeze-past tolerance so brushing a mirror is
-                // not a full collision; a wreck lying askew presents a wider profile.
-                var lateralReach = (player.HalfWidth + traffic.HalfWidth) * (traffic.IsWreck ? 1.25f : 0.9f);
+                var lateralReach = (player.HalfWidth + traffic.HalfWidth) * (traffic.IsWreck ? 1.15f : 0.92f);
                 if (Mathf.Abs(lateral) > lateralReach) continue;
 
+                // 1. Continuous physical anti-penetration resolution (runs every frame to prevent any mesh clipping)
+                var overlapLong = reach - Mathf.Abs(longitudinal);
+                if (longitudinal > 0f) // Player is behind traffic: shove traffic car forward
+                {
+                    traffic.RoadDistance += overlapLong * 0.6f;
+                    player.RoadDistance -= overlapLong * 0.4f;
+                    // Transfer momentum so traffic car speeds up ahead of player instead of player driving through it
+                    traffic.currentSpeedKph = Mathf.Max(traffic.currentSpeedKph, player.SpeedKph * 0.95f);
+                }
+                else // Player is in front of traffic
+                {
+                    player.RoadDistance += overlapLong * 0.6f;
+                    traffic.RoadDistance -= overlapLong * 0.4f;
+                }
+
+                var overlapLat = lateralReach - Mathf.Abs(lateral);
+                var latSign = Mathf.Sign(lateral);
+                if (Mathf.Abs(latSign) < 0.01f) latSign = 1f;
+                traffic.laneDrift += latSign * overlapLat * 0.65f;
+                player.LateralOffset -= latSign * overlapLat * 0.35f;
+
+                // 2. Trigger gameplay impact & damage/score events
                 var speedAtImpact = player.SpeedKph;
-                if (player.ApplyTrafficImpact(traffic, longitudinal, lateral) && !traffic.IsWreck)
+                player.ApplyTrafficImpact(traffic, longitudinal, lateral);
+                if (!traffic.IsWreck)
+                {
                     traffic.Crash(lateral, speedAtImpact);
-                return;
+                }
             }
         }
     }
