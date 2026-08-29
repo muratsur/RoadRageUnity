@@ -4969,6 +4969,61 @@ namespace RoadRage.UnityRemake
             lockedStyle.fontSize = Mathf.RoundToInt(17 * s);
         }
 
+        private static Texture2D cardGlassTex;
+        private static Texture2D pillBadgeTex;
+        private static Texture2D goldBadgeTex;
+        private static Texture2D topBarTex;
+
+        private static Texture2D CreateRoundedTexture(int w, int h, int r, Color fill, Color border, float borderWidth = 1.5f)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                var dx = Mathf.Max(r - x, 0, x - (w - 1 - r));
+                var dy = Mathf.Max(r - y, 0, y - (h - 1 - r));
+                var dist = Mathf.Sqrt(dx * dx + dy * dy);
+                if (dist > r)
+                {
+                    tex.SetPixel(x, y, Color.clear);
+                }
+                else if (dist > r - borderWidth)
+                {
+                    var t = Mathf.Clamp01(dist - (r - borderWidth));
+                    tex.SetPixel(x, y, Color.Lerp(border, Color.clear, t * 0.5f));
+                }
+                else
+                {
+                    var grad = Mathf.Lerp(1.08f, 0.92f, (float)y / h);
+                    tex.SetPixel(x, y, fill * grad);
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private static Texture2D CreateHeaderTexture(int w, int h, Color fill, Color bottomBorder)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                if (y <= 2)
+                    tex.SetPixel(x, y, bottomBorder);
+                else
+                {
+                    var grad = Mathf.Lerp(1.05f, 0.95f, (float)y / h);
+                    tex.SetPixel(x, y, fill * grad);
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
         private void EnsureStyles()
         {
             if (titleStyle != null) { ApplyUiScale(); return; }
@@ -4988,6 +5043,12 @@ namespace RoadRage.UnityRemake
             dimTexture = new Texture2D(1, 1);
             dimTexture.SetPixel(0, 0, new Color(0.02f, 0.025f, 0.045f, 0.93f));
             dimTexture.Apply();
+
+            cardGlassTex = CreateRoundedTexture(128, 128, 14, new Color(0.04f, 0.06f, 0.10f, 0.88f), new Color(0.2f, 0.65f, 1f, 0.65f), 1.5f);
+            pillBadgeTex = CreateRoundedTexture(128, 64, 16, new Color(0.06f, 0.08f, 0.14f, 0.90f), new Color(0.3f, 0.5f, 0.8f, 0.45f), 1.2f);
+            goldBadgeTex = CreateRoundedTexture(128, 64, 16, new Color(0.18f, 0.12f, 0.04f, 0.92f), new Color(1f, 0.78f, 0.2f, 0.85f), 1.5f);
+            topBarTex = CreateHeaderTexture(64, 64, new Color(0.03f, 0.04f, 0.07f, 0.92f), new Color(0.2f, 0.55f, 0.95f, 0.35f));
+
             ApplyUiScale();
         }
 
@@ -5456,117 +5517,148 @@ namespace RoadRage.UnityRemake
         {
             var w = Screen.width;
             var h = Screen.height;
-            var s = UiScale;
+            var safe = Screen.safeArea;
 
-            // 1. Top Glass Status Bar
-            var topBarH = Mathf.Max(56f, 66f * s);
-            GUI.DrawTexture(new Rect(0f, 0f, w, topBarH), dimTexture);
+            // Safe Area margins (protecting from mobile notches, camera cutouts, and rounded corners)
+            var leftPad = Mathf.Max(safe.x, 36f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 36f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 14f);
+            var botPad = Mathf.Max(safe.y, 14f);
 
-            // Left: Player Profile & Level Badge
+            var usableW = w - leftPad - rightPad;
+            var usableH = h - topPad - botPad;
+            var s = Mathf.Clamp(usableH / 650f, 0.48f, 1.15f);
+
+            // 1. Top Status Bar
+            var topBarH = Mathf.Clamp(usableH * 0.13f, 40f, 58f);
+            var topBarY = topPad;
+            if (topBarTex != null)
+                GUI.DrawTexture(new Rect(0f, 0f, w, topBarY + topBarH), topBarTex);
+            else
+                GUI.DrawTexture(new Rect(0f, 0f, w, topBarY + topBarH), dimTexture);
+
+            // Top Bar - Left: Player Profile Pill
+            var badgeW = Mathf.Clamp(usableW * 0.25f, 150f, 250f);
             var rank = Mathf.Max(1, GameState.Takedowns / 5 + 1);
-            GUI.Label(new Rect(24f, 10f, 320f * s, 26f), $"👑 VIP PILOT  •  LVL {rank}", titleStyle);
-            GUI.Label(new Rect(24f, 34f, 320f * s, 22f), $"🔥 {GameState.LoginStreak}-DAY STREAK  •  ${GameState.LastLoginReward:N0} BONUS", readoutStyle);
+            if (goldBadgeTex != null)
+                GUI.DrawTexture(new Rect(leftPad, topBarY + 3f, badgeW, topBarH - 6f), goldBadgeTex);
 
-            // Center Stats: Cash, High Score, Takedowns
-            var statX = w * 0.5f - 240f * s;
-            var statW = 480f * s;
-            var centerTitleStyle = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(22 * s) };
-            GUI.Label(new Rect(statX, 8f, statW, 26f),
-                $"💰 ${GameState.Cash:N0}    🏆 BEST: {GameState.HighScore:N0}    ⭐ {GameState.Takedowns} WRECKS",
-                centerTitleStyle);
+            var profileStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(14 * s), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(leftPad + 8f, topBarY + 2f, badgeW - 16f, (topBarH - 6f) * 0.52f), $"👑 VIP PILOT • LVL {rank}", profileStyle);
+            var streakStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(10 * s), alignment = TextAnchor.MiddleLeft, normal = { textColor = new Color(1f, 0.85f, 0.35f) } };
+            GUI.Label(new Rect(leftPad + 8f, topBarY + (topBarH - 6f) * 0.48f, badgeW - 16f, (topBarH - 6f) * 0.48f), $"🔥 {GameState.LoginStreak}-DAY STREAK", streakStyle);
+
+            // Top Bar - Center: Cash & High Score
+            var centerW = Mathf.Clamp(usableW * 0.45f, 220f, 440f);
+            var centerX = w * 0.5f - centerW * 0.5f;
+            if (pillBadgeTex != null)
+                GUI.DrawTexture(new Rect(centerX, topBarY + 3f, centerW, topBarH - 6f), pillBadgeTex);
+
+            var centerStatStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(15 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
+            GUI.Label(new Rect(centerX, topBarY + 2f, centerW, (topBarH - 6f) * 0.52f),
+                $"💰 ${GameState.Cash:N0}    🏆 BEST: {GameState.HighScore:N0}", centerStatStyle);
 
             var activeBiome = World != null ? World.BiomeName : "Tire District";
-            var centerReadoutStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(14 * s) };
-            GUI.Label(new Rect(statX, 34f, statW, 22f),
-                $"TRACK: {activeBiome.ToUpper()}  •  WEATHER: {WeatherSystem.Label(World != null ? World.Weather : WeatherKind.Clear).ToUpper()}",
-                centerReadoutStyle);
+            var trackInfoStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(10 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.45f, 0.95f, 0.65f) } };
+            GUI.Label(new Rect(centerX, topBarY + (topBarH - 6f) * 0.48f, centerW, (topBarH - 6f) * 0.48f),
+                $"TRACK: {activeBiome.ToUpper()}  •  {WeatherSystem.Label(World != null ? World.Weather : WeatherKind.Clear).ToUpper()}", trackInfoStyle);
 
-            // Right: Settings Toggle Button
-            var setBtnW = Mathf.Max(110f, 130f * s);
-            var setBtnH = Mathf.Max(38f, 44f * s);
-            if (GUI.Button(new Rect(w - setBtnW - 20f, 10f, setBtnW, setBtnH), "⚙️ SETTINGS", buttonStyle))
+            // Top Bar - Right: Settings Button
+            var setBtnW = Mathf.Clamp(usableW * 0.15f, 85f, 125f);
+            var setBtnH = topBarH - 6f;
+            var setBtnX = w - rightPad - setBtnW;
+            var setBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(13 * s) };
+            if (GUI.Button(new Rect(setBtnX, topBarY + 3f, setBtnW, setBtnH), "⚙️ SETTINGS", setBtnStyle))
             {
                 settingsOpen = !settingsOpen;
             }
 
-            // 2. Center-Left Branding (Hero Logo & Car Specs Card)
-            var titleTop = h * 0.16f;
-            var prevColor = GUI.color;
+            // 2. Left Side: Brand Logo & Vehicle Specs Card
+            var contentTop = topBarY + topBarH + Mathf.Max(6f, 8f * s);
+            var cardW = Mathf.Clamp(usableW * 0.28f, 190f, 300f);
+            var cardH = Mathf.Clamp(usableH * 0.44f, 95f, 150f);
 
-            // Drop shadow for logo
-            GUI.color = new Color(0f, 0f, 0f, 0.75f);
-            var logoStyle = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(48 * s), alignment = TextAnchor.MiddleLeft };
-            GUI.Label(new Rect(42f, titleTop + 3f, 520f, 60f), "ROAD RAGE", logoStyle);
+            // Stylized Game Logo
+            var logoH = Mathf.Clamp(usableH * 0.11f, 30f, 48f);
+            var logoStyle = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(26 * s), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(leftPad + 2f, contentTop + 1f, cardW, logoH * 0.65f), "ROAD RAGE", new GUIStyle(logoStyle) { normal = { textColor = Color.black } });
+            GUI.Label(new Rect(leftPad, contentTop, cardW, logoH * 0.65f), "ROAD RAGE", logoStyle);
 
-            // Gradient neon gold/white title
-            GUI.color = Color.white;
-            GUI.Label(new Rect(40f, titleTop, 520f, 60f), "ROAD RAGE", logoStyle);
-            GUI.color = new Color(1f, 0.82f, 0.25f);
-            GUI.Label(new Rect(40f, titleTop + 54f * s, 520f, 30f), "⚡ BURNOUT ARCADE RACING ⚡", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(18 * s) });
-            GUI.color = prevColor;
+            var subLogoStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(11 * s), normal = { textColor = new Color(1f, 0.82f, 0.2f) } };
+            GUI.Label(new Rect(leftPad, contentTop + logoH * 0.55f, cardW, logoH * 0.45f), "⚡ BURNOUT ARCADE RACING ⚡", subLogoStyle);
 
-            // Vehicle Specs Glass Card on Left
-            var cardY = titleTop + 90f * s;
-            var cardW = Mathf.Max(300f, 360f * s);
-            var cardH = Mathf.Max(135f, 155f * s);
-            GUI.DrawTexture(new Rect(35f, cardY, cardW, cardH), dimTexture);
+            // Vehicle Specs Glass Card
+            var cardY = contentTop + logoH + 4f;
+            if (cardGlassTex != null)
+                GUI.DrawTexture(new Rect(leftPad, cardY, cardW, cardH), cardGlassTex);
+            else
+                GUI.DrawTexture(new Rect(leftPad, cardY, cardW, cardH), dimTexture);
 
             var curCar = GameState.CurrentCar;
             var ramName = GameState.TuningRamBar switch { 2 => "TITANIUM RAM", 1 => "STEEL PUSHBAR", _ => "STOCK BUMPER" };
             var inductName = GameState.TuningInduction == 1 ? "TURBOCHARGER (+22 KM/H)" : "SUPERCHARGER (+ACCEL)";
 
-            GUI.Label(new Rect(48f, cardY + 10f, cardW - 24f, 28f), $"🏎️ {curCar.Name.ToUpper()}", titleStyle);
-            GUI.Label(new Rect(48f, cardY + 38f, cardW - 24f, 22f), $"⚡ TOP SPEED: {curCar.Speed * 220f:0} KM/H   ACCEL: {curCar.Acceleration:0.0}", readoutStyle);
-            GUI.Label(new Rect(48f, cardY + 62f, cardW - 24f, 22f), $"🛡️ ARMOR: {curCar.Armour:0.0}   •   RAM: {ramName}", readoutStyle);
-            var orangeText = new GUIStyle(readoutStyle) { normal = { textColor = new Color(1f, 0.72f, 0.25f) } };
-            GUI.Label(new Rect(48f, cardY + 86f, cardW - 24f, 22f), $"🔥 {inductName}", orangeText);
+            var lineH = cardH / 4.2f;
+            var padIn = 8f;
+            var carNameStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(13 * s), normal = { textColor = Color.white } };
+            GUI.Label(new Rect(leftPad + padIn, cardY + 3f, cardW - padIn * 2, lineH), $"🏎️ {curCar.Name.ToUpper()}", carNameStyle);
 
-            // 3. Center-Bottom Hero Call To Action ("START RUN")
-            var pulse = 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 5.5f);
-            var ctaW = Mathf.Clamp(w * 0.38f, 320f, 480f);
-            var ctaH = Mathf.Max(64f, 76f * s);
+            var specStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(10 * s) };
+            GUI.Label(new Rect(leftPad + padIn, cardY + 3f + lineH, cardW - padIn * 2, lineH), $"⚡ TOP: {curCar.Speed * 220f:0} KM/H  •  ACC: {curCar.Acceleration:0.0}", specStyle);
+            GUI.Label(new Rect(leftPad + padIn, cardY + 3f + lineH * 2, cardW - padIn * 2, lineH), $"🛡️ ARMOR: {curCar.Armour:0.0}  •  {ramName}", specStyle);
+            var orangeStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(10 * s), normal = { textColor = new Color(1f, 0.72f, 0.22f) } };
+            GUI.Label(new Rect(leftPad + padIn, cardY + 3f + lineH * 3, cardW - padIn * 2, lineH), $"🔥 {inductName}", orangeStyle);
+
+            // 3. Center-Bottom Hero CTA: "START RUN"
+            var pulse = 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 5.0f);
+            var ctaW = Mathf.Clamp(usableW * 0.34f, 200f, 340f);
+            var ctaH = Mathf.Clamp(usableH * 0.14f, 42f, 60f);
             var ctaX = w * 0.5f - ctaW * 0.5f;
-            var ctaY = h * 0.70f;
+
+            var dockBtnH = Mathf.Clamp(usableH * 0.11f, 34f, 46f);
+            var dockY = h - botPad - dockBtnH;
+            var ctaY = dockY - ctaH - Mathf.Max(6f, 10f * s);
 
             var oldBg = GUI.backgroundColor;
-            GUI.backgroundColor = new Color(0.2f * pulse, 0.95f * pulse, 0.45f * pulse, 0.95f);
-            if (GUI.Button(new Rect(ctaX, ctaY, ctaW, ctaH), "🏁  S T A R T   R U N", new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(28 * s) }))
+            GUI.backgroundColor = new Color(0.25f * pulse, 1f * pulse, 0.5f * pulse, 1f);
+            var ctaStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(20 * s) };
+            if (GUI.Button(new Rect(ctaX, ctaY, ctaW, ctaH), "🏁  S T A R T   R U N", ctaStyle))
             {
                 if (RoadRageLandingDirector.Instance != null)
                     RoadRageLandingDirector.Instance.LaunchRun();
             }
             GUI.backgroundColor = oldBg;
 
-            var promptStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * s), normal = { textColor = new Color(0.85f, 0.95f, 1f, 0.85f) } };
-            GUI.Label(new Rect(0f, ctaY + ctaH + 6f, w, 24f), "PRESS [SPACE] / [ENTER] OR TAP TO LAUNCH RACE", promptStyle);
+            var hintStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * s), normal = { textColor = new Color(0.8f, 0.95f, 1f, 0.85f) } };
+            GUI.Label(new Rect(0f, ctaY + ctaH + 1f, w, 16f), "PRESS [SPACE] / [ENTER] OR TAP TO RACE", hintStyle);
 
-            // 4. Bottom Dock Hub (Garage, Biomes, Missions)
-            var dockY = h * 0.86f;
-            var dockBtnW = Mathf.Clamp(w * 0.24f, 160f, 260f);
-            var dockBtnH = Mathf.Max(46f, 54f * s);
-            var dockSpacing = 16f * s;
+            // 4. Bottom Dock Navigation Buttons
+            var dockBtnW = Mathf.Clamp(usableW * 0.22f, 100f, 175f);
+            var dockSpacing = Mathf.Clamp(usableW * 0.02f, 6f, 16f);
             var totalDockW = dockBtnW * 3 + dockSpacing * 2;
             var dockStartX = w * 0.5f - totalDockW * 0.5f;
 
-            // Button 1: GARAGE & TUNING
-            if (GUI.Button(new Rect(dockStartX, dockY, dockBtnW, dockBtnH), "🏎️ GARAGE [G]", buttonStyle))
+            var dockBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(13 * s) };
+
+            // Dock Button 1: GARAGE
+            if (GUI.Button(new Rect(dockStartX, dockY, dockBtnW, dockBtnH), "🏎️ GARAGE [G]", dockBtnStyle))
             {
                 garageOpen = true;
             }
 
-            // Button 2: SELECT BIOMES / TRACKS
-            if (GUI.Button(new Rect(dockStartX + dockBtnW + dockSpacing, dockY, dockBtnW, dockBtnH), "🌐 TRACKS [B]", buttonStyle))
+            // Dock Button 2: TRACKS / BIOMES
+            if (GUI.Button(new Rect(dockStartX + dockBtnW + dockSpacing, dockY, dockBtnW, dockBtnH), "🌐 TRACKS [B]", dockBtnStyle))
             {
                 if (World != null) World.OpenPicker();
             }
 
-            // Button 3: DAILY MISSIONS
-            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 2, dockY, dockBtnW, dockBtnH), "🎯 MISSIONS [M]", buttonStyle))
+            // Dock Button 3: DAILY MISSIONS
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 2, dockY, dockBtnW, dockBtnH), "🎯 MISSIONS [M]", dockBtnStyle))
             {
                 missionsOpen = true;
             }
 
-            // Hotkeys on landing screen
+            // Hotkeys
             if (Event.current != null && Event.current.type == EventType.KeyDown)
             {
                 if (Event.current.keyCode == KeyCode.G) { garageOpen = true; Event.current.Use(); }
@@ -5574,7 +5666,7 @@ namespace RoadRage.UnityRemake
                 else if (Event.current.keyCode == KeyCode.M) { missionsOpen = true; Event.current.Use(); }
             }
 
-            // 5. Settings Modal (if opened)
+            // 5. Settings Modal
             if (settingsOpen)
             {
                 DrawSettingsModal();
@@ -5585,44 +5677,51 @@ namespace RoadRage.UnityRemake
         {
             var w = Screen.width;
             var h = Screen.height;
-            var modalW = Mathf.Min(w * 0.7f, 440f);
-            var modalH = Mathf.Min(h * 0.65f, 340f);
+            var modalW = Mathf.Min(w * 0.7f, 400f);
+            var modalH = Mathf.Min(h * 0.65f, 300f);
             var modalX = w * 0.5f - modalW * 0.5f;
             var modalY = h * 0.5f - modalH * 0.5f;
 
             GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
-            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
+            if (cardGlassTex != null)
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), cardGlassTex);
+            else
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
 
-            GUI.Label(new Rect(modalX, modalY + 16f, modalW, 36f), "SETTINGS", pickerTitleStyle);
+            var s = UiScale;
+            var titleS = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(24 * s) };
+            GUI.Label(new Rect(modalX, modalY + 14f, modalW, 30f), "SETTINGS", titleS);
 
-            var rowY = modalY + 68f;
-            var rowH = 44f;
+            var rowY = modalY + 54f;
+            var rowH = Mathf.Clamp(modalH * 0.14f, 32f, 42f);
+
+            var btnS = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(14 * s) };
 
             // Audio SFX Toggle
-            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"SOUND EFFECTS: {(sfxEnabled ? "ON 🔊" : "OFF 🔇")}", buttonStyle))
+            if (GUI.Button(new Rect(modalX + 20f, rowY, modalW - 40f, rowH), $"SOUND EFFECTS: {(sfxEnabled ? "ON 🔊" : "OFF 🔇")}", btnS))
             {
                 sfxEnabled = !sfxEnabled;
                 AudioListener.volume = sfxEnabled ? 1f : 0f;
             }
-            rowY += rowH + 12f;
+            rowY += rowH + 8f;
 
             // FPS Display Toggle
-            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"FPS COUNTER: {(showFps ? "VISIBLE" : "HIDDEN")}", buttonStyle))
+            if (GUI.Button(new Rect(modalX + 20f, rowY, modalW - 40f, rowH), $"FPS COUNTER: {(showFps ? "VISIBLE" : "HIDDEN")}", btnS))
             {
                 showFps = !showFps;
             }
-            rowY += rowH + 12f;
+            rowY += rowH + 8f;
 
             // Target Framerate
             var currentFps = Application.targetFrameRate;
-            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"TARGET FPS: {currentFps} FPS", buttonStyle))
+            if (GUI.Button(new Rect(modalX + 20f, rowY, modalW - 40f, rowH), $"TARGET FPS: {currentFps} FPS", btnS))
             {
                 Application.targetFrameRate = currentFps == 120 ? 60 : 120;
             }
-            rowY += rowH + 20f;
+            rowY += rowH + 14f;
 
             // Close Button
-            if (GUI.Button(new Rect(modalX + modalW * 0.5f - 80f, rowY, 160f, 46f), "CLOSE", buttonStyle))
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f - 70f, rowY, 140f, rowH), "CLOSE", btnS))
             {
                 settingsOpen = false;
             }

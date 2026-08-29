@@ -9,7 +9,7 @@ namespace RoadRage.UnityRemake
         public bool IsLandingActive { get; set; } = true;
         public bool IsTransitioningToRace { get; private set; }
 
-        private float showcaseOrbitAngle = 40f;
+        private float showcaseOrbitAngle = 35f;
         private float transitionProgress = 0f;
         private const float TransitionDuration = 0.85f;
 
@@ -33,7 +33,8 @@ namespace RoadRage.UnityRemake
         {
             if (IsLandingActive)
             {
-                showcaseOrbitAngle += Time.unscaledDeltaTime * 14.0f;
+                // Slow, dynamic showcase sweep around vehicle
+                showcaseOrbitAngle += Time.unscaledDeltaTime * 11.0f;
                 if (showcaseOrbitAngle >= 360f) showcaseOrbitAngle -= 360f;
 
                 if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
@@ -117,11 +118,12 @@ namespace RoadRage.UnityRemake
             var carPos = car.position;
             var carRot = car.rotation;
 
-            var focusPoint = carPos + Vector3.up * 0.95f;
+            // Low-slung dynamic hero angle looking at car body and grille
+            var focusPoint = carPos + Vector3.up * 0.60f;
 
             var rad = showcaseOrbitAngle * Mathf.Deg2Rad;
-            var radius = 6.2f + 0.4f * Mathf.Sin(Time.unscaledTime * 0.4f);
-            var height = 1.6f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.6f);
+            var radius = 4.7f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.35f);
+            var height = 0.85f + 0.18f * Mathf.Sin(Time.unscaledTime * 0.5f);
 
             var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
             var targetShowcasePos = focusPoint + (carRot * localOffset);
