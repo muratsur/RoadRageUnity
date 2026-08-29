@@ -1,12 +1,11 @@
-using System.Collections.Generic;
 using UnityEngine;
 
 namespace RoadRage.UnityRemake
 {
     /// <summary>
     /// Procedural Asphalt Tire Skidmark & Burning Rubber Smoke Director:
-    /// Generates dynamic continuous tire track meshes on the road surface during drifts,
-    /// power-slides, high-speed braking, and Aftertouch wrecks with tire smoke VFX and squeal audio.
+    /// Uses high-performance tire trail renderers attached directly to the rear wheels
+    /// to generate continuous asphalt tire marks during drifts, power-slides, and crashes.
     /// </summary>
     public sealed class RoadRageSkidmarkDirector : MonoBehaviour
     {
@@ -15,19 +14,8 @@ namespace RoadRage.UnityRemake
         private Transform playerCar;
         private ArcadeCarController playerController;
 
-        private Mesh skidMesh;
-        private MeshFilter meshFilter;
-        private MeshRenderer meshRenderer;
-
-        private const int MaxSkidmarks = 256;
-        private readonly List<Vector3> vertices = new(MaxSkidmarks * 4);
-        private readonly List<Vector3> normals = new(MaxSkidmarks * 4);
-        private readonly List<Vector2> uvs = new(MaxSkidmarks * 4);
-        private readonly List<Color> colors = new(MaxSkidmarks * 4);
-        private readonly List<int> triangles = new(MaxSkidmarks * 6);
-
-        private int leftLastIndex = -1;
-        private int rightLastIndex = -1;
+        private TrailRenderer leftTrail;
+        private TrailRenderer rightTrail;
 
         private ParticleSystem leftSmokeFx;
         private ParticleSystem rightSmokeFx;
@@ -42,31 +30,7 @@ namespace RoadRage.UnityRemake
                 return;
             }
             Instance = this;
-            InitializeSkidmarkRenderer();
             InitializeTireSmoke();
-        }
-
-        private void InitializeSkidmarkRenderer()
-        {
-            var skidObj = new GameObject("ProceduralSkidmarksMesh");
-            skidObj.transform.SetParent(transform, false);
-
-            meshFilter = skidObj.AddComponent<MeshFilter>();
-            meshRenderer = skidObj.AddComponent<MeshRenderer>();
-
-            skidMesh = new Mesh { name = "SkidmarksMesh" };
-            skidMesh.MarkDynamic();
-            meshFilter.sharedMesh = skidMesh;
-
-            var skidMat = Resources.Load<Material>("DecalVariantAnchor");
-            if (skidMat == null)
-            {
-                var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
-                skidMat = new Material(shader) { color = new Color(0.04f, 0.04f, 0.04f, 0.85f) };
-            }
-            meshRenderer.sharedMaterial = skidMat;
-            meshRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
-            meshRenderer.receiveShadows = false;
         }
 
         private void InitializeTireSmoke()
@@ -105,12 +69,52 @@ namespace RoadRage.UnityRemake
             return ps;
         }
 
+        private TrailRenderer CreateTireTrail(string name, Transform parent, Vector3 localPos)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            var trail = go.AddComponent<TrailRenderer>();
+            trail.time = 3.2f;
+            trail.startWidth = 0.26f;
+            trail.endWidth = 0.26f;
+            trail.minVertexDistance = 0.25f;
+            trail.autodestruct = false;
+            trail.emitting = false;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+
+            var shader = Shader.Find("Universal Render Pipeline/Unlit") ?? Shader.Find("Sprites/Default");
+            var trailMat = new Material(shader) { color = new Color(0.08f, 0.08f, 0.08f, 0.75f) };
+            trail.sharedMaterial = trailMat;
+
+            // Fade alpha over trail lifetime
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new GradientColorKey[] { new(new Color(0.08f, 0.08f, 0.08f), 0f), new(new Color(0.08f, 0.08f, 0.08f), 1f) },
+                new GradientAlphaKey[] { new(0.75f, 0f), new(0.55f, 0.7f), new(0f, 1f) }
+            );
+            trail.colorGradient = gradient;
+
+            return trail;
+        }
+
         public void BindPlayer(Transform player)
         {
             playerCar = player;
             if (player != null)
             {
                 playerController = player.GetComponent<ArcadeCarController>();
+
+                // Setup Trails parented to car rear wheels
+                if (leftTrail != null) Destroy(leftTrail.gameObject);
+                if (rightTrail != null) Destroy(rightTrail.gameObject);
+
+                leftTrail = CreateTireTrail("Left Tire Trail", player, new Vector3(-0.75f, -0.32f, -1.3f));
+                rightTrail = CreateTireTrail("Right Tire Trail", player, new Vector3(0.75f, -0.32f, -1.3f));
+
                 if (leftSmokeFx != null)
                 {
                     leftSmokeFx.transform.SetParent(player, false);
@@ -126,10 +130,11 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
-            if (playerCar == null || playerController == null || GameState.RunOver)
+            if (playerCar == null || playerController == null || GameState.RunOver || 
+                (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive) ||
+                playerController.CountdownTimer > 0f)
             {
-                leftLastIndex = -1;
-                rightLastIndex = -1;
+                SetTrailsEmitting(false);
                 SetSmokeActive(false);
                 if (RoadRageAudioBridge.Instance != null)
                     RoadRageAudioBridge.Instance.PlayTireSqueal(0f);
@@ -161,95 +166,33 @@ namespace RoadRage.UnityRemake
                 driftIntensity = 1.0f;
             }
 
-            // Audio & Smoke VFX
-            var isSkidding = driftIntensity > 0.12f;
+            // If airborne, stop skidding
+            if (playerController.IsAirborne)
+            {
+                driftIntensity = 0f;
+            }
+
+            // Audio & Smoke VFX & Trails
+            var isSkidding = driftIntensity > 0.18f;
+            SetTrailsEmitting(isSkidding);
             SetSmokeActive(isSkidding);
 
             if (RoadRageAudioBridge.Instance != null)
             {
                 RoadRageAudioBridge.Instance.PlayTireSqueal(driftIntensity);
             }
-
-            // Add tire marks
-            if (isSkidding)
-            {
-                var leftTirePos = playerCar.TransformPoint(new Vector3(-0.75f, -0.38f, -1.3f));
-                var rightTirePos = playerCar.TransformPoint(new Vector3(0.75f, -0.38f, -1.3f));
-
-                leftLastIndex = AddSkidmarkSegment(leftTirePos, playerCar.right, leftLastIndex, driftIntensity);
-                rightLastIndex = AddSkidmarkSegment(rightTirePos, playerCar.right, rightLastIndex, driftIntensity);
-            }
-            else
-            {
-                leftLastIndex = -1;
-                rightLastIndex = -1;
-            }
         }
 
-        private int AddSkidmarkSegment(Vector3 pos, Vector3 right, int lastIndex, float intensity)
+        private void SetTrailsEmitting(bool active)
         {
-            var halfWidth = 0.14f;
-            var normal = Vector3.up;
-            var p0 = pos - right * halfWidth + normal * 0.02f;
-            var p1 = pos + right * halfWidth + normal * 0.02f;
-
-            var alpha = Mathf.Clamp01(intensity * 0.85f);
-            var markColor = new Color(0.04f, 0.04f, 0.04f, alpha);
-
-            // Ring buffer capacity check
-            if (vertices.Count >= MaxSkidmarks * 4)
+            if (leftTrail != null && leftTrail.emitting != active)
             {
-                vertices.RemoveRange(0, 4);
-                normals.RemoveRange(0, 4);
-                uvs.RemoveRange(0, 4);
-                colors.RemoveRange(0, 4);
-                if (triangles.Count >= 6) triangles.RemoveRange(0, 6);
-                for (var i = 0; i < triangles.Count; i++)
-                {
-                    triangles[i] = Mathf.Max(0, triangles[i] - 4);
-                }
-                if (lastIndex >= 4) lastIndex -= 4;
-                else lastIndex = -1;
+                leftTrail.emitting = active;
             }
-
-            var currentIndex = vertices.Count;
-            vertices.Add(p0);
-            vertices.Add(p1);
-            normals.Add(normal);
-            normals.Add(normal);
-            uvs.Add(new Vector2(0f, 0f));
-            uvs.Add(new Vector2(1f, 0f));
-            colors.Add(markColor);
-            colors.Add(markColor);
-
-            if (lastIndex >= 0 && lastIndex < vertices.Count - 2)
+            if (rightTrail != null && rightTrail.emitting != active)
             {
-                var dist = Vector3.Distance(pos, (vertices[lastIndex] + vertices[lastIndex + 1]) * 0.5f);
-                if (dist < 5.0f && dist > 0.08f)
-                {
-                    triangles.Add(lastIndex);
-                    triangles.Add(lastIndex + 1);
-                    triangles.Add(currentIndex);
-
-                    triangles.Add(currentIndex);
-                    triangles.Add(lastIndex + 1);
-                    triangles.Add(currentIndex + 1);
-                }
+                rightTrail.emitting = active;
             }
-
-            UpdateMesh();
-            return currentIndex;
-        }
-
-        private void UpdateMesh()
-        {
-            if (skidMesh == null) return;
-            skidMesh.Clear();
-            skidMesh.SetVertices(vertices);
-            skidMesh.SetNormals(normals);
-            skidMesh.SetUVs(0, uvs);
-            skidMesh.SetColors(colors);
-            skidMesh.SetTriangles(triangles, 0);
         }
 
         private void SetSmokeActive(bool active)
