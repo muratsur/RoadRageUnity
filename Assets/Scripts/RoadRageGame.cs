@@ -371,86 +371,220 @@ namespace RoadRage.UnityRemake
 
     /// Impact debris. The shipped build deliberately uses a soft dust puff rather than
     /// flying cubes, and keeps the particle count low so rapid hits don't litter the screen.
+    /// <summary>
+    /// Multi-layered realistic automotive crash and collision VFX system:
+    /// High-velocity metal grinding sparks, shattered safety glass shards, crushed bodywork debris,
+    /// heavy tire friction smoke, and radiator steam plumes.
+    /// </summary>
     public sealed class CrashEffects : MonoBehaviour
     {
         public static CrashEffects Active { get; private set; }
 
-        private ParticleSystem puff;
         private ParticleSystem sparks;
+        private ParticleSystem glassShards;
+        private ParticleSystem metalDebris;
+        private ParticleSystem smokeDark;
+        private ParticleSystem radiatorSteam;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetActive() => Active = null;
 
-        public static CrashEffects Create(Material puffMaterial)
+        public static CrashEffects Create(Material fallbackMaterial)
         {
             if (Active != null) return Active;
             var root = new GameObject("Crash Effects");
             var effects = root.AddComponent<CrashEffects>();
             Active = effects;
-            effects.puff = effects.BuildPuff(puffMaterial);
-            effects.sparks = effects.BuildSparks(puffMaterial);
+            effects.sparks = effects.BuildSparks(fallbackMaterial);
+            effects.glassShards = effects.BuildGlassShards(fallbackMaterial);
+            effects.metalDebris = effects.BuildMetalDebris(fallbackMaterial);
+            effects.smokeDark = effects.BuildSmokeDark(fallbackMaterial);
+            effects.radiatorSteam = effects.BuildRadiatorSteam(fallbackMaterial);
             return effects;
         }
 
-        /// Particles must never use an opaque surface material. The caller historically
-        /// passed "White Paint" (URP Lit, opaque), which drew each particle as a hard
-        /// white rectangle instead of a soft puff.
-        private static Material ParticleMaterial(Material fallback)
+        private static Material LoadMaterial(string resourcePath, Material fallback)
         {
-            var soft = Resources.Load<Material>("WeatherParticle");
-            return soft != null ? new Material(soft) : fallback;
+            var mat = Resources.Load<Material>(resourcePath) ?? Resources.Load<Material>("WeatherParticle");
+            return mat != null ? new Material(mat) : fallback;
         }
 
-        private ParticleSystem BuildPuff(Material material)
+        private ParticleSystem BuildSparks(Material fallback)
         {
-            material = ParticleMaterial(material);
-            var system = new GameObject("Impact Puff").AddComponent<ParticleSystem>();
+            var mat = LoadMaterial("VFX/Materials/CrashSparks", fallback);
+            var system = new GameObject("Impact Sparks").AddComponent<ParticleSystem>();
             system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             system.transform.SetParent(transform, false);
+
             var main = system.main;
             main.duration = 0.5f;
             main.loop = false;
             main.playOnAwake = false;
-            main.startLifetime = 0.45f;
-            main.startSpeed = 3.2f;
-            main.startSize = 0.9f;
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.72f, 0.70f, 0.66f, 0.55f));
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.25f, 0.55f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(14f, 26f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.18f, 0.35f);
+            main.gravityModifier = 2.4f;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.92f, 0.55f), new Color(1f, 0.42f, 0.08f));
             main.simulationSpace = ParticleSystemSimulationSpace.World;
 
             var emission = system.emission;
             emission.enabled = true;
             emission.rateOverTime = 0f;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 8) });
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 45) });
 
             var shape = system.shape;
-            shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.4f;
-
-            var overLifetime = system.sizeOverLifetime;
-            overLifetime.enabled = true;
-            overLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.8f));
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 55f;
+            shape.radius = 0.3f;
 
             var renderer = system.GetComponent<ParticleSystemRenderer>();
-            renderer.material = material;
+            renderer.material = mat;
+            renderer.renderMode = ParticleSystemRenderMode.Stretch;
+            renderer.velocityScale = 0.04f;
+            renderer.lengthScale = 1.4f;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             return system;
         }
 
-        private ParticleSystem BuildSparks(Material material)
+        private ParticleSystem BuildGlassShards(Material fallback)
         {
-            material = ParticleMaterial(material);
-            var system = new GameObject("Impact Sparks").AddComponent<ParticleSystem>();
+            var mat = LoadMaterial("VFX/Materials/CrashGlass", fallback);
+            var system = new GameObject("Glass Shards").AddComponent<ParticleSystem>();
             system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
             system.transform.SetParent(transform, false);
+
             var main = system.main;
-            main.duration = 0.4f;
+            main.duration = 0.6f;
             main.loop = false;
             main.playOnAwake = false;
-            main.startLifetime = 0.35f;
-            main.startSpeed = 8f;
-            main.startSize = 0.22f;
-            main.gravityModifier = 1.6f;
-            main.startColor = new ParticleSystem.MinMaxGradient(new Color(1f, 0.75f, 0.25f), new Color(1f, 0.35f, 0.1f));
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.4f, 0.85f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(10f, 20f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.12f, 0.28f);
+            main.gravityModifier = 3.2f;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.9f, 0.98f, 1f, 0.9f), new Color(0.7f, 0.88f, 0.95f, 0.7f));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = system.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 32) });
+
+            var shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.45f;
+
+            var rotOverLifetime = system.rotationOverLifetime;
+            rotOverLifetime.enabled = true;
+            rotOverLifetime.z = new ParticleSystem.MinMaxCurve(-360f, 360f);
+
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            renderer.material = mat;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return system;
+        }
+
+        private ParticleSystem BuildMetalDebris(Material fallback)
+        {
+            var mat = LoadMaterial("VFX/Materials/CrashDebris", fallback);
+            var system = new GameObject("Metal Debris").AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            system.transform.SetParent(transform, false);
+
+            var main = system.main;
+            main.duration = 0.7f;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 0.95f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(8f, 18f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.22f, 0.48f);
+            main.gravityModifier = 3.5f;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.25f, 0.25f, 0.28f, 1f), new Color(0.15f, 0.15f, 0.15f, 1f));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = system.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 18) });
+
+            var shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Cone;
+            shape.angle = 60f;
+            shape.radius = 0.35f;
+
+            var rotOverLifetime = system.rotationOverLifetime;
+            rotOverLifetime.enabled = true;
+            rotOverLifetime.x = new ParticleSystem.MinMaxCurve(-280f, 280f);
+            rotOverLifetime.y = new ParticleSystem.MinMaxCurve(-280f, 280f);
+            rotOverLifetime.z = new ParticleSystem.MinMaxCurve(-360f, 360f);
+
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            renderer.material = mat;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return system;
+        }
+
+        private ParticleSystem BuildSmokeDark(Material fallback)
+        {
+            var mat = LoadMaterial("VFX/Materials/CrashSmokeDark", fallback);
+            var system = new GameObject("Crash Smoke").AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            system.transform.SetParent(transform, false);
+
+            var main = system.main;
+            main.duration = 0.8f;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.6f, 1.1f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(2.5f, 6f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.8f, 1.8f);
+            main.gravityModifier = -0.15f;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.22f, 0.22f, 0.22f, 0.75f), new Color(0.12f, 0.12f, 0.12f, 0.55f));
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+
+            var emission = system.emission;
+            emission.enabled = true;
+            emission.rateOverTime = 0f;
+            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 15) });
+
+            var shape = system.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.5f;
+
+            var overLifetime = system.sizeOverLifetime;
+            overLifetime.enabled = true;
+            overLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.5f, 1f, 2.4f));
+
+            var colorOverLifetime = system.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(new Color(0.2f, 0.2f, 0.2f), 0f), new GradientColorKey(new Color(0.1f, 0.1f, 0.1f), 1f) },
+                new[] { new GradientAlphaKey(0.7f, 0f), new GradientAlphaKey(0.5f, 0.4f), new GradientAlphaKey(0f, 1f) }
+            );
+            colorOverLifetime.color = grad;
+
+            var renderer = system.GetComponent<ParticleSystemRenderer>();
+            renderer.material = mat;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            return system;
+        }
+
+        private ParticleSystem BuildRadiatorSteam(Material fallback)
+        {
+            var mat = LoadMaterial("VFX/Materials/CrashSmokeSteam", fallback);
+            var system = new GameObject("Radiator Steam").AddComponent<ParticleSystem>();
+            system.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            system.transform.SetParent(transform, false);
+
+            var main = system.main;
+            main.duration = 0.9f;
+            main.loop = false;
+            main.playOnAwake = false;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.7f, 1.3f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(3f, 7.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.9f, 2.2f);
+            main.gravityModifier = -0.35f;
+            main.startColor = new ParticleSystem.MinMaxGradient(new Color(0.88f, 0.88f, 0.88f, 0.65f), new Color(0.75f, 0.75f, 0.75f, 0.45f));
             main.simulationSpace = ParticleSystemSimulationSpace.World;
 
             var emission = system.emission;
@@ -460,21 +594,48 @@ namespace RoadRage.UnityRemake
 
             var shape = system.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 42f;
-            shape.radius = 0.2f;
+            shape.angle = 35f;
+            shape.radius = 0.35f;
+
+            var overLifetime = system.sizeOverLifetime;
+            overLifetime.enabled = true;
+            overLifetime.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.4f, 1f, 2.6f));
+
+            var colorOverLifetime = system.colorOverLifetime;
+            colorOverLifetime.enabled = true;
+            var grad = new Gradient();
+            grad.SetKeys(
+                new[] { new GradientColorKey(new Color(0.9f, 0.9f, 0.9f), 0f), new GradientColorKey(new Color(0.8f, 0.8f, 0.8f), 1f) },
+                new[] { new GradientAlphaKey(0.6f, 0f), new GradientAlphaKey(0.4f, 0.3f), new GradientAlphaKey(0f, 1f) }
+            );
+            colorOverLifetime.color = grad;
 
             var renderer = system.GetComponent<ParticleSystemRenderer>();
-            renderer.material = material;
+            renderer.material = mat;
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             return system;
         }
 
-        public void PlayAt(Vector3 position)
+        public void PlayAt(Vector3 position, float severity = 1f)
         {
-            puff.transform.position = position;
+            var countMult = Mathf.Clamp(severity, 0.5f, 2.0f);
+
             sparks.transform.position = position;
-            puff.Play();
-            sparks.Play();
+            glassShards.transform.position = position;
+            metalDebris.transform.position = position;
+            smokeDark.transform.position = position;
+            radiatorSteam.transform.position = position;
+
+            sparks.Emit((int)(45 * countMult));
+            glassShards.Emit((int)(32 * countMult));
+            metalDebris.Emit((int)(18 * countMult));
+            smokeDark.Emit((int)(15 * countMult));
+            radiatorSteam.Emit((int)(14 * countMult));
+
+            if (RoadRageAudioBridge.Instance != null)
+            {
+                RoadRageAudioBridge.Instance.PlayCrash(severity);
+            }
         }
     }
 }

@@ -100,6 +100,7 @@ namespace RoadRage.UnityRemake
     public sealed class TrafficCarController : MonoBehaviour
     {
         private static readonly List<TrafficCarController> ActiveCars = new();
+        private static int nextTrafficId;
 
         public float RoadDistance { get; private set; }
         /// Signed fraction of the carriageway, -1 (outer left) to 1 (outer right).
@@ -114,6 +115,7 @@ namespace RoadRage.UnityRemake
         private float currentSpeedKph;
         private float wreckRoll;
         private int variationSeed;
+        private int trafficId;
 
         /// The core mechanic: this is a vigilante game, so traffic must be judgeable.
         /// Violators earn score when rammed; innocents cost you. The tell is behaviour,
@@ -137,11 +139,16 @@ namespace RoadRage.UnityRemake
         private float weaveRate;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetRegistry() => ActiveCars.Clear();
+        private static void ResetRegistry()
+        {
+            ActiveCars.Clear();
+            nextTrafficId = 0;
+        }
 
         public void Initialize(float distance, float lane, float speedKph, float direction,
             bool wreck = false, float wreckYaw = 0f, Offence violation = Offence.None)
         {
+            trafficId = ++nextTrafficId;
             Violation = wreck ? Offence.None : violation;
             weavePhase = Random.Range(0f, Mathf.PI * 2f);
             weaveRate = Random.Range(0.55f, 0.95f);
@@ -282,6 +289,9 @@ namespace RoadRage.UnityRemake
                 var other = ActiveCars[i];
                 if (other == null) { ActiveCars.RemoveAt(i); continue; }
                 if (other == this) continue;
+                // Each pair is solved once.  Letting A move B and then B move A in the
+                // same frame over-corrected stacked traffic, producing the visible shake.
+                if (trafficId > other.trafficId) continue;
 
                 var deltaDist = other.RoadDistance - RoadDistance;
                 var reach = (HalfLength + other.HalfLength) * 0.96f;
@@ -314,20 +324,27 @@ namespace RoadRage.UnityRemake
                 var relativeSpeed = Mathf.Abs(currentSpeedKph - other.currentSpeedKph);
                 if (IsWreck || other.IsWreck || relativeSpeed > 18f)
                 {
-                    if (!other.IsWreck)
+                    var otherWasWrecked = other.IsWreck;
+                    var thisWasWrecked = IsWreck;
+                    if (!otherWasWrecked)
                     {
                         other.Crash(deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
                     }
-                    if (!IsWreck)
+                    if (!thisWasWrecked)
                     {
                         Crash(-deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
                     }
 
-                    var contactPoint = (transform.position + other.transform.position) * 0.5f + Vector3.up * 0.4f;
-                    CrashEffects.Active?.PlayAt(contactPoint);
-
-                    GameState.PileupDamage += 2500;
-                    GameState.BumpDaily("pileup", 2500);
+                    // A settled wreck pair stays in contact for several frames.  The crash
+                    // should be a single physical event, not a permanent spark/explosion
+                    // loop that also makes the pile read as if it is still colliding.
+                    if (!thisWasWrecked || !otherWasWrecked)
+                    {
+                        var contactPoint = (transform.position + other.transform.position) * 0.5f + Vector3.up * 0.4f;
+                        CrashEffects.Active?.PlayAt(contactPoint);
+                        GameState.PileupDamage += 2500;
+                        GameState.BumpDaily("pileup", 2500);
+                    }
                 }
                 else
                 {
@@ -476,6 +493,64 @@ namespace RoadRage.UnityRemake
                 {
                     traffic.Crash(lateral, speedAtImpact);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Police cruisers are driven by their pursuit controller rather than a Rigidbody,
+        /// so Unity's collision solver never sees them.  Keep them in the same continuous
+        /// road-space collision system as traffic, including a swept test for a low-frame-rate
+        /// crossing where the cruiser moves from one side of a car to the other in one frame.
+        /// </summary>
+        public static void ResolvePoliceTrafficCollisions(PoliceVehicleController police, float previousRoadDistance)
+        {
+            if (police == null) return;
+
+            const float policeHalfLength = 2.45f;
+            const float policeHalfWidth = 1.05f;
+            var policeTravel = police.RoadDistance - previousRoadDistance;
+            if (Mathf.Abs(policeTravel) < 0.001f) policeTravel = 1f;
+
+            for (var i = ActiveCars.Count - 1; i >= 0; i--)
+            {
+                var traffic = ActiveCars[i];
+                if (traffic == null)
+                {
+                    ActiveCars.RemoveAt(i);
+                    continue;
+                }
+
+                var reach = (policeHalfLength + traffic.HalfLength) * 0.98f;
+                var longitudinal = traffic.RoadDistance - police.RoadDistance;
+                var previousLongitudinal = traffic.RoadDistance - previousRoadDistance;
+                var overlapsLongitudinally = Mathf.Abs(longitudinal) < reach;
+                var sweptThrough = previousLongitudinal * longitudinal <= 0f;
+                if (!overlapsLongitudinally && !sweptThrough) continue;
+
+                var lateral = traffic.LaneOffset - police.LateralOffset;
+                var lateralReach = (policeHalfWidth + traffic.HalfWidth) * (traffic.IsWreck ? 1.15f : 0.96f);
+                if (Mathf.Abs(lateral) >= lateralReach) continue;
+
+                // A swept crossing is resolved on the approaching side, rather than after the
+                // cruiser has already appeared beyond the traffic vehicle.
+                var requiredLongitudinal = overlapsLongitudinally
+                    ? Mathf.Sign(longitudinal == 0f ? policeTravel : longitudinal) * reach
+                    : Mathf.Sign(policeTravel) * reach;
+                var longitudinalCorrection = requiredLongitudinal - longitudinal;
+                traffic.RoadDistance += longitudinalCorrection * 0.72f;
+                police.RoadDistance -= longitudinalCorrection * 0.28f;
+
+                var lateralSign = Mathf.Sign(lateral);
+                if (Mathf.Abs(lateralSign) < 0.01f)
+                    lateralSign = (police.SlotIndex & 1) == 0 ? 1f : -1f;
+                var lateralOverlap = lateralReach - Mathf.Abs(lateral);
+                traffic.laneDrift += lateralSign * lateralOverlap * 0.70f;
+                police.LateralOffset -= lateralSign * lateralOverlap * 0.30f;
+
+                // Matching the obstacle's pace after a nose-to-tail contact prevents the
+                // kinematic pursuit movement from immediately tunnelling into it again.
+                if (requiredLongitudinal > 0f && traffic.Direction > 0f && !traffic.IsWreck)
+                    police.SpeedKph = Mathf.Min(police.SpeedKph, Mathf.Max(22f, traffic.currentSpeedKph + 12f));
             }
         }
     }
