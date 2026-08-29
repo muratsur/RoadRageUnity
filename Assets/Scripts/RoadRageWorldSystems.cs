@@ -223,12 +223,7 @@ namespace RoadRage.UnityRemake
         private void Update()
         {
             var rb = GetComponent<Rigidbody>();
-            if (rb != null && !rb.isKinematic)
-            {
-                // Dynamic physics takedown or crash active: let PhysX drive the tumble and do not snap to road
-                RoadDistance = transform.position.z;
-                return;
-            }
+            if (rb != null) rb.isKinematic = true;
 
             Recycle();
             UpdateOffenceBehaviour(Time.deltaTime);
@@ -271,9 +266,9 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 42f * Time.deltaTime);
-                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget, 7f * Time.deltaTime);
-                WreckYaw = Mathf.MoveTowards(WreckYaw, wreckYawTarget, 70f * Time.deltaTime);
+                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 36f * Time.deltaTime);
+                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget, 8f * Time.deltaTime);
+                WreckYaw = Mathf.MoveTowards(WreckYaw, wreckYawTarget, 120f * Time.deltaTime);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
@@ -334,19 +329,19 @@ namespace RoadRage.UnityRemake
             if (IsWreck) return;
             IsWreck = true;
 
-            // Momentum transfer. Zeroing the speed made the victim stop dead while the
-            // player was still doing 120 km/h, so the player drove through the mesh -
-            // the "cars clip through each other" bug. A rammed car is shoved forward and
-            // slews away; it does not become an instant wall.
-            currentSpeedKph = Mathf.Max(currentSpeedKph, impactSpeedKph * 0.88f);
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null) rb.isKinematic = true;
+
+            // Momentum transfer: shove victim forward and slew it away across the asphalt.
+            currentSpeedKph = Mathf.Max(currentSpeedKph * 0.4f, impactSpeedKph * 0.72f);
 
             var sign = Mathf.Abs(lateralPush) < 0.01f ? (variationSeed % 2 == 0 ? 1f : -1f) : Mathf.Sign(lateralPush);
-            var variation = 24f + Mathf.Abs(variationSeed % 23);
+            var variation = 55f + Mathf.Abs(variationSeed % 40);
             wreckYawTarget = sign * variation;
-            WreckYaw = sign * variation * 0.25f;
-            wreckRoll = sign * 3.5f;
-            // 0.65 m cannot separate two ~2 m wide cars; shove it clear of the lane.
-            wreckSlideTarget = Mathf.Clamp(laneDrift + sign * 4.5f, -7f, 7f);
+            WreckYaw = sign * variation * 0.2f;
+            wreckRoll = sign * 2.5f;
+            // Shove smoothly towards road shoulder
+            wreckSlideTarget = Mathf.Clamp(laneDrift + sign * 5.2f, -8f, 8f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns

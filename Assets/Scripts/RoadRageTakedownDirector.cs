@@ -128,18 +128,19 @@ namespace RoadRage.UnityRemake
                 debrisFx.Emit(35);
             }
 
-            // 3. Apply Explosive Physics to Victim
-            var rb = victim.GetComponent<Rigidbody>();
-            if (rb == null)
+            // 3. Trigger authentic road-level takedown spinout (vehicle stays planted on asphalt)
+            var traffic = victim.GetComponent<TrafficCarController>();
+            if (traffic != null)
             {
-                rb = victim.gameObject.AddComponent<Rigidbody>();
-                rb.mass = 1350f;
-                rb.interpolation = RigidbodyInterpolation.Interpolate;
+                traffic.Crash(impactNormal.x, playerSpeedKph);
             }
-            rb.isKinematic = false;
-            var launchForce = (impactNormal * 12f + Vector3.up * 14f + victim.forward * (playerSpeedKph * 0.15f)) * rb.mass;
-            rb.AddForce(launchForce, ForceMode.Impulse);
-            rb.AddTorque(new Vector3(Random.Range(-25f, 25f), Random.Range(15f, 35f), Random.Range(-45f, 45f)) * rb.mass, ForceMode.Impulse);
+            var cop = victim.GetComponent<PoliceVehicleController>();
+            if (cop != null)
+            {
+                cop.WreckCop();
+            }
+            var rb = victim.GetComponent<Rigidbody>();
+            if (rb != null) rb.isKinematic = true;
 
             // 4. Hit-Stop Impact Freeze (100ms kinetic punch)
             Time.timeScale = 0.05f;

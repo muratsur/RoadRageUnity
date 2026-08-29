@@ -45,36 +45,13 @@ namespace RoadRage.UnityRemake
             sirenSource = gameObject.AddComponent<AudioSource>();
             sirenSource.loop = true;
             sirenSource.playOnAwake = false;
-            sirenSource.spatialBlend = 0.2f;
-            sirenSource.volume = 0.45f;
+            sirenSource.spatialBlend = 0.05f;
+            sirenSource.volume = 0.35f;
             sirenSource.pitch = 1.0f;
-            sirenSource.clip = CreateProceduralSirenClip();
-        }
-
-        private static AudioClip CreateProceduralSirenClip()
-        {
-            var sampleRate = 44100;
-            var duration = 3.6f;
-            var samples = Mathf.CeilToInt(sampleRate * duration);
-            var data = new float[samples];
-
-            for (var i = 0; i < samples; i++)
-            {
-                var t = (float)i / sampleRate;
-                // Modern Electronic Interceptor Wail Siren (520Hz to 1180Hz smooth harmonic sweep)
-                var sweep = (Mathf.Sin(t * Mathf.PI * 1.6f) + 1f) * 0.5f;
-                var freq = Mathf.Lerp(520f, 1180f, sweep);
-                var phase = t * freq * 2f * Mathf.PI;
-                var fst = Mathf.Sin(phase);
-                var snd = Mathf.Sin(phase * 2f) * 0.35f;
-                var thd = Mathf.Sin(phase * 3f) * 0.15f;
-                var hornBody = Mathf.Clamp(fst * 1.25f, -0.7f, 0.7f);
-                data[i] = (hornBody * 0.55f + snd + thd) * 0.32f;
-            }
-
-            var clip = AudioClip.Create("ModernPoliceInterceptorSiren", samples, 1, sampleRate, false);
-            clip.SetData(data, 0);
-            return clip;
+            // Authentic recorded police siren from project audio assets
+            sirenSource.clip = Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_1")
+                ?? Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_2")
+                ?? Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_3");
         }
 
         public void BindPlayer(Transform player, Camera cam)
@@ -410,9 +387,25 @@ namespace RoadRage.UnityRemake
             blueLeds = new[] { b1.GetComponent<Renderer>() };
         }
 
+        private bool isWrecked;
+        private float wreckSlideDir;
+        private float wreckYaw;
+        private float targetWreckYaw;
+        private float wreckRoll;
+
         private void Update()
         {
-            if (isWrecked) return;
+            if (isWrecked)
+            {
+                SpeedKph = Mathf.MoveTowards(SpeedKph, 0f, 45f * Time.deltaTime);
+                LateralOffset += wreckSlideDir * 6.5f * Time.deltaTime;
+                wreckYaw = Mathf.MoveTowards(wreckYaw, targetWreckYaw, 180f * Time.deltaTime);
+                var forwardMove = SpeedKph / 3.6f * Time.deltaTime;
+                RoadDistance = RoadPath.Wrap(RoadDistance + forwardMove);
+                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
+                transform.rotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(0f, wreckYaw, wreckRoll);
+                return;
+            }
 
             // 1. Alternate High-Intensity LED Emergency Strobes (Shader Emission)
             strobeTimer += Time.deltaTime * 12f;
@@ -498,12 +491,10 @@ namespace RoadRage.UnityRemake
             if (isWrecked) return;
             isWrecked = true;
 
-            var rb = gameObject.GetComponent<Rigidbody>();
-            if (rb == null) rb = gameObject.AddComponent<Rigidbody>();
-            rb.isKinematic = false;
-            rb.mass = 1600f;
-            rb.AddForce((Vector3.up * 14f + Random.insideUnitSphere * 12f) * rb.mass, ForceMode.Impulse);
-            rb.AddTorque(Random.insideUnitSphere * 35000f, ForceMode.Impulse);
+            wreckSlideDir = targetPlayer != null ? Mathf.Sign(LateralOffset - targetPlayer.LateralOffset) : (Random.value > 0.5f ? 1f : -1f);
+            if (Mathf.Abs(wreckSlideDir) < 0.1f) wreckSlideDir = 1f;
+            targetWreckYaw = wreckSlideDir * Random.Range(70f, 130f);
+            wreckRoll = wreckSlideDir * 4f;
 
             if (RoadRageTakedownDirector.Instance != null)
             {
