@@ -4719,7 +4719,7 @@ namespace RoadRage.UnityRemake
                 lateralVelocity = 0f;
                 verticalOffset = 0f;
                 verticalVelocity = 0f;
-                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
+                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f);
                 transform.rotation = RoadPath.Rotation(RoadDistance);
                 return;
             }
@@ -4731,7 +4731,7 @@ namespace RoadRage.UnityRemake
                 lateralVelocity = 0f;
                 verticalOffset = 0f;
                 verticalVelocity = 0f;
-                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
+                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f);
                 transform.rotation = RoadPath.Rotation(RoadDistance);
                 return;
             }
@@ -4828,7 +4828,7 @@ namespace RoadRage.UnityRemake
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
             var edge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset + lateralVelocity * Time.deltaTime, -edge, edge);
-            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f + verticalOffset);
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f + verticalOffset);
             var desiredRotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(-airPitch, steer * 9f, -steer * 4f);
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             

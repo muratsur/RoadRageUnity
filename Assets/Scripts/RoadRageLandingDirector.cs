@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 namespace RoadRage.UnityRemake
 {
@@ -121,7 +121,7 @@ namespace RoadRage.UnityRemake
                 var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
                 var targetShowcasePos = focusPoint + (carRot * localOffset);
 
-                var floor = carPos.y + 0.65f;
+                var floor = carPos.y + 0.35f;
                 if (targetShowcasePos.y < floor) targetShowcasePos.y = floor;
 
                 cameraPos = targetShowcasePos;
