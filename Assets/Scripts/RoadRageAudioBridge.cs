@@ -84,6 +84,12 @@ namespace RoadRage.UnityRemake
         public void PlayTireSqueal(float intensity)
         {
             if (skidSource == null) return;
+            if (!GameState.IsAftertouchActive)
+            {
+                if (skidSource.isPlaying) skidSource.Stop();
+                skidSource.volume = 0f;
+                return;
+            }
             var targetVol = Mathf.Clamp01(intensity) * 0.75f;
             skidSource.volume = Mathf.Lerp(skidSource.volume, targetVol, Time.deltaTime * 14f);
             skidSource.pitch = Mathf.Lerp(0.85f, 1.25f, intensity);
