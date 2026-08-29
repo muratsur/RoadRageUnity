@@ -4304,6 +4304,7 @@ namespace RoadRage.UnityRemake
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
             var landingDirector = cameraObject.AddComponent<RoadRageLandingDirector>();
+            var leaderboardDirector = cameraObject.AddComponent<RoadRageLeaderboardDirector>();
 
             if (reflectionProbe != null)
             {
@@ -5087,6 +5088,11 @@ namespace RoadRage.UnityRemake
                 DrawMissions();
                 return;
             }
+            if (RoadRageLeaderboardDirector.Instance != null && RoadRageLeaderboardDirector.Instance.IsLeaderboardOpen)
+            {
+                DrawLeaderboardModal();
+                return;
+            }
             if (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive)
             {
                 DrawLandingScreen();
@@ -5258,23 +5264,7 @@ namespace RoadRage.UnityRemake
 
             if (GameState.RunOver)
             {
-                GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), dimTexture);
-                GUI.Label(new Rect(0f, Screen.height * 0.18f, Screen.width, 50f), "💥 CRASH SUMMARY 💥", pickerTitleStyle);
-                GUI.Label(new Rect(0f, Screen.height * 0.28f, Screen.width, 220f),
-                    $"FINAL SCORE: {GameState.Score:N0}   •   {GameState.Takedowns} TAKEDOWNS\n" +
-                    $"💥 PILEUP DAMAGE: ${GameState.PileupDamage:N0}\n" +
-                    $"🔥 AFTERTOUCH TAKEDOWNS: {GameState.AftertouchTakedowns}\n" +
-                    $"{GameState.RunDistanceKm:0.00} KM TRAVELLED   •   {GameState.InnocentsHit} INNOCENTS\n\n" +
-                    $"TOTAL CASH BANKED: ${GameState.LastRunCash:N0}", pickerTitleStyle);
-                if (GUI.Button(new Rect(Screen.width * 0.5f - 210f, Screen.height * 0.72f, 200f, 56f),
-                        "DRIVE AGAIN", buttonStyle))
-                {
-                    GameState.BeginRun();
-                    w.ReloadBiome(w.BiomeName);
-                }
-                if (GUI.Button(new Rect(Screen.width * 0.5f + 10f, Screen.height * 0.72f, 200f, 56f),
-                        "GARAGE", buttonStyle))
-                    garageOpen = true;
+                DrawRunOverScreen();
                 return;
             }
 
@@ -5632,13 +5622,13 @@ namespace RoadRage.UnityRemake
             var hintStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * s), normal = { textColor = new Color(0.8f, 0.95f, 1f, 0.85f) } };
             GUI.Label(new Rect(0f, ctaY + ctaH + 1f, w, 16f), "PRESS [SPACE] / [ENTER] OR TAP TO RACE", hintStyle);
 
-            // 4. Bottom Dock Navigation Buttons
-            var dockBtnW = Mathf.Clamp(usableW * 0.22f, 100f, 175f);
-            var dockSpacing = Mathf.Clamp(usableW * 0.02f, 6f, 16f);
-            var totalDockW = dockBtnW * 3 + dockSpacing * 2;
+            // 4. Bottom Dock Navigation Buttons (Garage, Tracks, Missions, Leaderboard)
+            var dockBtnW = Mathf.Clamp(usableW * 0.20f, 85f, 150f);
+            var dockSpacing = Mathf.Clamp(usableW * 0.015f, 6f, 14f);
+            var totalDockW = dockBtnW * 4 + dockSpacing * 3;
             var dockStartX = w * 0.5f - totalDockW * 0.5f;
 
-            var dockBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(13 * s) };
+            var dockBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
 
             // Dock Button 1: GARAGE
             if (GUI.Button(new Rect(dockStartX, dockY, dockBtnW, dockBtnH), "🏎️ GARAGE [G]", dockBtnStyle))
@@ -5647,7 +5637,7 @@ namespace RoadRage.UnityRemake
             }
 
             // Dock Button 2: TRACKS / BIOMES
-            if (GUI.Button(new Rect(dockStartX + dockBtnW + dockSpacing, dockY, dockBtnW, dockBtnH), "🌐 TRACKS [B]", dockBtnStyle))
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing), dockY, dockBtnW, dockBtnH), "🌐 TRACKS [B]", dockBtnStyle))
             {
                 if (World != null) World.OpenPicker();
             }
@@ -5658,18 +5648,298 @@ namespace RoadRage.UnityRemake
                 missionsOpen = true;
             }
 
+            // Dock Button 4: LEADERBOARD
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 3, dockY, dockBtnW, dockBtnH), "🏆 BOARD [L]", dockBtnStyle))
+            {
+                if (RoadRageLeaderboardDirector.Instance != null)
+                    RoadRageLeaderboardDirector.Instance.OpenLeaderboard();
+            }
+
             // Hotkeys
             if (Event.current != null && Event.current.type == EventType.KeyDown)
             {
                 if (Event.current.keyCode == KeyCode.G) { garageOpen = true; Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.B && World != null) { World.OpenPicker(); Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.M) { missionsOpen = true; Event.current.Use(); }
+                else if (Event.current.keyCode == KeyCode.L)
+                {
+                    if (RoadRageLeaderboardDirector.Instance != null)
+                        RoadRageLeaderboardDirector.Instance.ToggleLeaderboard();
+                    Event.current.Use();
+                }
             }
 
             // 5. Settings Modal
             if (settingsOpen)
             {
                 DrawSettingsModal();
+            }
+        }
+
+        private bool hasSubmittedRunScore = false;
+        private string tempPlayerName = "";
+
+        private void DrawRunOverScreen()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var safe = Screen.safeArea;
+
+            var leftPad = Mathf.Max(safe.x, 32f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 32f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 16f);
+            var botPad = Mathf.Max(safe.y, 16f);
+
+            var usableW = w - leftPad - rightPad;
+            var usableH = h - topPad - botPad;
+            var s = Mathf.Clamp(usableH / 650f, 0.48f, 1.15f);
+
+            // Submit score to Leaderboard once per run
+            if (!hasSubmittedRunScore)
+            {
+                hasSubmittedRunScore = true;
+                if (RoadRageLeaderboardDirector.Instance != null)
+                {
+                    RoadRageLeaderboardDirector.Instance.SubmitScore(
+                        GameState.Score, GameState.Takedowns, GameState.CurrentCar.Name);
+                }
+            }
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+
+            // Modal Glass Panel
+            var modalW = Mathf.Clamp(usableW * 0.76f, 320f, 640f);
+            var modalH = Mathf.Clamp(usableH * 0.88f, 280f, 480f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+
+            if (cardGlassTex != null)
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), cardGlassTex);
+            else
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
+
+            // Top Header: CRASH SUMMARY
+            var headerH = Mathf.Clamp(modalH * 0.14f, 34f, 50f);
+            var headerTitleStyle = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, 0.35f, 0.35f) } };
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, headerH), "💥 RUN OVER • CRASH SUMMARY 💥", headerTitleStyle);
+
+            var contentY = modalY + headerH + 6f;
+            var colW = (modalW - 36f) * 0.5f;
+
+            // Left Column: Score, Takedowns, Pileup
+            var isNewHigh = GameState.Score >= GameState.HighScore && GameState.Score > 0;
+            var scoreCardH = Mathf.Clamp(modalH * 0.42f, 85f, 155f);
+            var leftCardX = modalX + 14f;
+
+            if (pillBadgeTex != null)
+                GUI.DrawTexture(new Rect(leftCardX, contentY, colW, scoreCardH), pillBadgeTex);
+
+            var statLineH = scoreCardH / 3.8f;
+            var scoreStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(14 * s), normal = { textColor = isNewHigh ? new Color(1f, 0.85f, 0.2f) : Color.white } };
+            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f, colW - 20f, statLineH),
+                $"🏆 SCORE: {GameState.Score:N0}{(isNewHigh ? " ⭐ RECORD!" : "")}", scoreStyle);
+
+            var statStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s) };
+            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f + statLineH, colW - 20f, statLineH),
+                $"⭐ TAKEDOWNS: {GameState.Takedowns} (+{GameState.AftertouchTakedowns} AT)", statStyle);
+            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f + statLineH * 2, colW - 20f, statLineH),
+                $"💥 PILEUP DAMAGE: ${GameState.PileupDamage:N0}", statStyle);
+
+            // Right Column: Distance, Car, Cash Banked
+            var rightCardX = modalX + modalW - colW - 14f;
+            if (goldBadgeTex != null)
+                GUI.DrawTexture(new Rect(rightCardX, contentY, colW, scoreCardH), goldBadgeTex);
+
+            var carSpec = GameState.CurrentCar;
+            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f, colW - 20f, statLineH),
+                $"🏎️ CAR: {carSpec.Name.ToUpper()}", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(13 * s) });
+            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f + statLineH, colW - 20f, statLineH),
+                $"🛣️ DISTANCE: {GameState.RunDistanceKm:0.00} KM", statStyle);
+
+            var cashStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(14 * s), normal = { textColor = new Color(0.35f, 1f, 0.55f) } };
+            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f + statLineH * 2, colW - 20f, statLineH),
+                $"💰 CASH: +${GameState.LastRunCash:N0}", cashStyle);
+
+            // Driver VIP Rank Progress Bar
+            var rankY = contentY + scoreCardH + 8f;
+            var rankH = Mathf.Clamp(modalH * 0.11f, 26f, 38f);
+            var rank = Mathf.Max(1, GameState.Takedowns / 5 + 1);
+            var xpFrac = Mathf.Clamp01((GameState.Takedowns % 5) / 5f);
+
+            var rankStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(12 * s), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(modalX + 16f, rankY, modalW * 0.38f, rankH), $"👑 VIP PILOT • LVL {rank}", rankStyle);
+
+            var barX = modalX + modalW * 0.38f;
+            var barW = modalW * 0.58f;
+            var barRect = new Rect(barX, rankY + rankH * 0.25f, barW, rankH * 0.5f);
+            GUI.DrawTexture(barRect, dimTexture);
+            var prevGUIColor = GUI.color;
+            GUI.color = new Color(1f, 0.78f, 0.2f);
+            GUI.DrawTexture(new Rect(barRect.x, barRect.y, barRect.width * xpFrac, barRect.height), Texture2D.whiteTexture);
+            GUI.color = prevGUIColor;
+
+            // Action Buttons
+            var btnRowY = rankY + rankH + 10f;
+            var btnH = Mathf.Clamp(modalH * 0.14f, 36f, 48f);
+            var btnSpacing = 6f * s;
+            var btnW = (modalW - 32f - btnSpacing * 3) / 4f;
+
+            var actionBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
+
+            // Button 1: RETRY RUN
+            var pulse = 0.88f + 0.12f * Mathf.Sin(Time.unscaledTime * 6f);
+            var oldBg = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.2f * pulse, 0.95f * pulse, 0.45f * pulse);
+            if (GUI.Button(new Rect(modalX + 16f, btnRowY, btnW, btnH), "🏁 RETRY [SPACE]", actionBtnStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Space))
+            {
+                hasSubmittedRunScore = false;
+                GameState.BeginRun();
+                if (World != null) World.ReloadBiome(World.BiomeName);
+                if (Event.current != null) Event.current.Use();
+                return;
+            }
+            GUI.backgroundColor = oldBg;
+
+            // Button 2: LEADERBOARD
+            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing), btnRowY, btnW, btnH), "🏆 BOARD [L]", actionBtnStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.L))
+            {
+                if (RoadRageLeaderboardDirector.Instance != null)
+                    RoadRageLeaderboardDirector.Instance.OpenLeaderboard();
+                if (Event.current != null) Event.current.Use();
+            }
+
+            // Button 3: GARAGE
+            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing) * 2, btnRowY, btnW, btnH), "🏎️ GARAGE [G]", actionBtnStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.G))
+            {
+                hasSubmittedRunScore = false;
+                garageOpen = true;
+                if (Event.current != null) Event.current.Use();
+            }
+
+            // Button 4: MAIN MENU
+            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing) * 3, btnRowY, btnW, btnH), "🏠 MENU [ESC]", actionBtnStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
+            {
+                hasSubmittedRunScore = false;
+                GameState.BeginRun();
+                if (RoadRageLandingDirector.Instance != null)
+                    RoadRageLandingDirector.Instance.ReturnToLanding();
+                if (World != null) World.ReloadBiome(World.BiomeName);
+                if (Event.current != null) Event.current.Use();
+            }
+        }
+
+        private void DrawLeaderboardModal()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var safe = Screen.safeArea;
+
+            var usableW = safe.width > 0 ? safe.width : w;
+            var usableH = safe.height > 0 ? safe.height : h;
+            var s = Mathf.Clamp(usableH / 650f, 0.48f, 1.15f);
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+
+            var modalW = Mathf.Clamp(usableW * 0.78f, 340f, 660f);
+            var modalH = Mathf.Clamp(usableH * 0.90f, 290f, 510f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+
+            if (cardGlassTex != null)
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), cardGlassTex);
+            else
+                GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
+
+            // Title & Status
+            var titleStyleL = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, 0.82f, 0.2f) } };
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, 28f), "🏆 GLOBAL ARCADE LEADERBOARD 🏆", titleStyleL);
+
+            var statusMsg = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.StatusMessage : "Ready";
+            var statusStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.7f, 0.85f, 1f) } };
+            GUI.Label(new Rect(modalX, modalY + 34f, modalW, 18f), statusMsg, statusStyle);
+
+            // Pilot Name Field
+            var currentName = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.PlayerName : "RoadWarrior";
+            if (string.IsNullOrEmpty(tempPlayerName)) tempPlayerName = currentName;
+
+            var nameRowY = modalY + 54f;
+            GUI.Label(new Rect(modalX + 20f, nameRowY, 110f * s, 24f), "PILOT TAG:", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(12 * s) });
+            tempPlayerName = GUI.TextField(new Rect(modalX + 20f + 110f * s, nameRowY, 140f * s, 24f), tempPlayerName, 14);
+            if (tempPlayerName != currentName && RoadRageLeaderboardDirector.Instance != null)
+            {
+                RoadRageLeaderboardDirector.Instance.PlayerName = tempPlayerName;
+            }
+
+            // Table Header
+            var tableHeaderY = nameRowY + 28f;
+            var rowH = Mathf.Clamp((modalH - 180f) / 7.2f, 22f, 34f);
+            var colRankW = 55f * s;
+            var colNameW = 130f * s;
+            var colCarW = 100f * s;
+            var colTdW = 75f * s;
+            var colScoreW = modalW - 40f - colRankW - colNameW - colCarW - colTdW;
+
+            var thStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(11 * s), normal = { textColor = new Color(0.6f, 0.75f, 0.9f) } };
+            var tableX = modalX + 20f;
+            GUI.Label(new Rect(tableX, tableHeaderY, colRankW, 20f), "RANK", thStyle);
+            GUI.Label(new Rect(tableX + colRankW, tableHeaderY, colNameW, 20f), "PILOT", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW, tableHeaderY, colCarW, 20f), "CAR", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW, tableHeaderY, colTdW, 20f), "WRECKS", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, tableHeaderY, colScoreW, 20f), "SCORE", new GUIStyle(thStyle) { alignment = TextAnchor.MiddleRight });
+
+            // Table Rows
+            var entries = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.CachedEntries : new List<LeaderboardEntryData>();
+            var rowStartY = tableHeaderY + 22f;
+
+            var maxRows = Mathf.Min(7, entries.Count);
+            for (int i = 0; i < maxRows; i++)
+            {
+                var entry = entries[i];
+                var currentY = rowStartY + i * rowH;
+                var isMe = entry.Username == currentName;
+
+                if (isMe && pillBadgeTex != null)
+                {
+                    GUI.DrawTexture(new Rect(tableX - 4f, currentY - 2f, modalW - 32f, rowH), pillBadgeTex);
+                }
+
+                var rankBadge = entry.Rank switch
+                {
+                    1 => "🥇 #1",
+                    2 => "🥈 #2",
+                    3 => "🥉 #3",
+                    _ => $"   #{entry.Rank}"
+                };
+
+                var rowTextStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s), normal = { textColor = isMe ? new Color(1f, 0.85f, 0.2f) : Color.white } };
+                GUI.Label(new Rect(tableX, currentY, colRankW, rowH), rankBadge, rowTextStyle);
+                GUI.Label(new Rect(tableX + colRankW, currentY, colNameW, rowH), entry.Username, rowTextStyle);
+                GUI.Label(new Rect(tableX + colRankW + colNameW, currentY, colCarW, rowH), entry.CarName, rowTextStyle);
+                GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW, currentY, colTdW, rowH), $"{entry.Takedowns} ⭐", rowTextStyle);
+                GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, currentY, colScoreW, rowH), $"{entry.Score:N0}", new GUIStyle(rowTextStyle) { alignment = TextAnchor.MiddleRight });
+            }
+
+            // Bottom Buttons
+            var botBtnY = modalY + modalH - 42f;
+            var botBtnW = 120f * s;
+            var botBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
+
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f - botBtnW - 8f, botBtnY, botBtnW, 34f), "🔄 REFRESH", botBtnStyle))
+            {
+                if (RoadRageLeaderboardDirector.Instance != null)
+                    RoadRageLeaderboardDirector.Instance.FetchOnlineScores();
+            }
+
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f + 8f, botBtnY, botBtnW, 34f), "✖ CLOSE", botBtnStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Escape || Event.current.keyCode == KeyCode.L)))
+            {
+                if (RoadRageLeaderboardDirector.Instance != null)
+                    RoadRageLeaderboardDirector.Instance.CloseLeaderboard();
+                if (Event.current != null) Event.current.Use();
             }
         }
 
