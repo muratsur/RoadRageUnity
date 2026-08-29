@@ -4303,6 +4303,8 @@ namespace RoadRage.UnityRemake
 
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
+            var landingDirector = cameraObject.AddComponent<RoadRageLandingDirector>();
+
             if (reflectionProbe != null)
             {
                 // Cubemap capture is axis-aligned regardless of transform rotation, so
@@ -4596,6 +4598,16 @@ namespace RoadRage.UnityRemake
 
         private void Update()
         {
+            if (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive)
+            {
+                CountdownTimer = 3.0f;
+                SpeedKph = 0f;
+                lateralVelocity = 0f;
+                transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.85f);
+                transform.rotation = RoadPath.Rotation(RoadDistance);
+                return;
+            }
+
             if (CountdownTimer > 0f)
             {
                 CountdownTimer -= Time.deltaTime;
@@ -4833,6 +4845,14 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
+            if (RoadRageLandingDirector.Instance != null &&
+                RoadRageLandingDirector.Instance.TryGetShowcaseCameraPose(target, out var showcasePos, out var showcaseRot))
+            {
+                transform.position = showcasePos;
+                transform.rotation = showcaseRot;
+                return;
+            }
+
             if (RoadRageTakedownDirector.Instance != null &&
                 RoadRageTakedownDirector.Instance.TryGetTakedownCameraPose(out var takedownPos, out var takedownRot))
             {
@@ -5006,8 +5026,21 @@ namespace RoadRage.UnityRemake
                 DrawMissions();
                 return;
             }
+            if (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive)
+            {
+                DrawLandingScreen();
+                return;
+            }
             var c = Car;
             if (c == null) return;
+
+            var menuRect = new Rect(Screen.width - 240f, 20f, 100f, 44f);
+            if (GUI.Button(menuRect, "🏠 MENU", buttonStyle))
+            {
+                if (RoadRageLandingDirector.Instance != null)
+                    RoadRageLandingDirector.Instance.ReturnToLanding();
+                return;
+            }
 
             var garageRect = new Rect(Screen.width * 0.5f - 250f, 24f, 150f, 44f);
             if (GUI.Button(garageRect, "GARAGE", buttonStyle))
@@ -5413,6 +5446,186 @@ namespace RoadRage.UnityRemake
 
             if (GUI.Button(new Rect(Screen.width * 0.5f - 90f, rowY + 300f, 180f, 52f), "BACK", buttonStyle))
                 missionsOpen = false;
+        }
+
+        private bool settingsOpen = false;
+        private bool sfxEnabled = true;
+        private bool showFps = true;
+
+        private void DrawLandingScreen()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var s = UiScale;
+
+            // 1. Top Glass Status Bar
+            var topBarH = Mathf.Max(56f, 66f * s);
+            GUI.DrawTexture(new Rect(0f, 0f, w, topBarH), dimTexture);
+
+            // Left: Player Profile & Level Badge
+            var rank = Mathf.Max(1, GameState.Takedowns / 5 + 1);
+            GUI.Label(new Rect(24f, 10f, 320f * s, 26f), $"👑 VIP PILOT  •  LVL {rank}", titleStyle);
+            GUI.Label(new Rect(24f, 34f, 320f * s, 22f), $"🔥 {GameState.LoginStreak}-DAY STREAK  •  ${GameState.LastLoginReward:N0} BONUS", readoutStyle);
+
+            // Center Stats: Cash, High Score, Takedowns
+            var statX = w * 0.5f - 240f * s;
+            var statW = 480f * s;
+            var centerTitleStyle = new GUIStyle(titleStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(22 * s) };
+            GUI.Label(new Rect(statX, 8f, statW, 26f),
+                $"💰 ${GameState.Cash:N0}    🏆 BEST: {GameState.HighScore:N0}    ⭐ {GameState.Takedowns} WRECKS",
+                centerTitleStyle);
+
+            var activeBiome = World != null ? World.BiomeName : "Tire District";
+            var centerReadoutStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(14 * s) };
+            GUI.Label(new Rect(statX, 34f, statW, 22f),
+                $"TRACK: {activeBiome.ToUpper()}  •  WEATHER: {WeatherSystem.Label(World != null ? World.Weather : WeatherType.Clear).ToUpper()}",
+                centerReadoutStyle);
+
+            // Right: Settings Toggle Button
+            var setBtnW = Mathf.Max(110f, 130f * s);
+            var setBtnH = Mathf.Max(38f, 44f * s);
+            if (GUI.Button(new Rect(w - setBtnW - 20f, 10f, setBtnW, setBtnH), "⚙️ SETTINGS", buttonStyle))
+            {
+                settingsOpen = !settingsOpen;
+            }
+
+            // 2. Center-Left Branding (Hero Logo & Car Specs Card)
+            var titleTop = h * 0.16f;
+            var prevColor = GUI.color;
+
+            // Drop shadow for logo
+            GUI.color = new Color(0f, 0f, 0f, 0.75f);
+            var logoStyle = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(48 * s), alignment = TextAnchor.MiddleLeft };
+            GUI.Label(new Rect(42f, titleTop + 3f, 520f, 60f), "ROAD RAGE", logoStyle);
+
+            // Gradient neon gold/white title
+            GUI.color = Color.white;
+            GUI.Label(new Rect(40f, titleTop, 520f, 60f), "ROAD RAGE", logoStyle);
+            GUI.color = new Color(1f, 0.82f, 0.25f);
+            GUI.Label(new Rect(40f, titleTop + 54f * s, 520f, 30f), "⚡ BURNOUT ARCADE RACING ⚡", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(18 * s) });
+            GUI.color = prevColor;
+
+            // Vehicle Specs Glass Card on Left
+            var cardY = titleTop + 90f * s;
+            var cardW = Mathf.Max(300f, 360f * s);
+            var cardH = Mathf.Max(135f, 155f * s);
+            GUI.DrawTexture(new Rect(35f, cardY, cardW, cardH), dimTexture);
+
+            var curCar = GameState.CurrentCar;
+            var ramName = GameState.TuningRamBar switch { 2 => "TITANIUM RAM", 1 => "STEEL PUSHBAR", _ => "STOCK BUMPER" };
+            var inductName = GameState.TuningInduction == 1 ? "TURBOCHARGER (+22 KM/H)" : "SUPERCHARGER (+ACCEL)";
+
+            GUI.Label(new Rect(48f, cardY + 10f, cardW - 24f, 28f), $"🏎️ {curCar.Name.ToUpper()}", titleStyle);
+            GUI.Label(new Rect(48f, cardY + 38f, cardW - 24f, 22f), $"⚡ TOP SPEED: {curCar.Speed * 220f:0} KM/H   ACCEL: {curCar.Acceleration:0.0}", readoutStyle);
+            GUI.Label(new Rect(48f, cardY + 62f, cardW - 24f, 22f), $"🛡️ ARMOR: {curCar.Armour:0.0}   •   RAM: {ramName}", readoutStyle);
+            var orangeText = new GUIStyle(readoutStyle) { normal = { textColor = new Color(1f, 0.72f, 0.25f) } };
+            GUI.Label(new Rect(48f, cardY + 86f, cardW - 24f, 22f), $"🔥 {inductName}", orangeText);
+
+            // 3. Center-Bottom Hero Call To Action ("START RUN")
+            var pulse = 0.85f + 0.15f * Mathf.Sin(Time.unscaledTime * 5.5f);
+            var ctaW = Mathf.Clamp(w * 0.38f, 320f, 480f);
+            var ctaH = Mathf.Max(64f, 76f * s);
+            var ctaX = w * 0.5f - ctaW * 0.5f;
+            var ctaY = h * 0.70f;
+
+            var oldBg = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.2f * pulse, 0.95f * pulse, 0.45f * pulse, 0.95f);
+            if (GUI.Button(new Rect(ctaX, ctaY, ctaW, ctaH), "🏁  S T A R T   R U N", new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(28 * s) }))
+            {
+                if (RoadRageLandingDirector.Instance != null)
+                    RoadRageLandingDirector.Instance.LaunchRun();
+            }
+            GUI.backgroundColor = oldBg;
+
+            var promptStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(15 * s), normal = { textColor = new Color(0.85f, 0.95f, 1f, 0.85f) } };
+            GUI.Label(new Rect(0f, ctaY + ctaH + 6f, w, 24f), "PRESS [SPACE] / [ENTER] OR TAP TO LAUNCH RACE", promptStyle);
+
+            // 4. Bottom Dock Hub (Garage, Biomes, Missions)
+            var dockY = h * 0.86f;
+            var dockBtnW = Mathf.Clamp(w * 0.24f, 160f, 260f);
+            var dockBtnH = Mathf.Max(46f, 54f * s);
+            var dockSpacing = 16f * s;
+            var totalDockW = dockBtnW * 3 + dockSpacing * 2;
+            var dockStartX = w * 0.5f - totalDockW * 0.5f;
+
+            // Button 1: GARAGE & TUNING
+            if (GUI.Button(new Rect(dockStartX, dockY, dockBtnW, dockBtnH), "🏎️ GARAGE [G]", buttonStyle))
+            {
+                garageOpen = true;
+            }
+
+            // Button 2: SELECT BIOMES / TRACKS
+            if (GUI.Button(new Rect(dockStartX + dockBtnW + dockSpacing, dockY, dockBtnW, dockBtnH), "🌐 TRACKS [B]", buttonStyle))
+            {
+                if (World != null) World.OpenPicker();
+            }
+
+            // Button 3: DAILY MISSIONS
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 2, dockY, dockBtnW, dockBtnH), "🎯 MISSIONS [M]", buttonStyle))
+            {
+                missionsOpen = true;
+            }
+
+            // Hotkeys on landing screen
+            if (Event.current != null && Event.current.type == EventType.KeyDown)
+            {
+                if (Event.current.keyCode == KeyCode.G) { garageOpen = true; Event.current.Use(); }
+                else if (Event.current.keyCode == KeyCode.B && World != null) { World.OpenPicker(); Event.current.Use(); }
+                else if (Event.current.keyCode == KeyCode.M) { missionsOpen = true; Event.current.Use(); }
+            }
+
+            // 5. Settings Modal (if opened)
+            if (settingsOpen)
+            {
+                DrawSettingsModal();
+            }
+        }
+
+        private void DrawSettingsModal()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var modalW = Mathf.Min(w * 0.7f, 440f);
+            var modalH = Mathf.Min(h * 0.65f, 340f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
+
+            GUI.Label(new Rect(modalX, modalY + 16f, modalW, 36f), "SETTINGS", pickerTitleStyle);
+
+            var rowY = modalY + 68f;
+            var rowH = 44f;
+
+            // Audio SFX Toggle
+            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"SOUND EFFECTS: {(sfxEnabled ? "ON 🔊" : "OFF 🔇")}", buttonStyle))
+            {
+                sfxEnabled = !sfxEnabled;
+                AudioListener.volume = sfxEnabled ? 1f : 0f;
+            }
+            rowY += rowH + 12f;
+
+            // FPS Display Toggle
+            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"FPS COUNTER: {(showFps ? "VISIBLE" : "HIDDEN")}", buttonStyle))
+            {
+                showFps = !showFps;
+            }
+            rowY += rowH + 12f;
+
+            // Target Framerate
+            var currentFps = Application.targetFrameRate;
+            if (GUI.Button(new Rect(modalX + 24f, rowY, modalW - 48f, rowH), $"TARGET FPS: {currentFps} FPS", buttonStyle))
+            {
+                Application.targetFrameRate = currentFps == 120 ? 60 : 120;
+            }
+            rowY += rowH + 20f;
+
+            // Close Button
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f - 80f, rowY, 160f, 46f), "CLOSE", buttonStyle))
+            {
+                settingsOpen = false;
+            }
         }
 
         private static int pickerCursorIndex = 0;
