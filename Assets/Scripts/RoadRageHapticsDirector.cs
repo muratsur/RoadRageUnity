@@ -44,7 +44,10 @@ namespace RoadRage.UnityRemake
 
             // High-speed speed rumble (subtle continuous vibration when driving >175 km/h)
             var speedRumble = 0f;
-            var playerSpeed = GameState.CurrentSpeedKph;
+            var player = RoadRageBootstrap.World != null && RoadRageBootstrap.World.Car != null 
+                ? RoadRageBootstrap.World.Car.GetComponent<ArcadeCarController>() 
+                : null;
+            var playerSpeed = player != null ? player.SpeedKph : 0f;
             if (playerSpeed > 175f)
             {
                 var factor = Mathf.Clamp01((playerSpeed - 175f) / 75f);

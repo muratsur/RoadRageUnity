@@ -4593,6 +4593,7 @@ namespace RoadRage.UnityRemake
         public bool IsAccelerating => (GameInput.GetThrottle() + TouchThrottle) > 0.1f;
         public bool IsBraking => (GameInput.GetThrottle() + TouchThrottle) < -0.1f;
         public float SteerInput => Mathf.Clamp(GameInput.GetSteer() + TouchSteer, -1f, 1f);
+        public float LateralVelocity => lateralVelocity;
         private float lateralVelocity;
         private float totalDistance;
         private float nextImpactTime;
