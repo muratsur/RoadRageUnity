@@ -387,7 +387,6 @@ namespace RoadRage.UnityRemake
             blueLeds = new[] { b1.GetComponent<Renderer>() };
         }
 
-        private bool isWrecked;
         private float wreckSlideDir;
         private float wreckYaw;
         private float targetWreckYaw;
