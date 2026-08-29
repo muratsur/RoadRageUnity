@@ -1708,6 +1708,13 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("street_props")) assigned[i] = materials["Kowloon Props"];
                         else assigned[i] = material;
                     }
+                    else if (pack == "DemoCity")
+                    {
+                        // Preserve original DemoCity PBR materials (facades, building bases, glass)
+                        assigned[i] = (i < renderer.sharedMaterials.Length && renderer.sharedMaterials[i] != null)
+                            ? renderer.sharedMaterials[i]
+                            : (material ?? materials["City Concrete"]);
+                    }
                     else if (pack == "HollywoodHills")
                     {
                         if (sourceName.Contains("hollywood_sign") || sourceName.Contains("letter") || resourceName.Contains("Letters/")) assigned[i] = materials["Hills Sign"];
@@ -2394,30 +2401,48 @@ namespace RoadRage.UnityRemake
                 if (junk != null) NormalizeModelHeight(junk, Random.Range(0.8f, 1.6f), 0.05f);
                 return junk;
             });
-            // Three building rows: frontage tight to the pavement, a mid block, then a
-            // skyline. One row left the district reading as a road through a field.
-            ScatterBand(15f, 20f, 30f, (d, l, s) =>
+            // Industrial factories, workshops, and mid-rise office warehouses
+            var industrialBuildings = new[]
             {
-                var front = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                "factory_building_big",
+                "factory_building_small",
+                "office_building_1_with_base",
+                "office_building_2_with_base",
+                "office_building_3_with_base",
+                "office_building_4_with_base",
+                "mid_house_1",
+                "mid_house_2",
+                "mid_house_3",
+                "mid_house_4",
+                "mid_house_5"
+            };
+
+            // Three building rows: frontage factories, mid block workshops, and skyline factories
+            ScatterBand(16f, 22f, 32f, (d, l, s) =>
+            {
+                var bName = industrialBuildings[Random.Range(0, industrialBuildings.Length)];
+                var front = PlaceBiomeModelOnRoad("DemoCity", bName,
                     materials["City Concrete"], d, l, 0f,
-                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Street Frontage");
-                if (front != null) NormalizeModelHeight(front, Random.Range(14f, 30f));
+                    new Vector3(0f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Industrial Frontage");
+                if (front != null) NormalizeModelHeight(front, Random.Range(14f, 28f));
                 return front;
             });
-            ScatterBand(18f, 34f, 62f, (d, l, s) =>
+            ScatterBand(20f, 36f, 65f, (d, l, s) =>
             {
-                var back = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                var bName = industrialBuildings[Random.Range(0, industrialBuildings.Length)];
+                var back = PlaceBiomeModelOnRoad("DemoCity", bName,
                     materials["City Concrete"], d, l, 0f,
-                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Back Block");
-                if (back != null) NormalizeModelHeight(back, Random.Range(22f, 48f));
+                    new Vector3(0f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Industrial Back Block");
+                if (back != null) NormalizeModelHeight(back, Random.Range(20f, 42f));
                 return back;
             });
-            ScatterBand(20f, 66f, 130f, (d, l, s) =>
+            ScatterBand(26f, 68f, 130f, (d, l, s) =>
             {
-                var far = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                var bName = industrialBuildings[Random.Range(0, industrialBuildings.Length)];
+                var far = PlaceBiomeModelOnRoad("DemoCity", bName,
                     materials["City Concrete"], d, l, 0f,
-                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "District Skyline");
-                if (far != null) NormalizeModelHeight(far, Random.Range(34f, 78f));
+                    new Vector3(0f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Industrial Skyline");
+                if (far != null) NormalizeModelHeight(far, Random.Range(28f, 58f));
                 return far;
             });
             ScatterBand(22f, 15.5f, 17.5f, (d, l, s) =>
@@ -2429,52 +2454,41 @@ namespace RoadRage.UnityRemake
                 if (fence != null) NormalizeModelSpan(fence, 9f, 0f);
                 return fence;
             });
-            var cityBuildings = new[]
-            {
-                "Buildings/SM_building_01", "Buildings/SM_building_02", "Buildings/SM_building_03",
-                "Buildings/SM_building_04", "Buildings/SM_building_05", "Buildings/SM_building_06",
-                "Buildings/SM_building_07", "Buildings/SM_building_08", "Buildings/SM_building_09",
-                "Buildings/SM_building_10", "Buildings/SM_building_11", "Buildings/SM_building_12",
-                "Buildings/SM_dome_building", "Buildings/SM_dome_building_02",
-                "Buildings/SM_dome_building_03", "Buildings/SM_dome_building_04"
-            };
 
-            // Derived from absolute distance so the pattern stays aligned to the world
-            // rather than restarting at every streamed chunk boundary.
-            for (var z = SegBegin(4f, 30f); z < segEnd; z += 30f)
+            // Aligned block pattern for consistent street frontage
+            for (var z = SegBegin(4f, 32f); z < segEnd; z += 32f)
             {
-                var block = Mathf.FloorToInt(z / 30f);
+                var block = Mathf.FloorToInt(z / 32f);
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
-                    var nearName = cityBuildings[BlockHash(block, side) % cityBuildings.Length];
+                    var nearName = industrialBuildings[BlockHash(block, side) % industrialBuildings.Length];
                     var nearDistance = z + (side > 0 ? 5f : -4f) + Random.Range(-3f, 3f);
-                    var nearBuilding = PlaceBiomeModelOnRoad("Synthwave", nearName, materials["City Concrete"],
-                        nearDistance, side * Random.Range(22f, 29f), 0f,
-                        new Vector3(-90f, facing, 0f), Vector3.one, "City Frontage");
+                    var nearBuilding = PlaceBiomeModelOnRoad("DemoCity", nearName, materials["City Concrete"],
+                        nearDistance, side * Random.Range(24f, 32f), 0f,
+                        new Vector3(0f, facing, 0f), Vector3.one, "Factory Frontage");
                     if (nearBuilding != null)
                     {
-                        NormalizeModelHeight(nearBuilding, Random.Range(14f, 34f));
+                        NormalizeModelHeight(nearBuilding, Random.Range(14f, 30f));
                         EnsureOutsideRoad(nearBuilding, nearDistance, side);
                     }
 
                     if (block % 2 == 0)
                     {
-                        var farName = cityBuildings[BlockHash(block, side * 3) % cityBuildings.Length];
+                        var farName = industrialBuildings[BlockHash(block, side * 3) % industrialBuildings.Length];
                         var farDistance = z + Random.Range(-12f, 12f);
-                        var skyline = PlaceBiomeModelOnRoad("Synthwave", farName, materials["City Concrete"],
-                            farDistance, side * Random.Range(44f, 62f), 0f,
-                            new Vector3(-90f, facing, 0f), Vector3.one, "City Skyline");
+                        var skyline = PlaceBiomeModelOnRoad("DemoCity", farName, materials["City Concrete"],
+                            farDistance, side * Random.Range(46f, 68f), 0f,
+                            new Vector3(0f, facing, 0f), Vector3.one, "Factory Skyline");
                         if (skyline != null)
                         {
-                            NormalizeModelHeight(skyline, Random.Range(28f, 56f));
+                            NormalizeModelHeight(skyline, Random.Range(26f, 52f));
                             EnsureOutsideRoad(skyline, farDistance, side);
                         }
                     }
 
-                    CreateStreetLamp(z + (side > 0 ? 9f : -7f), side * 12.6f, new Color(0.26f, 0.72f, 1f));
+                    CreateStreetLamp(z + (side > 0 ? 9f : -7f), side * 12.6f, new Color(1f, 0.88f, 0.72f));
                 }
-
                 if (block % 4 == 1)
                 {
                     var side = block % 8 < 4 ? 1f : -1f;
