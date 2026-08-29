@@ -836,6 +836,7 @@ namespace RoadRage.UnityRemake
             BiomeCutoutMaterial("Forest Grass", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.52f, 0.78f, 0.36f), 0.36f);
 
             BuildLayaMaterials();
+            BuildManhattanMaterials();
             BuildDecalMaterials();
             BuildSplatMaterials();
         }
@@ -942,6 +943,32 @@ namespace RoadRage.UnityRemake
         /// Road Rage ships on iOS, so the desktop-grade settings need a mobile fallback.
         /// Texture size is handled at import time (BiomeTextureImporter); these are the
         /// parts that can still be dialled back at runtime.
+        
+        private void BuildManhattanMaterials()
+        {
+            const string pack = "DemoCity";
+            // Highrise skyscrapers with glowing office windows
+            var highrise = BiomeMaterial("Demo Highrise", pack, "highrise_facades", "highrise_facades_nm",
+                new Color(0.88f, 0.90f, 0.95f), 0.55f, 0.75f, "highrise_facades_em");
+            highrise.SetColor("_EmissionColor", new Color(1.1f, 1.05f, 0.95f));
+            materials["Demo Highrise"] = highrise;
+
+            materials["Demo Facades"] = BiomeSurface(BiomeMaterial("Demo Facades", pack, "building_facades", "building_facades_nm",
+                new Color(0.82f, 0.80f, 0.76f), 0.15f, 0.42f), pack, null);
+
+            materials["Demo Bases"] = BiomeSurface(BiomeMaterial("Demo Bases", pack, "building_bases", "building_bases_nm",
+                new Color(0.74f, 0.72f, 0.70f), 0.18f, 0.45f), pack, null);
+
+            materials["Demo Interior"] = BiomeSurface(BiomeMaterial("Demo Interior", pack, "building_interior", "building_interior_nm",
+                new Color(0.92f, 0.90f, 0.88f), 0.10f, 0.35f), pack, null);
+
+            materials["Demo Windows"] = BiomeSurface(BiomeMaterial("Demo Windows", pack, "building_windows_wet", "building_windows_wet_nm",
+                new Color(0.15f, 0.22f, 0.32f), 0.85f, 0.95f), pack, null);
+
+            materials["Demo Props"] = BiomeSurface(BiomeMaterial("Demo Props", pack, "props_main", "props_main_nm",
+                new Color(0.78f, 0.78f, 0.78f), 0.45f, 0.55f), pack, null);
+        }
+
         private static void ApplyPlatformQuality()
         {
             if (!Application.isMobilePlatform)
@@ -1113,12 +1140,12 @@ namespace RoadRage.UnityRemake
                 Ground = new Color(0.35f, 0.35f, 0.35f), SunColor = new Color(1f, 1f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.15f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
-            8 => new BiomeMood // MANHATTAN
+            8 => new BiomeMood // MANHATTAN - Iconic NYC Midtown Daylight with soaring skyscrapers
             {
-                FogDensity = 0.009f, Fog = new Color(0.055f, 0.086f, 0.13f),
-                Sky = new Color(0.09f, 0.12f, 0.23f), Equator = new Color(0.09f, 0.16f, 0.29f),
-                Ground = new Color(0.04f, 0.05f, 0.08f), SunColor = new Color(0.65f, 0.75f, 1f),
-                SunIntensity = 0.9f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.62f
+                FogDensity = 0.0016f, Fog = new Color(0.70f, 0.78f, 0.88f),
+                Sky = new Color(0.48f, 0.68f, 0.92f), Equator = new Color(0.62f, 0.72f, 0.82f),
+                Ground = new Color(0.32f, 0.34f, 0.36f), SunColor = new Color(1.0f, 0.98f, 0.94f),
+                SunIntensity = 1.65f, PostExposure = 0.18f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.05f
             },
             _ => new BiomeMood // GREENWOOD
             {
@@ -1705,7 +1732,7 @@ namespace RoadRage.UnityRemake
                             ? materials["City Windows"]
                             : material;
                     }
-                    else if (pack == "CyberpunkCity" || pack == "Buildings" || resourceName.Contains("Buildings/"))
+                    else if (pack == "CyberpunkCity")
                     {
                         var skylinePass = material != null && material.name == "Cyber Skyline";
                         if (sourceName.Contains("hologram") || sourceName.Contains("sign") || sourceName.Contains("light") || sourceName.Contains("lamp") || sourceName.Contains("farola")) assigned[i] = materials["City Neon"];
@@ -1717,6 +1744,16 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
                         else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = skylinePass ? material : materials["City Concrete"];
                         else assigned[i] = material ?? materials["City Concrete"];
+                    }
+                    else if (pack == "Buildings" || pack == "DemoCity" || resourceName.Contains("Buildings/") || resourceName.Contains("DemoCity"))
+                    {
+                        if (sourceName.Contains("highrise") || sourceName.Contains("office_building") || resourceName.Contains("office_building")) assigned[i] = materials["Demo Highrise"];
+                        else if (sourceName.Contains("base") || sourceName.Contains("sideway") || sourceName.Contains("concrete") || sourceName.Contains("wall")) assigned[i] = materials["Demo Bases"];
+                        else if (sourceName.Contains("window") || sourceName.Contains("glass") || sourceName.Contains("wet")) assigned[i] = materials["Demo Windows"];
+                        else if (sourceName.Contains("interior")) assigned[i] = materials["Demo Interior"];
+                        else if (sourceName.Contains("prop") || sourceName.Contains("metal") || sourceName.Contains("lamp") || sourceName.Contains("bench")) assigned[i] = materials["Demo Props"];
+                        else if (sourceName.Contains("trim") || sourceName.Contains("roof") || sourceName.Contains("chimney")) assigned[i] = materials["City Asphalt Trim"];
+                        else assigned[i] = materials["Demo Facades"];
                     }
                     else if (pack == "HongKong")
                     {
@@ -2911,29 +2948,23 @@ namespace RoadRage.UnityRemake
 				RenderSettings.fogMode = FogMode.ExponentialSquared;
 				ApplyAmbientOffset(brooklyn);
 
-				// Previous 0.22/0.16 was 50x fogDensity and made horizon 100% fog at 50m (flat surface bug).
-				var horizonBias = brooklyn ? 0.0045f : 0.0042f;
+				var horizonBias = brooklyn ? 0.0035f : 0.0016f;
 				RenderSettings.fogDensity = Mathf.Lerp(RenderSettings.fogDensity, horizonBias, 0.35f);
 			}
 
 			private void ApplyFogDivergence(bool brooklyn)
 			{
-				// Manhattan was 0.0048: at 200 m that is ~60% fog and at 400 m ~95%, so
-				// the whole skyline rendered as flat black silhouettes with no visible
-				// windows. 0.0028 keeps towers readable to ~500 m while still hazing.
-				RenderSettings.fogDensity = brooklyn ? 0.0032f : 0.0028f;
-				// Slightly lifted night haze - a real city glows with light pollution
-				// rather than fading to pure black.
+				RenderSettings.fogDensity = brooklyn ? 0.0032f : 0.0016f;
 				RenderSettings.fogColor = brooklyn
-					? new Color(0.34f, 0.38f, 0.48f)
-					: new Color(0.07f, 0.10f, 0.17f);
+					? new Color(0.36f, 0.42f, 0.50f)
+					: new Color(0.70f, 0.78f, 0.88f);
 			}
 
 			private void ApplyAmbientOffset(bool brooklyn)
 			{
 				RenderSettings.ambientLight = brooklyn
-					? new Color(0.11f, 0.12f, 0.14f)
-					: new Color(0.07f, 0.08f, 0.12f);
+					? new Color(0.35f, 0.40f, 0.48f)
+					: new Color(0.45f, 0.48f, 0.55f);
 			}
 
 			private void BuildKowloonNights()
@@ -3038,34 +3069,57 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(41903 ^ chunkSeed);
 
-            // Ground-level NYC sidewalk clutter & newspaper boxes
+            // 1. NYC Avenue street trees and sidewalk furniture
             ScatterBand(10f, 13.0f, 15.0f, (d, l, s) =>
             {
                 var pick = Random.value;
-                var propName = pick > 0.65f ? "Buildings/NYCBlock6/Fireplug"
-                             : pick > 0.45f ? "Buildings/NYCBlock6/Newspapers"
-                             : pick > 0.25f ? "Buildings/NYCBlock6/Parkimeter"
-                             : "Buildings/NYCBlock6/Chairs";
-                var junk = PlaceBiomeModelOnRoad("Buildings", propName,
-                    materials["City Props"], d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one, "NYC Street Furniture");
-                if (junk != null) NormalizeModelHeight(junk, Random.Range(1.1f, 1.8f), 0.14f);
-                return junk;
+                if (pick > 0.55f)
+                {
+                    var treeModel = pick > 0.85f ? "Buildings/DemoCity/tree_1"
+                                  : pick > 0.70f ? "Buildings/DemoCity/tree_2"
+                                  : "Buildings/DemoCity/tree_3";
+                    var tree = PlaceBiomeModelOnRoad("Buildings", treeModel,
+                        materials["Broadleaf Canopy"], d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * 1.3f, "NYC Avenue Tree");
+                    if (tree != null) NormalizeModelHeight(tree, Random.Range(6.5f, 9.5f), 0.14f);
+                    return tree;
+                }
+                else
+                {
+                    var propName = pick > 0.35f ? "Buildings/NYCBlock6/Fireplug"
+                                 : pick > 0.20f ? "Buildings/NYCBlock6/Newspapers"
+                                 : "Buildings/NYCBlock6/Chairs";
+                    var junk = PlaceBiomeModelOnRoad("Buildings", propName,
+                        materials["Demo Props"], d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one, "NYC Street Furniture");
+                    if (junk != null) NormalizeModelHeight(junk, Random.Range(1.1f, 1.8f), 0.14f);
+                    return junk;
+                }
             });
 
-            var nycSkyscrapers = new[]
+            // Modern NYC Midtown Glass & Steel Highrises & Art-Deco Towers
+            var nycOfficeTowers = new[]
             {
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2", "Buildings/NYC/building_3",
-                "Buildings/NYC/building_4", "Buildings/NYC/building_5", "Buildings/NYC/building_6",
-                "Buildings/NYC/building_7", "Buildings/NYC/building_8", "Buildings/NYC/building_9",
-                "Buildings/NYC/building_10", "Buildings/NYC/building_11", "Buildings/NYC/building_12",
-                "Buildings/NYC/building_13", "Buildings/USA/building"
+                "Buildings/DemoCity/office_building_1", "Buildings/DemoCity/office_building_2",
+                "Buildings/DemoCity/office_building_3", "Buildings/DemoCity/office_building_4",
+                "Buildings/NYC/building_1", "Buildings/NYC/building_2",
+                "Buildings/NYC/building_3", "Buildings/NYC/building_4",
+                "Buildings/NYC/building_5", "Buildings/NYC/building_6",
+                "Buildings/NYC/building_7", "Buildings/NYC/building_8",
+                "Buildings/USA/building"
             };
 
-            var nycFrontageBlocks = new[]
+            var nycCommercialBlocks = new[]
             {
-                "Buildings/NYCBlock6/builds", "Buildings/NYCBlock6/shops",
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2",
-                "Buildings/NYC/building_3", "Buildings/USA/building"
+                "Buildings/DemoCity/mid_house_1", "Buildings/DemoCity/mid_house_2",
+                "Buildings/DemoCity/mid_house_3", "Buildings/DemoCity/mid_house_4",
+                "Buildings/DemoCity/mid_house_5", "Buildings/NYCBlock6/builds",
+                "Buildings/NYCBlock6/shops"
+            };
+
+            var nycBackgroundSkyscrapers = new[]
+            {
+                "Buildings/DemoCity/office_building_1_bgr", "Buildings/DemoCity/office_building_2_bgr",
+                "Buildings/DemoCity/office_building_3_bgr", "Buildings/DemoCity/office_building_4_bgr",
+                "Buildings/DemoCity/factory_building_big_bgr"
             };
 
             var nycRooftops = new[]
@@ -3073,78 +3127,81 @@ namespace RoadRage.UnityRemake
                 "Buildings/NYCBlock6/roof00", "Buildings/NYCBlock6/roof01",
                 "Buildings/NYCBlock6/roof02", "Buildings/NYCBlock6/roof03",
                 "Buildings/NYCBlock6/roof04", "Buildings/NYCBlock6/roof05",
-                "Buildings/NYCBlock6/roof06", "Buildings/NYCBlock6/roof07",
-                "Buildings/NYCBlock6/roof08"
+                "Buildings/NYC/roof_chimney", "Buildings/NYC/roof_building"
             };
 
-            for (var z = SegBegin(0f, 24f); z < segEnd; z += 24f)
+            for (var z = SegBegin(0f, 28f); z < segEnd; z += 28f)
             {
-                var block = Mathf.FloorToInt(z / 24f);
+                var block = Mathf.FloorToInt(z / 28f);
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
                     var frontDistance = z + (side > 0 ? 3f : -4f);
 
-                    // 1. Authentic NYC Street Frontages (Brownstones, Bodegas, Shops)
-                    var frontMesh = nycFrontageBlocks[BlockHash(block, side * 7) % nycFrontageBlocks.Length];
-                    var front = PlaceBiomeModelOnRoad("Buildings", frontMesh,
-                        materials["City Concrete"], frontDistance, side * Random.Range(16.5f, 21.5f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Frontage");
+                    // 1. Soaring NYC Avenue Glass & Pre-War Skyscraper Frontages (55m to 125m)
+                    var towerMesh = (block % 2 == 0)
+                        ? nycOfficeTowers[BlockHash(block, side * 7) % nycOfficeTowers.Length]
+                        : nycCommercialBlocks[BlockHash(block, side * 5) % nycCommercialBlocks.Length];
+
+                    var front = PlaceBiomeModelOnRoad("Buildings", towerMesh,
+                        materials["Demo Highrise"], frontDistance, side * Random.Range(18.5f, 23.5f), 0f,
+                        new Vector3(0f, facing, 0f), Vector3.one * 1.25f, "Manhattan Avenue Skyscraper");
                     if (front != null)
                     {
-                        NormalizeModelHeight(front, Random.Range(34f, 62f));
+                        var targetH = (block % 2 == 0) ? Random.Range(55f, 125f) : Random.Range(32f, 58f);
+                        NormalizeModelHeight(front, targetH);
                         EnsureOutsideRoad(front, frontDistance, side);
                     }
 
-                    // 2. Iconic NYC Rooftop Water Tanks & HVAC units
-                    if (block % 2 == 0)
+                    // 2. Rooftop Water Towers & HVAC Units
+                    if (block % 2 == 1)
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 35f,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(20.0f, 26.0f), 38f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
-                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 35f);
+                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(5.5f, 9.5f), 38f);
                     }
 
-                    // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
-                    var towerDistance = z + Random.Range(-10f, 10f);
-                    var towerMesh = nycSkyscrapers[BlockHash(block, side * 3) % nycSkyscrapers.Length];
-                    var tower = PlaceBiomeModelOnRoad("Buildings", towerMesh,
-                        materials["City Skyline"], towerDistance, side * Random.Range(36f, 75f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "Manhattan Midtown Skyscraper");
-                    if (tower != null) NormalizeModelHeight(tower, Random.Range(70f, 160f));
+                    // 3. Towering Background Manhattan Megastructure Skyline (90m to 190m)
+                    var bgrDistance = z + Random.Range(-12f, 12f);
+                    var bgrMesh = nycBackgroundSkyscrapers[BlockHash(block, side * 3) % nycBackgroundSkyscrapers.Length];
+                    var bgrTower = PlaceBiomeModelOnRoad("Buildings", bgrMesh,
+                        materials["Demo Highrise"], bgrDistance, side * Random.Range(42f, 85f), 0f,
+                        new Vector3(0f, facing, 0f), Vector3.one * 1.4f, "Manhattan Background Megastructure");
+                    if (bgrTower != null) NormalizeModelHeight(bgrTower, Random.Range(95f, 195f));
 
-                    // 4. NYC Street Lamposts with warm amber glow
-                    var lampDistance = z + (side > 0 ? 10f : -7f);
-                    var lamp = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/lampost2", materials["City Asphalt Trim"],
-                        lampDistance, side * 13.0f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Lamp");
+                    // 4. Modern NYC Avenue Dual Streetlamps with brilliant illumination
+                    var lampDistance = z + (side > 0 ? 12f : -8f);
+                    var lamp = PlaceBiomeModelOnRoad("Buildings", "Buildings/DemoCity/lamp_pole_dual", materials["Demo Props"],
+                        lampDistance, side * 14.5f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one * 1.15f, "NYC Avenue Streetlamp");
                     if (lamp != null)
                     {
-                        NormalizeModelHeight(lamp, 7.5f, 0.14f);
-                        CreateLocalLight(RoadPath.Point(lampDistance, side * 13.0f, 6.8f),
-                            new Color(1f, 0.88f, 0.65f), 10f, 16f);
+                        NormalizeModelHeight(lamp, 8.5f, 0.14f);
+                        CreateLocalLight(RoadPath.Point(lampDistance, side * 14.5f, 7.8f),
+                            new Color(1f, 0.95f, 0.85f), 12f, 18f);
                     }
 
-                    // 5. NYC Traffic Lights at intersections
-                    if (block % 5 == 1)
+                    // 5. NYC Avenue Traffic Lights at intersections
+                    if (block % 4 == 1)
                     {
-                        var trafficLight = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Trafficlight", materials["City Props"],
-                            z + 14f, side * 13.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
-                        if (trafficLight != null) NormalizeModelHeight(trafficLight, 6.5f, 0.14f);
+                        var trafficLight = PlaceBiomeModelOnRoad("Buildings", "Buildings/NYCBlock6/Trafficlight", materials["Demo Props"],
+                            z + 16f, side * 14.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one * 1.15f, "NYC Traffic Light");
+                        if (trafficLight != null) NormalizeModelHeight(trafficLight, 7.2f, 0.14f);
                     }
 
-                    // 6. NYC Bus Shelters & Advertising Billboards
-                    if (block % 4 == 2)
+                    // 6. NYC Bus Shelters & Avenue Benches
+                    if (block % 3 == 0)
                     {
-                        var shelter = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Busstop", materials["City Props"],
-                            z + 18f, side * 13.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
-                        if (shelter != null) NormalizeModelHeight(shelter, 3.4f, 0.14f);
+                        var bench = PlaceBiomeModelOnRoad("Buildings", "Buildings/DemoCity/bench", materials["Demo Props"],
+                            z + 20f, side * 15.2f, 0.14f, new Vector3(0f, facing + 90f, 0f), Vector3.one * 1.2f, "NYC Avenue Bench");
+                        if (bench != null) NormalizeModelHeight(bench, 1.4f, 0.14f);
                     }
-                    else if (block % 3 == 0)
+                    else if (block % 4 == 2)
                     {
-                        var panel = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Panel00", materials["City Billboard"],
-                            z + 18f, side * 14.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
-                        if (panel != null) NormalizeModelHeight(panel, 4.2f, 0.14f);
+                        var shelter = PlaceBiomeModelOnRoad("Buildings", "Buildings/NYCBlock6/Busstop", materials["Demo Props"],
+                            z + 20f, side * 15.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one * 1.1f, "NYC Bus Shelter");
+                        if (shelter != null) NormalizeModelHeight(shelter, 3.8f, 0.14f);
                     }
                 }
             }
