@@ -670,39 +670,6 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("City Car Parts", "Synthwave", "T_car_parts_D", "T_car_parts_N", Color.white, 0.68f, 0.62f, "T_car_parts_E"), "Synthwave", "T_car_parts_MSO");
             BiomeSurface(BiomeMaterial("City Car B1", "Synthwave", "T_car_B_01_D", "T_car_B_01_N", Color.white, 0.52f, 0.72f, "T_car_B_01_E"), "Synthwave", "T_car_B_01_MSO");
             BiomeSurface(BiomeMaterial("City Car B2", "Synthwave", "T_car_B_02_D", "T_car_B_02_N", Color.white, 0.52f, 0.72f, "T_car_B_02_E"), "Synthwave", "T_car_B_02_MSO");
-
-            // Demo City was imported with Built-in Render Pipeline materials. Rebuild its
-            // façade surfaces as URP materials so Tire District can use its real meshes.
-            Material DemoCitySurface(string name, string albedo, string normal, Color tint, float metallic, float smoothness)
-            {
-                var surface = MakeMaterial(name, tint, metallic, smoothness);
-                var albedoMap = Resources.Load<Texture2D>($"Biomes/DemoCity/Textures/{albedo}");
-                var normalMap = Resources.Load<Texture2D>($"Biomes/DemoCity/Textures/{normal}");
-                if (albedoMap != null)
-                {
-                    surface.mainTexture = albedoMap;
-                    if (surface.HasProperty("_BaseMap")) surface.SetTexture("_BaseMap", albedoMap);
-                }
-                if (normalMap != null)
-                {
-                    surface.SetTexture("_BumpMap", normalMap);
-                    surface.EnableKeyword("_NORMALMAP");
-                }
-                return surface;
-            }
-            DemoCitySurface("Demo City Facade", "building_facades", "building_facades_nm", Color.white, 0.08f, 0.38f);
-            DemoCitySurface("Demo City Base", "building_bases", "building_bases_nm", Color.white, 0.12f, 0.32f);
-            var demoHighrise = DemoCitySurface("Demo City Highrise", "highrise_facades", "highrise_facades_nm", Color.white, 0.16f, 0.46f);
-            var demoWindows = DemoCitySurface("Demo City Windows", "building_windows_wet", "building_windows_wet_nm", Color.white, 0.05f, 0.62f);
-            var demoWindowEmission = Resources.Load<Texture2D>("Biomes/DemoCity/Textures/highrise_facades_em");
-            if (demoWindowEmission != null)
-            {
-                demoHighrise.SetTexture("_EmissionMap", demoWindowEmission);
-                demoHighrise.SetColor("_EmissionColor", new Color(0.45f, 0.55f, 0.72f));
-                demoHighrise.EnableKeyword("_EMISSION");
-            }
-            demoWindows.SetColor("_EmissionColor", new Color(0.18f, 0.22f, 0.30f));
-            demoWindows.EnableKeyword("_EMISSION");
             BiomeSurface(BiomeMaterial("Alien Organic A", "AlienBiomass", "T_alien_organic_D", "T_alien_organic_N", new Color(0.68f, 0.86f, 0.72f), 0.04f, 0.48f, "T_alien_organic_E"), "AlienBiomass", "T_alien_organic_MSO");
             BiomeSurface(BiomeMaterial("Alien Organic B", "AlienBiomass", "T_alien_organic_02_D", "T_alien_organic_02_N", new Color(0.78f, 0.58f, 0.92f), 0.03f, 0.5f, "T_alien_organic_02_E"), "AlienBiomass", "T_alien_organic_02_MSO");
             BiomeSurface(BiomeMaterial("Alien Facility", "AlienBiomass", "T_modules_D", "T_modules_N", new Color(0.74f, 0.82f, 0.83f), 0.62f, 0.55f, "T_modules_E"), "AlienBiomass", "T_modules_MSO");
@@ -1031,20 +998,18 @@ namespace RoadRage.UnityRemake
 			var tonemap = volume.profile.Add<Tonemapping>();
 			tonemap.mode.Override(TonemappingMode.ACES);
 
-			// A clear road read matters more than cinematic smear at driving speed.
-			// The previous blur and heavy vignette made every biome appear muddier and
-			// amplified the already-strong palette tints.
+			// Slight motion blur sells speed and hides the low-poly silhouettes.
 			var motionBlur = volume.profile.Add<MotionBlur>();
-			motionBlur.intensity.Override(0f);
-			motionBlur.active = false;
+			motionBlur.intensity.Override(0.18f);
+			motionBlur.clamp.Override(0.04f);
 
-			colorAdjustments = volume.profile.Add<ColorAdjustments>();
-			colorAdjustments.postExposure.Override(mood.PostExposure + weather.ExposureAdd);
-			colorAdjustments.contrast.Override(4f);
-			colorAdjustments.saturation.Override(-32f);
+			var color = volume.profile.Add<ColorAdjustments>();
+			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd);
+			color.contrast.Override(6f);
+			color.saturation.Override(-2f);
 			var vignette = volume.profile.Add<Vignette>();
-			vignette.intensity.Override(0.08f);
-			vignette.smoothness.Override(0.55f);
+			vignette.intensity.Override(0.20f);
+			vignette.smoothness.Override(0.68f);
         }
 
         private struct BiomeMood
@@ -1710,13 +1675,6 @@ namespace RoadRage.UnityRemake
                             ? materials["City Car Parts"]
                             : material;
                     }
-                    else if (pack == "DemoCity")
-                    {
-                        if (sourceName.Contains("highrise")) assigned[i] = materials["Demo City Highrise"];
-                        else if (sourceName.Contains("window") || sourceName.Contains("interior")) assigned[i] = materials["Demo City Windows"];
-                        else if (sourceName.Contains("base")) assigned[i] = materials["Demo City Base"];
-                        else assigned[i] = materials["Demo City Facade"];
-                    }
                     else if (pack == "Synthwave")
                     {
                         assigned[i] = sourceName.Contains("window") || sourceName.Contains("neon") || sourceName.Contains("light")
@@ -2157,7 +2115,6 @@ namespace RoadRage.UnityRemake
         /// new rather than a cut.
         private const float ZoneBlend = 320f;
         private Light sunLight;
-        private ColorAdjustments colorAdjustments;
 
         private void BlendZoneLighting(float playerDistance)
         {
@@ -2180,11 +2137,6 @@ namespace RoadRage.UnityRemake
                 sunLight.color = here.SunColor;
                 sunLight.intensity = here.SunIntensity * weather.SunScale;
             }
-            // Keep post exposure in step with the live biome blend.  Previously it was
-            // locked to the biome that happened to be loaded first, causing some zones to
-            // look blown out and artificially saturated by comparison.
-            if (colorAdjustments != null)
-                colorAdjustments.postExposure.Override(here.PostExposure + weather.ExposureAdd);
             ApplyRoadWetness(Mathf.Clamp01(here.RoadWetness + weather.WetnessAdd));
         }
 
@@ -2442,8 +2394,32 @@ namespace RoadRage.UnityRemake
                 if (junk != null) NormalizeModelHeight(junk, Random.Range(0.8f, 1.6f), 0.05f);
                 return junk;
             });
-            // Use the new Demo City factory and office kit. The old Synthwave towers were
-            // Z-up assets rescaled into every row, which produced the warped white slabs.
+            // Three building rows: frontage tight to the pavement, a mid block, then a
+            // skyline. One row left the district reading as a road through a field.
+            ScatterBand(15f, 20f, 30f, (d, l, s) =>
+            {
+                var front = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                    materials["City Concrete"], d, l, 0f,
+                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Street Frontage");
+                if (front != null) NormalizeModelHeight(front, Random.Range(14f, 30f));
+                return front;
+            });
+            ScatterBand(18f, 34f, 62f, (d, l, s) =>
+            {
+                var back = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                    materials["City Concrete"], d, l, 0f,
+                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Back Block");
+                if (back != null) NormalizeModelHeight(back, Random.Range(22f, 48f));
+                return back;
+            });
+            ScatterBand(20f, 66f, 130f, (d, l, s) =>
+            {
+                var far = PlaceBiomeModelOnRoad("Synthwave", $"Buildings/SM_building_{Random.Range(1, 13):00}",
+                    materials["City Concrete"], d, l, 0f,
+                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "District Skyline");
+                if (far != null) NormalizeModelHeight(far, Random.Range(34f, 78f));
+                return far;
+            });
             ScatterBand(22f, 15.5f, 17.5f, (d, l, s) =>
                 CreateStreetLampAt(d, l, new Color(1f, 0.86f, 0.62f)));
             ScatterBand(26f, 15f, 18f, (d, l, s) =>
@@ -2453,11 +2429,14 @@ namespace RoadRage.UnityRemake
                 if (fence != null) NormalizeModelSpan(fence, 9f, 0f);
                 return fence;
             });
-            var districtBuildings = new[]
+            var cityBuildings = new[]
             {
-                "factory_building_small", "factory_building_big", "mid_house_1", "mid_house_2", "mid_house_3",
-                "office_building_1_with_base", "office_building_2_with_base",
-                "office_building_3_with_base", "office_building_4_with_base"
+                "Buildings/SM_building_01", "Buildings/SM_building_02", "Buildings/SM_building_03",
+                "Buildings/SM_building_04", "Buildings/SM_building_05", "Buildings/SM_building_06",
+                "Buildings/SM_building_07", "Buildings/SM_building_08", "Buildings/SM_building_09",
+                "Buildings/SM_building_10", "Buildings/SM_building_11", "Buildings/SM_building_12",
+                "Buildings/SM_dome_building", "Buildings/SM_dome_building_02",
+                "Buildings/SM_dome_building_03", "Buildings/SM_dome_building_04"
             };
 
             // Derived from absolute distance so the pattern stays aligned to the world
@@ -2468,27 +2447,27 @@ namespace RoadRage.UnityRemake
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
-                    var nearName = districtBuildings[BlockHash(block, side) % districtBuildings.Length];
+                    var nearName = cityBuildings[BlockHash(block, side) % cityBuildings.Length];
                     var nearDistance = z + (side > 0 ? 5f : -4f) + Random.Range(-3f, 3f);
-                    var nearBuilding = PlaceBiomeModelOnRoad("DemoCity", nearName, materials["Demo City Facade"],
+                    var nearBuilding = PlaceBiomeModelOnRoad("Synthwave", nearName, materials["City Concrete"],
                         nearDistance, side * Random.Range(22f, 29f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "Tire District Frontage");
+                        new Vector3(-90f, facing, 0f), Vector3.one, "City Frontage");
                     if (nearBuilding != null)
                     {
-                        NormalizeModelHeight(nearBuilding, Random.Range(10f, 22f));
+                        NormalizeModelHeight(nearBuilding, Random.Range(14f, 34f));
                         EnsureOutsideRoad(nearBuilding, nearDistance, side);
                     }
 
                     if (block % 2 == 0)
                     {
-                        var farName = districtBuildings[BlockHash(block, side * 3) % districtBuildings.Length];
+                        var farName = cityBuildings[BlockHash(block, side * 3) % cityBuildings.Length];
                         var farDistance = z + Random.Range(-12f, 12f);
-                        var skyline = PlaceBiomeModelOnRoad("DemoCity", farName, materials["Demo City Highrise"],
+                        var skyline = PlaceBiomeModelOnRoad("Synthwave", farName, materials["City Concrete"],
                             farDistance, side * Random.Range(44f, 62f), 0f,
-                            new Vector3(0f, facing, 0f), Vector3.one, "Tire District Back Block");
+                            new Vector3(-90f, facing, 0f), Vector3.one, "City Skyline");
                         if (skyline != null)
                         {
-                            NormalizeModelHeight(skyline, Random.Range(20f, 40f));
+                            NormalizeModelHeight(skyline, Random.Range(28f, 56f));
                             EnsureOutsideRoad(skyline, farDistance, side);
                         }
                     }
@@ -4773,11 +4752,11 @@ namespace RoadRage.UnityRemake
             }
 
             if (sideSwipe)
-                SpeedKph = Mathf.Max(8f, SpeedKph - 5f * absorb);
+                SpeedKph = Mathf.Max(28f, SpeedKph - 22f * absorb);
             else if (traffic.IsWreck || traffic.Direction < 0f)
-                SpeedKph = Mathf.Max(8f, SpeedKph - 14f * absorb);
+                SpeedKph = Mathf.Min(SpeedKph, Mathf.Lerp(12f, SpeedKph, 1f - absorb));
             else
-                SpeedKph = Mathf.Max(8f, SpeedKph - 9f * absorb);
+                SpeedKph = Mathf.Min(SpeedKph, Mathf.Lerp(38f, SpeedKph, 1f - absorb));
 
             var pushDirection = Mathf.Abs(lateralGap) < 0.05f ? -1f : -Mathf.Sign(lateralGap);
             lateralVelocity += pushDirection * (sideSwipe ? 3.5f : 6.5f) * absorb;
@@ -4829,6 +4808,14 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
+            if (RoadRageTakedownDirector.Instance != null &&
+                RoadRageTakedownDirector.Instance.TryGetTakedownCameraPose(out var takedownPos, out var takedownRot))
+            {
+                transform.position = Vector3.Lerp(transform.position, takedownPos, Time.unscaledDeltaTime * 12f);
+                transform.rotation = Quaternion.Slerp(transform.rotation, takedownRot, Time.unscaledDeltaTime * 12f);
+                return;
+            }
+
             if (target == null) return;
 			var desired = target.position + target.up * Rise - target.forward * Trail;
             var next = (transform.position - desired).sqrMagnitude > 2500f

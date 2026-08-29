@@ -17,11 +17,6 @@ namespace RoadRage.UnityRemake
         private AudioSource crashSource;
         private AudioLowPassFilter lowPassFilter;
 
-        private AudioClip[] crashHeavyClips;
-        private AudioClip[] crashMetalClips;
-        private AudioClip crashGlassClip;
-        private AudioClip crashCinematicClip;
-
         private float targetLowPassCutoff = 22000f;
         private float currentLowPassCutoff = 22000f;
 
@@ -65,25 +60,6 @@ namespace RoadRage.UnityRemake
             lowPassFilter = gameObject.AddComponent<AudioLowPassFilter>();
             lowPassFilter.cutoffFrequency = 22000f;
 
-            // Load authentic recorded impact SFX
-            crashHeavyClips = new[]
-            {
-                Resources.Load<AudioClip>("Audio/Impacts/CrashHeavy_01"),
-                Resources.Load<AudioClip>("Audio/Impacts/CrashHeavy_02"),
-                Resources.Load<AudioClip>("Audio/Impacts/CrashHeavy_03"),
-                Resources.Load<AudioClip>("Audio/Impacts/CrashStrong_01")
-            };
-
-            crashMetalClips = new[]
-            {
-                Resources.Load<AudioClip>("Audio/Impacts/CrashMetal_01"),
-                Resources.Load<AudioClip>("Audio/Impacts/CrashMetal_02"),
-                Resources.Load<AudioClip>("Audio/Impacts/CrashMetal_03")
-            };
-
-            crashGlassClip = Resources.Load<AudioClip>("Audio/Impacts/CrashGlass_01");
-            crashCinematicClip = Resources.Load<AudioClip>("Audio/Impacts/CrashCinematic_01");
-
             // Engine loop starts silent (no continuous buzz at rest)
             engineSource.volume = 0f;
         }
@@ -122,47 +98,8 @@ namespace RoadRage.UnityRemake
         public void PlayCrash(float severity = 1f)
         {
             if (crashSource == null) return;
-
-            var volume = Mathf.Clamp(severity, 0.45f, 1f);
-            crashSource.pitch = Random.Range(0.92f, 1.08f);
-
-            // 1. Heavy Chassis Impact / Body Crunch
-            var playedHeavy = false;
-            if (crashHeavyClips != null)
-            {
-                var validClips = System.Array.FindAll(crashHeavyClips, c => c != null);
-                if (validClips.Length > 0)
-                {
-                    crashSource.PlayOneShot(validClips[Random.Range(0, validClips.Length)], volume);
-                    playedHeavy = true;
-                }
-            }
-            if (!playedHeavy)
-            {
-                crashSource.PlayOneShot(CreateProceduralCrashClip(), volume);
-            }
-
-            // 2. Metallic tearing and crunch layer
-            if (crashMetalClips != null)
-            {
-                var validMetal = System.Array.FindAll(crashMetalClips, c => c != null);
-                if (validMetal.Length > 0)
-                {
-                    crashSource.PlayOneShot(validMetal[Random.Range(0, validMetal.Length)], volume * 0.75f);
-                }
-            }
-
-            // 3. Crystalline Shattered Glass cascade
-            if (crashGlassClip != null && severity > 0.4f)
-            {
-                crashSource.PlayOneShot(crashGlassClip, volume * 0.65f);
-            }
-
-            // 4. Sub-bass cinematic boom on severe takedowns
-            if (crashCinematicClip != null && severity >= 0.75f)
-            {
-                crashSource.PlayOneShot(crashCinematicClip, volume * 0.85f);
-            }
+            crashSource.pitch = Random.Range(0.85f, 1.15f);
+            crashSource.PlayOneShot(CreateProceduralCrashClip(), Mathf.Clamp01(severity));
         }
 
         public void PlayTakedownStinger()

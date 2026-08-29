@@ -405,10 +405,6 @@ namespace RoadRage.UnityRemake
 
             if (targetPlayer == null) return;
 
-            // Save the pre-move road coordinate so traffic resolution can catch a cruiser
-            // that crosses an entire vehicle during a long frame.
-            var previousRoadDistance = RoadDistance;
-
             // 2. Tactical Pursuit AI Navigation based on Formation Slot
             var maxSpeed = 138f + unitHeatLevel * 14f;
             float targetLane;
@@ -507,14 +503,6 @@ namespace RoadRage.UnityRemake
                     targetPlayer.LateralOffset += signLat * overlapLat * 0.3f;
                 }
             }
-
-            // Police are kinematic, transform-driven vehicles.  Without this explicit pass
-            // they are absent from TrafficCarController's anti-penetration system and can
-            // visually pass through civilian cars.
-            TrafficCarController.ResolvePoliceTrafficCollisions(this, previousRoadDistance);
-
-            var roadHalfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset, -roadHalfWidth, roadHalfWidth);
 
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
             transform.rotation = RoadPath.Rotation(RoadDistance);
