@@ -34,6 +34,16 @@ namespace RoadRage.UnityRemake
             noiseSeed = Random.value * 100f;
         }
 
+        private ArcadeCarController playerController;
+
+        public void BindPlayer(Transform player)
+        {
+            if (player != null)
+            {
+                playerController = player.GetComponent<ArcadeCarController>();
+            }
+        }
+
         private void Update()
         {
             // Exponential trauma decay
@@ -44,10 +54,7 @@ namespace RoadRage.UnityRemake
 
             // High-speed speed rumble (subtle continuous vibration when driving >175 km/h)
             var speedRumble = 0f;
-            var player = RoadRageBootstrap.World != null && RoadRageBootstrap.World.Car != null 
-                ? RoadRageBootstrap.World.Car.GetComponent<ArcadeCarController>() 
-                : null;
-            var playerSpeed = player != null ? player.SpeedKph : 0f;
+            var playerSpeed = playerController != null ? playerController.SpeedKph : 0f;
             if (playerSpeed > 175f)
             {
                 var factor = Mathf.Clamp01((playerSpeed - 175f) / 75f);

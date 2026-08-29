@@ -4302,7 +4302,8 @@ namespace RoadRage.UnityRemake
             var skidDirector = cameraObject.AddComponent<RoadRageSkidmarkDirector>();
             skidDirector.BindPlayer(car);
 
-            cameraObject.AddComponent<RoadRageHapticsDirector>();
+            var hapticsDirector = cameraObject.AddComponent<RoadRageHapticsDirector>();
+            hapticsDirector.BindPlayer(car);
 
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
