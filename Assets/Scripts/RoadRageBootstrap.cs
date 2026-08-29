@@ -321,13 +321,30 @@ namespace RoadRage.UnityRemake
                 Destroy(vol.gameObject);
             }
 
-            // 4. Destroy old traffic
+            // 2. Clear old ramps & traffic
+            if (RoadRageRampDirector.Instance != null)
+            {
+                RoadRageRampDirector.Instance.ClearRamps();
+            }
+
+            // 3. Destroy old traffic & leaked root objects
             var oldTraffic = GameObject.Find("Living Highway Traffic");
             if (oldTraffic != null)
             {
                 oldTraffic.name = "OldTraffic_Disposed";
                 oldTraffic.SetActive(false);
                 Destroy(oldTraffic);
+            }
+
+            foreach (var go in FindObjectsByType<GameObject>(FindObjectsInactive.Include))
+            {
+                if (go == null || go == gameObject || go.transform.parent != null) continue;
+                var n = go.name;
+                if (n.Contains("Garage") || n.Contains("Biomass") || n.Contains("Accident") || n.Contains("Chunk") || n.Contains("StuntRamp"))
+                {
+                    go.SetActive(false);
+                    Destroy(go);
+                }
             }
 
             // 5. Rebuild materials dictionary for new biome
@@ -1116,7 +1133,7 @@ namespace RoadRage.UnityRemake
         {
             var item = Adopt(GameObject.CreatePrimitive(type));
             item.name = name;
-            item.transform.SetParent(parent);
+            if (parent != null) item.transform.SetParent(parent);
             item.transform.position = position;
             item.transform.localScale = scale;
             var primitiveRenderer = item.GetComponent<Renderer>();

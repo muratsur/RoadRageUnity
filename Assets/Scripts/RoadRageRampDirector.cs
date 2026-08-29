@@ -23,11 +23,13 @@ namespace RoadRage.UnityRemake
         private Transform playerCar;
         private ArcadeCarController playerController;
 
-        private const float RampSpacing = 420f;
-        private const float RampHalfLength = 4.2f;
+        private const float RampSpacing = 650f;
+        private const float RampHalfLength = 4.8f;
         private const float RampHalfWidth = 2.4f;
 
-        private Material rampMat;
+        private Material rampDeckMat;
+        private Material rampFrameMat;
+        private Material hazardMat;
 
         private void Awake()
         {
@@ -37,13 +39,30 @@ namespace RoadRage.UnityRemake
                 return;
             }
             Instance = this;
-            InitializeRampMaterial();
+            InitializeRampMaterials();
         }
 
-        private void InitializeRampMaterial()
+        private void InitializeRampMaterials()
         {
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard") ?? Shader.Find("Sprites/Default");
-            rampMat = new Material(shader) { color = new Color(0.95f, 0.75f, 0.12f, 1f) };
+            rampDeckMat = new Material(shader)
+            {
+                color = new Color(0.20f, 0.21f, 0.24f, 1f) // Dark asphalt ramp deck
+            };
+            rampDeckMat.SetFloat("_Metallic", 0.15f);
+            rampDeckMat.SetFloat("_Smoothness", 0.35f);
+
+            rampFrameMat = new Material(shader)
+            {
+                color = new Color(0.85f, 0.65f, 0.08f, 1f) // Yellow industrial steel frame
+            };
+            rampFrameMat.SetFloat("_Metallic", 0.75f);
+            rampFrameMat.SetFloat("_Smoothness", 0.65f);
+
+            hazardMat = new Material(shader)
+            {
+                color = new Color(1.0f, 0.35f, 0.05f, 1f) // Safety Orange Cones
+            };
         }
 
         public void BindPlayer(Transform player)
@@ -55,17 +74,40 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        public void ClearRamps()
+        {
+            for (var i = activeRamps.Count - 1; i >= 0; i--)
+            {
+                if (activeRamps[i].RampObject != null)
+                {
+                    Destroy(activeRamps[i].RampObject);
+                }
+            }
+            activeRamps.Clear();
+        }
+
+        private void OnDestroy()
+        {
+            ClearRamps();
+        }
+
         private void Update()
         {
-            if (playerController == null || GameState.RunOver) return;
+            if (playerController == null || GameState.RunOver || 
+                (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive))
+            {
+                return;
+            }
 
             var playerDist = playerController.RoadDistance;
 
-            // Maintain procedural ramps ahead of the player
-            var nextRampDist = Mathf.Floor(playerDist / RampSpacing) * RampSpacing + RampSpacing;
-            for (var d = nextRampDist - RampSpacing; d <= playerDist + 800f; d += RampSpacing)
+            // Only spawn ramps on highway straightaways starting at 450m ahead
+            var firstRampDist = 450f;
+            var nextRampDist = Mathf.Floor((playerDist - firstRampDist) / RampSpacing) * RampSpacing + firstRampDist + RampSpacing;
+
+            for (var d = nextRampDist - RampSpacing; d <= playerDist + 750f; d += RampSpacing)
             {
-                if (d < playerDist - 150f) continue;
+                if (d < playerDist + 80f) continue;
                 if (!HasRampNear(d))
                 {
                     SpawnRampAt(d);
@@ -76,7 +118,7 @@ namespace RoadRage.UnityRemake
             for (var i = activeRamps.Count - 1; i >= 0; i--)
             {
                 var r = activeRamps[i];
-                if (r.RoadDistance < playerDist - 200f || r.RoadDistance > playerDist + 1200f)
+                if (r.RoadDistance < playerDist - 120f || r.RoadDistance > playerDist + 1200f)
                 {
                     if (r.RampObject != null) Destroy(r.RampObject);
                     activeRamps.RemoveAt(i);
@@ -91,7 +133,7 @@ namespace RoadRage.UnityRemake
         {
             for (var i = 0; i < activeRamps.Count; i++)
             {
-                if (Mathf.Abs(activeRamps[i].RoadDistance - dist) < 50f) return true;
+                if (Mathf.Abs(activeRamps[i].RoadDistance - dist) < 60f) return true;
             }
             return false;
         }
@@ -101,21 +143,38 @@ namespace RoadRage.UnityRemake
             var halfW = RoadPath.HalfWidthAt(dist);
             // Alternate left and right outer lanes
             var laneSign = ((int)(dist / RampSpacing) % 2 == 0) ? -1f : 1f;
-            var latOffset = (halfW - 3.8f) * laneSign;
+            var latOffset = (halfW - 3.4f) * laneSign;
 
             var rampObj = new GameObject($"StuntRamp_{dist:0}");
-            rampObj.transform.SetParent(transform, false);
+            // CRITICAL: Must be root world object, NEVER parented to camera!
+            rampObj.transform.SetParent(null, false);
 
             var mf = rampObj.AddComponent<MeshFilter>();
             var mr = rampObj.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = rampMat;
+            mr.sharedMaterials = new Material[] { rampDeckMat, rampFrameMat };
 
             mf.sharedMesh = CreateWedgeRampMesh();
 
-            var worldPos = RoadPath.Point(dist, latOffset, 0.1f);
+            var worldPos = RoadPath.Point(dist, latOffset, 0.05f);
             var worldRot = RoadPath.Rotation(dist);
             rampObj.transform.position = worldPos;
             rampObj.transform.rotation = worldRot;
+
+            // Spawn warning hazard cones leading up to the ramp
+            for (var c = 0; c < 3; c++)
+            {
+                var coneDist = dist - 18f + c * 5.5f;
+                var conePos = RoadPath.Point(coneDist, latOffset + (c % 2 == 0 ? -1.1f : 1.1f), 0.35f);
+                var cone = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+                cone.name = "Ramp Warning Cone";
+                cone.transform.SetParent(rampObj.transform, false);
+                cone.transform.position = conePos;
+                cone.transform.localScale = new Vector3(0.25f, 0.35f, 0.25f);
+                var cr = cone.GetComponent<Renderer>();
+                if (cr != null) cr.sharedMaterial = hazardMat;
+                var cc = cone.GetComponent<Collider>();
+                if (cc != null) Destroy(cc);
+            }
 
             activeRamps.Add(new RampData
             {
@@ -134,48 +193,47 @@ namespace RoadRage.UnityRemake
 
             var verts = new Vector3[]
             {
-                // Ramp wedge top face
+                // Ramp wedge top asphalt deck (Submesh 0)
                 new Vector3(-hw, 0.05f, -hl),
                 new Vector3(hw, 0.05f, -hl),
                 new Vector3(-hw, height, hl),
                 new Vector3(hw, height, hl),
 
-                // Back drop face
+                // Back drop face (Submesh 1 - Yellow Frame)
                 new Vector3(-hw, height, hl),
                 new Vector3(hw, height, hl),
                 new Vector3(-hw, 0.05f, hl),
                 new Vector3(hw, 0.05f, hl),
 
-                // Left side
+                // Left side (Submesh 1 - Yellow Frame)
                 new Vector3(-hw, 0.05f, -hl),
                 new Vector3(-hw, height, hl),
                 new Vector3(-hw, 0.05f, hl),
 
-                // Right side
+                // Right side (Submesh 1 - Yellow Frame)
                 new Vector3(hw, 0.05f, -hl),
                 new Vector3(hw, 0.05f, hl),
                 new Vector3(hw, height, hl)
             };
 
-            var tris = new int[]
+            var deckTris = new int[]
             {
-                // Top
                 0, 2, 1,
-                1, 2, 3,
+                1, 2, 3
+            };
 
-                // Back
+            var frameTris = new int[]
+            {
                 4, 5, 6,
                 5, 7, 6,
-
-                // Left
                 8, 9, 10,
-
-                // Right
                 11, 12, 13
             };
 
+            m.subMeshCount = 2;
             m.vertices = verts;
-            m.triangles = tris;
+            m.SetTriangles(deckTris, 0);
+            m.SetTriangles(frameTris, 1);
             m.RecalculateNormals();
             return m;
         }
@@ -195,11 +253,11 @@ namespace RoadRage.UnityRemake
                 var dLat = Mathf.Abs(pLat - r.LateralOffset);
 
                 // Check if car is climbing ramp slope and reaching launch lip
-                if (dDist >= -RampHalfLength && dDist <= RampHalfLength + 1.5f && dLat < RampHalfWidth + 0.5f)
+                if (dDist >= -RampHalfLength && dDist <= RampHalfLength + 1.8f && dLat < RampHalfWidth + 0.4f)
                 {
                     if (pSpeed > 35f)
                     {
-                        var launchPower = 12f + (pSpeed / 200f) * 8.5f;
+                        var launchPower = 13.5f + (pSpeed / 200f) * 7.5f;
                         playerController.LaunchAirtime(launchPower);
 
                         if (RoadRageAudioBridge.Instance != null)
