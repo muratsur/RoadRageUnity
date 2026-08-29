@@ -142,24 +142,13 @@ namespace RoadRage.UnityRemake
             }
 
             // Calculate drift & tire slip intensity
-            var latVel = Mathf.Abs(playerController.LateralVelocity);
-            var speed = playerController.SpeedKph;
-            var is1left = UnityEngine.InputSystem.Keyboard.current != null && (UnityEngine.InputSystem.Keyboard.current.aKey.isPressed || UnityEngine.InputSystem.Keyboard.current.leftArrowKey.isPressed);
-            var is1right = UnityEngine.InputSystem.Keyboard.current != null && (UnityEngine.InputSystem.Keyboard.current.dKey.isPressed || UnityEngine.InputSystem.Keyboard.current.rightArrowKey.isPressed);
             var isBraking = UnityEngine.InputSystem.Keyboard.current != null && UnityEngine.InputSystem.Keyboard.current.sKey.isPressed;
+            var speed = playerController.SpeedKph;
 
             driftIntensity = 0f;
-            if (latVel > 1.4f && speed > 25f)
+            if (isBraking && speed > 70f)
             {
-                driftIntensity = Mathf.Clamp01((latVel - 1.4f) / 4.5f);
-            }
-            if ((is1left || is1right) && speed > 80f)
-            {
-                driftIntensity = Mathf.Max(driftIntensity, 0.50f);
-            }
-            if (isBraking && speed > 55f)
-            {
-                driftIntensity = Mathf.Max(driftIntensity, 0.75f);
+                driftIntensity = 0.55f;
             }
             if (GameState.IsAftertouchActive)
             {
@@ -173,13 +162,13 @@ namespace RoadRage.UnityRemake
             }
 
             // Audio & Smoke VFX & Trails
-            var isSkidding = driftIntensity > 0.18f;
+            var isSkidding = driftIntensity > 0.40f;
             SetTrailsEmitting(isSkidding);
             SetSmokeActive(isSkidding);
 
             if (RoadRageAudioBridge.Instance != null)
             {
-                RoadRageAudioBridge.Instance.PlayTireSqueal(driftIntensity);
+                RoadRageAudioBridge.Instance.PlayTireSqueal(GameState.IsAftertouchActive ? 0.75f : 0f);
             }
         }
 

@@ -2940,24 +2940,28 @@ namespace RoadRage.UnityRemake
 			{
             Random.InitState(88214 ^ chunkSeed);
 
-            // Ground-level pavement market stalls and shelves along the sidewalk
-            ScatterBand(12f, 13.5f, 16.5f, (d, l, s) =>
+            // 1. Ground-level pavement night markets, dim sum carts, food stalls
+            ScatterBand(11f, 13.5f, 17f, (d, l, s) =>
             {
-                var stall = PlaceBiomeModelOnRoad("HongKong",
-                    Random.value > 0.5f ? "Markets/SM_market_empty" : "Markets/SM_shelf",
-                    materials["Kowloon Market Detail"], d, l, 0.14f,
-                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Pavement Stall");
-                if (stall != null) NormalizeModelHeight(stall, Random.Range(1.6f, 2.4f), 0.14f);
+                var pick = Random.value;
+                var model = pick > 0.65f ? "Markets/SM_market_cover_01"
+                          : pick > 0.45f ? "Food_market/SM_food_market_01"
+                          : pick > 0.25f ? "Markets/SM_market_02"
+                          : "Markets/SM_shelf";
+                var mat = pick > 0.5f ? materials["Kowloon Food"] : materials["Kowloon Market Detail"];
+                var stall = PlaceBiomeModelOnRoad("HongKong", model, mat, d, l, 0.14f,
+                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one * 1.15f, "Pavement Night Market Stall");
+                if (stall != null) NormalizeModelHeight(stall, Random.Range(1.8f, 2.6f), 0.14f);
                 return stall;
             });
 
-            // Back tenements behind frontages
-            ScatterBand(16f, 26f, 52f, (d, l, s) =>
+            // 2. Deep background Victoria Harbour skyscrapers behind frontages
+            ScatterBand(16f, 32f, 68f, (d, l, s) =>
             {
                 var back = PlaceBiomeModelOnRoad("HongKong", $"Buildings_modules/SM_building_0{Random.Range(1, 6)}",
                     materials["Kowloon Skyline"], d, l, 0f,
-                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one, "Back Tenement");
-                if (back != null) NormalizeModelHeight(back, Random.Range(22f, 42f));
+                    new Vector3(-90f, s > 0 ? -90f : 90f, 0f), Vector3.one * 1.35f, "Back Tenement");
+                if (back != null) NormalizeModelHeight(back, Random.Range(32f, 65f));
                 return back;
             });
 
@@ -2979,62 +2983,124 @@ namespace RoadRage.UnityRemake
             };
             var signGlow = new[]
             {
-                new Color(1f, 0.24f, 0.20f), new Color(1f, 0.72f, 0.18f),
-                new Color(0.28f, 1f, 0.72f), new Color(1f, 0.32f, 0.62f)
+                new Color(1f, 0.18f, 0.15f), // Crimson Red
+                new Color(1f, 0.75f, 0.12f), // Golden Amber
+                new Color(0.18f, 1f, 0.72f), // Jade Green
+                new Color(1f, 0.22f, 0.75f)  // Hong Kong Magenta
             };
 
             for (var z = SegBegin(0f, 18f); z < segEnd; z += 18f)
             {
                 var block = Mathf.FloorToInt(z / 18f);
+
+                // Monumental Chinatown Cultural Pagoda Gateway across the roadway
+                if (block % 8 == 0)
+                {
+                    BuildChinatownGateway(z + 8f);
+                }
+
+                // Overhead tangled electrical wires across the road with hanging red lanterns
+                if (block % 4 == 2)
+                {
+                    var wire = PlaceBiomeModelOnRoad("HongKong", "Wire/SM_wire_long_01", materials["City Asphalt Trim"],
+                        z + 5f, 0f, 7.2f, new Vector3(-90f, 0f, 0f), Vector3.one, "Overhead Street Wire", false);
+                    for (var w = -1; w <= 1; w += 2)
+                    {
+                        var lanternPos = RoadPath.Point(z + 5f, w * 5.2f, 6.4f);
+                        PrimitiveOnRoad(PrimitiveType.Sphere, "Street Lantern", z + 5f, w * 5.2f, 6.4f,
+                            new Vector3(0.6f, 0.8f, 0.6f), materials["Kowloon Sign"], Vector3.zero, false);
+                        CreateLocalLight(lanternPos, new Color(1f, 0.25f, 0.15f), 3.5f, 6.5f);
+                    }
+                }
+
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
                     var facadeDistance = z + (side > 0 ? 2f : -3f);
-                    var facadeLateral = side * Random.Range(22.5f, 28.5f);
+                    var facadeLateral = side * Random.Range(21.5f, 26.5f);
                     var facade = PlaceBiomeModelOnRoad("HongKong", facades[BlockHash(block, side) % facades.Length],
                         materials["Kowloon Building"], facadeDistance, facadeLateral, 0f,
-                        new Vector3(-90f, facing, 0f), Vector3.one, "Kowloon Facade");
+                        new Vector3(-90f, facing, 0f), Vector3.one * 1.15f, "Kowloon Facade");
                     if (facade != null)
                     {
-                        NormalizeModelHeight(facade, Random.Range(20f, 38f));
+                        NormalizeModelHeight(facade, Random.Range(26f, 48f));
+
+                        // Attach rooftop air-con condenser units
+                        PlaceBiomeModelOnRoad("HongKong", "Aircon/SM_aircon_01", materials["Kowloon Street Detail"],
+                            facadeDistance + 1.5f, side * 19.2f, Random.Range(8f, 16f),
+                            new Vector3(-90f, facing, 0f), Vector3.one, "Facade Aircon", false);
                     }
 
                     var moduleDistance = z + (side > 0 ? 10f : -9f);
                     var module = PlaceBiomeModelOnRoad("HongKong", streetModules[BlockHash(block, side * 3) % streetModules.Length],
-                        materials["Kowloon Street Detail"], moduleDistance, side * Random.Range(21.0f, 25.0f), 0f,
-                        new Vector3(-90f, facing, 0f), Vector3.one, "Kowloon Street Front");
+                        materials["Kowloon Street Detail"], moduleDistance, side * Random.Range(20.0f, 24.0f), 0f,
+                        new Vector3(-90f, facing, 0f), Vector3.one * 1.1f, "Kowloon Street Front");
                     if (module != null)
                     {
-                        NormalizeModelHeight(module, Random.Range(10f, 18f));
+                        NormalizeModelHeight(module, Random.Range(12f, 22f));
                     }
 
-                    // Wall-mounted glowing neon signs attached to building facades
+                    // Cantilevered glowing Chinese neon signs overhanging the sidewalk & street
+                    var signDistance = z + (side > 0 ? 6f : -5f);
+                    var sign = PlaceBiomeModelOnRoad("HongKong", signs[BlockHash(block, side * 5) % signs.Length],
+                        materials["Kowloon Sign"], signDistance, side * 18.5f, Random.Range(4.5f, 8.5f),
+                        new Vector3(-90f, facing, 0f), Vector3.one * 1.3f, "Wall Mounted Neon Sign", false);
+                    if (sign != null)
+                    {
+                        NormalizeModelHeight(sign, Random.Range(3.2f, 5.2f), 5.5f);
+                        CreateLocalLight(RoadPath.Point(signDistance, side * 17.5f, 5.5f),
+                            signGlow[BlockHash(block, side * 7) % signGlow.Length], 5.5f, 10f);
+                    }
+
+                    // Cultural red and gold sidewalk street lamps
                     if (block % 2 == 0)
                     {
-                        var signDistance = z + (side > 0 ? 6f : -5f);
-                        var sign = PlaceBiomeModelOnRoad("HongKong", signs[BlockHash(block, side * 5) % signs.Length],
-                            materials["Kowloon Sign"], signDistance, side * 19.5f, 4.5f,
-                            new Vector3(-90f, facing, 0f), Vector3.one, "Wall Mounted Neon Sign", false);
-                        if (sign != null)
-                        {
-                            NormalizeModelHeight(sign, Random.Range(2.4f, 4.0f), 4.5f);
-                            CreateLocalLight(RoadPath.Point(signDistance, side * 18.5f, 4.8f),
-                                signGlow[BlockHash(block, side * 7) % signGlow.Length], 4f, 8f);
-                        }
-                    }
-
-                    // Grounded sidewalk street lamps
-                    if (block % 3 == 0)
-                    {
                         var lamp = PlaceBiomeModelOnRoad("HongKong", "Lamp/SM_lamp", materials["Kowloon Props"],
-                            z + 14f, side * 18.2f, 0.14f, new Vector3(-90f, facing, 0f), Vector3.one, "Street Lamp");
+                            z + 13f, side * 17.8f, 0.14f, new Vector3(-90f, facing, 0f), Vector3.one * 1.15f, "Street Lamp");
                         if (lamp != null)
                         {
-                            NormalizeModelHeight(lamp, 6.4f, 0.14f);
-                            CreateLocalLight(RoadPath.Point(z + 14f, side * 18.2f, 5.5f), new Color(1f, 0.82f, 0.55f), 4f, 8f);
+                            NormalizeModelHeight(lamp, 6.8f, 0.14f);
+                            CreateLocalLight(RoadPath.Point(z + 13f, side * 17.8f, 6.0f), new Color(1f, 0.78f, 0.35f), 5.5f, 9.5f);
                         }
                     }
                 }
+            }
+        }
+
+        private void BuildChinatownGateway(float distance)
+        {
+            var halfW = RoadPath.HalfWidthAt(distance) + 2.5f;
+
+            // Red / Gold lacquer pillars on left and right sidewalks
+            PrimitiveOnRoad(PrimitiveType.Cylinder, "Gateway Left Pillar", distance, -halfW, 4.2f,
+                new Vector3(0.95f, 4.2f, 0.95f), materials["Car Orange"], Vector3.zero, false);
+            PrimitiveOnRoad(PrimitiveType.Cylinder, "Gateway Right Pillar", distance, halfW, 4.2f,
+                new Vector3(0.95f, 4.2f, 0.95f), materials["Car Orange"], Vector3.zero, false);
+
+            // Cultural Red Cross Beam
+            PrimitiveOnRoad(PrimitiveType.Cube, "Gateway Cross Beam", distance, 0f, 7.8f,
+                new Vector3(halfW * 2f + 2.8f, 0.95f, 1.5f), materials["Car Orange"], Vector3.zero, false);
+
+            // Golden ornamental pagoda eave roof
+            PrimitiveOnRoad(PrimitiveType.Cube, "Gateway Pagoda Eave", distance, 0f, 8.8f,
+                new Vector3(halfW * 2f + 4.5f, 0.65f, 2.8f), materials["Yellow Paint"], Vector3.zero, false);
+
+            // Upper tier roof
+            PrimitiveOnRoad(PrimitiveType.Cube, "Gateway Upper Pagoda Eave", distance, 0f, 9.9f,
+                new Vector3(halfW * 1.2f, 0.55f, 2.2f), materials["Yellow Paint"], Vector3.zero, false);
+
+            // Central Chinese character illuminated plaque
+            PlaceBiomeModelOnRoad("HongKong", "Signs/SM_sign_05", materials["Kowloon Sign"],
+                distance, 0f, 8.0f, new Vector3(-90f, 0f, 0f), Vector3.one * 1.4f, "Chinatown Gateway Plaque", false);
+
+            // Hanging illuminated red lanterns
+            for (var l = -2; l <= 2; l++)
+            {
+                var lat = l * (halfW * 0.42f);
+                var lanternPos = RoadPath.Point(distance, lat, 6.8f);
+                PrimitiveOnRoad(PrimitiveType.Sphere, "Hanging Red Lantern", distance, lat, 6.8f,
+                    new Vector3(0.65f, 0.85f, 0.65f), materials["Kowloon Sign"], Vector3.zero, false);
+                CreateLocalLight(lanternPos, new Color(1f, 0.18f, 0.12f), 4.5f, 7.5f);
             }
         }
 

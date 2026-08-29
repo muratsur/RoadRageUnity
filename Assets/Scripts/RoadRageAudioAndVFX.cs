@@ -153,7 +153,7 @@ namespace RoadRage.UnityRemake
             UpdateEngineSound(speedKmh, isAccelerating, isDriving);
             UpdateTurboBlowOff(speedKmh, isAccelerating, isDriving);
             UpdateNitroVFXAndAudio(isAccelerating, speedKmh, isDriving);
-            UpdateTireEffects(isBraking, isSteeringHard, speedKmh, isDriving);
+            UpdateTireEffects(isBraking, speedKmh, isDriving);
 
             previousSpeedKmh = speedKmh;
             previousThrottle = isAccelerating ? 1f : 0f;
@@ -221,19 +221,18 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        private void UpdateTireEffects(bool isBraking, bool isSteeringHard, float speedKmh, bool isDriving)
+        private void UpdateTireEffects(bool isBraking, float speedKmh, bool isDriving)
         {
-            var drifting = isDriving && (isBraking || isSteeringHard) && speedKmh > 30f;
+            var hardBraking = isDriving && isBraking && speedKmh > 60f;
 
-            // Tire Burnout & Drift Smoke
-            SetParticleEmission(leftTireSmoke, drifting);
-            SetParticleEmission(rightTireSmoke, drifting);
+            // Tire Burnout & Smoke only on emergency braking
+            SetParticleEmission(leftTireSmoke, hardBraking);
+            SetParticleEmission(rightTireSmoke, hardBraking);
 
-            // Play tire skid only during actual drifts
-            if (drifting && Time.time > nextTirePlayTime && tireSource != null && tireSkidClip != null)
+            if (hardBraking && Time.time > nextTirePlayTime && tireSource != null && tireSkidClip != null)
             {
-                nextTirePlayTime = Time.time + 0.5f;
-                tireSource.PlayOneShot(tireSkidClip, 0.30f);
+                nextTirePlayTime = Time.time + 0.6f;
+                tireSource.PlayOneShot(tireSkidClip, 0.22f);
             }
         }
 
