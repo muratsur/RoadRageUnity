@@ -4506,7 +4506,7 @@ namespace RoadRage.UnityRemake
         public float HalfWidth { get; internal set; } = 1.3f;
         public float DistanceKm => totalDistance / 1000f;
         public float RoadDistance { get; internal set; } = 5f;
-        public float LateralOffset { get; private set; } = -2.25f;
+        public float LateralOffset { get; internal set; } = -2.25f;
         /// Trailer autopilot. Hunts violators, avoids innocents and holds the throttle
         /// open so recorded footage shows the actual mechanic rather than someone
         /// fumbling arrow keys. Enabled with -cinematic.
