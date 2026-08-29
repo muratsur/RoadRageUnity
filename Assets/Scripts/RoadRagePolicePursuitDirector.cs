@@ -22,7 +22,7 @@ namespace RoadRage.UnityRemake
         private Camera mainCamera;
 
         private readonly List<PoliceVehicleController> activePolice = new();
-        private readonly List<GameObject> activeRoadblocks = new();
+        public IReadOnlyList<PoliceVehicleController> ActivePolice => activePolice;
 
         private float spawnTimer;
         private float roadblockTimer;
@@ -66,52 +66,31 @@ namespace RoadRage.UnityRemake
 
         public void AddHeat(float amount)
         {
-            if (GameState.RunOver) return;
-
             HeatProgress += amount;
-            while (HeatProgress >= 1f && HeatLevel < 5)
+            if (HeatProgress >= 1f && HeatLevel < 5)
             {
-                HeatProgress -= 1f;
                 HeatLevel++;
-                OnHeatLevelUp();
-            }
-        }
-
-        private void OnHeatLevelUp()
-        {
-            GameState.Show($"🚨 HEAT LEVEL {HeatLevel}! POLICE DISPATCHED!");
-            if (RoadRageAudioBridge.Instance != null)
-            {
-                RoadRageAudioBridge.Instance.PlayTakedownStinger();
-            }
-            if (sirenSource != null && !sirenSource.isPlaying)
-            {
-                sirenSource.Play();
+                HeatProgress = 0f;
+                GameState.Show($"🚨 HEAT LEVEL INCREASED: LEVEL {HeatLevel}!");
+                if (RoadRageAudioBridge.Instance != null)
+                {
+                    RoadRageAudioBridge.Instance.PlayPoliceSirenStinger();
+                }
             }
         }
 
         private void Update()
         {
-            if (playerCar == null || playerController == null || GameState.RunOver)
-            {
-                if (sirenSource != null && sirenSource.isPlaying) sirenSource.Stop();
-                return;
-            }
+            if (playerController == null) return;
 
-            // 1. Accumulate Heat based on speed and driving infractions
-            if (playerController.SpeedKph > 125f)
+            // 1. Audio Siren Dynamic Volume Modulation
+            if (activePolice.Count > 0)
             {
-                AddHeat(Time.deltaTime * 0.045f);
-            }
-            if (playerController.LateralOffset < -1.5f) // Oncoming lane driving
-            {
-                AddHeat(Time.deltaTime * 0.065f);
-            }
+                if (sirenSource != null && !sirenSource.isPlaying)
+                {
+                    sirenSource.Play();
+                }
 
-            // Manage siren volume based on closest active cop
-            if (activePolice.Count > 0 && sirenSource != null)
-            {
-                if (!sirenSource.isPlaying) sirenSource.Play();
                 var closestDist = float.MaxValue;
                 foreach (var cop in activePolice)
                 {
@@ -167,17 +146,20 @@ namespace RoadRage.UnityRemake
 
         private void SpawnPoliceUnit()
         {
+            var slot = activePolice.Count;
             var spawnBehind = Random.value > 0.35f;
-            var distOffset = spawnBehind ? -45f : 65f;
+            var distOffset = spawnBehind ? -45f - slot * 8f : 65f + slot * 12f;
             var spawnDist = RoadPath.Wrap(playerController.RoadDistance + distOffset);
-            var spawnLane = spawnBehind ? playerController.LateralOffset + (Random.value > 0.5f ? 3.5f : -3.5f) : (Random.value > 0.5f ? 2.5f : -2.5f);
+            var laneSign = (slot % 2 == 0) ? -1f : 1f;
+            var halfW = RoadPath.HalfWidthAt(spawnDist);
+            var spawnLane = Mathf.Clamp(playerController.LateralOffset + laneSign * (3.4f + slot * 0.6f), -halfW + 1.8f, halfW - 1.8f);
 
-            var copObj = new GameObject($"Police Unit [{HeatLevel} Star]");
+            var copObj = new GameObject($"Police Unit [{HeatLevel} Star - Slot {slot}]");
             copObj.transform.position = RoadPath.Point(spawnDist, spawnLane, 0.4f);
             copObj.transform.rotation = RoadPath.Rotation(spawnDist);
 
             var cop = copObj.AddComponent<PoliceVehicleController>();
-            cop.Initialize(playerController, HeatLevel, spawnDist, spawnLane);
+            cop.Initialize(playerController, HeatLevel, spawnDist, spawnLane, slot);
             activePolice.Add(cop);
         }
 
@@ -249,9 +231,10 @@ namespace RoadRage.UnityRemake
     /// </summary>
     public sealed class PoliceVehicleController : MonoBehaviour
     {
-        public float RoadDistance { get; private set; }
-        public float LateralOffset { get; private set; }
-        public float SpeedKph { get; private set; } = 95f;
+        public float RoadDistance { get; internal set; }
+        public float LateralOffset { get; internal set; }
+        public float SpeedKph { get; internal set; } = 95f;
+        public int SlotIndex { get; private set; }
 
         private ArcadeCarController targetPlayer;
         private int unitHeatLevel;
@@ -260,12 +243,13 @@ namespace RoadRage.UnityRemake
         private float strobeTimer;
         private bool isWrecked;
 
-        public void Initialize(ArcadeCarController player, int heat, float startDist, float startLane)
+        public void Initialize(ArcadeCarController player, int heat, float startDist, float startLane, int slot = 0)
         {
             targetPlayer = player;
             unitHeatLevel = heat;
             RoadDistance = startDist;
             LateralOffset = startLane;
+            SlotIndex = slot;
             SpeedKph = player != null ? player.SpeedKph + 12f : 105f;
 
             BuildPoliceMesh();
@@ -420,25 +404,43 @@ namespace RoadRage.UnityRemake
 
             if (targetPlayer == null) return;
 
-            // 2. Pursuit AI Navigation
-            var distToPlayer = targetPlayer.RoadDistance - RoadDistance;
-            var maxSpeed = 135f + unitHeatLevel * 14f;
+            // 2. Tactical Pursuit AI Navigation based on Formation Slot
+            var maxSpeed = 138f + unitHeatLevel * 14f;
+            float targetLane;
+            float targetDistDelta;
 
-            // Match speed and chase player down
-            if (distToPlayer > 8f) // Behind player: accelerate
+            switch (SlotIndex % 3)
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * 32f);
+                case 0: // Left Flank Interceptor
+                    targetLane = targetPlayer.LateralOffset - 3.4f;
+                    targetDistDelta = 0.5f;
+                    break;
+                case 1: // Right Flank Interceptor
+                    targetLane = targetPlayer.LateralOffset + 3.4f;
+                    targetDistDelta = 0.5f;
+                    break;
+                default: // Rear Pursuer / Rammer
+                    targetLane = targetPlayer.LateralOffset;
+                    targetDistDelta = -7.5f;
+                    break;
             }
-            else if (distToPlayer < -12f) // Ahead of player: slow down to block
+
+            var distToTarget = (targetPlayer.RoadDistance + targetDistDelta) - RoadDistance;
+            if (distToTarget > 5f) // Behind target position: accelerate
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph - 15f, Time.deltaTime * 40f);
+                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * 36f);
             }
-            else // Alongside: match speed and execute aggressive PIT maneuver
+            else if (distToTarget < -7f) // Ahead of target position: slow down
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph, Time.deltaTime * 24f);
-                var pitDir = Mathf.Sign(targetPlayer.LateralOffset - LateralOffset);
-                LateralOffset = Mathf.MoveTowards(LateralOffset, targetPlayer.LateralOffset + pitDir * 0.4f, Time.deltaTime * 5.5f);
+                SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph - 18f, Time.deltaTime * 42f);
             }
+            else // In position: match player speed and execute tactical pressure
+            {
+                SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph + (distToTarget * 2.5f), Time.deltaTime * 28f);
+            }
+
+            // Steer smoothly towards assigned tactical formation lane
+            LateralOffset = Mathf.MoveTowards(LateralOffset, targetLane, Time.deltaTime * 6.5f);
 
             var forwardTravel = SpeedKph / 3.6f * Time.deltaTime;
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
@@ -446,10 +448,65 @@ namespace RoadRage.UnityRemake
             var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
 
+            // 3. Continuous Inter-Police Anti-Penetration Resolution (Never merge or sink into each other!)
+            if (RoadRagePolicePursuitDirector.Instance != null)
+            {
+                var allCops = RoadRagePolicePursuitDirector.Instance.ActivePolice;
+                for (var i = allCops.Count - 1; i >= 0; i--)
+                {
+                    var other = allCops[i];
+                    if (other == null || other == this) continue;
+
+                    var deltaDist = other.RoadDistance - RoadDistance;
+                    var reach = 4.8f;
+                    if (Mathf.Abs(deltaDist) > reach) continue;
+
+                    var deltaLat = other.LateralOffset - LateralOffset;
+                    var latReach = 2.4f;
+                    if (Mathf.Abs(deltaLat) > latReach) continue;
+
+                    // Physical pushback between cop cruisers
+                    var overlapDist = reach - Mathf.Abs(deltaDist);
+                    if (deltaDist > 0f)
+                    {
+                        other.RoadDistance += overlapDist * 0.5f;
+                        RoadDistance -= overlapDist * 0.5f;
+                    }
+                    else
+                    {
+                        RoadDistance += overlapDist * 0.5f;
+                        other.RoadDistance -= overlapDist * 0.5f;
+                    }
+
+                    var overlapLat = latReach - Mathf.Abs(deltaLat);
+                    var latSign = Mathf.Sign(deltaLat);
+                    if (Mathf.Abs(latSign) < 0.01f) latSign = (SlotIndex > other.SlotIndex ? 1f : -1f);
+                    other.LateralOffset += latSign * overlapLat * 0.55f;
+                    LateralOffset -= latSign * overlapLat * 0.55f;
+                }
+            }
+
+            // 4. Continuous Police-to-Player Anti-Penetration Resolution
+            var playerDistDelta = RoadPath.SignedDelta(RoadDistance, targetPlayer.RoadDistance);
+            var playerReachLong = 4.8f;
+            if (Mathf.Abs(playerDistDelta) < playerReachLong)
+            {
+                var playerDistLat = targetPlayer.LateralOffset - LateralOffset;
+                var playerReachLat = 2.25f;
+                if (Mathf.Abs(playerDistLat) < playerReachLat)
+                {
+                    var overlapLat = playerReachLat - Mathf.Abs(playerDistLat);
+                    var signLat = Mathf.Sign(playerDistLat);
+                    if (Mathf.Abs(signLat) < 0.01f) signLat = 1f;
+                    LateralOffset -= signLat * overlapLat * 0.7f;
+                    targetPlayer.LateralOffset += signLat * overlapLat * 0.3f;
+                }
+            }
+
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
             transform.rotation = RoadPath.Rotation(RoadDistance);
 
-            // 3. Check for collision with player car
+            // 5. Check for collision with player car
             var playerPos = targetPlayer.transform.position;
             var copPos = transform.position;
             var dist = Vector3.Distance(playerPos, copPos);
