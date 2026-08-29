@@ -162,7 +162,8 @@ namespace RoadRage.UnityRemake
         {
             Daily.TryGetValue(key, out var current);
             Daily[key] = isMax ? Mathf.Max(current, amount) : current + amount;
-            SaveMissions();
+            // SaveMissions() removed: writing to disk on every hit caused lag spikes.
+            // Daily progress is now written once, when the run ends.
         }
 
         /// Damage from a bad decision. Returns true when the run ends on this hit.
@@ -182,6 +183,7 @@ namespace RoadRage.UnityRemake
             // Cash scales with how far the run got, so a better truck paying for longer
             // survival is the progression: run -> cash -> garage -> longer run.
             LastRunCash = AwardCash(Mathf.Clamp01(RunDistanceKm / 8f), RunStartScore);
+            SaveMissions();
             Save();
         }
 
@@ -381,6 +383,7 @@ namespace RoadRage.UnityRemake
 
         public static CrashEffects Create(Material puffMaterial)
         {
+            if (Active != null) return Active;
             var root = new GameObject("Crash Effects");
             var effects = root.AddComponent<CrashEffects>();
             Active = effects;

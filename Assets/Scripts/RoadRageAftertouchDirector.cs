@@ -86,6 +86,7 @@ namespace RoadRage.UnityRemake
 
             // 3. Wreck Spark/Flame Trail
             var trailGo = new GameObject("Aftertouch Wreck Trail FX");
+            trailGo.SetActive(false);
             trailGo.transform.SetParent(transform, false);
             flameTrailFx = trailGo.AddComponent<ParticleSystem>();
             var tMain = flameTrailFx.main;
@@ -360,6 +361,18 @@ namespace RoadRage.UnityRemake
                 RoadRageAudioBridge.Instance.SetSlowMotionFilter(false);
 
             GameState.EndRun();
+
+             if (!GameState.IsAftertouchActive) return;
+            GameState.IsAftertouchActive = false;
+            if (flameTrailFx != null) flameTrailFx.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+    // NEW: stop the wreck trail so it doesn't glow forever
+    var trail = GameObject.Find("Aftertouch Wreck Trail FX");
+    if (trail != null)
+    {
+        var ps = trail.GetComponentInChildren<ParticleSystem>(true);
+        if (ps != null) ps.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+    }
         }
     }
 }
