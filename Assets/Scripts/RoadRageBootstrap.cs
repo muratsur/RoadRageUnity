@@ -4971,11 +4971,21 @@ namespace RoadRage.UnityRemake
         }
 
         private static Texture2D cardGlassTex;
+        private static Texture2D statCardGlassTex;
         private static Texture2D pillBadgeTex;
         private static Texture2D goldBadgeTex;
         private static Texture2D topBarTex;
+        private static Texture2D greenBtnTex;
+        private static Texture2D blueBtnTex;
+        private static Texture2D orangeBtnTex;
+        private static Texture2D rowEvenTex;
+        private static Texture2D rowOddTex;
+        private static Texture2D rowHighlightTex;
 
-        private static Texture2D CreateRoundedTexture(int w, int h, int r, Color fill, Color border, float borderWidth = 1.5f)
+        private static Font arcadeFont;
+        private static Font titleFont;
+
+        private static Texture2D CreateAntiAliasedBox(int w, int h, int r, Color fill, Color border, float borderWidth = 1.0f, float topSheen = 0.08f)
         {
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
             tex.wrapMode = TextureWrapMode.Clamp;
@@ -4992,13 +5002,53 @@ namespace RoadRage.UnityRemake
                 }
                 else if (dist > r - borderWidth)
                 {
-                    var t = Mathf.Clamp01(dist - (r - borderWidth));
-                    tex.SetPixel(x, y, Color.Lerp(border, Color.clear, t * 0.5f));
+                    var edgeAlpha = Mathf.Clamp01(r - dist);
+                    tex.SetPixel(x, y, Color.Lerp(Color.clear, border, edgeAlpha));
                 }
                 else
                 {
-                    var grad = Mathf.Lerp(1.08f, 0.92f, (float)y / h);
-                    tex.SetPixel(x, y, fill * grad);
+                    var col = fill;
+                    if (y > h * 0.5f && topSheen > 0f)
+                    {
+                        var frac = (float)(y - h * 0.5f) / (h * 0.5f);
+                        col += new Color(topSheen * frac, topSheen * frac, topSheen * frac, 0f);
+                    }
+                    tex.SetPixel(x, y, col);
+                }
+            }
+            tex.Apply();
+            return tex;
+        }
+
+        private static Texture2D CreateBeveledButton(int w, int h, int r, Color topCol, Color botCol, Color border)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false);
+            tex.wrapMode = TextureWrapMode.Clamp;
+            tex.filterMode = FilterMode.Bilinear;
+            for (var y = 0; y < h; y++)
+            for (var x = 0; x < w; x++)
+            {
+                var dx = Mathf.Max(r - x, 0, x - (w - 1 - r));
+                var dy = Mathf.Max(r - y, 0, y - (h - 1 - r));
+                var dist = Mathf.Sqrt(dx * dx + dy * dy);
+                if (dist > r)
+                {
+                    tex.SetPixel(x, y, Color.clear);
+                }
+                else if (dist > r - 1.2f)
+                {
+                    tex.SetPixel(x, y, border);
+                }
+                else
+                {
+                    var vert = (float)y / h;
+                    var col = Color.Lerp(botCol, topCol, vert);
+                    if (y > h * 0.55f)
+                    {
+                        var sheen = Mathf.Lerp(0f, 0.18f, (y - h * 0.55f) / (h * 0.45f));
+                        col += new Color(sheen, sheen, sheen, 0f);
+                    }
+                    tex.SetPixel(x, y, col);
                 }
             }
             tex.Apply();
@@ -5028,27 +5078,43 @@ namespace RoadRage.UnityRemake
         private void EnsureStyles()
         {
             if (titleStyle != null) { ApplyUiScale(); return; }
-            titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 27, fontStyle = FontStyle.Bold };
+
+            arcadeFont = Resources.Load<Font>("Fonts/RobotoCondensed-Bold");
+            titleFont = Resources.Load<Font>("Fonts/Play-Bold");
+            if (arcadeFont == null) arcadeFont = titleFont;
+            if (titleFont == null) titleFont = arcadeFont;
+
+            titleStyle = new GUIStyle(GUI.skin.label) { font = titleFont, fontSize = 27, fontStyle = FontStyle.Bold };
             titleStyle.normal.textColor = Color.white;
-            readoutStyle = new GUIStyle(GUI.skin.label) { fontSize = 18, fontStyle = FontStyle.Bold };
+            readoutStyle = new GUIStyle(GUI.skin.label) { font = arcadeFont, fontSize = 18, fontStyle = FontStyle.Bold };
             readoutStyle.normal.textColor = new Color(0.62f, 1f, 0.72f);
-            buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
+            buttonStyle = new GUIStyle(GUI.skin.button) { font = titleFont, fontSize = 22, fontStyle = FontStyle.Bold };
             pickerTitleStyle = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
+                font = titleFont, fontSize = 34, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
             };
             pickerTitleStyle.normal.textColor = Color.white;
-            lockedStyle = new GUIStyle(GUI.skin.button) { fontSize = 17, fontStyle = FontStyle.Bold };
+            lockedStyle = new GUIStyle(GUI.skin.button) { font = titleFont, fontSize = 17, fontStyle = FontStyle.Bold };
             lockedStyle.normal.textColor = new Color(0.55f, 0.55f, 0.60f);
             lockedStyle.hover.textColor = lockedStyle.normal.textColor;
+
             dimTexture = new Texture2D(1, 1);
             dimTexture.SetPixel(0, 0, new Color(0.02f, 0.025f, 0.045f, 0.93f));
             dimTexture.Apply();
 
-            cardGlassTex = CreateRoundedTexture(128, 128, 14, new Color(0.04f, 0.06f, 0.10f, 0.88f), new Color(0.2f, 0.65f, 1f, 0.65f), 1.5f);
-            pillBadgeTex = CreateRoundedTexture(128, 64, 16, new Color(0.06f, 0.08f, 0.14f, 0.90f), new Color(0.3f, 0.5f, 0.8f, 0.45f), 1.2f);
-            goldBadgeTex = CreateRoundedTexture(128, 64, 16, new Color(0.18f, 0.12f, 0.04f, 0.92f), new Color(1f, 0.78f, 0.2f, 0.85f), 1.5f);
-            topBarTex = CreateHeaderTexture(64, 64, new Color(0.03f, 0.04f, 0.07f, 0.92f), new Color(0.2f, 0.55f, 0.95f, 0.35f));
+            // High-Resolution Premium Assets
+            cardGlassTex = CreateAntiAliasedBox(256, 256, 18, new Color(0.04f, 0.06f, 0.11f, 0.94f), new Color(0.25f, 0.65f, 1f, 0.80f), 1.2f, 0.06f);
+            statCardGlassTex = CreateAntiAliasedBox(256, 256, 14, new Color(0.03f, 0.04f, 0.08f, 0.90f), new Color(0.35f, 0.55f, 0.85f, 0.45f), 1.0f, 0.04f);
+            goldBadgeTex = CreateBeveledButton(256, 128, 16, new Color(0.32f, 0.22f, 0.06f, 0.95f), new Color(0.16f, 0.10f, 0.02f, 0.95f), new Color(1f, 0.82f, 0.25f, 0.85f));
+            pillBadgeTex = CreateAntiAliasedBox(256, 128, 16, new Color(0.06f, 0.09f, 0.16f, 0.92f), new Color(0.3f, 0.55f, 0.9f, 0.50f), 1.0f, 0.05f);
+            topBarTex = CreateHeaderTexture(128, 64, new Color(0.04f, 0.05f, 0.09f, 0.94f), new Color(0.2f, 0.60f, 1f, 0.45f));
+
+            greenBtnTex = CreateBeveledButton(256, 128, 14, new Color(0.15f, 0.85f, 0.45f), new Color(0.05f, 0.55f, 0.25f), new Color(0.4f, 1f, 0.65f));
+            blueBtnTex = CreateBeveledButton(256, 128, 14, new Color(0.15f, 0.65f, 1f), new Color(0.05f, 0.35f, 0.75f), new Color(0.45f, 0.85f, 1f));
+            orangeBtnTex = CreateBeveledButton(256, 128, 14, new Color(1f, 0.65f, 0.15f), new Color(0.75f, 0.35f, 0.05f), new Color(1f, 0.85f, 0.4f));
+            rowEvenTex = CreateAntiAliasedBox(256, 64, 8, new Color(0.06f, 0.08f, 0.14f, 0.75f), Color.clear, 0f, 0.02f);
+            rowOddTex = CreateAntiAliasedBox(256, 64, 8, new Color(0.04f, 0.05f, 0.10f, 0.75f), Color.clear, 0f, 0.02f);
+            rowHighlightTex = CreateAntiAliasedBox(256, 64, 8, new Color(0.18f, 0.14f, 0.04f, 0.90f), new Color(1f, 0.82f, 0.22f, 0.85f), 1.2f, 0.08f);
 
             ApplyUiScale();
         }
@@ -5685,16 +5751,16 @@ namespace RoadRage.UnityRemake
             var h = Screen.height;
             var safe = Screen.safeArea;
 
-            var leftPad = Mathf.Max(safe.x, 32f);
-            var rightPad = Mathf.Max(w - (safe.x + safe.width), 32f);
-            var topPad = Mathf.Max(h - (safe.y + safe.height), 16f);
-            var botPad = Mathf.Max(safe.y, 16f);
+            var leftPad = Mathf.Max(safe.x, 24f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 24f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 12f);
+            var botPad = Mathf.Max(safe.y, 12f);
 
             var usableW = w - leftPad - rightPad;
             var usableH = h - topPad - botPad;
-            var s = Mathf.Clamp(usableH / 650f, 0.48f, 1.15f);
+            var s = Mathf.Clamp(usableH / 600f, 0.55f, 1.35f);
 
-            // Submit score to Leaderboard once per run
+            // Auto-submit score to Leaderboard once per run
             if (!hasSubmittedRunScore)
             {
                 hasSubmittedRunScore = true;
@@ -5707,9 +5773,9 @@ namespace RoadRage.UnityRemake
 
             GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
 
-            // Modal Glass Panel
-            var modalW = Mathf.Clamp(usableW * 0.76f, 320f, 640f);
-            var modalH = Mathf.Clamp(usableH * 0.88f, 280f, 480f);
+            // Main AAA Modal Frame
+            var modalW = Mathf.Clamp(usableW * 0.88f, 480f, 880f);
+            var modalH = Mathf.Clamp(usableH * 0.92f, 320f, 580f);
             var modalX = w * 0.5f - modalW * 0.5f;
             var modalY = h * 0.5f - modalH * 0.5f;
 
@@ -5718,79 +5784,121 @@ namespace RoadRage.UnityRemake
             else
                 GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
 
-            // Top Header: CRASH SUMMARY
-            var headerH = Mathf.Clamp(modalH * 0.14f, 34f, 50f);
-            var headerTitleStyle = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, 0.35f, 0.35f) } };
-            GUI.Label(new Rect(modalX, modalY + 6f, modalW, headerH), "💥 RUN OVER • CRASH SUMMARY 💥", headerTitleStyle);
+            // Top Header: CRASH REPORT
+            var headerH = Mathf.Clamp(modalH * 0.13f, 36f, 54f);
+            var bannerStyle = new GUIStyle(pickerTitleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(26 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.35f, 0.25f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, headerH * 0.65f), "💥 CRASH REPORT  •  RUN CONCLUDED 💥", bannerStyle);
 
-            var contentY = modalY + headerH + 6f;
-            var colW = (modalW - 36f) * 0.5f;
+            var subBannerStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(12 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.7f, 0.85f, 1f, 0.8f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + headerH * 0.65f + 4f, modalW, headerH * 0.35f), "ALL BOUNTIES & CASH PERSISTED TO GARAGE VAULT", subBannerStyle);
 
-            // Left Column: Score, Takedowns, Pileup
-            var isNewHigh = GameState.Score >= GameState.HighScore && GameState.Score > 0;
-            var scoreCardH = Mathf.Clamp(modalH * 0.42f, 85f, 155f);
-            var leftCardX = modalX + 14f;
+            var contentY = modalY + headerH + 8f;
+            var colSpacing = 16f * s;
+            var colW = (modalW - 40f - colSpacing) * 0.5f;
 
-            if (pillBadgeTex != null)
-                GUI.DrawTexture(new Rect(leftCardX, contentY, colW, scoreCardH), pillBadgeTex);
+            // --- LEFT CARD: HERO SCORE & COMBAT STATS ---
+            var leftCardX = modalX + 20f;
+            var cardH = Mathf.Clamp(modalH * 0.44f, 110f, 190f);
 
-            var statLineH = scoreCardH / 3.8f;
-            var scoreStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(14 * s), normal = { textColor = isNewHigh ? new Color(1f, 0.85f, 0.2f) : Color.white } };
-            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f, colW - 20f, statLineH),
-                $"🏆 SCORE: {GameState.Score:N0}{(isNewHigh ? " ⭐ RECORD!" : "")}", scoreStyle);
+            if (statCardGlassTex != null)
+                GUI.DrawTexture(new Rect(leftCardX, contentY, colW, cardH), statCardGlassTex);
 
-            var statStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s) };
-            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f + statLineH, colW - 20f, statLineH),
-                $"⭐ TAKEDOWNS: {GameState.Takedowns} (+{GameState.AftertouchTakedowns} AT)", statStyle);
-            GUI.Label(new Rect(leftCardX + 10f, contentY + 6f + statLineH * 2, colW - 20f, statLineH),
-                $"💥 PILEUP DAMAGE: ${GameState.PileupDamage:N0}", statStyle);
+            var isNewRecord = GameState.Score >= GameState.HighScore && GameState.Score > 0;
+            var scoreHeadStyle = new GUIStyle(readoutStyle) { font = arcadeFont, fontSize = Mathf.RoundToInt(12 * s), normal = { textColor = new Color(1f, 0.8f, 0.3f) } };
+            GUI.Label(new Rect(leftCardX + 16f, contentY + 8f, colW - 32f, 20f), "FINAL RUN SCORE", scoreHeadStyle);
 
-            // Right Column: Distance, Car, Cash Banked
-            var rightCardX = modalX + modalW - colW - 14f;
-            if (goldBadgeTex != null)
-                GUI.DrawTexture(new Rect(rightCardX, contentY, colW, scoreCardH), goldBadgeTex);
+            var bigScoreStyle = new GUIStyle(titleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(28 * s),
+                normal = { textColor = isNewRecord ? new Color(1f, 0.90f, 0.2f) : Color.white }
+            };
+            var scoreText = $"{GameState.Score:N0}";
+            if (isNewRecord) scoreText += "  ⭐ RECORD!";
+            GUI.Label(new Rect(leftCardX + 16f, contentY + 26f * s + 4f, colW - 32f, 38f * s), scoreText, bigScoreStyle);
+
+            // Combat mini metrics
+            var combatRowY = contentY + 68f * s;
+            var metricStyle = new GUIStyle(readoutStyle) { font = arcadeFont, fontSize = Mathf.RoundToInt(13 * s), normal = { textColor = Color.white } };
+            GUI.Label(new Rect(leftCardX + 16f, combatRowY, colW - 32f, 22f * s), $"💥 TAKEDOWNS: {GameState.Takedowns}  (+{GameState.AftertouchTakedowns} AFTERTOUCH)", metricStyle);
+            GUI.Label(new Rect(leftCardX + 16f, combatRowY + 22f * s, colW - 32f, 22f * s), $"🚨 PILEUP WRECKAGE: ${GameState.PileupDamage:N0}", metricStyle);
+
+            // --- RIGHT CARD: CASH EARNED & VEHICLE STATS ---
+            var rightCardX = leftCardX + colW + colSpacing;
+            if (statCardGlassTex != null)
+                GUI.DrawTexture(new Rect(rightCardX, contentY, colW, cardH), statCardGlassTex);
+
+            var cashHeadStyle = new GUIStyle(readoutStyle) { font = arcadeFont, fontSize = Mathf.RoundToInt(12 * s), normal = { textColor = new Color(0.4f, 1f, 0.6f) } };
+            GUI.Label(new Rect(rightCardX + 16f, contentY + 8f, colW - 32f, 20f), "TOTAL REWARDS BANKED", cashHeadStyle);
+
+            var bigCashStyle = new GUIStyle(titleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(28 * s),
+                normal = { textColor = new Color(0.35f, 1f, 0.55f) }
+            };
+            GUI.Label(new Rect(rightCardX + 16f, contentY + 26f * s + 4f, colW - 32f, 38f * s), $"+${GameState.LastRunCash:N0}", bigCashStyle);
 
             var carSpec = GameState.CurrentCar;
-            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f, colW - 20f, statLineH),
-                $"🏎️ CAR: {carSpec.Name.ToUpper()}", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(13 * s) });
-            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f + statLineH, colW - 20f, statLineH),
-                $"🛣️ DISTANCE: {GameState.RunDistanceKm:0.00} KM", statStyle);
+            GUI.Label(new Rect(rightCardX + 16f, combatRowY, colW - 32f, 22f * s), $"🏎️ PILOT CAR: {carSpec.Name.ToUpper()}", metricStyle);
+            GUI.Label(new Rect(rightCardX + 16f, combatRowY + 22f * s, colW - 32f, 22f * s), $"🛣️ HIGHWAY DISTANCE: {GameState.RunDistanceKm:0.00} KM", metricStyle);
 
-            var cashStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(14 * s), normal = { textColor = new Color(0.35f, 1f, 0.55f) } };
-            GUI.Label(new Rect(rightCardX + 10f, contentY + 6f + statLineH * 2, colW - 20f, statLineH),
-                $"💰 CASH: +${GameState.LastRunCash:N0}", cashStyle);
+            // --- DRIVER XP / VIP RANK PROGRESSION ---
+            var rankY = contentY + cardH + 10f;
+            var rankH = Mathf.Clamp(modalH * 0.12f, 32f, 48f);
+            var rankCardW = modalW - 40f;
 
-            // Driver VIP Rank Progress Bar
-            var rankY = contentY + scoreCardH + 8f;
-            var rankH = Mathf.Clamp(modalH * 0.11f, 26f, 38f);
+            if (statCardGlassTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f, rankY, rankCardW, rankH), statCardGlassTex);
+
             var rank = Mathf.Max(1, GameState.Takedowns / 5 + 1);
             var xpFrac = Mathf.Clamp01((GameState.Takedowns % 5) / 5f);
 
-            var rankStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(12 * s), alignment = TextAnchor.MiddleLeft };
-            GUI.Label(new Rect(modalX + 16f, rankY, modalW * 0.38f, rankH), $"👑 VIP PILOT • LVL {rank}", rankStyle);
+            var rankTitleStyle = new GUIStyle(titleStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s), alignment = TextAnchor.MiddleLeft, normal = { textColor = new Color(1f, 0.82f, 0.25f) } };
+            GUI.Label(new Rect(modalX + 34f, rankY, rankCardW * 0.35f, rankH), $"👑 VIP PILOT • RANK {rank}", rankTitleStyle);
 
-            var barX = modalX + modalW * 0.38f;
-            var barW = modalW * 0.58f;
-            var barRect = new Rect(barX, rankY + rankH * 0.25f, barW, rankH * 0.5f);
-            GUI.DrawTexture(barRect, dimTexture);
+            var barX = modalX + 34f + rankCardW * 0.35f;
+            var barW = rankCardW * 0.58f;
+            var barH = rankH * 0.44f;
+            var barY = rankY + (rankH - barH) * 0.5f;
+
+            GUI.DrawTexture(new Rect(barX, barY, barW, barH), dimTexture);
             var prevGUIColor = GUI.color;
             GUI.color = new Color(1f, 0.78f, 0.2f);
-            GUI.DrawTexture(new Rect(barRect.x, barRect.y, barRect.width * xpFrac, barRect.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(barX, barY, barW * xpFrac, barH), Texture2D.whiteTexture);
             GUI.color = prevGUIColor;
 
-            // Action Buttons
-            var btnRowY = rankY + rankH + 10f;
-            var btnH = Mathf.Clamp(modalH * 0.14f, 36f, 48f);
-            var btnSpacing = 6f * s;
-            var btnW = (modalW - 32f - btnSpacing * 3) / 4f;
+            var xpLabelStyle = new GUIStyle(readoutStyle) { font = arcadeFont, fontSize = Mathf.RoundToInt(11 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
+            GUI.Label(new Rect(barX, barY, barW, barH), $"{Mathf.RoundToInt(xpFrac * 100)}% TO RANK {rank + 1}", xpLabelStyle);
 
-            var actionBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
+            // --- ACTION BUTTONS DOCK ---
+            var btnRowY = rankY + rankH + 12f;
+            var btnH = Mathf.Clamp(modalH * 0.15f, 42f, 56f);
+            var btnSpacing = 10f * s;
+            var btnW = (modalW - 40f - btnSpacing * 3) / 4f;
 
-            // Button 1: RETRY RUN
+            var actionBtnStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s) };
+
+            // Button 1: PLAY AGAIN
             var pulse = 0.88f + 0.12f * Mathf.Sin(Time.unscaledTime * 6f);
             var oldBg = GUI.backgroundColor;
             GUI.backgroundColor = new Color(0.2f * pulse, 0.95f * pulse, 0.45f * pulse);
-            if (GUI.Button(new Rect(modalX + 16f, btnRowY, btnW, btnH), "🏁 RETRY [SPACE]", actionBtnStyle) ||
+            if (greenBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f, btnRowY, btnW, btnH), greenBtnTex);
+
+            if (GUI.Button(new Rect(modalX + 20f, btnRowY, btnW, btnH), "🏁 PLAY AGAIN [SPACE]", actionBtnStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Space))
             {
                 hasSubmittedRunScore = false;
@@ -5802,7 +5910,10 @@ namespace RoadRage.UnityRemake
             GUI.backgroundColor = oldBg;
 
             // Button 2: LEADERBOARD
-            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing), btnRowY, btnW, btnH), "🏆 BOARD [L]", actionBtnStyle) ||
+            if (blueBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f + (btnW + btnSpacing), btnRowY, btnW, btnH), blueBtnTex);
+
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing), btnRowY, btnW, btnH), "🏆 BOARD [L]", actionBtnStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.L))
             {
                 if (RoadRageLeaderboardDirector.Instance != null)
@@ -5811,7 +5922,10 @@ namespace RoadRage.UnityRemake
             }
 
             // Button 3: GARAGE
-            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing) * 2, btnRowY, btnW, btnH), "🏎️ GARAGE [G]", actionBtnStyle) ||
+            if (orangeBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f + (btnW + btnSpacing) * 2, btnRowY, btnW, btnH), orangeBtnTex);
+
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 2, btnRowY, btnW, btnH), "🏎️ GARAGE [G]", actionBtnStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.G))
             {
                 hasSubmittedRunScore = false;
@@ -5820,7 +5934,7 @@ namespace RoadRage.UnityRemake
             }
 
             // Button 4: MAIN MENU
-            if (GUI.Button(new Rect(modalX + 16f + (btnW + btnSpacing) * 3, btnRowY, btnW, btnH), "🏠 MENU [ESC]", actionBtnStyle) ||
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 3, btnRowY, btnW, btnH), "🏠 MENU [ESC]", actionBtnStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
             {
                 hasSubmittedRunScore = false;
@@ -5838,14 +5952,19 @@ namespace RoadRage.UnityRemake
             var h = Screen.height;
             var safe = Screen.safeArea;
 
-            var usableW = safe.width > 0 ? safe.width : w;
-            var usableH = safe.height > 0 ? safe.height : h;
-            var s = Mathf.Clamp(usableH / 650f, 0.48f, 1.15f);
+            var leftPad = Mathf.Max(safe.x, 24f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 24f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 12f);
+            var botPad = Mathf.Max(safe.y, 12f);
+
+            var usableW = w - leftPad - rightPad;
+            var usableH = h - topPad - botPad;
+            var s = Mathf.Clamp(usableH / 600f, 0.55f, 1.35f);
 
             GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
 
-            var modalW = Mathf.Clamp(usableW * 0.78f, 340f, 660f);
-            var modalH = Mathf.Clamp(usableH * 0.90f, 290f, 510f);
+            var modalW = Mathf.Clamp(usableW * 0.88f, 480f, 880f);
+            var modalH = Mathf.Clamp(usableH * 0.92f, 340f, 580f);
             var modalX = w * 0.5f - modalW * 0.5f;
             var modalY = h * 0.5f - modalH * 0.5f;
 
@@ -5855,86 +5974,129 @@ namespace RoadRage.UnityRemake
                 GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), dimTexture);
 
             // Title & Status
-            var titleStyleL = new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(22 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(1f, 0.82f, 0.2f) } };
-            GUI.Label(new Rect(modalX, modalY + 6f, modalW, 28f), "🏆 GLOBAL ARCADE LEADERBOARD 🏆", titleStyleL);
+            var titleStyleL = new GUIStyle(pickerTitleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(24 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.82f, 0.2f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 8f, modalW, 30f * s), "🏆 GLOBAL ARCADE LEADERBOARD 🏆", titleStyleL);
 
             var statusMsg = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.StatusMessage : "Ready";
-            var statusStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.7f, 0.85f, 1f) } };
-            GUI.Label(new Rect(modalX, modalY + 34f, modalW, 18f), statusMsg, statusStyle);
+            var statusStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(12 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.65f, 0.85f, 1f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 36f * s, modalW, 20f), statusMsg, statusStyle);
 
-            // Pilot Name Field
+            // Pilot Tag Selector Bar
             var currentName = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.PlayerName : "RoadWarrior";
             if (string.IsNullOrEmpty(tempPlayerName)) tempPlayerName = currentName;
 
-            var nameRowY = modalY + 54f;
-            GUI.Label(new Rect(modalX + 20f, nameRowY, 110f * s, 24f), "PILOT TAG:", new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(12 * s) });
-            tempPlayerName = GUI.TextField(new Rect(modalX + 20f + 110f * s, nameRowY, 140f * s, 24f), tempPlayerName, 14);
+            var nameRowY = modalY + 56f * s;
+            var nameTagW = 140f * s;
+            var nameFieldW = 180f * s;
+            var nameTotalW = nameTagW + nameFieldW;
+            var nameStartX = modalX + modalW * 0.5f - nameTotalW * 0.5f;
+
+            GUI.Label(new Rect(nameStartX, nameRowY, nameTagW, 26f), "✏️ YOUR PILOT TAG:", new GUIStyle(titleStyle) { font = titleFont, fontSize = Mathf.RoundToInt(13 * s) });
+            tempPlayerName = GUI.TextField(new Rect(nameStartX + nameTagW, nameRowY, nameFieldW, 26f), tempPlayerName, 14);
             if (tempPlayerName != currentName && RoadRageLeaderboardDirector.Instance != null)
             {
                 RoadRageLeaderboardDirector.Instance.PlayerName = tempPlayerName;
             }
 
             // Table Header
-            var tableHeaderY = nameRowY + 28f;
-            var rowH = Mathf.Clamp((modalH - 180f) / 7.2f, 22f, 34f);
-            var colRankW = 55f * s;
-            var colNameW = 130f * s;
-            var colCarW = 100f * s;
-            var colTdW = 75f * s;
-            var colScoreW = modalW - 40f - colRankW - colNameW - colCarW - colTdW;
+            var tableHeaderY = nameRowY + 34f;
+            var tableX = modalX + 24f;
+            var tableW = modalW - 48f;
+            var rowH = Mathf.Clamp((modalH - 180f) / 7.2f, 26f, 38f);
 
-            var thStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(11 * s), normal = { textColor = new Color(0.6f, 0.75f, 0.9f) } };
-            var tableX = modalX + 20f;
-            GUI.Label(new Rect(tableX, tableHeaderY, colRankW, 20f), "RANK", thStyle);
-            GUI.Label(new Rect(tableX + colRankW, tableHeaderY, colNameW, 20f), "PILOT", thStyle);
-            GUI.Label(new Rect(tableX + colRankW + colNameW, tableHeaderY, colCarW, 20f), "CAR", thStyle);
-            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW, tableHeaderY, colTdW, 20f), "WRECKS", thStyle);
-            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, tableHeaderY, colScoreW, 20f), "SCORE", new GUIStyle(thStyle) { alignment = TextAnchor.MiddleRight });
+            var colRankW = 70f * s;
+            var colNameW = 180f * s;
+            var colCarW = 140f * s;
+            var colTdW = 90f * s;
+            var colScoreW = tableW - colRankW - colNameW - colCarW - colTdW;
+
+            if (statCardGlassTex != null)
+                GUI.DrawTexture(new Rect(tableX, tableHeaderY, tableW, 26f), statCardGlassTex);
+
+            var thStyle = new GUIStyle(titleStyle) { font = titleFont, fontSize = Mathf.RoundToInt(12 * s), normal = { textColor = new Color(0.6f, 0.8f, 1f) } };
+            GUI.Label(new Rect(tableX + 8f, tableHeaderY + 2f, colRankW, 22f), "RANK", thStyle);
+            GUI.Label(new Rect(tableX + colRankW, tableHeaderY + 2f, colNameW, 22f), "PILOT", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW, tableHeaderY + 2f, colCarW, 22f), "VEHICLE", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW, tableHeaderY + 2f, colTdW, 22f), "WRECKS", thStyle);
+            GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, tableHeaderY + 2f, colScoreW - 8f, 22f), "HIGH SCORE", new GUIStyle(thStyle) { alignment = TextAnchor.MiddleRight });
 
             // Table Rows
             var entries = RoadRageLeaderboardDirector.Instance != null ? RoadRageLeaderboardDirector.Instance.CachedEntries : new List<LeaderboardEntryData>();
-            var rowStartY = tableHeaderY + 22f;
+            var rowStartY = tableHeaderY + 28f;
 
             var maxRows = Mathf.Min(7, entries.Count);
             for (int i = 0; i < maxRows; i++)
             {
                 var entry = entries[i];
-                var currentY = rowStartY + i * rowH;
+                var currentY = rowStartY + i * (rowH + 3f);
                 var isMe = entry.Username == currentName;
 
-                if (isMe && pillBadgeTex != null)
+                var bgTex = isMe ? rowHighlightTex : (i % 2 == 0 ? rowEvenTex : rowOddTex);
+                if (bgTex != null)
                 {
-                    GUI.DrawTexture(new Rect(tableX - 4f, currentY - 2f, modalW - 32f, rowH), pillBadgeTex);
+                    GUI.DrawTexture(new Rect(tableX, currentY, tableW, rowH), bgTex);
                 }
 
                 var rankBadge = entry.Rank switch
                 {
-                    1 => "🥇 #1",
-                    2 => "🥈 #2",
-                    3 => "🥉 #3",
-                    _ => $"   #{entry.Rank}"
+                    1 => "🥇  #1",
+                    2 => "🥈  #2",
+                    3 => "🥉  #3",
+                    _ => $"    #{entry.Rank}"
                 };
 
-                var rowTextStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(11 * s), normal = { textColor = isMe ? new Color(1f, 0.85f, 0.2f) : Color.white } };
-                GUI.Label(new Rect(tableX, currentY, colRankW, rowH), rankBadge, rowTextStyle);
-                GUI.Label(new Rect(tableX + colRankW, currentY, colNameW, rowH), entry.Username, rowTextStyle);
+                var rankColor = entry.Rank switch
+                {
+                    1 => new Color(1f, 0.85f, 0.25f),
+                    2 => new Color(0.85f, 0.90f, 1f),
+                    3 => new Color(0.95f, 0.65f, 0.40f),
+                    _ => Color.white
+                };
+
+                var rowTextStyle = new GUIStyle(readoutStyle)
+                {
+                    font = arcadeFont,
+                    fontSize = Mathf.RoundToInt(13 * s),
+                    alignment = TextAnchor.MiddleLeft,
+                    normal = { textColor = isMe ? new Color(1f, 0.90f, 0.25f) : rankColor }
+                };
+
+                var displayName = isMe ? $"{entry.Username}  (YOU)" : entry.Username;
+
+                GUI.Label(new Rect(tableX + 8f, currentY, colRankW, rowH), rankBadge, rowTextStyle);
+                GUI.Label(new Rect(tableX + colRankW, currentY, colNameW, rowH), displayName, rowTextStyle);
                 GUI.Label(new Rect(tableX + colRankW + colNameW, currentY, colCarW, rowH), entry.CarName, rowTextStyle);
                 GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW, currentY, colTdW, rowH), $"{entry.Takedowns} ⭐", rowTextStyle);
-                GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, currentY, colScoreW, rowH), $"{entry.Score:N0}", new GUIStyle(rowTextStyle) { alignment = TextAnchor.MiddleRight });
+                GUI.Label(new Rect(tableX + colRankW + colNameW + colCarW + colTdW, currentY, colScoreW - 8f, rowH), $"{entry.Score:N0} PTS", new GUIStyle(rowTextStyle) { alignment = TextAnchor.MiddleRight, font = titleFont });
             }
 
             // Bottom Buttons
-            var botBtnY = modalY + modalH - 42f;
-            var botBtnW = 120f * s;
-            var botBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
+            var botBtnY = modalY + modalH - 48f;
+            var botBtnW = 140f * s;
+            var botBtnStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(13 * s) };
 
-            if (GUI.Button(new Rect(modalX + modalW * 0.5f - botBtnW - 8f, botBtnY, botBtnW, 34f), "🔄 REFRESH", botBtnStyle))
+            if (blueBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + modalW * 0.5f - botBtnW - 10f, botBtnY, botBtnW, 40f), blueBtnTex);
+
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f - botBtnW - 10f, botBtnY, botBtnW, 40f), "🔄 REFRESH", botBtnStyle))
             {
                 if (RoadRageLeaderboardDirector.Instance != null)
                     RoadRageLeaderboardDirector.Instance.FetchOnlineScores();
             }
 
-            if (GUI.Button(new Rect(modalX + modalW * 0.5f + 8f, botBtnY, botBtnW, 34f), "✖ CLOSE", botBtnStyle) ||
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f + 10f, botBtnY, botBtnW, 40f), "✖ CLOSE [ESC]", botBtnStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && (Event.current.keyCode == KeyCode.Escape || Event.current.keyCode == KeyCode.L)))
             {
                 if (RoadRageLeaderboardDirector.Instance != null)
