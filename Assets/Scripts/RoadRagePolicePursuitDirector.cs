@@ -23,6 +23,7 @@ namespace RoadRage.UnityRemake
 
         private readonly List<PoliceVehicleController> activePolice = new();
         public IReadOnlyList<PoliceVehicleController> ActivePolice => activePolice;
+        private readonly List<GameObject> activeRoadblocks = new();
 
         private float spawnTimer;
         private float roadblockTimer;
@@ -74,7 +75,7 @@ namespace RoadRage.UnityRemake
                 GameState.Show($"🚨 HEAT LEVEL INCREASED: LEVEL {HeatLevel}!");
                 if (RoadRageAudioBridge.Instance != null)
                 {
-                    RoadRageAudioBridge.Instance.PlayPoliceSirenStinger();
+                    RoadRageAudioBridge.Instance.PlayTakedownStinger();
                 }
             }
         }
