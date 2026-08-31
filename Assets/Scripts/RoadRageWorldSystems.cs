@@ -100,6 +100,8 @@ namespace RoadRage.UnityRemake
     public sealed class TrafficCarController : MonoBehaviour
     {
         private static readonly List<TrafficCarController> ActiveCars = new();
+        /// Read-only view for the HUD's quarry markers and the capture self-test.
+        public static IReadOnlyList<TrafficCarController> Active => ActiveCars;
 
         public float RoadDistance { get; private set; }
         /// Signed fraction of the carriageway, -1 (outer left) to 1 (outer right).
@@ -179,8 +181,28 @@ namespace RoadRage.UnityRemake
             HalfWidth = Mathf.Max(0.4f, halfWidth);
         }
         public bool IsViolator => Violation != Offence.None && !IsWreck;
+        /// True once this violator has noticed the hunter on its tail and is running.
+        /// Drives the run speed, harder weaving and the HUD quarry marker.
+        public bool IsFleeing { get; private set; }
+        /// A staged hit-and-run offender. Runs far longer than a spooked driver - the
+        /// whole point is a personal, catchable chase - and pays a justice bonus.
+        public bool IsHitAndRunner { get; private set; }
+        /// Metres from the player, positive when this car is ahead. Feeds the HUD.
+        public float GapToPlayer => RoadDistance - PlayerDistance;
+        private const float FleeTriggerGap = 90f;
+        private const float FleeLostGap = 175f;
+        private const float FleeMaxKph = 185f;
+        private const float HitAndRunLostGap = 420f;
+        private const float HitAndRunMaxKph = 195f;
         private float weavePhase;
         private float weaveRate;
+        /// Lateral drift target while queued behind an obstruction, set by the yield
+        /// scan in Update. Zero when the road ahead is clear.
+        private float overtakeDriftTarget;
+        /// Hysteresis for the overtake: which way we are passing, and where the
+        /// blocker sits - the drift holds until the car is fully past that point.
+        private float overtakeDir;
+        private float overtakeBlockerRoad = float.MinValue;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetRegistry() => ActiveCars.Clear();
@@ -191,7 +213,8 @@ namespace RoadRage.UnityRemake
             Violation = wreck ? Offence.None : violation;
             weavePhase = Random.Range(0f, Mathf.PI * 2f);
             weaveRate = Random.Range(0.55f, 0.95f);
-            if (Violation == Offence.Speeding) speedKph *= 1.55f;
+            // Speeders run ~1.5x traffic, capped so a 200 km/h hunter can still close on them.
+            if (Violation == Offence.Speeding) speedKph = Mathf.Min(speedKph * 1.55f, 165f);
             if (Violation == Offence.WrongWay) direction = -direction;
             RoadDistance = RoadPath.Wrap(distance);
             LaneFraction = Mathf.Clamp(lane, -1f, 1f);
@@ -209,20 +232,101 @@ namespace RoadRage.UnityRemake
 
         private void UpdateOffenceBehaviour(float delta)
         {
+            // A queued driver edges around whatever blocked it - this outranks the
+            // offence drift below, otherwise one wreck parks the whole highway.
+            if (!IsWreck && overtakeDriftTarget != 0f)
+            {
+                laneDrift = Mathf.Lerp(laneDrift, overtakeDriftTarget, delta * 2.5f);
+                return;
+            }
+
             switch (Violation)
             {
                 case Offence.Weaving:
                     // Wide, lazy lane drift - the most readable tell at speed.
-                    weavePhase += delta * weaveRate;
-                    laneDrift = Mathf.Sin(weavePhase) * 5.2f;
+                    weavePhase += delta * weaveRate * (IsFleeing ? 1.6f : 1f);
+                    laneDrift = Mathf.Sin(weavePhase) * (IsFleeing ? 7.4f : 5.2f);
                     break;
                 case Offence.Tailgating:
                     laneDrift = Mathf.Lerp(laneDrift, 0f, delta * 2f);
                     break;
                 default:
-                    laneDrift = Mathf.Lerp(laneDrift, 0f, delta * 2f);
+                    // Any runner swerves when spooked, even a plain speeder - a fleeing
+                    // target that drives in a straight line is not a chase.
+                    if (IsFleeing)
+                    {
+                        weavePhase += delta * weaveRate * 1.3f;
+                        laneDrift = Mathf.Sin(weavePhase) * 4.5f;
+                    }
+                    else
+                    {
+                        laneDrift = Mathf.Lerp(laneDrift, 0f, delta * 2f);
+                    }
                     break;
             }
+        }
+
+        private void UpdateChaseState()
+        {
+            // Only same-direction violators can be chased; oncoming WrongWay cars pass
+            // too fast to run from anything.
+            if (IsWreck || Direction < 0f || Violation == Offence.None)
+            {
+                IsFleeing = false;
+                return;
+            }
+
+            var gap = GapToPlayer;
+            if (!IsFleeing && gap > 0f && gap < FleeTriggerGap)
+            {
+                IsFleeing = true;
+                if (RoadRageAudioBridge.Instance != null)
+                    RoadRageAudioBridge.Instance.PlayTurboFlutter();
+            }
+            else if (IsFleeing && (gap <= 0f || gap > (IsHitAndRunner ? HitAndRunLostGap : FleeLostGap)))
+            {
+                // The chase ends. Overtaking a spooked driver is just overtaking, but a
+                // hit-and-runner you pass without catching has genuinely escaped - the
+                // road only goes forward.
+                if (IsHitAndRunner || gap > 0f)
+                {
+                    GameState.Show(IsHitAndRunner ? "HIT & RUNNER GOT AWAY" : "HE GOT AWAY - STAY ON HIS TAIL");
+                    if (IsHitAndRunner)
+                        Debug.Log($"RR_EVENT hitandrun escaped gap={gap:0}m");
+                }
+                IsHitAndRunner = false;
+                IsFleeing = false;
+            }
+        }
+
+        /// Called by the world when this car is staged as a hit-and-run offender: it
+        /// rammed a civilian and now the player is personally after it. The shove is
+        /// the direction AWAY from the wreck it just left, so it sidesteps out of that
+        /// lane instead of ploughing into its own crash scene and self-wrecking.
+        public void BeginHitAndRun(float shove)
+        {
+            if (IsWreck || Direction < 0f) return;
+            IsHitAndRunner = true;
+            IsFleeing = true;
+            LaneFraction = Mathf.Clamp(LaneFraction + shove * 0.5f, -0.88f, 0.88f);
+            weavePhase = shove > 0f ? 0.6f : -0.6f;
+            crashImmunityUntil = Time.time + 2f;
+        }
+
+        /// The hunter caught the offender - the special chase is over.
+        public void ClearHitAndRun() => IsHitAndRunner = false;
+        private float crashImmunityUntil;
+
+        /// Overtake drift, clamped so the passing car stays ON the asphalt - on the
+        /// narrow two-lane biomes a raw 4 m shove pushed cars off the road edge.
+        private float OvertakeDrift(float dir)
+        {
+            var half = RoadPath.HalfWidthAt(RoadDistance) - 1.2f;
+            if (half <= 0f) return 0f;
+            var baseOffset = LaneOffset - laneDrift;
+            var lo = -half - baseOffset;
+            var hi = half - baseOffset;
+            return Mathf.Clamp(dir * 4f, Mathf.Min(lo, hi), Mathf.Max(lo, hi));
         }
 
         private void OnDestroy() => ActiveCars.Remove(this);
@@ -231,27 +335,63 @@ namespace RoadRage.UnityRemake
         /// so cars that fall too far behind are recycled ahead of the player instead.
         public static float PlayerDistance;
         private const float RecycleBehind = 140f;
-        private const float RecycleAhead = 420f;
+        private const float WreckRecycleBehind = 70f;
+        private const float RecycleAhead = 300f;
+        /// A recycled car rerolls its allegiance: the player outruns same-direction
+        /// traffic within seconds, so without a fresh supply of rule-breakers the road
+        /// ahead turns into long empty stretches with nobody to hunt.
+        private static readonly Offence[] RecycleOffences =
+            { Offence.Weaving, Offence.Speeding, Offence.Tailgating, Offence.WrongWay };
 
         private void Recycle()
         {
+            var relocated = false;
+            // Wrecks clear sooner than live traffic: they are obstacles, and since
+            // crashes now persist on screen a wreck parked at the horizon-length
+            // recycle distance constipates a lane for far too long.
+            var behindLimit = PlayerDistance - (IsWreck ? WreckRecycleBehind : RecycleBehind);
             if (Direction >= 0f)
             {
                 // Same-direction traffic overtaken by the player reappears up ahead.
-                if (RoadDistance < PlayerDistance - RecycleBehind)
+                if (RoadDistance < behindLimit)
+                {
                     RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.55f, RecycleAhead);
+                    relocated = true;
+                }
             }
             else
             {
                 // Oncoming traffic that has passed comes back from further up the road.
-                if (RoadDistance < PlayerDistance - RecycleBehind)
+                if (RoadDistance < behindLimit)
+                {
                     RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.7f, RecycleAhead * 1.4f);
+                    relocated = true;
+                }
             }
 
             if (RoadDistance > PlayerDistance + RecycleAhead * 1.6f)
+            {
                 RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.4f, RecycleAhead);
+                relocated = true;
+            }
 
-            if (!IsWreck) return;
+            // Everything below belongs to the recycle EVENT. Recycle() runs every
+            // frame: without the relocated gate, wrecks un-wrecked instantly and the
+            // allegiance reroll flickered violator, fleeing and hit-and-run flags off
+            // within a frame of being set.
+            if (!relocated) return;
+
+            // Reroll the offence while the car is off-screen. Keeps roughly one in two
+            // recycled cars worth chasing without ever emptying the road of innocents.
+            if (!IsWreck)
+            {
+                Violation = Random.value < 0.45f
+                    ? RecycleOffences[Random.Range(0, RecycleOffences.Length)]
+                    : Offence.None;
+                IsHitAndRunner = false;
+                return;
+            }
+
             // A wreck recycled into fresh road should drive again, otherwise the player
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
@@ -272,10 +412,16 @@ namespace RoadRage.UnityRemake
             if (rb != null) rb.isKinematic = true;
 
             Recycle();
+            UpdateChaseState();
             UpdateOffenceBehaviour(Time.deltaTime);
             if (!IsWreck)
             {
                 var desiredSpeed = cruiseSpeedKph;
+                var nearestGap = float.MaxValue;
+                var blockerOffset = 0f;
+                var blockerRoadDistance = 0f;
+                var hasBlocker = false;
+                var nearestBlockerGap = float.MaxValue;
                 for (var i = ActiveCars.Count - 1; i >= 0; i--)
                 {
                     var other = ActiveCars[i];
@@ -296,6 +442,14 @@ namespace RoadRage.UnityRemake
                     if (Mathf.Abs(other.LaneOffset - LaneOffset) > lateralFootprint) continue;
                     var gap = RoadPath.ForwardGap(RoadDistance, other.RoadDistance, Direction);
                     if (gap <= 0.05f || gap >= 38f) continue;
+                    nearestGap = Mathf.Min(nearestGap, gap);
+                    if (gap < nearestBlockerGap)
+                    {
+                        nearestBlockerGap = gap;
+                        blockerOffset = other.LaneOffset;
+                        blockerRoadDistance = other.RoadDistance;
+                        hasBlocker = true;
+                    }
 
                     var obstacleSpeed = other.IsWreck ? 0f : other.currentSpeedKph;
                     var safeSpeed = gap < 10f
@@ -306,6 +460,43 @@ namespace RoadRage.UnityRemake
                 }
 
                 var acceleration = desiredSpeed < currentSpeedKph ? 55f : 16f;
+                // Gridlock escape with hysteresis: once a driver starts edging around
+                // an obstruction it COMMITS to the pass. Releasing the drift as soon
+                // as the lateral gap opened let the car slide back into the blocked
+                // line and park at an angle forever.
+                if (hasBlocker && desiredSpeed < cruiseSpeedKph * 0.55f)
+                {
+                    // A trailing car sitting directly behind another in the same lane has
+                    // LaneOffset == blockerOffset, so Mathf.Sign returns 0 - no overtake
+                    // direction is ever chosen, and it just matches the blocker's speed
+                    // forever. If the blocker is stopped, this parks the follower (and
+                    // everyone behind it) permanently. Fall back to a deterministic side.
+                    overtakeDir = Mathf.Sign(LaneOffset - blockerOffset);
+                    if (Mathf.Abs(overtakeDir) < 0.01f) overtakeDir = variationSeed % 2 == 0 ? 1f : -1f;
+                    overtakeBlockerRoad = blockerRoadDistance;
+                    overtakeDriftTarget = OvertakeDrift(overtakeDir);
+                }
+                else if (overtakeBlockerRoad > -1e8f && RoadDistance < overtakeBlockerRoad + 9f)
+                {
+                    overtakeDriftTarget = OvertakeDrift(overtakeDir);
+                }
+                else
+                {
+                    overtakeDriftTarget = 0f;
+                    overtakeBlockerRoad = float.MinValue;
+                }
+                // A spooked runner pulls away hard; a hit-and-runner runs even harder.
+                // Reckless, not blind: with a wreck or slower car right on top of them
+                // they still brake, so a chase stays possible instead of ending in an
+                // instant self-inflicted pileup.
+                if (IsFleeing)
+                {
+                    var runSpeed = Mathf.Min(IsHitAndRunner ? HitAndRunMaxKph : FleeMaxKph,
+                                             cruiseSpeedKph * (IsHitAndRunner ? 1.6f : 1.45f));
+                    desiredSpeed = nearestGap < 12f
+                        ? Mathf.Min(desiredSpeed, runSpeed)
+                        : Mathf.Max(desiredSpeed, runSpeed);
+                }
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, desiredSpeed, acceleration * Time.deltaTime);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
@@ -356,15 +547,20 @@ namespace RoadRage.UnityRemake
                 other.laneDrift += latSign * overlapLat * 0.5f;
                 laneDrift -= latSign * overlapLat * 0.5f;
 
-                // 2. Dynamic Kinetic Collision & Chain-Reaction Pileups
+                // 2. Dynamic Kinetic Collision & Chain-Reaction Pileups.
+                // A hit-and-run runner never self-wrecks in traffic: its whole weave
+                // sweeps it across lanes at 100+ km/h closing speeds, and letting any
+                // overlap wreck it killed the chase seconds after staging every time.
+                // It still wrecks everyone it ploughs into - that is the point.
+                var immune = Time.time < crashImmunityUntil || IsHitAndRunner;
                 var relativeSpeed = Mathf.Abs(currentSpeedKph - other.currentSpeedKph);
                 if (IsWreck || other.IsWreck || relativeSpeed > 18f)
                 {
-                    if (!other.IsWreck)
+                    if (!other.IsWreck && !(Time.time < other.crashImmunityUntil))
                     {
                         other.Crash(deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
                     }
-                    if (!IsWreck)
+                    if (!IsWreck && !immune)
                     {
                         Crash(-deltaLat, Mathf.Max(currentSpeedKph, other.currentSpeedKph));
                     }
