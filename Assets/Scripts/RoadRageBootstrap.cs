@@ -438,22 +438,7 @@ namespace RoadRage.UnityRemake
 			if (GameInput.GetKKeyPressed())
 			{
 				activeWeather = (WeatherKind)(((int)activeWeather + 1) % System.Enum.GetValues(typeof(WeatherKind)).Length);
-				Debug.Log($"[LIGHT] weather = {activeWeather}");
-			}
-
-			// Live lighting trim, so brightness can be judged against the actual frame
-			// instead of guessed from a screenshot. The logged value is what to bake in.
-			if (GameInput.GetBracketKey(true) || GameInput.GetBracketKey(false))
-			{
-				AmbientTrim = Mathf.Clamp(AmbientTrim + (GameInput.GetBracketKey(true) ? 0.15f : -0.15f), 0.25f, 4f);
-				Debug.Log($"[LIGHT] AmbientTrim = {AmbientTrim:0.00}  (ExposureTrim = {ExposureTrim:0.00})");
-			}
-			if (GameInput.GetExposureKey(true) || GameInput.GetExposureKey(false))
-			{
-				ExposureTrim = Mathf.Clamp(ExposureTrim + (GameInput.GetExposureKey(true) ? 0.15f : -0.15f), -2f, 3f);
-				if (colorAdjustments != null)
-					colorAdjustments.postExposure.Override(Mood().PostExposure + NeutralToneCompensation + ExposureTrim);
-				Debug.Log($"[LIGHT] ExposureTrim = {ExposureTrim:0.00}  (AmbientTrim = {AmbientTrim:0.00})");
+				Debug.Log($"[WEATHER] {activeWeather}");
 			}
 
 			// N key cycles to next biome
@@ -1036,7 +1021,6 @@ namespace RoadRage.UnityRemake
 
         private void BuildLighting()
         {
-            groundingLogs = 0;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -1103,18 +1087,6 @@ namespace RoadRage.UnityRemake
 			vignette.intensity.Override(0.20f);
 			vignette.smoothness.Override(0.68f);
 
-			// Diagnostic. Three remote attempts at the Manhattan darkness have changed
-			// values that either were not read (ambientIntensity in Trilight) or may not
-			// be reaching the renderer at all. This prints what is actually live, plus a
-			// build marker so it is obvious whether the running code is the current one.
-			Debug.Log($"[LIGHT] build=ambient-trim-v1 biome={biomeName} mode={RenderSettings.ambientMode}\n" +
-			          $"[LIGHT] sky={RenderSettings.ambientSkyColor} equator={RenderSettings.ambientEquatorColor} ground={RenderSettings.ambientGroundColor}\n" +
-			          $"[LIGHT] ambientIntensity={RenderSettings.ambientIntensity:0.00} trim={AmbientTrim:0.00} moodGain={mood.AmbientIntensity:0.00}\n" +
-			          $"[LIGHT] sun={sun.intensity:0.00} colour={sun.color} shadows={sun.shadows}\n" +
-			          $"[LIGHT] exposure={mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim:0.00} " +
-			          $"tonemap=Neutral contrast=14 saturation={GradeSaturation}\n" +
-			          $"[LIGHT] lightmaps={LightmapSettings.lightmaps.Length} probes={(LightmapSettings.lightProbes != null ? LightmapSettings.lightProbes.count : 0)} " +
-			          $"quality={QualitySettings.GetQualityLevel()} colorSpace={QualitySettings.activeColorSpace}");
         }
 
         private ColorAdjustments colorAdjustments;
@@ -1165,11 +1137,10 @@ namespace RoadRage.UnityRemake
         /// hue and its darkness while letting shadowed surfaces still read.
         private const float MinAmbientLuma = 0.22f;
 
-        /// Live brightness trim, driven by the [ and ] keys in play mode. Judging a
-        /// lighting value from a screenshot is guesswork; this makes it a dial you turn
-        /// while looking at the frame. The chosen value is logged so it can be baked in.
-        public static float AmbientTrim = 1f;
-        public static float ExposureTrim = 0f;
+        /// Settled values. These were dialled in play mode against the actual frame
+        /// with a pair of trim keys; the keys are gone now that the numbers are known.
+        private const float AmbientTrim = 1f;
+        private const float ExposureTrim = 0f;
 
         /// Scales RGB only. Multiplying a Color by a float also scales alpha, which is
         /// meaningless for an ambient colour and shows up as a stray 1.35 in the logs.
@@ -2101,29 +2072,16 @@ namespace RoadRage.UnityRemake
         }
 
         /// Scales a model to a target height and sits its base on the ground.
-        /// Counts how many grounding reports have been logged, so the diagnostic shows
-        /// the first few buildings of a run rather than one line per object forever.
-        ///
-        /// Reset explicitly. Statics survive entering play mode when domain reload is
-        /// off, so on the second run this was already at its cap and the diagnostic
-        /// printed nothing at all - which is exactly why the first attempt came back
-        /// with no results. Three other systems in this project carry the same guard.
-        private static int groundingLogs;
-
         /// A building mesh should not need to be blown up more than an order of
         /// magnitude to reach its target height. Beyond that the source is the wrong
         /// asset for the job and scaling it only produces something the wrong shape.
         private const float MinModelScale = 0.05f;
         private const float MaxModelScale = 12f;
 
+        /// A static survives entering play mode when domain reload is off, so a
+        /// catalogue built once would outlive the run that measured it.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetGroundingLogs()
-        {
-            groundingLogs = 0;
-            // Same trap: a static survives entering play mode when domain reload is off,
-            // so a catalogue built once would outlive the run that measured it.
-            buildingCatalogue = null;
-        }
+        private static void ResetBuildingCatalogue() => buildingCatalogue = null;
 
         /// A candidate building mesh, measured in its own right.
         ///
@@ -2252,13 +2210,6 @@ namespace RoadRage.UnityRemake
             }
             AssignClasses(buildingCatalogue);
 
-            var frontage = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Frontage).Count;
-            var mid = buildingCatalogue.FindAll(e => e.Class == BuildingClass.MidBlock).Count;
-            var sky = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Skyline).Count;
-            var narrowest = buildingCatalogue.Count > 0 ? buildingCatalogue[0].Width : 0f;
-            var widest = buildingCatalogue.Count > 0 ? buildingCatalogue[buildingCatalogue.Count - 1].Width : 0f;
-            Debug.Log($"[CITY] catalogue: {frontage} frontage, {mid} mid-block, {sky} skyline, {rejected} rejected " +
-                      $"(widths {narrowest:0.0}m to {widest:0.0}m)");
             return buildingCatalogue;
         }
 
@@ -2348,7 +2299,7 @@ namespace RoadRage.UnityRemake
             var wanted = targetHeight / bounds.size.y;
             var scale = Mathf.Clamp(wanted, MinModelScale, MaxModelScale);
             if (!Mathf.Approximately(scale, wanted))
-                Debug.LogWarning($"[GROUND] {model.name} native height {bounds.size.y:0.00}m needs {wanted:0.0}x " +
+                Debug.LogWarning($"[CITY] {model.name} native height {bounds.size.y:0.00}m needs {wanted:0.0}x " +
                                  $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong in a building roster.");
             model.transform.localScale *= scale;
             if (!TryGetCombinedBounds(model, out bounds)) return;
@@ -2369,15 +2320,6 @@ namespace RoadRage.UnityRemake
                 }
             }
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
-            if (groundingLogs < 10 && targetHeight > 15f)
-            {
-                groundingLogs++;
-                TryGetCombinedBounds(model, out var settled);
-                Debug.Log($"[GROUND] {model.name} roadY={groundY:0.00} baseY={settled.min.y:0.00} " +
-                          $"drift={settled.min.y - groundY - groundHeight:0.000} " +
-                          $"height={settled.size.y:0.0} scale={model.transform.localScale.x:0.000} " +
-                          $"footprint={settled.size.x:0.0}x{settled.size.z:0.0}m");
-            }
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
             var roadCenter = RoadPath.Point(dist, 0f, 0f);
@@ -7098,39 +7040,6 @@ namespace RoadRage.UnityRemake
             }
             catch {}
             return false;
-        }
-
-        /// Live lighting trim. [ and ] step ambient, ; and ' step exposure.
-        public static bool GetBracketKey(bool right)
-        {
-        	try
-        	{
-        		var kb = UnityEngine.InputSystem.Keyboard.current;
-        		if (kb != null && (right ? kb.rightBracketKey : kb.leftBracketKey).wasPressedThisFrame) return true;
-        	}
-        	catch {}
-        	try
-        	{
-        		if (Input.GetKeyDown(right ? KeyCode.RightBracket : KeyCode.LeftBracket)) return true;
-        	}
-        	catch {}
-        	return false;
-        }
-
-        public static bool GetExposureKey(bool up)
-        {
-        	try
-        	{
-        		var kb = UnityEngine.InputSystem.Keyboard.current;
-        		if (kb != null && (up ? kb.quoteKey : kb.semicolonKey).wasPressedThisFrame) return true;
-        	}
-        	catch {}
-        	try
-        	{
-        		if (Input.GetKeyDown(up ? KeyCode.Quote : KeyCode.Semicolon)) return true;
-        	}
-        	catch {}
-        	return false;
         }
 
         /// Cycles weather. Weather is rolled at random per run, and storm halves the sun
