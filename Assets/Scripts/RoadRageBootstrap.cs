@@ -432,6 +432,15 @@ namespace RoadRage.UnityRemake
 				else OpenPicker();
 			}
 
+			// K cycles weather. Random weather per run means two runs of the same biome can
+			// differ by about a factor of two in light, which invalidates any A/B of a
+			// lighting change. Pin it to CLEAR to compare like with like.
+			if (GameInput.GetKKeyPressed())
+			{
+				activeWeather = (WeatherKind)(((int)activeWeather + 1) % System.Enum.GetValues(typeof(WeatherKind)).Length);
+				Debug.Log($"[LIGHT] weather = {activeWeather}");
+			}
+
 			// Live lighting trim, so brightness can be judged against the actual frame
 			// instead of guessed from a screenshot. The logged value is what to bake in.
 			if (GameInput.GetBracketKey(true) || GameInput.GetBracketKey(false))
@@ -6864,6 +6873,25 @@ namespace RoadRage.UnityRemake
         	try
         	{
         		if (Input.GetKeyDown(up ? KeyCode.Quote : KeyCode.Semicolon)) return true;
+        	}
+        	catch {}
+        	return false;
+        }
+
+        /// Cycles weather. Weather is rolled at random per run, and storm halves the sun
+        /// while doubling the fog, so two runs of the same biome are not comparable unless
+        /// the weather is pinned - which quietly invalidated every A/B of the lighting.
+        public static bool GetKKeyPressed()
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && kb.kKey.wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(KeyCode.K)) return true;
         	}
         	catch {}
         	return false;
