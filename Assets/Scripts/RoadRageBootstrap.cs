@@ -2110,6 +2110,12 @@ namespace RoadRage.UnityRemake
         /// with no results. Three other systems in this project carry the same guard.
         private static int groundingLogs;
 
+        /// A building mesh should not need to be blown up more than an order of
+        /// magnitude to reach its target height. Beyond that the source is the wrong
+        /// asset for the job and scaling it only produces something the wrong shape.
+        private const float MinModelScale = 0.05f;
+        private const float MaxModelScale = 12f;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetGroundingLogs() => groundingLogs = 0;
 
@@ -2117,7 +2123,20 @@ namespace RoadRage.UnityRemake
         {
             if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.01f) return;
             var groundY = model.transform.position.y;
-            model.transform.localScale *= targetHeight / bounds.size.y;
+
+            // Uniform scale to a target height only behaves when the roster's meshes are
+            // roughly comparable. This one spans 0.65 m to 228 m native, so reaching a
+            // 60 m building from a 0.65 m mesh takes 93x - which widens and deepens it by
+            // 93x too, running its walls out through the sidewalk and across the road.
+            // That is the "buildings not on the ground" report: they are grounded exactly
+            // right and simply enormous. Cap the factor and take a shorter building over
+            // a misshapen one.
+            var wanted = targetHeight / bounds.size.y;
+            var scale = Mathf.Clamp(wanted, MinModelScale, MaxModelScale);
+            if (!Mathf.Approximately(scale, wanted))
+                Debug.LogWarning($"[GROUND] {model.name} native height {bounds.size.y:0.00}m needs {wanted:0.0}x " +
+                                 $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong in a building roster.");
+            model.transform.localScale *= scale;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
             if (groundingLogs < 10 && targetHeight > 15f)
@@ -2126,7 +2145,8 @@ namespace RoadRage.UnityRemake
                 TryGetCombinedBounds(model, out var settled);
                 Debug.Log($"[GROUND] {model.name} roadY={groundY:0.00} baseY={settled.min.y:0.00} " +
                           $"drift={settled.min.y - groundY - groundHeight:0.000} " +
-                          $"height={settled.size.y:0.0} scale={model.transform.localScale.x:0.000}");
+                          $"height={settled.size.y:0.0} scale={model.transform.localScale.x:0.000} " +
+                          $"footprint={settled.size.x:0.0}x{settled.size.z:0.0}m");
             }
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
