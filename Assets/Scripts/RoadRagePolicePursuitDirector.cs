@@ -499,12 +499,16 @@ namespace RoadRage.UnityRemake
 
             transform.rotation = RoadPath.Rotation(RoadDistance);
 
-            // 5. Check for collision with player car
-            var playerPos = targetPlayer.transform.position;
-            var copPos = transform.position;
-            var dist = Vector3.Distance(playerPos, copPos);
-
-            if (dist < 3.2f)
+            // 5. Check for collision with player car.
+            //
+            // Measured in road space rather than from the two transforms. Placement
+            // moved to LateUpdate when the cruiser joined the shared contact pass, so
+            // by the time this runs transform.position still holds last frame's value -
+            // at pursuit speed that is most of a metre of error on a 3.2 m test.
+            // RoadDistance and LateralOffset are current on both vehicles here.
+            var alongRoad = RoadDistance - targetPlayer.RoadDistance;
+            var acrossRoad = LateralOffset - targetPlayer.LateralOffset;
+            if (alongRoad * alongRoad + acrossRoad * acrossRoad < 3.2f * 3.2f)
             {
                 OnCollideWithPlayer();
             }
