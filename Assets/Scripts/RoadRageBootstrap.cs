@@ -2119,7 +2119,8 @@ namespace RoadRage.UnityRemake
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetGroundingLogs() => groundingLogs = 0;
 
-        private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f)
+        private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f,
+            float maxFootprint = 0f)
         {
             if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.01f) return;
             var groundY = model.transform.position.y;
@@ -2138,6 +2139,22 @@ namespace RoadRage.UnityRemake
                                  $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong in a building roster.");
             model.transform.localScale *= scale;
             if (!TryGetCombinedBounds(model, out bounds)) return;
+
+            // Height alone does not describe a building. Several of these meshes are
+            // whole city blocks, so normalising them to a plausible height left
+            // footprints of 111 m and 167 m across - dropped onto a plot about 25 m wide
+            // between the kerb and the block behind. They swallowed the sidewalk and ran
+            // into their neighbours. Scale down further to fit the plot, keeping the
+            // proportions, and accept a shorter building.
+            if (maxFootprint > 0f)
+            {
+                var widest = Mathf.Max(bounds.size.x, bounds.size.z);
+                if (widest > maxFootprint)
+                {
+                    model.transform.localScale *= maxFootprint / widest;
+                    if (!TryGetCombinedBounds(model, out bounds)) return;
+                }
+            }
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
             if (groundingLogs < 10 && targetHeight > 15f)
             {
@@ -3309,7 +3326,7 @@ namespace RoadRage.UnityRemake
                         new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Frontage");
                     if (front != null)
                     {
-                        NormalizeModelHeight(front, Random.Range(34f, 62f));
+                        NormalizeModelHeight(front, Random.Range(34f, 62f), 0.05f, maxFootprint: 26f);
                         EnsureOutsideRoad(front, frontDistance, side);
                     }
 
@@ -3329,7 +3346,7 @@ namespace RoadRage.UnityRemake
                     var tower = PlaceBiomeModelOnRoad("Buildings", towerMesh,
                         materials["City Skyline"], towerDistance, side * Random.Range(36f, 75f), 0f,
                         new Vector3(0f, facing, 0f), Vector3.one, "Manhattan Midtown Skyscraper");
-                    if (tower != null) NormalizeModelHeight(tower, Random.Range(70f, 160f));
+                    if (tower != null) NormalizeModelHeight(tower, Random.Range(70f, 160f), 0.05f, maxFootprint: 62f);
 
                     // 4. NYC Street Lamposts with warm amber glow
                     var lampDistance = z + (side > 0 ? 10f : -7f);
