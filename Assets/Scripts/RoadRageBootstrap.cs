@@ -3675,7 +3675,13 @@ namespace RoadRage.UnityRemake
 
         /// Density multiplier for scatter passes. Lowering this on weaker hardware thins
         /// every biome uniformly instead of needing per-biome mobile variants.
-        private float ScatterDensity => QualitySettings.GetQualityLevel() <= 1 ? 0.55f : 1f;
+        /// Foliage thinning. The mobile figure is not a guess at a nice-looking density:
+        /// Gate A measured the device at under 1 FPS with the desktop set, and screen
+        /// coverage of alpha-tested foliage is the thing that has to come down.
+        private float ScatterDensity =>
+            !RichDetailBudget ? 0.34f
+            : QualitySettings.GetQualityLevel() <= 1 ? 0.55f
+            : 1f;
 
         /// Scatters a prop along a lateral band beside the road. Biomes read as real when
         /// props sit in overlapping depth bands (verge / near / mid / far) rather than as a
@@ -4253,12 +4259,23 @@ namespace RoadRage.UnityRemake
 
             // Trunks packed right against the shoulder. Canopies overhang the road.
             if (NoCanopy) return;
-            ScatterBand(10f, 26f, 38f, (d, l, s) => ForestTree(d, l, 12f, 17f));
-            ScatterBand(11f, 34f, 52f, (d, l, s) => ForestTree(d, l, 16f, 24f));
-            ScatterBand(10f, 27f, 42f, (d, l, s) => ForestTree(d, l, 13f, 21f));
-            ScatterBand(11f, 30f, 54f, (d, l, s) => ForestTree(d, l, 12f, 20f));
-            ScatterBand(11f, 36f, 66f, (d, l, s) => ForestTree(d, l, 12f, 19f));
-            // Far canopy
+
+            // Gate A measured Greenwood as alpha-test overdraw, not geometry or draw
+            // calls: 850 renderers a chunk of which 824 are cutout, 126 FPS with the
+            // canopy and 457 without, while Hollywood draws more triangles and runs four
+            // times faster. The only lever that moves it is less foliage covering the
+            // screen - instancing and LODs were measured and did nothing.
+            //
+            // Five near bands used to run here, all spanning 26-66 m. They overlapped
+            // almost entirely, so most of what they added was a second and third layer
+            // of leaf cards over the same ground - which is precisely the cost, since
+            // alpha test defeats early-Z and every overlapping card shades again. Three
+            // bands cover the same span with the layering that was being paid for twice.
+            ScatterBand(10f, 26f, 40f, (d, l, s) => ForestTree(d, l, 12f, 18f));
+            ScatterBand(11f, 32f, 54f, (d, l, s) => ForestTree(d, l, 15f, 24f));
+            ScatterBand(11f, 38f, 66f, (d, l, s) => ForestTree(d, l, 12f, 20f));
+            // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
+            // over the camera - so it keeps the forest reading as deep.
             ScatterBand(17f, 60f, 140f, (d, l, s) => ForestTree(d, l, 14f, 24f));
             // Bushes and deadfall break up the ground between trunks.
             ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
@@ -4266,8 +4283,9 @@ namespace RoadRage.UnityRemake
                 return SpawnForestPiece("ForestVillage|Vegetation/SM_bush", d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
             });
 
-            // Wider grass coverage
-            ScatterBand(3.4f, 20f, 55f, (d, l, s) =>
+            // Ground cover. Low to the camera rather than over it, but at 3.4 m spacing
+            // it was the single densest band in the biome and every card is cutout.
+            ScatterBand(4.6f, 20f, 55f, (d, l, s) =>
             {
                 return ForestPlant(d, l, 0.7f, 1.5f, "Forest Ground Cover");
             });
