@@ -1075,7 +1075,6 @@ namespace RoadRage.UnityRemake
 			motionBlur.clamp.Override(0.04f);
 
 			var color = volume.profile.Add<ColorAdjustments>();
-			colorAdjustments = color;
 			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim);
 			// Contrast and saturation were stacked on top of an ACES curve that already
 			// pushes both, so every biome graded out as a poster. Neutral tonemapping
@@ -1089,8 +1088,6 @@ namespace RoadRage.UnityRemake
 			vignette.smoothness.Override(0.68f);
 
         }
-
-        private ColorAdjustments colorAdjustments;
 
         private struct BiomeMood
         {

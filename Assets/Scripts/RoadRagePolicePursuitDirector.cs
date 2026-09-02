@@ -565,8 +565,6 @@ namespace RoadRage.UnityRemake
 
         private Material redLedMat;
         private Material blueLedMat;
-        private Renderer[] redLeds;
-        private Renderer[] blueLeds;
 
         private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
         {
@@ -678,8 +676,28 @@ namespace RoadRage.UnityRemake
             b1.GetComponent<Renderer>().material = blueLedMat;
             Destroy(b1.GetComponent<Collider>());
 
-            redLeds = new[] { r1.GetComponent<Renderer>() };
-            blueLeds = new[] { b1.GetComponent<Renderer>() };
+            // The two Light fields have been declared since this class was written and
+            // never created, so a cruiser cast no light at all - the lightbar was two
+            // emissive cubes and nothing else. On a wet night street the flashing red
+            // and blue thrown onto the road is most of what a pursuit looks like.
+            redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), Color.red);
+            blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
+        }
+
+        private static Light MakeStrobe(Transform parent, Vector3 localPosition, Color colour)
+        {
+            var holder = new GameObject("Strobe");
+            holder.transform.SetParent(parent, false);
+            holder.transform.localPosition = localPosition;
+            var light = holder.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = colour;
+            light.range = 18f;
+            light.intensity = 0f;
+            // No shadows: up to five cruisers carry two of these each, and a shadow-
+            // casting strobe apiece is not worth what it costs.
+            light.shadows = LightShadows.None;
+            return light;
         }
 
         private float wreckSlideDir;
@@ -712,6 +730,9 @@ namespace RoadRage.UnityRemake
             {
                 blueLedMat.SetColor("_EmissionColor", !isRed ? new Color(0.1f, 0.5f, 1f) * 5.5f : Color.black);
             }
+            // Same phase as the emission, so the cast light and the glowing lens agree.
+            if (redStrobe != null) redStrobe.intensity = isRed ? 5.5f : 0f;
+            if (blueStrobe != null) blueStrobe.intensity = isRed ? 0f : 5.5f;
 
             if (targetPlayer == null) return;
 
