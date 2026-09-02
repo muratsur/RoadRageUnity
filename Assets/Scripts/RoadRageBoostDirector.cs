@@ -318,13 +318,22 @@ namespace RoadRage.UnityRemake
                 return;
             }
 
-            var origin = playerCar.position;
-            var hits = Physics.OverlapSphere(origin, 3.8f);
+            // Queried against the traffic registry rather than through physics.
+            //
+            // OverlapSphere found nothing here, ever: traffic cars are spawned with all
+            // their colliders destroyed and never given one on the root, so there was no
+            // collider in the world for the sphere to hit. The near miss - the reward
+            // that pays for threading a gap at speed, and the entry point to the whole
+            // risk-buys-boost loop this game runs on - has never once fired. Road space
+            // is where these positions actually live, and testing there is both exact
+            // and cheaper than a physics query.
+            if (playerController.SpeedKph <= 75f) return;
 
-            foreach (var hit in hits)
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
             {
-                var traffic = hit.GetComponentInParent<TrafficCarController>();
-                if (traffic != null && !traffic.IsWreck && playerController.SpeedKph > 75f)
+                var traffic = cars[i];
+                if (traffic != null && !traffic.IsWreck)
                 {
                     var lateralDist = Mathf.Abs(traffic.LaneOffset - playerController.LateralOffset);
                     var longDist = Mathf.Abs(traffic.RoadDistance - playerController.RoadDistance);
