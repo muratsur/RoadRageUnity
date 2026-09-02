@@ -6831,6 +6831,39 @@ namespace RoadRage.UnityRemake
             return false;
         }
 
+        /// Live lighting trim. [ and ] step ambient, ; and ' step exposure.
+        public static bool GetBracketKey(bool right)
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && (right ? kb.rightBracketKey : kb.leftBracketKey).wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(right ? KeyCode.RightBracket : KeyCode.LeftBracket)) return true;
+        	}
+        	catch {}
+        	return false;
+        }
+
+        public static bool GetExposureKey(bool up)
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && (up ? kb.quoteKey : kb.semicolonKey).wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(up ? KeyCode.Quote : KeyCode.Semicolon)) return true;
+        	}
+        	catch {}
+        	return false;
+        }
+
         public static bool GetGKeyPressed()
         {
             try

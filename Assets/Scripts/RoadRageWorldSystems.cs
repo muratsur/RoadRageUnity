@@ -256,11 +256,7 @@ namespace RoadRage.UnityRemake
         private float weaveRate;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetRegistry()
-        {
-            ActiveCars.Clear();
-            player = null;
-        }
+        private static void ResetRegistry() => ActiveCars.Clear();
 
         public void Initialize(float distance, float lane, float speedKph, float direction,
             bool wreck = false, float wreckYaw = 0f, Offence violation = Offence.None)
