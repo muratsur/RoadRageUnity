@@ -1,0 +1,23 @@
+<!--
+  IL2CPP managed stripping removes types that nothing references statically.
+
+  GameObject.CreatePrimitive attaches its collider in native code, so the managed
+  collider type is never named anywhere the linker can see it. The only one this
+  project references explicitly is BoxCollider, via a single AddComponent; the
+  capsule and sphere colliders that Cylinder, Capsule and Sphere primitives rely
+  on were stripped from the Android build. Gate A recorded the result: 15x
+  "Can't add component because class 'CapsuleCollider' doesn't exist" and 2x the
+  same for SphereCollider, leaving the player and trigger colliders absent on
+  device while working correctly on Windows.
+
+  Preserving the collider types is the fix named in PRODUCTION-GATES.
+-->
+<linker>
+  <assembly fullname="UnityEngine.PhysicsModule">
+    <type fullname="UnityEngine.BoxCollider" preserve="all" />
+    <type fullname="UnityEngine.CapsuleCollider" preserve="all" />
+    <type fullname="UnityEngine.SphereCollider" preserve="all" />
+    <type fullname="UnityEngine.MeshCollider" preserve="all" />
+    <type fullname="UnityEngine.Rigidbody" preserve="all" />
+  </assembly>
+</linker>

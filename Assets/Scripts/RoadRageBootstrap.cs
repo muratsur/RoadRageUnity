@@ -433,6 +433,10 @@ namespace RoadRage.UnityRemake
 				else OpenPicker();
 			}
 
+			// P measures the loaded world against Gate A's numbers.
+			if (GameInput.GetPKeyPressed()) LogLiveWorldCost();
+
+
 			// K cycles weather. Random weather per run means two runs of the same biome can
 			// differ by about a factor of two in light, which invalidates any A/B of a
 			// lighting change. Pin it to CLEAR to compare like with like.
@@ -2505,6 +2509,57 @@ namespace RoadRage.UnityRemake
         private static bool NoCanopy;
         private static bool LogSky;
 
+        /// The measurement Gate A was decided on: renderers, triangles and how many of
+        /// those renderers are alpha-tested. Greenwood measured 850 / 824 at the time.
+        private static void LogChunkCost(GameObject root, string biome, float seg)
+        {
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            long tris = 0;
+            var cutouts = 0;
+            foreach (var r in renderers)
+            {
+                if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                {
+                    var mesh = mf.sharedMesh;
+                    for (var s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
+                }
+                foreach (var m in r.sharedMaterials)
+                    if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { cutouts++; break; }
+            }
+            Debug.Log($"RR_COST {biome} seg={seg:0}: renderers={renderers.Length} tris={tris} cutoutRenderers={cutouts}");
+        }
+
+        /// Measures every chunk currently loaded and totals them.
+        ///
+        /// The cost log was reachable only through a -profile command-line flag, which
+        /// cannot be passed from the editor and which Gate C names as a smell in its own
+        /// right: no system should need a flag to exercise. Since the foliage work has to
+        /// be judged on this number rather than on how a frame looks, it needs to be one
+        /// keypress away from wherever the player already is.
+        private void LogLiveWorldCost()
+        {
+            long totalRenderers = 0, totalCutouts = 0, totalTris = 0;
+            foreach (var pair in liveChunks)
+            {
+                if (pair.Value == null) continue;
+                var renderers = pair.Value.GetComponentsInChildren<Renderer>(true);
+                totalRenderers += renderers.Length;
+                foreach (var r in renderers)
+                {
+                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                        for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
+                            totalTris += mf.sharedMesh.GetIndexCount(sm) / 3;
+                    foreach (var m in r.sharedMaterials)
+                        if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { totalCutouts++; break; }
+                }
+            }
+            var chunks = Mathf.Max(1, liveChunks.Count);
+            Debug.Log($"RR_COST {biomeName} live: chunks={liveChunks.Count} " +
+                      $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}\n" +
+                      $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks} " +
+                      $"(Gate A measured Greenwood at 850 / 824) fps={1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f):0}");
+        }
+
         private void BuildChunk(int index)
         {
             if (liveChunks.ContainsKey(index)) return;
@@ -2528,21 +2583,7 @@ namespace RoadRage.UnityRemake
 
             if (ProfileChunks)
             {
-                var renderers = root.GetComponentsInChildren<Renderer>(true);
-                long tris = 0;
-                var cutouts = 0;
-                foreach (var r in renderers)
-                {
-                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
-                    {
-                        var mesh = mf.sharedMesh;
-                        for (var s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
-                    }
-                    foreach (var m in r.sharedMaterials)
-                        if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { cutouts++; break; }
-                }
-                Debug.Log($"RR_COST {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} " +
-                          $"seg={segStart:0}: renderers={renderers.Length} tris={tris} cutoutRenderers={cutouts}");
+                LogChunkCost(root, Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)], segStart);
             }
 
             ClearRoadCorridor(chunkRoot);
@@ -7140,6 +7181,25 @@ namespace RoadRage.UnityRemake
         /// Cycles weather. Weather is rolled at random per run, and storm halves the sun
         /// while doubling the fog, so two runs of the same biome are not comparable unless
         /// the weather is pinned - which quietly invalidated every A/B of the lighting.
+        /// P logs the render cost of the loaded world - the measurement Gate A was
+        /// decided on. Not a debug flag: foliage work has to be judged on this number
+        /// and it should not need a command-line argument to read.
+        public static bool GetPKeyPressed()
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && kb.pKey.wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(KeyCode.P)) return true;
+        	}
+        	catch {}
+        	return false;
+        }
+
         public static bool GetKKeyPressed()
         {
         	try
