@@ -144,7 +144,7 @@ namespace RoadRage.UnityRemake
                 spawnTimer += Time.deltaTime;
                 // Heat 1 sent one cruiser and capped there, which is trivially outrun -
                 // the pursuit was over before it registered. Escalation has to be felt.
-                var maxUnits = Mathf.Min(1 + HeatLevel, 5);
+                var maxUnits = Mathf.Min(1 + HeatLevel, RoadRageBootstrap.RichDetailBudget ? 5 : 3);
                 var spawnInterval = Mathf.Max(2.5f, 8f - HeatLevel * 1.2f);
                 // The first unit of a pursuit does not wait out the interval.
                 if (unitsDispatched == 0) spawnTimer = spawnInterval;
@@ -680,8 +680,15 @@ namespace RoadRage.UnityRemake
             // never created, so a cruiser cast no light at all - the lightbar was two
             // emissive cubes and nothing else. On a wet night street the flashing red
             // and blue thrown onto the road is most of what a pursuit looks like.
-            redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), Color.red);
-            blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
+            // Ten realtime point lights across five cruisers is not affordable on a
+            // device that already cannot produce a frame. Where there is no budget the
+            // lens emission still pulses, which reads at distance; only the cast light
+            // is dropped.
+            if (RoadRageBootstrap.RichDetailBudget)
+            {
+                redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), Color.red);
+                blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
+            }
         }
 
         private static Light MakeStrobe(Transform parent, Vector3 localPosition, Color colour)

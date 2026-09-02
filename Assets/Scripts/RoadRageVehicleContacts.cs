@@ -54,6 +54,8 @@ namespace RoadRage.UnityRemake
         private const float ContactSkin = 0.08f;
         /// Above this height difference one vehicle is over the other, not into it.
         private const float ClearanceHeight = 1.6f;
+        /// Above this many vehicles the pass drops to a single relaxation.
+        private const int CrowdedSet = 18;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Reset()
@@ -81,7 +83,12 @@ namespace RoadRage.UnityRemake
                 if (Registered[i] == null || Registered[i] is Object o && o == null)
                     Registered.RemoveAt(i);
 
-            for (var pass = 0; pass < Passes; pass++)
+            // Pairs are O(n^2) and the passes multiply it: 28 vehicles is 378 pairs,
+            // 1134 tests a frame at three passes. Under a heavy set one pass still
+            // separates the common case - a second body arriving in an already-clear
+            // gap - and only a dense pileup needs the extra relaxation it gives up.
+            var passes = Registered.Count > CrowdedSet ? 1 : Passes;
+            for (var pass = 0; pass < passes; pass++)
                 for (var a = 0; a < Registered.Count; a++)
                     for (var b = a + 1; b < Registered.Count; b++)
                         Separate(Registered[a], Registered[b]);

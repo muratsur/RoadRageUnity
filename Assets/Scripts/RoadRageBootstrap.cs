@@ -984,8 +984,18 @@ namespace RoadRage.UnityRemake
         /// Texture size is handled at import time (BiomeTextureImporter); these are the
         /// parts that can still be dialled back at runtime.
         
+        /// One budget flag every added system checks before spending.
+        ///
+        /// PRODUCTION-GATES records Greenwood at 31 FPS on a desktop GPU and under 1 FPS
+        /// on a Helio G85, with a stop-work rule at 30 FPS on desktop. Anything added
+        /// after that has to be able to switch itself off rather than assume headroom
+        /// that measurably is not there.
+        public static bool RichDetailBudget { get; private set; } = true;
+
         private static void ApplyPlatformQuality()
         {
+            RichDetailBudget = !Application.isMobilePlatform;
+
             if (!Application.isMobilePlatform)
             {
                 QualitySettings.shadowDistance = 160f;
@@ -4543,7 +4553,9 @@ namespace RoadRage.UnityRemake
         /// Cars on the road at full intensity versus at the start. Twelve is a busy
         /// highway to begin with; by the time a run is going well it should be work.
         private const int BaseTrafficCount = 12;
-        private const int PeakTrafficCount = 22;
+        /// Twenty-two cars is a desktop figure. On mobile the escalation still happens,
+        /// it just tops out where the frame budget does.
+        private static int PeakTrafficCount => RichDetailBudget ? 22 : 14;
 
         /// Adds traffic as a run escalates.
         ///
