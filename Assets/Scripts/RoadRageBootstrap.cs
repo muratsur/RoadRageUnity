@@ -457,7 +457,7 @@ namespace RoadRage.UnityRemake
         /// like Alien Biomass is mostly violet organics and violet rock, so it still read
         /// as a single hue under a neutral key. BiomeMaterial funnels through here, so
         /// this is the one place every generated surface tint passes.
-        private const float SurfaceDesaturation = 0.5f;
+        private const float SurfaceDesaturation = 0.35f;
 
         /// Colour that carries meaning is exempt. Road markings, hazard cones, brake
         /// lights, neon and signage are how the player reads the road at speed - washing
@@ -1063,11 +1063,13 @@ namespace RoadRage.UnityRemake
 			motionBlur.clamp.Override(0.04f);
 
 			var color = volume.profile.Add<ColorAdjustments>();
-			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd);
+			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation);
 			// Contrast and saturation were stacked on top of an ACES curve that already
 			// pushes both, so every biome graded out as a poster. Neutral tonemapping
 			// leaves hue and saturation alone, and the grade now only takes colour away.
-			color.contrast.Override(3.5f);
+			// Contrast is what separates a facade from the sky at night, and unlike the
+			// tonemapper it adds no saturation, so it can carry the punch ACES used to.
+			color.contrast.Override(14f);
 			color.saturation.Override(GradeSaturation);
 			var vignette = volume.profile.Add<Vignette>();
 			vignette.intensity.Override(0.20f);
@@ -1097,12 +1099,35 @@ namespace RoadRage.UnityRemake
         /// ambient, fog and the sun, so every surface in the zone inherited the cast.
         /// Pulling them most of the way to neutral keeps each biome's identity readable
         /// while taking the poster-paint saturation out of the frame.
-        private const float MoodDesaturation = 0.62f;
+        private const float MoodDesaturation = 0.45f;
         /// Ground bounce carries the strongest cast because it lights the underside of
         /// every car, so it loses slightly more than the sky does.
-        private const float GroundDesaturation = 0.72f;
+        private const float GroundDesaturation = 0.55f;
         /// Final global trim in the colour grade, on top of the neutral tonemapper.
-        private const float GradeSaturation = -16f;
+        private const float GradeSaturation = -10f;
+
+        /// Neutral tonemapping is a plain range remap where ACES applied a filmic
+        /// S-curve, so swapping to it removed the midtone lift and the shoulder punch
+        /// ACES was quietly providing. On a night biome that reads as "dark and flat".
+        /// This puts the brightness back without putting the colour cast back.
+        private const float NeutralToneCompensation = 0.45f;
+
+        /// Ambient floor, in luma. Manhattan runs an ambient sky of 0.12 and a ground
+        /// bounce of 0.05, so anything the directional sun does not hit falls to black
+        /// and the facades lose all their detail. Lifting the floor keeps the biome's
+        /// hue and its darkness while letting shadowed surfaces still read.
+        private const float MinAmbientLuma = 0.14f;
+
+        /// Raises a colour to a minimum luma without changing its hue.
+        private static Color LiftToFloor(Color value, float floor)
+        {
+            var luma = value.r * 0.2126f + value.g * 0.7152f + value.b * 0.0722f;
+            if (luma >= floor) return value;
+            // Lerp towards white rather than scaling, so a near-black colour lifts to a
+            // readable grey instead of amplifying whatever tint it happened to have.
+            var t = Mathf.InverseLerp(luma, 1f, floor);
+            return Color.Lerp(value, Color.white, t);
+        }
 
         /// Rec.709 luma. Lerping a colour towards its own luma desaturates it without
         /// changing brightness, so a desaturated mood keeps the exposure it was tuned at.
@@ -1121,9 +1146,9 @@ namespace RoadRage.UnityRemake
         private static BiomeMood Neutralize(BiomeMood mood)
         {
             mood.Fog = Desaturate(mood.Fog, MoodDesaturation);
-            mood.Sky = Desaturate(mood.Sky, MoodDesaturation);
-            mood.Equator = Desaturate(mood.Equator, MoodDesaturation);
-            mood.Ground = Desaturate(mood.Ground, GroundDesaturation);
+            mood.Sky = LiftToFloor(Desaturate(mood.Sky, MoodDesaturation), MinAmbientLuma);
+            mood.Equator = LiftToFloor(Desaturate(mood.Equator, MoodDesaturation), MinAmbientLuma);
+            mood.Ground = LiftToFloor(Desaturate(mood.Ground, GroundDesaturation), MinAmbientLuma * 0.7f);
             // Key light keeps more of its warmth than the ambient does - a fully neutral
             // sun flattens the shading, and a tinted key reads as time of day, not as
             // a colour filter over the whole frame.
