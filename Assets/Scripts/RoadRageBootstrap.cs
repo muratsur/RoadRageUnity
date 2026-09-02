@@ -688,8 +688,13 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("City Sign", "Synthwave", "T_road_sign_D", "T_road_sign_N", Color.white, 0.18f, 0.48f, "T_road_sign_E"), "Synthwave", "T_road_sign_MSO");
             // The buildings carry MI_window_* and MI_neon_* slots that all resolve to City Windows;
             // at night in NEON CITY that emission is the main light source, so push it hard.
+            // This emission is the main light source at night, so a near-pure violet
+            // here dyed every wall, road and car in the zone. Desaturating the source is
+            // what actually fixes the cast; Desaturate preserves luma so it stays as
+            // bright a key as before.
             if (biomeName == Biomes[5])
-                materials["City Windows"].SetColor("_EmissionColor", new Color(3.4f, 2.5f, 4.8f));
+                materials["City Windows"].SetColor("_EmissionColor",
+                    Desaturate(new Color(3.4f, 2.5f, 4.8f), 0.55f));
             BiomeSurface(BiomeMaterial("City Car Paint", "Synthwave", "T_car_pain_D", "T_car_pain_N", Color.white, 0.58f, 0.72f), "Synthwave", "T_car_pain_MSO");
             BiomeSurface(BiomeMaterial("City Car Parts", "Synthwave", "T_car_parts_D", "T_car_parts_N", Color.white, 0.68f, 0.62f, "T_car_parts_E"), "Synthwave", "T_car_parts_MSO");
             BiomeSurface(BiomeMaterial("City Car B1", "Synthwave", "T_car_B_01_D", "T_car_B_01_N", Color.white, 0.52f, 0.72f, "T_car_B_01_E"), "Synthwave", "T_car_B_01_MSO");
@@ -707,7 +712,7 @@ namespace RoadRage.UnityRemake
                 billboard.mainTexture = advertisement;
                 if (billboard.HasProperty("_BaseMap")) billboard.SetTexture("_BaseMap", advertisement);
                 billboard.SetTexture("_EmissionMap", advertisement);
-                billboard.SetColor("_EmissionColor", new Color(1.9f, 1.3f, 2.4f));
+                billboard.SetColor("_EmissionColor", Desaturate(new Color(1.9f, 1.3f, 2.4f), 0.45f));
                 billboard.EnableKeyword("_EMISSION");
             }
             BiomeSurface(BiomeMaterial("City Palm", "Synthwave", "T_palm_tree_D", "T_palm_tree_N", Color.white, 0.1f, 0.35f), "Synthwave", "T_palm_tree_MSO");
@@ -900,11 +905,14 @@ namespace RoadRage.UnityRemake
                 "T_concrete_building_D", "T_concrete_building_N",
                 new Color(0.52f, 0.55f, 0.64f), 0.1f, 0.3f, null), "CyberpunkCity", "T_concrete_building_MSO");
 
-            var hologram = MakeMaterial("Cyber Hologram", new Color(0.22f, 0.86f, 1f), 0.1f, 0.85f);
-            hologram.SetColor("_EmissionColor", new Color(0.45f, 1.0f, 1.2f));
+            // Signage keeps more of its hue than architecture does - a sign is meant to
+            // read as coloured light. It is the surfaces they spill onto that were the
+            // problem, and those are handled by the mood and grade above.
+            var hologram = MakeMaterial("Cyber Hologram", Desaturate(new Color(0.22f, 0.86f, 1f), 0.35f), 0.1f, 0.85f);
+            hologram.SetColor("_EmissionColor", Desaturate(new Color(0.45f, 1.0f, 1.2f), 0.35f));
             hologram.EnableKeyword("_EMISSION");
-            var neonStrip = MakeMaterial("Cyber Neon Strip", new Color(1f, 0.22f, 0.62f), 0.2f, 0.8f);
-            neonStrip.SetColor("_EmissionColor", new Color(1.1f, 0.4f, 0.8f));
+            var neonStrip = MakeMaterial("Cyber Neon Strip", Desaturate(new Color(1f, 0.22f, 0.62f), 0.35f), 0.2f, 0.8f);
+            neonStrip.SetColor("_EmissionColor", Desaturate(new Color(1.1f, 0.4f, 0.8f), 0.35f));
             neonStrip.EnableKeyword("_EMISSION");
 
             BiomeSurface(BiomeMaterial("Kowloon Building", "HongKong", "T_building_modules_D", "T_building_modules_N",
@@ -1020,8 +1028,11 @@ namespace RoadRage.UnityRemake
 			bloom.active = false;
 			// Without tonemapping every HDR highlight clips flat, which is a large part
 			// of the "plastic toy" read. ACES gives filmic rolloff on the bright end.
+			// ACES rolls the highlights off filmically but it also shifts hue and lifts
+			// saturation, which is a large part of the over-cooked look. Neutral does the
+			// range remap only and leaves the grading to ColorAdjustments below.
 			var tonemap = volume.profile.Add<Tonemapping>();
-			tonemap.mode.Override(TonemappingMode.ACES);
+			tonemap.mode.Override(TonemappingMode.Neutral);
 
 			// Slight motion blur sells speed and hides the low-poly silhouettes.
 			var motionBlur = volume.profile.Add<MotionBlur>();
@@ -1030,8 +1041,11 @@ namespace RoadRage.UnityRemake
 
 			var color = volume.profile.Add<ColorAdjustments>();
 			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd);
-			color.contrast.Override(6f);
-			color.saturation.Override(-2f);
+			// Contrast and saturation were stacked on top of an ACES curve that already
+			// pushes both, so every biome graded out as a poster. Neutral tonemapping
+			// leaves hue and saturation alone, and the grade now only takes colour away.
+			color.contrast.Override(3.5f);
+			color.saturation.Override(GradeSaturation);
 			var vignette = volume.profile.Add<Vignette>();
 			vignette.intensity.Override(0.20f);
 			vignette.smoothness.Override(0.68f);
@@ -1054,9 +1068,53 @@ namespace RoadRage.UnityRemake
             public float RoadWetness;
         }
 
+        /// How far every biome palette is pulled towards its own luminance. The moods
+        /// were authored as near-pure hues (a violet Neon City sky at 0.32/0.16/0.52, a
+        /// bottle-green sewer, a magenta Alien Biomass) and those colours multiply into
+        /// ambient, fog and the sun, so every surface in the zone inherited the cast.
+        /// Pulling them most of the way to neutral keeps each biome's identity readable
+        /// while taking the poster-paint saturation out of the frame.
+        private const float MoodDesaturation = 0.62f;
+        /// Ground bounce carries the strongest cast because it lights the underside of
+        /// every car, so it loses slightly more than the sky does.
+        private const float GroundDesaturation = 0.72f;
+        /// Final global trim in the colour grade, on top of the neutral tonemapper.
+        private const float GradeSaturation = -16f;
+
+        /// Rec.709 luma. Lerping a colour towards its own luma desaturates it without
+        /// changing brightness, so a desaturated mood keeps the exposure it was tuned at.
+        private static Color Desaturate(Color value, float amount)
+        {
+            var luma = value.r * 0.2126f + value.g * 0.7152f + value.b * 0.0722f;
+            return new Color(
+                Mathf.Lerp(value.r, luma, amount),
+                Mathf.Lerp(value.g, luma, amount),
+                Mathf.Lerp(value.b, luma, amount),
+                value.a);
+        }
+
+        /// Applied to every mood on the way out, so BuildLighting, BlendZoneLighting and
+        /// the camera clear colour all share one definition of how saturated a zone is.
+        private static BiomeMood Neutralize(BiomeMood mood)
+        {
+            mood.Fog = Desaturate(mood.Fog, MoodDesaturation);
+            mood.Sky = Desaturate(mood.Sky, MoodDesaturation);
+            mood.Equator = Desaturate(mood.Equator, MoodDesaturation);
+            mood.Ground = Desaturate(mood.Ground, GroundDesaturation);
+            // Key light keeps more of its warmth than the ambient does - a fully neutral
+            // sun flattens the shading, and a tinted key reads as time of day, not as
+            // a colour filter over the whole frame.
+            mood.SunColor = Desaturate(mood.SunColor, MoodDesaturation * 0.55f);
+            return mood;
+        }
+
         private BiomeMood Mood() => Mood(System.Array.IndexOf(Biomes, biomeName));
 
-        private BiomeMood Mood(int biomeIndex) => biomeIndex switch
+        private BiomeMood Mood(int biomeIndex) => Neutralize(RawMood(biomeIndex));
+
+        /// Authored palettes. Read these through Mood() so the neutral pass is never
+        /// bypassed; this is only separate so the per-biome values stay editable.
+        private static BiomeMood RawMood(int biomeIndex) => biomeIndex switch
         {
             1 => new BiomeMood // SNOW STATION
             {
@@ -3999,6 +4057,13 @@ namespace RoadRage.UnityRemake
 			// Replace the fallback blockout with whichever Street Racer preset is selected
 			// in the garage. Each car carries its own livery from the shipped catalogue.
 			var selected = GameState.CurrentCar;
+			// Measured off the spawned mesh below, then applied once the controller
+			// exists. It used to be written straight onto car.GetComponent<Arcade...>()
+			// from inside this block - but the controller is not added until the end of
+			// the method, so that GetComponent returned null every time and the player
+			// silently kept the 2.5 m / 1.3 m placeholder hull no matter which car was
+			// selected. The garage's long chassis were colliding as small hatchbacks.
+			var playerHull = Vector2.zero;
 			var racerPrefab = Resources.Load<GameObject>($"Vehicles/{selected.Mesh}");
 			if (racerPrefab != null)
 			{
@@ -4056,15 +4121,8 @@ namespace RoadRage.UnityRemake
 				// Collision radius must match the mesh: fixed 4.3 m / 2.05 m radii were
 				// sized for a small car, so a 7.2 m truck overlapped a 5.0 m car by ~1.8 m
 				// before the hit registered - that overlap is the clipping.
-				if (TryGetCombinedBounds(racerVisual, out var playerFit))
-				{
-					var arcade = car.GetComponent<ArcadeCarController>();
-					if (arcade != null)
-					{
-						arcade.HalfLength = playerFit.size.z * 0.5f;
-						arcade.HalfWidth = playerFit.size.x * 0.5f;
-					}
-				}
+				if (TryGetLocalFootprint(racerVisual, out var playerHalfLength, out var playerHalfWidth))
+					playerHull = new Vector2(playerHalfLength, playerHalfWidth);
                 foreach (var renderer in racerVisual.GetComponentsInChildren<Renderer>(true))
                 {
 					renderer.enabled = true;
@@ -4093,7 +4151,16 @@ namespace RoadRage.UnityRemake
             var carCollider = car.gameObject.AddComponent<BoxCollider>();
             carCollider.size = new Vector3(2.15f, 1.2f, 4.4f);
             carCollider.center = new Vector3(0f, 0.25f, 0f);
-            car.gameObject.AddComponent<ArcadeCarController>().RoadDistance = startDistance + 5f;
+            var arcade = car.gameObject.AddComponent<ArcadeCarController>();
+            arcade.RoadDistance = startDistance + 5f;
+            if (playerHull.sqrMagnitude > 0f)
+            {
+                arcade.HalfLength = playerHull.x;
+                arcade.HalfWidth = playerHull.y;
+                // The trigger box follows the same measurement, so the collider the
+                // directors raycast against agrees with the hull the overlap test uses.
+                carCollider.size = new Vector3(playerHull.y * 2f, 1.2f, playerHull.x * 2f);
+            }
             car.gameObject.AddComponent<RoadRageAudioAndVFX>();
         }
 
@@ -4270,16 +4337,81 @@ namespace RoadRage.UnityRemake
                     if (typeName.Contains("Halo") || typeName.Contains("Flare") || typeName.Contains("LensFlare") || typeName.Contains("Light"))
                         DestroyImmediate(b);
                 }
-                NormalizeVehicleVisual(visual, 4.75f);
+                NormalizeVehicleVisual(visual, VehicleLengthFor(modelName));
             }
             var controller = root.gameObject.AddComponent<TrafficCarController>();
             controller.Role = role;
-            if (TryGetCombinedBounds(root.gameObject, out var tb))
-                controller.SetFootprint(tb.size.z * 0.5f, tb.size.x * 0.5f);
-            if (role == TrafficCarController.VehicleRole.CarHauler) controller.SetFootprint(4.8f, 1.4f);
-            else if (role == TrafficCarController.VehicleRole.FuelTanker) controller.SetFootprint(4.5f, 1.4f);
+            // Hull comes from the mesh, always. The hand-set role footprints that used
+            // to override this described vehicles two to three times longer than what
+            // was actually being drawn, which is the other half of the clipping: the
+            // hull and the model were not the same object.
+            if (TryGetLocalFootprint(root.gameObject, out var halfLength, out var halfWidth))
+                controller.SetFootprint(halfLength, halfWidth);
             controller.Initialize(distance, lane, speed, direction, wreck, wreckYaw, offence);
             return controller;
+        }
+
+        /// Hull footprint measured in the vehicle root's own frame.
+        ///
+        /// The previous measurement read a world-space AABB (Renderer.bounds) taken
+        /// before the car had been rotated onto the road, so "length" was whichever way
+        /// the model happened to point inside its chunk - and the Synty presets import
+        /// Z-up and are then rolled 90 degrees, which leaves the long axis across world
+        /// Z on most of them. A 4.75 m car was registering as roughly 2 m long and
+        /// 4.75 m wide, so the longitudinal reach the overlap test used was less than
+        /// half of what it should have been: two cars had to bury a quarter of their
+        /// length in one another before contact registered. That is the clipping.
+        ///
+        /// Measuring in local space fixes the axes, and since a road vehicle is always
+        /// longer than it is wide the larger horizontal extent is the length regardless
+        /// of which way a given FBX was authored.
+        private static bool TryGetLocalFootprint(GameObject item, out float halfLength, out float halfWidth)
+        {
+            halfLength = 0f;
+            halfWidth = 0f;
+            var renderers = item.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return false;
+
+            var toLocal = item.transform.worldToLocalMatrix;
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+            foreach (var renderer in renderers)
+            {
+                var bounds = renderer.bounds;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var world = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f));
+                    var local = toLocal.MultiplyPoint3x4(world);
+                    min = Vector3.Min(min, local);
+                    max = Vector3.Max(max, local);
+                }
+            }
+
+            var size = max - min;
+            halfLength = Mathf.Max(size.x, size.z) * 0.5f;
+            halfWidth = Mathf.Min(size.x, size.z) * 0.5f;
+            return halfLength > 0.01f && halfWidth > 0.01f;
+        }
+
+        /// Kerb-weight lengths in metres, so a lorry is a lorry. Every traffic vehicle
+        /// used to be normalised to a flat 4.75 m, which shrank the trucks to hatchback
+        /// size on screen while their collision hulls stayed hand-set at 9.6 m and 9.0 m
+        /// - a lorry reserved twice its own visible length of road and the traffic
+        /// behind it braked for empty asphalt.
+        private static float VehicleLengthFor(string modelName)
+        {
+            if (modelName.Contains("Motorbike")) return 2.15f;
+            if (modelName.Contains("Hatch")) return 4.15f;
+            if (modelName.Contains("Sports")) return 4.45f;
+            if (modelName.Contains("Exotic")) return 4.55f;
+            if (modelName.Contains("Sedan")) return 4.85f;
+            if (modelName.Contains("Muscle")) return 5.05f;
+            if (modelName.Contains("Ute")) return 5.45f;
+            if (modelName.Contains("Truck")) return 9.20f;
+            return 4.60f;
         }
 
         private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
@@ -4651,6 +4783,15 @@ namespace RoadRage.UnityRemake
         public float SteerInput => Mathf.Clamp(GameInput.GetSteer() + TouchSteer, -1f, 1f);
         public float LateralVelocity => lateralVelocity;
         public bool IsAirborne => verticalOffset > 0.05f;
+        /// High enough to pass over traffic rather than through it. Contact and
+        /// separation are both skipped above this, so a jump clears the cars below.
+        internal bool ClearsTraffic => verticalOffset >= 1.6f;
+
+        /// Re-applies the road-space position. Update places the car, then the shared
+        /// separation pass runs in LateUpdate and may still move it; without this the
+        /// correction would not reach the transform until the following frame.
+        internal void SyncToRoad() =>
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f + verticalOffset);
         public float AirtimeDuration { get; private set; }
 
         private float verticalOffset;
@@ -4796,7 +4937,7 @@ namespace RoadRage.UnityRemake
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             
             // Only test ground collision if not flying high over cars
-            if (verticalOffset < 1.6f)
+            if (!ClearsTraffic)
             {
                 TrafficCarController.ResolvePlayerCollision(this);
             }
@@ -4818,19 +4959,10 @@ namespace RoadRage.UnityRemake
             nextImpactTime = Time.time + 0.35f;
             var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
 
-            // Physical anti-penetration pushback: separate the two vehicle hulls so they NEVER pass inside each other!
-            var minLongitudinal = (HalfLength + traffic.HalfLength) * 0.98f;
-            if (Mathf.Abs(longitudinalGap) < minLongitudinal)
-            {
-                var delta = Mathf.Sign(longitudinalGap) * (minLongitudinal - Mathf.Abs(longitudinalGap));
-                RoadDistance += delta * 0.6f;
-            }
-            var minLateral = (HalfWidth + traffic.HalfWidth) * 0.92f;
-            if (Mathf.Abs(lateralGap) < minLateral)
-            {
-                var deltaLat = Mathf.Sign(lateralGap) * (minLateral - Mathf.Abs(lateralGap));
-                LateralOffset -= deltaLat * 0.75f;
-            }
+            // Anti-penetration is no longer done here. It used to push on both axes at
+            // once with its own shrunken hull sizes, fighting the traffic's separate
+            // resolution of the same contact; both now go through the single relaxation
+            // pass in TrafficCarController, which runs after every vehicle has moved.
 
             // Armour is the reason to drive a truck: it cuts how much speed an impact
             // scrubs off and how far you get shoved. Upgrades and ram bars stack on top of the chassis.
