@@ -175,6 +175,22 @@ namespace RoadRage.UnityRemake
                 RoadRageBoostDirector.Instance.AddBoost(100f, "TANKER CHAIN REACTION");
             }
 
+            // A tanker is a pursuit breaker. Anything inside the blast goes, cruisers
+            // included - which gives a chase a shape beyond outrunning it: bait them
+            // past the tanker, then set it off.
+            if (RoadRagePolicePursuitDirector.Instance != null)
+            {
+                var police = RoadRagePolicePursuitDirector.Instance.ActivePolice;
+                for (var i = police.Count - 1; i >= 0; i--)
+                {
+                    var cop = police[i];
+                    if (cop == null) continue;
+                    if (Mathf.Abs(cop.RoadDistance - RoadDistance) > 30f) continue;
+                    GameState.Show("🚨 TANKER TOOK A CRUISER!");
+                    cop.WreckCop();
+                }
+            }
+
             // Chain reaction blast to surrounding traffic
             for (var i = ActiveCars.Count - 1; i >= 0; i--)
             {

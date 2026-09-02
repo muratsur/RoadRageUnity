@@ -322,8 +322,14 @@ namespace RoadRage.UnityRemake
         public void NotifyPoliceDestroyed(PoliceVehicleController cop)
         {
             activePolice.Remove(cop);
-            GameState.Award(750 + HeatLevel * 250, "🚨 COP TAKEDOWN!");
-            GameState.Show($"🚨 COP TAKEDOWN! +${750 + HeatLevel * 250}");
+            var value = 750 + HeatLevel * 250;
+            GameState.Award(value, "🚨 COP TAKEDOWN!");
+            // Wrecking a cruiser should pay into the pursuit it belongs to and feed the
+            // boost that made it possible - that loop of risk paying for more speed is
+            // the whole reason to take one on rather than simply outrun it.
+            PursuitBounty += value * 0.5f;
+            if (RoadRageBoostDirector.Instance != null)
+                RoadRageBoostDirector.Instance.AddBoost(45f, "COP TAKEDOWN");
         }
 
         public void ResetPursuit()
@@ -390,11 +396,46 @@ namespace RoadRage.UnityRemake
         {
             VehicleContacts.ResolveOncePerFrame();
             if (isWrecked) return;
+            CheckTrafficImpact();
             var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
         }
         // ------------------------------------------------------------------------
+
+        /// A cruiser that piles into traffic wrecks, like anything else on this road.
+        ///
+        /// Until it joined the shared contact registry a cruiser could only be stopped
+        /// by the player hitting it, so the traffic it was weaving through at 140 km/h
+        /// was scenery to it. Making it mortal to the world is what turns a pursuit into
+        /// something the player can fight with the road rather than only outrun: brake
+        /// hard, let them commit to a gap that closes, and the highway does the work.
+        private void CheckTrafficImpact()
+        {
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car == null || car.IsAirborne) continue;
+
+                var alongRoad = Mathf.Abs(car.RoadDistance - RoadDistance);
+                if (alongRoad > hullHalfLength + car.LongitudinalExtent + ContactMargin) continue;
+                var acrossRoad = Mathf.Abs(car.LaneOffset - LateralOffset);
+                if (acrossRoad > hullHalfWidth + car.LateralExtent + ContactMargin) continue;
+
+                // Closing speed decides it. Nudging a car at matched speed is a scrape;
+                // arriving 40 km/h faster than it is a wreck.
+                var closing = Mathf.Abs(SpeedKph - car.SpeedKph);
+                if (car.IsWreck || closing > 40f)
+                {
+                    GameState.Show("🚨 CRUISER WIPED OUT!");
+                    if (!car.IsWreck) car.Crash(acrossRoad, SpeedKph);
+                    WreckCop();
+                    return;
+                }
+                SpeedKph = Mathf.Min(SpeedKph, car.SpeedKph + 10f);
+            }
+        }
 
         private ArcadeCarController targetPlayer;
         private int unitHeatLevel;
