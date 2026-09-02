@@ -3122,35 +3122,14 @@ namespace RoadRage.UnityRemake
                 return junk;
             });
 
-            // building_9 through building_13 were being asked for here and nothing by
+            // building_9 through building_13 used to be listed here and nothing by
             // those names has ever shipped - Resources/Buildings/NYC stops at 8 - so
             // five of the fourteen draws silently produced nothing and the skyline came
-            // up with holes in it. The pack these came from ships assembled variants
-            // (bottom/middle/roof compositions, more storeys and more silhouettes than
-            // the eight bare models), which is what the block now draws from.
-            var nycSkyscrapers = new[]
-            {
-                "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_1_2", "Buildings/NYCVariants/building_1_3",
-                "Buildings/NYCVariants/building_1_4", "Buildings/NYCVariants/building_1_5", "Buildings/NYCVariants/building_2_1",
-                "Buildings/NYCVariants/building_2_2", "Buildings/NYCVariants/building_2_3", "Buildings/NYCVariants/building_2_4",
-                "Buildings/NYCVariants/building_2_5", "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_3_2",
-                "Buildings/NYCVariants/building_3_3", "Buildings/NYCVariants/building_3_4", "Buildings/NYCVariants/building_3_5",
-                "Buildings/NYCVariants/building_4_1", "Buildings/NYCVariants/building_4_2", "Buildings/NYCVariants/building_4_3",
-                "Buildings/NYCVariants/building_4_4", "Buildings/NYCVariants/building_4_5", "Buildings/NYCVariants/building_5_1",
-                "Buildings/NYCVariants/building_5_2", "Buildings/NYCVariants/building_5_3", "Buildings/NYCVariants/building_5_4",
-                "Buildings/NYCVariants/building_5_5", "Buildings/NYCVariants/building_6_1", "Buildings/NYCVariants/building_6_2",
-                "Buildings/NYCVariants/building_6_3", "Buildings/NYCVariants/building_6_4", "Buildings/NYCVariants/building_6_5",
-                "Buildings/NYCVariants/building_6_6", "Buildings/NYCVariants/building_6_7", "Buildings/NYCVariants/building_6_8",
-                "Buildings/NYCVariants/building_6_9", "Buildings/NYCVariants/building_6_10", "Buildings/NYCVariants/building_8_1",
-                "Buildings/NYCVariants/building_8_2", "Buildings/NYCVariants/building_8_3", "Buildings/NYCVariants/building_8_4",
-                "Buildings/NYCVariants/building_8_5", "Buildings/NYCVariants/building_8_6", "Buildings/NYCVariants/building_8_7",
-                "Buildings/NYCVariants/building_8_8", "Buildings/NYCVariants/building_8_9", "Buildings/NYCVariants/building_8_10",
-                "Buildings/NYCVariants/building_9_1", "Buildings/NYCVariants/building_9_2", "Buildings/NYCVariants/building_9_3",
-                "Buildings/NYCVariants/building_9_4", "Buildings/NYCVariants/building_9_5", "Buildings/NYCVariants/building_9_6",
-                "Buildings/NYCVariants/building_9_7", "Buildings/NYCVariants/building_9_8", "Buildings/NYCVariants/building_9_9",
-                "Buildings/NYCVariants/building_9_10",
-                "Buildings/USA/building"
-            };
+            // up with holes in it. The shared variant roster, plus the standalone USA
+            // block that only the skyline uses.
+            var nycSkyscrapers = new string[NycVariants.Length + 1];
+            System.Array.Copy(NycVariants, nycSkyscrapers, NycVariants.Length);
+            nycSkyscrapers[NycVariants.Length] = "Buildings/USA/building";
 
             var nycFrontageBlocks = new[]
             {
@@ -4227,6 +4206,8 @@ namespace RoadRage.UnityRemake
         }
 
         /// The assembled building variants from the NYC set, mirrored into Resources.
+        /// The set ships these alongside the eight bare models - bottom/middle/roof
+        /// compositions with more storeys and more silhouettes than the meshes alone.
         /// Shared by the Neon City frontage and the Manhattan blocks so both draw from
         /// the same catalogue rather than each keeping a partly-wrong list of its own.
         private static readonly string[] NycVariants =
