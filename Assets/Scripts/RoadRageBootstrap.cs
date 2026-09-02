@@ -1037,11 +1037,11 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = mood.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(mood.Fog, weather.FogTint, weather.FogTintAmount);
-            RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f)
-                                             * (mood.AmbientIntensity * AmbientTrim);
-            RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f)
-                                                 * (mood.AmbientIntensity * AmbientTrim);
-            RenderSettings.ambientGroundColor = mood.Ground * (mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientSkyColor = ScaleRgb(
+                Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f), mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientEquatorColor = ScaleRgb(
+                Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f), mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientGroundColor = ScaleRgb(mood.Ground, mood.AmbientIntensity * AmbientTrim);
             RenderSettings.haloStrength = 0f;
             RenderSettings.flareStrength = 0f;
 
@@ -1160,6 +1160,11 @@ namespace RoadRage.UnityRemake
         /// while looking at the frame. The chosen value is logged so it can be baked in.
         public static float AmbientTrim = 1f;
         public static float ExposureTrim = 0f;
+
+        /// Scales RGB only. Multiplying a Color by a float also scales alpha, which is
+        /// meaningless for an ambient colour and shows up as a stray 1.35 in the logs.
+        private static Color ScaleRgb(Color value, float gain) =>
+            new Color(value.r * gain, value.g * gain, value.b * gain, value.a);
 
         /// Raises a colour to a minimum luma without changing its hue.
         private static Color LiftToFloor(Color value, float floor)
@@ -2338,9 +2343,9 @@ namespace RoadRage.UnityRemake
             // Trilight Unity uses the three colours as given and ignores it entirely,
             // so setting it was a no-op. Fold the gain into the colours instead.
             var gain = here.AmbientIntensity * AmbientTrim;
-            RenderSettings.ambientSkyColor = Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f) * gain;
-            RenderSettings.ambientEquatorColor = Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f) * gain;
-            RenderSettings.ambientGroundColor = here.Ground * gain;
+            RenderSettings.ambientSkyColor = ScaleRgb(Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f), gain);
+            RenderSettings.ambientEquatorColor = ScaleRgb(Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f), gain);
+            RenderSettings.ambientGroundColor = ScaleRgb(here.Ground, gain);
             if (sunLight != null)
             {
                 sunLight.color = here.SunColor;
