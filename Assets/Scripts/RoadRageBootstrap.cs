@@ -1092,6 +1092,19 @@ namespace RoadRage.UnityRemake
 			var vignette = volume.profile.Add<Vignette>();
 			vignette.intensity.Override(0.20f);
 			vignette.smoothness.Override(0.68f);
+
+			// Diagnostic. Three remote attempts at the Manhattan darkness have changed
+			// values that either were not read (ambientIntensity in Trilight) or may not
+			// be reaching the renderer at all. This prints what is actually live, plus a
+			// build marker so it is obvious whether the running code is the current one.
+			Debug.Log($"[LIGHT] build=ambient-trim-v1 biome={biomeName} mode={RenderSettings.ambientMode}\n" +
+			          $"[LIGHT] sky={RenderSettings.ambientSkyColor} equator={RenderSettings.ambientEquatorColor} ground={RenderSettings.ambientGroundColor}\n" +
+			          $"[LIGHT] ambientIntensity={RenderSettings.ambientIntensity:0.00} trim={AmbientTrim:0.00} moodGain={mood.AmbientIntensity:0.00}\n" +
+			          $"[LIGHT] sun={sun.intensity:0.00} colour={sun.color} shadows={sun.shadows}\n" +
+			          $"[LIGHT] exposure={mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim:0.00} " +
+			          $"tonemap=Neutral contrast=14 saturation={GradeSaturation}\n" +
+			          $"[LIGHT] lightmaps={LightmapSettings.lightmaps.Length} probes={(LightmapSettings.lightProbes != null ? LightmapSettings.lightProbes.count : 0)} " +
+			          $"quality={QualitySettings.GetQualityLevel()} colorSpace={QualitySettings.activeColorSpace}");
         }
 
         private ColorAdjustments colorAdjustments;
