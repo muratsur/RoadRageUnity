@@ -33,6 +33,17 @@ namespace RoadRage.UnityRemake
         private float evadeTimer;
         private float bustTimer;
         private float pursuitSeconds;
+        /// Units sent this pursuit. With an empty list the nearest-cruiser distance is
+        /// infinite, so the evade timer ran before anything had been dispatched and the
+        /// pursuit could end before a single cruiser existed - sirens, then nothing.
+        private int unitsDispatched;
+
+        /// 0-1 towards shaking them, and towards being taken. Surfaced so the HUD can
+        /// show the player which way a pursuit is going; without that both endings
+        /// arrive unannounced and a pursuit reads as noise.
+        public float EvadeProgress => HeatLevel > 0 && unitsDispatched > 0
+            ? Mathf.Clamp01(evadeTimer / EvadeSecondsFor(HeatLevel)) : 0f;
+        public float BustProgress => Mathf.Clamp01(bustTimer / BustSeconds);
 
         /// No cruiser within this and the player is running clear.
         private const float EvadeRadius = 135f;
@@ -131,8 +142,12 @@ namespace RoadRage.UnityRemake
             if (HeatLevel > 0)
             {
                 spawnTimer += Time.deltaTime;
-                var maxUnits = Mathf.Min(HeatLevel, 3);
-                var spawnInterval = Mathf.Max(3.5f, 9f - HeatLevel * 1.2f);
+                // Heat 1 sent one cruiser and capped there, which is trivially outrun -
+                // the pursuit was over before it registered. Escalation has to be felt.
+                var maxUnits = Mathf.Min(1 + HeatLevel, 5);
+                var spawnInterval = Mathf.Max(2.5f, 8f - HeatLevel * 1.2f);
+                // The first unit of a pursuit does not wait out the interval.
+                if (unitsDispatched == 0) spawnTimer = spawnInterval;
 
                 if (spawnTimer >= spawnInterval && activePolice.Count < maxUnits)
                 {
@@ -162,6 +177,11 @@ namespace RoadRage.UnityRemake
             {
                 pursuitSeconds += Time.deltaTime;
                 PursuitBounty += Time.deltaTime * (35f + HeatLevel * 55f);
+                // Staying in a pursuit escalates it. Takedowns were the only source of
+                // heat, so a chase never grew on its own and every pursuit stayed at the
+                // star it started on - the escalation the whole system is built around
+                // simply never happened.
+                AddHeat(Time.deltaTime / 22f);
                 UpdatePursuitOutcome();
             }
 
@@ -191,7 +211,8 @@ namespace RoadRage.UnityRemake
             }
 
             // Escape: clear of every unit for long enough that they have lost the trail.
-            evadeTimer = nearest > EvadeRadius ? evadeTimer + Time.deltaTime : 0f;
+            // Only once something has actually been sent.
+            evadeTimer = unitsDispatched > 0 && nearest > EvadeRadius ? evadeTimer + Time.deltaTime : 0f;
             if (evadeTimer >= EvadeSecondsFor(HeatLevel))
             {
                 EndPursuit(escaped: true);
@@ -233,6 +254,7 @@ namespace RoadRage.UnityRemake
             HeatLevel = 0;
             HeatProgress = 0f;
             PursuitBounty = 0f;
+            unitsDispatched = 0;
             pursuitSeconds = 0f;
             evadeTimer = 0f;
             bustTimer = 0f;
@@ -256,6 +278,7 @@ namespace RoadRage.UnityRemake
             var cop = copObj.AddComponent<PoliceVehicleController>();
             cop.Initialize(playerController, HeatLevel, spawnDist, spawnLane, slot);
             activePolice.Add(cop);
+            unitsDispatched++;
         }
 
         private void SpawnRoadblock()

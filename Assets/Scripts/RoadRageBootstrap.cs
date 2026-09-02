@@ -5921,11 +5921,26 @@ namespace RoadRage.UnityRemake
             {
                 var heat = RoadRagePolicePursuitDirector.Instance.HeatLevel;
                 var stars = new string('★', heat) + new string('☆', 5 - heat);
-                var heatText = $"🚨 WANTED: {stars}  (HEAT {heat})";
+                var director = RoadRagePolicePursuitDirector.Instance;
+                var heatText = $"🚨 WANTED: {stars}   ${Mathf.RoundToInt(director.PursuitBounty)}";
                 var flash = Mathf.Sin(Time.unscaledTime * 8f) > 0f;
                 var prevColor = titleStyle.normal.textColor;
                 titleStyle.normal.textColor = flash ? new Color(1f, 0.25f, 0.2f) : new Color(0.2f, 0.65f, 1f);
-                GUI.Label(new Rect(Screen.width * 0.5f - 180f, 76f, 360f, 36f), heatText, titleStyle);
+                GUI.Label(new Rect(Screen.width * 0.5f - 200f, 76f, 400f, 36f), heatText, titleStyle);
+
+                // Which way the pursuit is going. Both endings used to arrive with no
+                // warning, so a chase read as noise rather than as something the player
+                // was winning or losing.
+                var bust = director.BustProgress;
+                var evade = director.EvadeProgress;
+                if (bust > 0.01f || evade > 0.01f)
+                {
+                    var losing = bust > evade;
+                    titleStyle.normal.textColor = losing ? new Color(1f, 0.35f, 0.25f) : new Color(0.45f, 1f, 0.55f);
+                    var pct = Mathf.RoundToInt((losing ? bust : evade) * 100f);
+                    GUI.Label(new Rect(Screen.width * 0.5f - 200f, 110f, 400f, 32f),
+                        losing ? $"BUSTED IN... {100 - pct}%" : $"LOSING THEM... {pct}%", titleStyle);
+                }
                 titleStyle.normal.textColor = prevColor;
             }
             GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
