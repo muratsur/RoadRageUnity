@@ -256,7 +256,7 @@ namespace RoadRage.UnityRemake
         /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
         /// the pair meeting in the middle.
         public float ContactMass => HalfLength * HalfWidth;
-        public bool ContactActive => isActiveAndEnabled;
+        public bool ContactActive => isActiveAndEnabled && !Ragdolled;
 
         public void ApplyContactPush(float alongRoad, float acrossRoad)
         {
@@ -358,8 +358,27 @@ namespace RoadRage.UnityRemake
             currentSpeedKph = cruiseSpeedKph;
         }
 
+        /// True once something has handed this car to the physics engine - the crash
+        /// blast during an aftertouch tumble. The controller then stops driving it and
+        /// stops forcing it kinematic, because those two things fight.
+        public bool Ragdolled { get; private set; }
+
+        /// Hands the car to physics for good. Without this the blast set isKinematic
+        /// false and applied an explosion impulse, and this controller set isKinematic
+        /// back to true on the very next frame - so even once the blast could find a car
+        /// to hit, it could never actually move one.
+        public void ReleaseToPhysics()
+        {
+            if (Ragdolled) return;
+            Ragdolled = true;
+            IsWreck = true;
+            VehicleContacts.Unregister(this);
+        }
+
         private void Update()
         {
+            if (Ragdolled) return;
+
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
 
@@ -430,6 +449,10 @@ namespace RoadRage.UnityRemake
         /// (crashes, pileup damage) stay here because they are traffic's own rules.
         private void LateUpdate()
         {
+            // A ragdolled car is the physics engine's now; placing it on the road would
+            // yank it straight back out of its own crash.
+            if (Ragdolled) return;
+
             VehicleContacts.ResolveOncePerFrame();
             if (reactionFrame != Time.frameCount)
             {

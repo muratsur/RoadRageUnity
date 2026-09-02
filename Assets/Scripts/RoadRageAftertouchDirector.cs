@@ -285,6 +285,9 @@ namespace RoadRage.UnityRemake
                     impactedTraffic.Add(traffic);
                     vehiclesBlown++;
 
+                    // Hand it over before touching the rigidbody, or the controller
+                    // forces it kinematic again on the next frame and the impulse is lost.
+                    traffic.ReleaseToPhysics();
                     var trb = traffic.GetComponent<Rigidbody>();
                     if (trb == null) trb = traffic.gameObject.AddComponent<Rigidbody>();
                     trb.isKinematic = false;
@@ -322,6 +325,9 @@ namespace RoadRage.UnityRemake
                     (traffic.transform.position - playerTransform.position).sqrMagnitude < 3.2f * 3.2f)
                 {
                     impactedTraffic.Add(traffic);
+                    // Hand it over before touching the rigidbody, or the controller
+                    // forces it kinematic again on the next frame and the impulse is lost.
+                    traffic.ReleaseToPhysics();
                     var trb = traffic.GetComponent<Rigidbody>();
                     if (trb == null) trb = traffic.gameObject.AddComponent<Rigidbody>();
                     trb.isKinematic = false;
