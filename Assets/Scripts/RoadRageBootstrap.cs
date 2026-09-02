@@ -2191,15 +2191,31 @@ namespace RoadRage.UnityRemake
             return size.y > 0.001f;
         }
 
-        private static BuildingClass ClassifyBuilding(float height, float width)
+        /// Only the genuinely-not-a-building test is absolute. Everything else is decided
+        /// by rank once the whole set is measured - see AssignClasses.
+        private static bool IsBuildingShaped(float height) => height >= 4f;
+
+        /// Splits the measured set into thirds by width: narrowest front the street,
+        /// widest go to the skyline.
+        ///
+        /// The first attempt used absolute cutoffs - under 34 m fronts the street, over
+        /// 80 m is skyline - and produced zero frontage buildings, because nothing in
+        /// this set is narrower than 34 m. Numbers picked from intuition about what a
+        /// building "should" measure describe no particular asset set. Ranking cannot
+        /// empty a bucket: whatever is narrowest here fronts the street, whatever that
+        /// turns out to be.
+        private static void AssignClasses(List<BuildingEntry> entries)
         {
-            // A 0.65 m mesh is a prop that got filed under buildings. Nothing rescues it.
-            if (height < 4f) return BuildingClass.NotABuilding;
-            // Wider than it is tall by a wide margin means a block or a terrace strip,
-            // not something that can front a 24 m plot.
-            if (width > 80f) return BuildingClass.Skyline;
-            if (width > 34f) return BuildingClass.MidBlock;
-            return BuildingClass.Frontage;
+            entries.Sort((a, b) => a.Width.CompareTo(b.Width));
+            var third = Mathf.Max(1, entries.Count / 3);
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                entry.Class = i < third ? BuildingClass.Frontage
+                            : i < third * 2 ? BuildingClass.MidBlock
+                            : BuildingClass.Skyline;
+                entries[i] = entry;
+            }
         }
 
         /// Built once per run from every mesh the city blocks can draw on, so placement
@@ -2223,8 +2239,7 @@ namespace RoadRage.UnityRemake
 
                 var width = Mathf.Max(size.x, size.z);
                 var depth = Mathf.Min(size.x, size.z);
-                var kind = ClassifyBuilding(size.y, width);
-                if (kind == BuildingClass.NotABuilding)
+                if (!IsBuildingShaped(size.y))
                 {
                     rejected++;
                     Debug.LogWarning($"[CITY] rejected {resource}: {size.y:0.00}m tall, {width:0.0}x{depth:0.0}m - not a building");
@@ -2232,14 +2247,18 @@ namespace RoadRage.UnityRemake
                 }
                 buildingCatalogue.Add(new BuildingEntry
                 {
-                    Resource = resource, Height = size.y, Width = width, Depth = depth, Class = kind
+                    Resource = resource, Height = size.y, Width = width, Depth = depth
                 });
             }
+            AssignClasses(buildingCatalogue);
 
             var frontage = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Frontage).Count;
             var mid = buildingCatalogue.FindAll(e => e.Class == BuildingClass.MidBlock).Count;
             var sky = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Skyline).Count;
-            Debug.Log($"[CITY] catalogue: {frontage} frontage, {mid} mid-block, {sky} skyline, {rejected} rejected");
+            var narrowest = buildingCatalogue.Count > 0 ? buildingCatalogue[0].Width : 0f;
+            var widest = buildingCatalogue.Count > 0 ? buildingCatalogue[buildingCatalogue.Count - 1].Width : 0f;
+            Debug.Log($"[CITY] catalogue: {frontage} frontage, {mid} mid-block, {sky} skyline, {rejected} rejected " +
+                      $"(widths {narrowest:0.0}m to {widest:0.0}m)");
             return buildingCatalogue;
         }
 
@@ -3504,7 +3523,7 @@ namespace RoadRage.UnityRemake
                     // 1. Street frontage, on a plot, meeting a continuous facade line.
                     PlaceBuildingOnPlot(BuildingClass.Frontage, materials["City Concrete"],
                         "NYC Street Frontage", frontDistance, side,
-                        frontageLine: FrontageSetback, plotWidth: 22f, hash: BlockHash(block, side * 7));
+                        frontageLine: FrontageSetback, plotWidth: 30f, hash: BlockHash(block, side * 7));
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     if (block % 2 == 0)
