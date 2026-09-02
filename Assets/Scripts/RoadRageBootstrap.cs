@@ -2117,7 +2117,201 @@ namespace RoadRage.UnityRemake
         private const float MaxModelScale = 12f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetGroundingLogs() => groundingLogs = 0;
+        private static void ResetGroundingLogs()
+        {
+            groundingLogs = 0;
+            // Same trap: a static survives entering play mode when domain reload is off,
+            // so a catalogue built once would outlive the run that measured it.
+            buildingCatalogue = null;
+        }
+
+        /// A candidate building mesh, measured in its own right.
+        ///
+        /// Sizing buildings by scaling whatever mesh a hash picked to a target height
+        /// cannot work when the roster runs from 0.65 m props to 228 m city blocks: the
+        /// same rule turns one into a 93x-wide monster and the other into a stub. So
+        /// every candidate is measured first and used only where it fits.
+        private struct BuildingEntry
+        {
+            public string Resource;
+            public float Height;
+            public float Width;   // larger horizontal extent
+            public float Depth;   // smaller horizontal extent
+            public BuildingClass Class;
+        }
+
+        /// What a mesh actually is, decided from its own proportions rather than from
+        /// the list it happened to be written into.
+        private enum BuildingClass
+        {
+            /// Too small or too squat to be a building. Never placed as one.
+            NotABuilding,
+            /// Fits a street plot: fronts the sidewalk.
+            Frontage,
+            /// Needs a deeper plot: sits behind the frontage line.
+            MidBlock,
+            /// A whole city block. Background skyline only, far from the road.
+            Skyline
+        }
+
+        private static List<BuildingEntry> buildingCatalogue;
+
+        /// Measures a prefab without instantiating it, by combining each mesh's local
+        /// bounds through the hierarchy into the prefab root's space.
+        private static bool TryMeasurePrefab(GameObject prefab, out Vector3 size)
+        {
+            size = Vector3.zero;
+            var filters = prefab.GetComponentsInChildren<MeshFilter>(true);
+            if (filters.Length == 0) return false;
+
+            var toRoot = prefab.transform.worldToLocalMatrix;
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+            var found = false;
+            foreach (var filter in filters)
+            {
+                var mesh = filter.sharedMesh;
+                if (mesh == null) continue;
+                var local = toRoot * filter.transform.localToWorldMatrix;
+                var b = mesh.bounds;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var point = b.center + Vector3.Scale(b.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f));
+                    var world = local.MultiplyPoint3x4(point);
+                    min = Vector3.Min(min, world);
+                    max = Vector3.Max(max, world);
+                    found = true;
+                }
+            }
+            if (!found) return false;
+            size = max - min;
+            return size.y > 0.001f;
+        }
+
+        private static BuildingClass ClassifyBuilding(float height, float width)
+        {
+            // A 0.65 m mesh is a prop that got filed under buildings. Nothing rescues it.
+            if (height < 4f) return BuildingClass.NotABuilding;
+            // Wider than it is tall by a wide margin means a block or a terrace strip,
+            // not something that can front a 24 m plot.
+            if (width > 80f) return BuildingClass.Skyline;
+            if (width > 34f) return BuildingClass.MidBlock;
+            return BuildingClass.Frontage;
+        }
+
+        /// Built once per run from every mesh the city blocks can draw on, so placement
+        /// picks by measured fit instead of by list position.
+        private static List<BuildingEntry> BuildingCatalogue()
+        {
+            if (buildingCatalogue != null) return buildingCatalogue;
+            buildingCatalogue = new List<BuildingEntry>();
+
+            var candidates = new List<string>(NycVariants) { "Buildings/USA/building" };
+            for (var i = 1; i <= 8; i++) candidates.Add($"Buildings/NYC/building_{i}");
+            candidates.Add("Buildings/NYCBlock6/builds");
+            candidates.Add("Buildings/NYCBlock6/shops");
+
+            var rejected = 0;
+            foreach (var resource in candidates)
+            {
+                var prefab = Resources.Load<GameObject>(resource);
+                if (prefab == null) continue;
+                if (!TryMeasurePrefab(prefab, out var size)) continue;
+
+                var width = Mathf.Max(size.x, size.z);
+                var depth = Mathf.Min(size.x, size.z);
+                var kind = ClassifyBuilding(size.y, width);
+                if (kind == BuildingClass.NotABuilding)
+                {
+                    rejected++;
+                    Debug.LogWarning($"[CITY] rejected {resource}: {size.y:0.00}m tall, {width:0.0}x{depth:0.0}m - not a building");
+                    continue;
+                }
+                buildingCatalogue.Add(new BuildingEntry
+                {
+                    Resource = resource, Height = size.y, Width = width, Depth = depth, Class = kind
+                });
+            }
+
+            var frontage = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Frontage).Count;
+            var mid = buildingCatalogue.FindAll(e => e.Class == BuildingClass.MidBlock).Count;
+            var sky = buildingCatalogue.FindAll(e => e.Class == BuildingClass.Skyline).Count;
+            Debug.Log($"[CITY] catalogue: {frontage} frontage, {mid} mid-block, {sky} skyline, {rejected} rejected");
+            return buildingCatalogue;
+        }
+
+        /// Places a building on a plot rather than scaling it into a gap.
+        ///
+        /// Two things make a street read as a street: every facade meets the pavement on
+        /// one continuous line, and a building is never wider than the plot it stands on.
+        /// The old code did neither - it centred each building at a random lateral and
+        /// then scaled it to a target height, so facades zigzagged and an oversized mesh
+        /// simply grew until EnsureOutsideRoad shoved it away from the road, leaving the
+        /// gap between the buildings and the pavement.
+        ///
+        /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
+        /// it recognisable, and then positioned by its street-facing face.
+        private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
+            float distance, float side, float frontageLine, float plotWidth, int hash)
+        {
+            var catalogue = BuildingCatalogue();
+            var fitting = new List<BuildingEntry>();
+            foreach (var entry in catalogue)
+            {
+                if (entry.Class != wanted) continue;
+                // Usable if it can be brought within the plot without shrinking so far
+                // that it stops reading as a building.
+                if (entry.Width * MinPlotScale <= plotWidth) fitting.Add(entry);
+            }
+            if (fitting.Count == 0) return null;
+
+            var chosen = fitting[Mathf.Abs(hash) % fitting.Count];
+
+            // Scale to fill the plot's width, capped so a small mesh is not blown up and
+            // a large one is not shrunk into a model. Height follows - the proportions
+            // of a real building are not ours to invent.
+            var scale = Mathf.Clamp(plotWidth / chosen.Width, MinPlotScale, MaxPlotScale);
+
+            var facing = side > 0f ? -90f : 90f;
+            var model = PlaceBiomeModelOnRoad("Buildings", chosen.Resource, material,
+                distance, side * (frontageLine + chosen.Depth * scale * 0.5f), 0f,
+                new Vector3(0f, facing, 0f), Vector3.one * scale, label, enforceClearance: false);
+            if (model == null) return null;
+
+            // Ground it, then set the street-facing face exactly on the frontage line so
+            // the whole block shares one facade.
+            if (TryGetCombinedBounds(model, out var bounds))
+            {
+                var roadRight = RoadPath.Right(distance);
+                var roadCenter = RoadPath.Point(distance, 0f, 0f);
+                var nearest = float.PositiveInfinity;
+                for (var x = -1; x <= 1; x += 2)
+                for (var y = -1; y <= 1; y += 2)
+                for (var z = -1; z <= 1; z += 2)
+                {
+                    var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                    var projection = Vector3.Dot(corner - roadCenter, roadRight) * side;
+                    nearest = Mathf.Min(nearest, projection);
+                }
+                model.transform.position += roadRight * (side * (frontageLine - nearest));
+
+                if (TryGetCombinedBounds(model, out bounds))
+                    model.transform.position += Vector3.up *
+                        (RoadPath.Point(distance, 0f, 0f).y - bounds.min.y + 0.05f);
+            }
+            return model;
+        }
+
+        /// Scale band for a building on a plot. Outside this the mesh stops looking like
+        /// the thing it was modelled as, which is worse than an imperfect fit.
+        /// Distance from the road centreline to the facade line. Road half-width plus
+        /// the shoulder and the pavement - every frontage meets the pavement here.
+        private const float FrontageSetback = 17.5f;
+        private const float MinPlotScale = 0.55f;
+        private const float MaxPlotScale = 1.9f;
 
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f,
             float maxFootprint = 0f)
@@ -3285,22 +3479,10 @@ namespace RoadRage.UnityRemake
                 return junk;
             });
 
-            // building_9 through building_13 used to be listed here and nothing by
-            // those names has ever shipped - Resources/Buildings/NYC stops at 8 - so
-            // five of the fourteen draws silently produced nothing and the skyline came
-            // up with holes in it. The shared variant roster, plus the standalone USA
-            // block that only the skyline uses.
-            var nycSkyscrapers = new string[NycVariants.Length + 1];
-            System.Array.Copy(NycVariants, nycSkyscrapers, NycVariants.Length);
-            nycSkyscrapers[NycVariants.Length] = "Buildings/USA/building";
-
-            var nycFrontageBlocks = new[]
-            {
-                "Buildings/NYCBlock6/builds", "Buildings/NYCBlock6/shops",
-                "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_2_2",
-                "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_4_3",
-                "Buildings/NYCVariants/building_5_2", "Buildings/USA/building"
-            };
+            // The skyscraper and frontage rosters that used to live here are gone.
+            // Picking a mesh from a list and scaling it to a target height is what
+            // produced 93x-wide frontages and 167 m-deep towers; BuildingCatalogue
+            // measures every candidate instead and PlaceBuildingOnPlot picks by fit.
 
             var nycRooftops = new[]
             {
@@ -3319,16 +3501,10 @@ namespace RoadRage.UnityRemake
                     var facing = side > 0f ? -90f : 90f;
                     var frontDistance = z + (side > 0 ? 3f : -4f);
 
-                    // 1. Authentic NYC Street Frontages (Brownstones, Bodegas, Shops)
-                    var frontMesh = nycFrontageBlocks[BlockHash(block, side * 7) % nycFrontageBlocks.Length];
-                    var front = PlaceBiomeModelOnRoad("Buildings", frontMesh,
-                        materials["City Concrete"], frontDistance, side * Random.Range(16.5f, 21.5f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Frontage");
-                    if (front != null)
-                    {
-                        NormalizeModelHeight(front, Random.Range(34f, 62f), 0.05f, maxFootprint: 26f);
-                        EnsureOutsideRoad(front, frontDistance, side);
-                    }
+                    // 1. Street frontage, on a plot, meeting a continuous facade line.
+                    PlaceBuildingOnPlot(BuildingClass.Frontage, materials["City Concrete"],
+                        "NYC Street Frontage", frontDistance, side,
+                        frontageLine: FrontageSetback, plotWidth: 22f, hash: BlockHash(block, side * 7));
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     if (block % 2 == 0)
@@ -3342,11 +3518,9 @@ namespace RoadRage.UnityRemake
 
                     // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
                     var towerDistance = z + Random.Range(-10f, 10f);
-                    var towerMesh = nycSkyscrapers[BlockHash(block, side * 3) % nycSkyscrapers.Length];
-                    var tower = PlaceBiomeModelOnRoad("Buildings", towerMesh,
-                        materials["City Skyline"], towerDistance, side * Random.Range(36f, 75f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "Manhattan Midtown Skyscraper");
-                    if (tower != null) NormalizeModelHeight(tower, Random.Range(70f, 160f), 0.05f, maxFootprint: 62f);
+                    PlaceBuildingOnPlot(BuildingClass.MidBlock, materials["City Skyline"],
+                        "Manhattan Midtown Skyscraper", towerDistance, side,
+                        frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: BlockHash(block, side * 3));
 
                     // 4. NYC Street Lamposts with warm amber glow
                     var lampDistance = z + (side > 0 ? 10f : -7f);
