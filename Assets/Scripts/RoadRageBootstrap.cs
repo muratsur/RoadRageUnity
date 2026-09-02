@@ -1287,9 +1287,13 @@ namespace RoadRage.UnityRemake
                 // city is not an unlit one - the light comes off windows, wet asphalt
                 // and sky glow, and that is ambient, not the key. Still blue, still
                 // night, but the geometry is now visible.
-                FogDensity = 0.0055f, Fog = new Color(0.15f, 0.19f, 0.26f),
-                Sky = new Color(0.34f, 0.40f, 0.52f), Equator = new Color(0.28f, 0.33f, 0.42f),
-                Ground = new Color(0.16f, 0.18f, 0.21f), SunColor = new Color(0.82f, 0.88f, 1f),
+                // Raising the ambient 4x also multiplied its blue tint, so the cast came
+                // back louder than before even though the mood is desaturated on the way
+                // out. At this brightness the hue has to be neutral at source - a cool
+                // hint, not a wash.
+                FogDensity = 0.0055f, Fog = new Color(0.19f, 0.20f, 0.22f),
+                Sky = new Color(0.40f, 0.42f, 0.46f), Equator = new Color(0.33f, 0.35f, 0.38f),
+                Ground = new Color(0.185f, 0.19f, 0.20f), SunColor = new Color(0.94f, 0.96f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.62f, AmbientIntensity = 1.35f
             },
@@ -2096,6 +2100,10 @@ namespace RoadRage.UnityRemake
         }
 
         /// Scales a model to a target height and sits its base on the ground.
+        /// Counts how many grounding reports have been logged, so the diagnostic shows
+        /// the first few buildings of a run rather than one line per object forever.
+        private static int groundingLogs;
+
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f)
         {
             if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.01f) return;
@@ -2103,6 +2111,14 @@ namespace RoadRage.UnityRemake
             model.transform.localScale *= targetHeight / bounds.size.y;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
+            if (groundingLogs < 8 && targetHeight > 20f)
+            {
+                groundingLogs++;
+                TryGetCombinedBounds(model, out var settled);
+                Debug.Log($"[GROUND] {model.name} roadY={groundY:0.00} baseY={settled.min.y:0.00} " +
+                          $"drift={settled.min.y - groundY - groundHeight:0.000} " +
+                          $"height={settled.size.y:0.0} scale={model.transform.localScale.x:0.000}");
+            }
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
             var roadCenter = RoadPath.Point(dist, 0f, 0f);
