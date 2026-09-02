@@ -25,6 +25,25 @@ namespace RoadRage.UnityRemake
         public IReadOnlyList<PoliceVehicleController> ActivePolice => activePolice;
         private readonly List<GameObject> activeRoadblocks = new();
 
+        /// Bounty earned so far in this pursuit. Paid out on escape, lost on a bust -
+        /// which is what makes staying in a pursuit a decision rather than an accident.
+        public float PursuitBounty { get; private set; }
+        /// Seconds the player has been clear of every cruiser, and seconds they have
+        /// been pinned. The two ends of the pursuit.
+        private float evadeTimer;
+        private float bustTimer;
+        private float pursuitSeconds;
+
+        /// No cruiser within this and the player is running clear.
+        private const float EvadeRadius = 135f;
+        /// Pinned means slow with a cruiser in contact range.
+        private const float BustSpeedKph = 38f;
+        private const float BustRadius = 14f;
+        private const float BustSeconds = 3.5f;
+        /// Cooldown lengthens with heat, so shaking five stars is real work and shaking
+        /// one is not. Two stars is a few seconds of clear road; five is most of a minute.
+        private static float EvadeSecondsFor(int heat) => 5f + heat * 4.5f;
+
         private float spawnTimer;
         private float roadblockTimer;
         private float sirenAudioTimer;
@@ -133,7 +152,20 @@ namespace RoadRage.UnityRemake
                 }
             }
 
-            // 4. Clean up stale roadblocks
+            // 4. The pursuit's two endings.
+            //
+            // Until now heat only ever went up, cruisers never left, and there was no
+            // busted state - so there was nothing the player could actually do about the
+            // police, win or lose. A pursuit needs an exit at both ends to be a
+            // mechanic: outrun them and get paid, or get pinned and lose the purse.
+            if (HeatLevel > 0)
+            {
+                pursuitSeconds += Time.deltaTime;
+                PursuitBounty += Time.deltaTime * (35f + HeatLevel * 55f);
+                UpdatePursuitOutcome();
+            }
+
+            // 5. Clean up stale roadblocks
             for (var i = activeRoadblocks.Count - 1; i >= 0; i--)
             {
                 var rb = activeRoadblocks[i];
@@ -143,6 +175,68 @@ namespace RoadRage.UnityRemake
                     activeRoadblocks.RemoveAt(i);
                 }
             }
+        }
+
+        private void UpdatePursuitOutcome()
+        {
+            var nearest = float.MaxValue;
+            var pinning = 0;
+            for (var i = activePolice.Count - 1; i >= 0; i--)
+            {
+                var cop = activePolice[i];
+                if (cop == null) { activePolice.RemoveAt(i); continue; }
+                var gap = Mathf.Abs(cop.RoadDistance - playerController.RoadDistance);
+                nearest = Mathf.Min(nearest, gap);
+                if (gap < BustRadius) pinning++;
+            }
+
+            // Escape: clear of every unit for long enough that they have lost the trail.
+            evadeTimer = nearest > EvadeRadius ? evadeTimer + Time.deltaTime : 0f;
+            if (evadeTimer >= EvadeSecondsFor(HeatLevel))
+            {
+                EndPursuit(escaped: true);
+                return;
+            }
+
+            // Bust: pinned slow with a unit on you. Being slow is only fatal while they
+            // are alongside, so braking to dodge traffic is not punished by itself.
+            var pinned = pinning > 0 && playerController.SpeedKph < BustSpeedKph;
+            bustTimer = pinned ? bustTimer + Time.deltaTime : Mathf.MoveTowards(bustTimer, 0f, Time.deltaTime * 2f);
+            if (bustTimer >= BustSeconds) EndPursuit(escaped: false);
+        }
+
+        private void EndPursuit(bool escaped)
+        {
+            // A long pursuit pays more than the sum of its seconds. Surviving five stars
+            // for a minute should feel different from shaking one star immediately, and
+            // a flat rate makes those the same thing.
+            var endurance = 1f + Mathf.Clamp01(pursuitSeconds / 90f) * 0.75f;
+            var payout = Mathf.RoundToInt(PursuitBounty * endurance);
+            if (escaped)
+            {
+                GameState.Award(payout, $"🚔 LOST THEM  +{payout}");
+                if (RoadRageBoostDirector.Instance != null)
+                    RoadRageBoostDirector.Instance.AddBoost(60f, "CLEAN GETAWAY");
+            }
+            else
+            {
+                GameState.Show($"🚨 BUSTED  -{payout}");
+                GameState.Score = Mathf.Max(0, GameState.Score - payout);
+                GameState.ApplyDamage(22f);
+                GameState.Combo = 0;
+            }
+
+            for (var i = activePolice.Count - 1; i >= 0; i--)
+                if (activePolice[i] != null) Destroy(activePolice[i].gameObject);
+            activePolice.Clear();
+
+            HeatLevel = 0;
+            HeatProgress = 0f;
+            PursuitBounty = 0f;
+            pursuitSeconds = 0f;
+            evadeTimer = 0f;
+            bustTimer = 0f;
+            spawnTimer = 0f;
         }
 
         private void SpawnPoliceUnit()
@@ -262,6 +356,9 @@ namespace RoadRage.UnityRemake
         /// constants this replaces were a guess that matched no car in the game.
         private float hullHalfLength = 2.4f;
         private float hullHalfWidth = 1.2f;
+        /// Slightly wider than the separation skin, so contact registers on the frame
+        /// the hulls meet rather than never.
+        private const float ContactMargin = 0.35f;
 
         private void OnEnable() => VehicleContacts.Register(this);
         private void OnDisable() => VehicleContacts.Unregister(this);
@@ -506,9 +603,15 @@ namespace RoadRage.UnityRemake
             // by the time this runs transform.position still holds last frame's value -
             // at pursuit speed that is most of a metre of error on a 3.2 m test.
             // RoadDistance and LateralOffset are current on both vehicles here.
-            var alongRoad = RoadDistance - targetPlayer.RoadDistance;
-            var acrossRoad = LateralOffset - targetPlayer.LateralOffset;
-            if (alongRoad * alongRoad + acrossRoad * acrossRoad < 3.2f * 3.2f)
+            // Tested against the hulls, not a fixed 3.2 m radius. The shared contact
+            // pass holds these two 4.68 m apart longitudinally - the sum of their
+            // half-lengths plus the skin - so a 3.2 m test could never once be true and
+            // the cruiser simply drove alongside forever. That is the "police comes and
+            // drives by me": it was physically unable to reach.
+            var alongRoad = Mathf.Abs(RoadDistance - targetPlayer.RoadDistance);
+            var acrossRoad = Mathf.Abs(LateralOffset - targetPlayer.LateralOffset);
+            if (alongRoad < hullHalfLength + targetPlayer.HalfLength + ContactMargin &&
+                acrossRoad < hullHalfWidth + targetPlayer.HalfWidth + ContactMargin)
             {
                 OnCollideWithPlayer();
             }
