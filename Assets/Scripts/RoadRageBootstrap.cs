@@ -1036,6 +1036,7 @@ namespace RoadRage.UnityRemake
 
         private void BuildLighting()
         {
+            groundingLogs = 0;
             RenderSettings.fog = true;
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.ambientMode = AmbientMode.Trilight;
@@ -2102,7 +2103,15 @@ namespace RoadRage.UnityRemake
         /// Scales a model to a target height and sits its base on the ground.
         /// Counts how many grounding reports have been logged, so the diagnostic shows
         /// the first few buildings of a run rather than one line per object forever.
+        ///
+        /// Reset explicitly. Statics survive entering play mode when domain reload is
+        /// off, so on the second run this was already at its cap and the diagnostic
+        /// printed nothing at all - which is exactly why the first attempt came back
+        /// with no results. Three other systems in this project carry the same guard.
         private static int groundingLogs;
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetGroundingLogs() => groundingLogs = 0;
 
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f)
         {
@@ -2111,7 +2120,7 @@ namespace RoadRage.UnityRemake
             model.transform.localScale *= targetHeight / bounds.size.y;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
-            if (groundingLogs < 8 && targetHeight > 20f)
+            if (groundingLogs < 10 && targetHeight > 15f)
             {
                 groundingLogs++;
                 TryGetCombinedBounds(model, out var settled);
