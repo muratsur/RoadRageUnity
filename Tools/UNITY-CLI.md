@@ -46,24 +46,43 @@ Unity's own documentation says to use the Unity CLI instead, citing faster itera
 better stability, and the ability to target both runtime and the Editor. The CLI ships
 an "MCP Mode" so existing MCP-based agents keep working.
 
-From Unity's documentation, the current path is roughly:
+### Setup, in order
 
-- Unity 6.0 LTS or later (this project is on 6000.5.4f1, so that is satisfied).
-- Install the Unity CLI. It is free and separate from Unity AI — installing it does not
-  require a Unity AI subscription.
-- Add the Unity Pipeline package to the project, then configure the client:
-  `unity pipeline install` followed by `unity mcp configure claude-code`.
-  That command updates the client's Unity entry while preserving its other config, so it
-  is preferable to hand-writing `.mcp.json`.
+Run from the project root (`C:\Users\Murat\Projects\RoadRageUnity`).
 
-**I could not verify the exact installer command.** `unity.com` and `docs.unity3d.com`
-are both blocked by this container's network egress proxy, so the commands above come
-from search result summaries rather than from the documentation itself. Run
-`unity mcp configure claude-code` from the project root and let it write the client
-config — do not copy a hand-made `.mcp.json` from anywhere, including from me, because
-the relay path and transport are things the installer knows and I do not.
+```powershell
+# 1. Do you already have it? Unity Hub installs the CLI automatically now.
+unity --version
 
-No `.mcp.json` has been added to this repo for that reason.
+# 2. Only if step 1 says the command is not recognised.
+#    Windows ships as an MSIX / PowerShell install script; on macOS and Linux it is
+#    curl -fsSL https://public-cdn.cloud.unity3d.com/hub/prod/cli/install.sh | bash
+#    brew, winget and apt support is announced but not shipped yet.
+
+# 3. Add the Unity Pipeline package (com.unity.pipeline) to this project.
+#    Targets the current directory or the running Editor by default.
+unity pipeline install
+
+# 4. Point Claude Code at it. This writes the client config itself, preserving
+#    whatever else is already in it.
+unity mcp configure claude-code
+```
+
+Prerequisite is Unity 6.0 or later; this project is on 6000.5.4f1, so that is fine.
+The CLI is free and separate from Unity AI — installing it needs no Unity AI
+subscription.
+
+### Confidence
+
+`unity.com`, `docs.unity.com` and `docs.unity3d.com` are all blocked by the network
+egress proxy of the container this was written in, so none of the above was read from
+Unity's documentation directly. The four commands are corroborated across several
+independent search results; the Windows installer step is the weakest link, which is why
+step 1 checks whether you need it at all.
+
+Let step 4 write the config. No `.mcp.json` is committed here, and one should not be
+pasted in by hand from any source, because the relay path and transport are things the
+installer knows and a hand-written file would be guessing at.
 
 ## Why the CLI matters here more than MCP
 
