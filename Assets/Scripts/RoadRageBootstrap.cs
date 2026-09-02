@@ -1729,6 +1729,17 @@ namespace RoadRage.UnityRemake
                 return null;
             }
             var model = Adopt(Instantiate(prefab));
+            // The NYC set was authored for HDRP and hangs Decal Projectors off the
+            // building parts - fifteen on a single storey. HDRP is not installed here,
+            // so each one arrives as a GameObject whose script cannot resolve: no
+            // geometry, no effect, one missing-script warning apiece, and a few hundred
+            // dead transforms per city block. They are dropped on instantiate.
+            foreach (var child in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (child == null || child == model.transform) continue;
+                if (child.name.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    DestroyImmediate(child.gameObject);
+            }
             foreach (var l in model.GetComponentsInChildren<Light>(true))
             {
                 DestroyImmediate(l.gameObject == model ? l : l.gameObject);
@@ -2727,7 +2738,7 @@ namespace RoadRage.UnityRemake
                     var facing = side > 0f ? -90f : 90f;
                     var isNyc = block % 2 == 0;
                     var frontageMesh = isNyc
-                        ? $"Buildings/NYC/building_{1 + (BlockHash(block, side * 7) % 13)}"
+                        ? NycVariants[BlockHash(block, side * 7) % NycVariants.Length]
                         : towers[BlockHash(block, side) % towers.Length];
                     var frontagePack = isNyc ? "Buildings" : "Synthwave";
                     var frontageDistance = z + (side > 0 ? 4f : -5f) + Random.Range(-2.5f, 2.5f);
@@ -3111,20 +3122,42 @@ namespace RoadRage.UnityRemake
                 return junk;
             });
 
+            // building_9 through building_13 were being asked for here and nothing by
+            // those names has ever shipped - Resources/Buildings/NYC stops at 8 - so
+            // five of the fourteen draws silently produced nothing and the skyline came
+            // up with holes in it. The pack these came from ships assembled variants
+            // (bottom/middle/roof compositions, more storeys and more silhouettes than
+            // the eight bare models), which is what the block now draws from.
             var nycSkyscrapers = new[]
             {
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2", "Buildings/NYC/building_3",
-                "Buildings/NYC/building_4", "Buildings/NYC/building_5", "Buildings/NYC/building_6",
-                "Buildings/NYC/building_7", "Buildings/NYC/building_8", "Buildings/NYC/building_9",
-                "Buildings/NYC/building_10", "Buildings/NYC/building_11", "Buildings/NYC/building_12",
-                "Buildings/NYC/building_13", "Buildings/USA/building"
+                "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_1_2", "Buildings/NYCVariants/building_1_3",
+                "Buildings/NYCVariants/building_1_4", "Buildings/NYCVariants/building_1_5", "Buildings/NYCVariants/building_2_1",
+                "Buildings/NYCVariants/building_2_2", "Buildings/NYCVariants/building_2_3", "Buildings/NYCVariants/building_2_4",
+                "Buildings/NYCVariants/building_2_5", "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_3_2",
+                "Buildings/NYCVariants/building_3_3", "Buildings/NYCVariants/building_3_4", "Buildings/NYCVariants/building_3_5",
+                "Buildings/NYCVariants/building_4_1", "Buildings/NYCVariants/building_4_2", "Buildings/NYCVariants/building_4_3",
+                "Buildings/NYCVariants/building_4_4", "Buildings/NYCVariants/building_4_5", "Buildings/NYCVariants/building_5_1",
+                "Buildings/NYCVariants/building_5_2", "Buildings/NYCVariants/building_5_3", "Buildings/NYCVariants/building_5_4",
+                "Buildings/NYCVariants/building_5_5", "Buildings/NYCVariants/building_6_1", "Buildings/NYCVariants/building_6_2",
+                "Buildings/NYCVariants/building_6_3", "Buildings/NYCVariants/building_6_4", "Buildings/NYCVariants/building_6_5",
+                "Buildings/NYCVariants/building_6_6", "Buildings/NYCVariants/building_6_7", "Buildings/NYCVariants/building_6_8",
+                "Buildings/NYCVariants/building_6_9", "Buildings/NYCVariants/building_6_10", "Buildings/NYCVariants/building_8_1",
+                "Buildings/NYCVariants/building_8_2", "Buildings/NYCVariants/building_8_3", "Buildings/NYCVariants/building_8_4",
+                "Buildings/NYCVariants/building_8_5", "Buildings/NYCVariants/building_8_6", "Buildings/NYCVariants/building_8_7",
+                "Buildings/NYCVariants/building_8_8", "Buildings/NYCVariants/building_8_9", "Buildings/NYCVariants/building_8_10",
+                "Buildings/NYCVariants/building_9_1", "Buildings/NYCVariants/building_9_2", "Buildings/NYCVariants/building_9_3",
+                "Buildings/NYCVariants/building_9_4", "Buildings/NYCVariants/building_9_5", "Buildings/NYCVariants/building_9_6",
+                "Buildings/NYCVariants/building_9_7", "Buildings/NYCVariants/building_9_8", "Buildings/NYCVariants/building_9_9",
+                "Buildings/NYCVariants/building_9_10",
+                "Buildings/USA/building"
             };
 
             var nycFrontageBlocks = new[]
             {
                 "Buildings/NYCBlock6/builds", "Buildings/NYCBlock6/shops",
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2",
-                "Buildings/NYC/building_3", "Buildings/USA/building"
+                "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_2_2",
+                "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_4_3",
+                "Buildings/NYCVariants/building_5_2", "Buildings/USA/building"
             };
 
             var nycRooftops = new[]
@@ -4155,11 +4188,17 @@ namespace RoadRage.UnityRemake
             arcade.RoadDistance = startDistance + 5f;
             if (playerHull.sqrMagnitude > 0f)
             {
-                arcade.HalfLength = playerHull.x;
-                arcade.HalfWidth = playerHull.y;
+                // Traffic is normalised to a known length before it is measured; the
+                // player's visual is left at its native prefab scale so the hand-tuned
+                // ride height keeps the tyres on the asphalt. That means the measurement
+                // here inherits whatever scale the FBX imported at, so it is clamped to
+                // the range a road vehicle can actually occupy - a motorbike at the low
+                // end, a semi cab at the high end - rather than trusted outright.
+                arcade.HalfLength = Mathf.Clamp(playerHull.x, 0.9f, 8f);
+                arcade.HalfWidth = Mathf.Clamp(playerHull.y, 0.4f, 1.8f);
                 // The trigger box follows the same measurement, so the collider the
                 // directors raycast against agrees with the hull the overlap test uses.
-                carCollider.size = new Vector3(playerHull.y * 2f, 1.2f, playerHull.x * 2f);
+                carCollider.size = new Vector3(arcade.HalfWidth * 2f, 1.2f, arcade.HalfLength * 2f);
             }
             car.gameObject.AddComponent<RoadRageAudioAndVFX>();
         }
@@ -4187,6 +4226,32 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// The assembled building variants from the NYC set, mirrored into Resources.
+        /// Shared by the Neon City frontage and the Manhattan blocks so both draw from
+        /// the same catalogue rather than each keeping a partly-wrong list of its own.
+        private static readonly string[] NycVariants =
+        {
+            "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_1_2", "Buildings/NYCVariants/building_1_3",
+            "Buildings/NYCVariants/building_1_4", "Buildings/NYCVariants/building_1_5", "Buildings/NYCVariants/building_2_1",
+            "Buildings/NYCVariants/building_2_2", "Buildings/NYCVariants/building_2_3", "Buildings/NYCVariants/building_2_4",
+            "Buildings/NYCVariants/building_2_5", "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_3_2",
+            "Buildings/NYCVariants/building_3_3", "Buildings/NYCVariants/building_3_4", "Buildings/NYCVariants/building_3_5",
+            "Buildings/NYCVariants/building_4_1", "Buildings/NYCVariants/building_4_2", "Buildings/NYCVariants/building_4_3",
+            "Buildings/NYCVariants/building_4_4", "Buildings/NYCVariants/building_4_5", "Buildings/NYCVariants/building_5_1",
+            "Buildings/NYCVariants/building_5_2", "Buildings/NYCVariants/building_5_3", "Buildings/NYCVariants/building_5_4",
+            "Buildings/NYCVariants/building_5_5", "Buildings/NYCVariants/building_6_1", "Buildings/NYCVariants/building_6_2",
+            "Buildings/NYCVariants/building_6_3", "Buildings/NYCVariants/building_6_4", "Buildings/NYCVariants/building_6_5",
+            "Buildings/NYCVariants/building_6_6", "Buildings/NYCVariants/building_6_7", "Buildings/NYCVariants/building_6_8",
+            "Buildings/NYCVariants/building_6_9", "Buildings/NYCVariants/building_6_10", "Buildings/NYCVariants/building_8_1",
+            "Buildings/NYCVariants/building_8_2", "Buildings/NYCVariants/building_8_3", "Buildings/NYCVariants/building_8_4",
+            "Buildings/NYCVariants/building_8_5", "Buildings/NYCVariants/building_8_6", "Buildings/NYCVariants/building_8_7",
+            "Buildings/NYCVariants/building_8_8", "Buildings/NYCVariants/building_8_9", "Buildings/NYCVariants/building_8_10",
+            "Buildings/NYCVariants/building_9_1", "Buildings/NYCVariants/building_9_2", "Buildings/NYCVariants/building_9_3",
+            "Buildings/NYCVariants/building_9_4", "Buildings/NYCVariants/building_9_5", "Buildings/NYCVariants/building_9_6",
+            "Buildings/NYCVariants/building_9_7", "Buildings/NYCVariants/building_9_8", "Buildings/NYCVariants/building_9_9",
+            "Buildings/NYCVariants/building_9_10"
+        };
+
         private static readonly TrafficCarController.Offence[] OffenceCycle =
         {
             TrafficCarController.Offence.Weaving,
@@ -4198,11 +4263,20 @@ namespace RoadRage.UnityRemake
         private void BuildTraffic()
         {
             var trafficRoot = new GameObject("Living Highway Traffic").transform;
+            // Six presets out of the fifteen the pack ships, on a twelve-car spawn, meant
+            // the same model appeared twice in a row often enough to read as a repeat.
+            // The four utes and the four truck bodies are all here now, so a full block
+            // of traffic no longer duplicates.
             var models = new[]
             {
                 "SK_Veh_Preset_Sedan_01", "SK_Veh_Preset_Hatch_01", "SK_Veh_Preset_Sports_01",
-                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_02"
+                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_01",
+                "SK_Veh_Preset_Ute_02", "SK_Veh_Preset_Ute_03", "SK_Veh_Preset_Ute_04"
             };
+            // Distinct bodies for the two special roles, so a tanker and a hauler in the
+            // same block are not the same lorry twice.
+            var tankers = new[] { "SK_Veh_Preset_Truck_01", "SK_Veh_Preset_Truck_02" };
+            var haulers = new[] { "SK_Veh_Preset_Truck_03", "SK_Veh_Preset_Truck_04" };
             var palette = new[]
             {
                 new Color(0.82f, 0.10f, 0.08f), new Color(0.10f, 0.34f, 0.88f),
@@ -4236,12 +4310,12 @@ namespace RoadRage.UnityRemake
                 if (i == 4 || i == 9)
                 {
                     role = TrafficCarController.VehicleRole.FuelTanker;
-                    model = "SK_Veh_Preset_Truck_01";
+                    model = tankers[i % tankers.Length];
                 }
                 else if (i == 6 || i == 11)
                 {
                     role = TrafficCarController.VehicleRole.CarHauler;
-                    model = "SK_Veh_Preset_Truck_03";
+                    model = haulers[i % haulers.Length];
                 }
 
                 CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", model,
@@ -4250,7 +4324,7 @@ namespace RoadRage.UnityRemake
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length}");
             BuildAccidentScene(trafficRoot, startDistance + 210f, -1f, models[1], models[3]);
-            BuildAccidentScene(trafficRoot, startDistance + 470f, 1f, models[0], models[4]);
+            BuildAccidentScene(trafficRoot, startDistance + 470f, 1f, models[0], models[8]);
         }
 
         private TrafficCarController CreateTrafficVehicle(Transform parent, string name, string modelName,
