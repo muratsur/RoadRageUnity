@@ -432,6 +432,21 @@ namespace RoadRage.UnityRemake
 				else OpenPicker();
 			}
 
+			// Live lighting trim, so brightness can be judged against the actual frame
+			// instead of guessed from a screenshot. The logged value is what to bake in.
+			if (GameInput.GetBracketKey(true) || GameInput.GetBracketKey(false))
+			{
+				AmbientTrim = Mathf.Clamp(AmbientTrim + (GameInput.GetBracketKey(true) ? 0.15f : -0.15f), 0.25f, 4f);
+				Debug.Log($"[LIGHT] AmbientTrim = {AmbientTrim:0.00}  (ExposureTrim = {ExposureTrim:0.00})");
+			}
+			if (GameInput.GetExposureKey(true) || GameInput.GetExposureKey(false))
+			{
+				ExposureTrim = Mathf.Clamp(ExposureTrim + (GameInput.GetExposureKey(true) ? 0.15f : -0.15f), -2f, 3f);
+				if (colorAdjustments != null)
+					colorAdjustments.postExposure.Override(Mood().PostExposure + NeutralToneCompensation + ExposureTrim);
+				Debug.Log($"[LIGHT] ExposureTrim = {ExposureTrim:0.00}  (AmbientTrim = {AmbientTrim:0.00})");
+			}
+
 			// N key cycles to next biome
 			if (GameInput.GetNKeyPressed())
 			{
@@ -1022,10 +1037,11 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = mood.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(mood.Fog, weather.FogTint, weather.FogTintAmount);
-            RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
-            RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
-            RenderSettings.ambientGroundColor = mood.Ground;
-            RenderSettings.ambientIntensity = mood.AmbientIntensity;
+            RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f)
+                                             * (mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f)
+                                                 * (mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientGroundColor = mood.Ground * (mood.AmbientIntensity * AmbientTrim);
             RenderSettings.haloStrength = 0f;
             RenderSettings.flareStrength = 0f;
 
@@ -1064,7 +1080,8 @@ namespace RoadRage.UnityRemake
 			motionBlur.clamp.Override(0.04f);
 
 			var color = volume.profile.Add<ColorAdjustments>();
-			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation);
+			colorAdjustments = color;
+			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim);
 			// Contrast and saturation were stacked on top of an ACES curve that already
 			// pushes both, so every biome graded out as a poster. Neutral tonemapping
 			// leaves hue and saturation alone, and the grade now only takes colour away.
@@ -1076,6 +1093,8 @@ namespace RoadRage.UnityRemake
 			vignette.intensity.Override(0.20f);
 			vignette.smoothness.Override(0.68f);
         }
+
+        private ColorAdjustments colorAdjustments;
 
         private struct BiomeMood
         {
@@ -1122,6 +1141,12 @@ namespace RoadRage.UnityRemake
         /// and the facades lose all their detail. Lifting the floor keeps the biome's
         /// hue and its darkness while letting shadowed surfaces still read.
         private const float MinAmbientLuma = 0.22f;
+
+        /// Live brightness trim, driven by the [ and ] keys in play mode. Judging a
+        /// lighting value from a screenshot is guesswork; this makes it a dial you turn
+        /// while looking at the frame. The chosen value is logged so it can be baked in.
+        public static float AmbientTrim = 1f;
+        public static float ExposureTrim = 0f;
 
         /// Raises a colour to a minimum luma without changing its hue.
         private static Color LiftToFloor(Color value, float floor)
@@ -2296,10 +2321,13 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = here.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(here.Fog, weather.FogTint, weather.FogTintAmount);
-            RenderSettings.ambientSkyColor = Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
-            RenderSettings.ambientEquatorColor = Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
-            RenderSettings.ambientGroundColor = here.Ground;
-            RenderSettings.ambientIntensity = here.AmbientIntensity;
+            // ambientIntensity is only honoured when the ambient source is Skybox; in
+            // Trilight Unity uses the three colours as given and ignores it entirely,
+            // so setting it was a no-op. Fold the gain into the colours instead.
+            var gain = here.AmbientIntensity * AmbientTrim;
+            RenderSettings.ambientSkyColor = Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f) * gain;
+            RenderSettings.ambientEquatorColor = Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f) * gain;
+            RenderSettings.ambientGroundColor = here.Ground * gain;
             if (sunLight != null)
             {
                 sunLight.color = here.SunColor;
