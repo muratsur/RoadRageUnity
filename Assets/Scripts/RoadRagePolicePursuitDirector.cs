@@ -230,12 +230,51 @@ namespace RoadRage.UnityRemake
     /// <summary>
     /// AI controller for high-speed police pursuit cruisers with flashing lightbars and PIT maneuvers.
     /// </summary>
-    public sealed class PoliceVehicleController : MonoBehaviour
+    public sealed class PoliceVehicleController : MonoBehaviour, IRoadVehicle
     {
         public float RoadDistance { get; internal set; }
         public float LateralOffset { get; internal set; }
         public float SpeedKph { get; internal set; } = 95f;
         public int SlotIndex { get; private set; }
+
+        // --- IRoadVehicle -------------------------------------------------------
+        // Cruisers used to resolve against each other and against the player, but never
+        // against traffic - so a pursuit unit drove clean through the cars it was
+        // chasing. Joining the shared registry is the fix; the duplicated resolution
+        // below it is gone.
+        public float ContactDistance => RoadDistance;
+        public float ContactLateral => LateralOffset;
+        public float ContactHalfLength => hullHalfLength;
+        public float ContactHalfWidth => hullHalfWidth;
+        public float ContactHeight => 0f;
+        /// A little heavier than civilian traffic: an interceptor shoulders a hatchback
+        /// out of the way rather than being deflected off the player's tail by it.
+        public float ContactMass => hullHalfLength * hullHalfWidth * 1.35f;
+        public bool ContactActive => isActiveAndEnabled && !isWrecked;
+
+        public void ApplyContactPush(float alongRoad, float acrossRoad)
+        {
+            RoadDistance += alongRoad;
+            LateralOffset += acrossRoad;
+        }
+
+        /// Measured off the spawned mesh, like every other vehicle. The 4.8 m / 2.4 m
+        /// constants this replaces were a guess that matched no car in the game.
+        private float hullHalfLength = 2.4f;
+        private float hullHalfWidth = 1.2f;
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+
+        private void LateUpdate()
+        {
+            VehicleContacts.ResolveOncePerFrame();
+            if (isWrecked) return;
+            var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
+            LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
+        }
+        // ------------------------------------------------------------------------
 
         private ArcadeCarController targetPlayer;
         private int unitHeatLevel;
@@ -302,6 +341,10 @@ namespace RoadRage.UnityRemake
                 }
                 foreach (var col in vehicleInstance.GetComponentsInChildren<Collider>()) Destroy(col);
                 NormalizeVehicleVisual(vehicleInstance, 4.8f);
+                // Hull follows the mesh that was just normalised, so the cruiser
+                // collides as the car you can see rather than as a fixed guess.
+                hullHalfLength = 4.8f * 0.5f;
+                hullHalfWidth = Mathf.Max(0.8f, hullHalfLength * 0.42f);
             }
             else
             {
@@ -449,62 +492,11 @@ namespace RoadRage.UnityRemake
             var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
 
-            // 3. Continuous Inter-Police Anti-Penetration Resolution (Never merge or sink into each other!)
-            if (RoadRagePolicePursuitDirector.Instance != null)
-            {
-                var allCops = RoadRagePolicePursuitDirector.Instance.ActivePolice;
-                for (var i = allCops.Count - 1; i >= 0; i--)
-                {
-                    var other = allCops[i];
-                    if (other == null || other == this) continue;
+            // Anti-penetration - against other cruisers, the player AND traffic - is
+            // handled by the shared vehicle pass in LateUpdate, after everything has
+            // moved. The two hand-rolled resolvers that used to live here only knew
+            // about police and the player, which is why cruisers drove through traffic.
 
-                    var deltaDist = other.RoadDistance - RoadDistance;
-                    var reach = 4.8f;
-                    if (Mathf.Abs(deltaDist) > reach) continue;
-
-                    var deltaLat = other.LateralOffset - LateralOffset;
-                    var latReach = 2.4f;
-                    if (Mathf.Abs(deltaLat) > latReach) continue;
-
-                    // Physical pushback between cop cruisers
-                    var overlapDist = reach - Mathf.Abs(deltaDist);
-                    if (deltaDist > 0f)
-                    {
-                        other.RoadDistance += overlapDist * 0.5f;
-                        RoadDistance -= overlapDist * 0.5f;
-                    }
-                    else
-                    {
-                        RoadDistance += overlapDist * 0.5f;
-                        other.RoadDistance -= overlapDist * 0.5f;
-                    }
-
-                    var overlapLat = latReach - Mathf.Abs(deltaLat);
-                    var latSign = Mathf.Sign(deltaLat);
-                    if (Mathf.Abs(latSign) < 0.01f) latSign = (SlotIndex > other.SlotIndex ? 1f : -1f);
-                    other.LateralOffset += latSign * overlapLat * 0.55f;
-                    LateralOffset -= latSign * overlapLat * 0.55f;
-                }
-            }
-
-            // 4. Continuous Police-to-Player Anti-Penetration Resolution
-            var playerDistDelta = RoadPath.SignedDelta(RoadDistance, targetPlayer.RoadDistance);
-            var playerReachLong = 4.8f;
-            if (Mathf.Abs(playerDistDelta) < playerReachLong)
-            {
-                var playerDistLat = targetPlayer.LateralOffset - LateralOffset;
-                var playerReachLat = 2.25f;
-                if (Mathf.Abs(playerDistLat) < playerReachLat)
-                {
-                    var overlapLat = playerReachLat - Mathf.Abs(playerDistLat);
-                    var signLat = Mathf.Sign(playerDistLat);
-                    if (Mathf.Abs(signLat) < 0.01f) signLat = 1f;
-                    LateralOffset -= signLat * overlapLat * 0.7f;
-                    targetPlayer.LateralOffset += signLat * overlapLat * 0.3f;
-                }
-            }
-
-            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
             transform.rotation = RoadPath.Rotation(RoadDistance);
 
             // 5. Check for collision with player car

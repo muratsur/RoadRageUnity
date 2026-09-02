@@ -127,6 +127,11 @@ namespace RoadRage.UnityRemake
 
             // Check if player drives onto a ramp
             CheckPlayerRampCollision();
+            // ...and traffic, which used to drive straight through the deck. A ramp that
+            // only the player can use is scenery for everyone else, and it reads as the
+            // world being fake: the interesting shot is the car ahead of you taking the
+            // jump you are about to take.
+            CheckTrafficRampCollisions();
         }
 
         private bool HasRampNear(float dist)
@@ -236,6 +241,35 @@ namespace RoadRage.UnityRemake
             m.SetTriangles(frameTris, 1);
             m.RecalculateNormals();
             return m;
+        }
+
+        /// Same geometry test as the player's, against every live traffic car. Traffic
+        /// needs more speed than the player to commit, so slow cars still filter past a
+        /// ramp rather than the whole highway launching at once.
+        private void CheckTrafficRampCollisions()
+        {
+            var cars = TrafficCarController.All;
+            for (var c = 0; c < cars.Count; c++)
+            {
+                var car = cars[c];
+                if (car == null || car.IsAirborne || car.IsWreck) continue;
+
+                for (var i = 0; i < activeRamps.Count; i++)
+                {
+                    var r = activeRamps[i];
+                    var dDist = car.RoadDistance - r.RoadDistance;
+                    var dLat = Mathf.Abs(car.LaneOffset - r.LateralOffset);
+
+                    if (dDist < -RampHalfLength || dDist > RampHalfLength + 1.8f) continue;
+                    if (dLat > RampHalfWidth + 0.4f) continue;
+                    if (car.SpeedKph <= 55f) continue;
+
+                    // Scaled down from the player's launch: traffic should clear the
+                    // ramp convincingly, not sail over the skyline and steal the shot.
+                    car.LaunchAirtime(9.5f + car.SpeedKph / 200f * 4.5f);
+                    break;
+                }
+            }
         }
 
         private void CheckPlayerRampCollision()

@@ -452,8 +452,29 @@ namespace RoadRage.UnityRemake
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 
+        /// How far a surface tint is pulled towards neutral. Desaturating the lighting
+        /// alone was not enough: the world geometry carries its own colour, and a biome
+        /// like Alien Biomass is mostly violet organics and violet rock, so it still read
+        /// as a single hue under a neutral key. BiomeMaterial funnels through here, so
+        /// this is the one place every generated surface tint passes.
+        private const float SurfaceDesaturation = 0.5f;
+
+        /// Colour that carries meaning is exempt. Road markings, hazard cones, brake
+        /// lights, neon and signage are how the player reads the road at speed - washing
+        /// those out to fix the scenery would cost more than it gained. Only the
+        /// environment is neutralised.
+        private static bool IsSignalColour(string name)
+        {
+            var lower = name.ToLowerInvariant();
+            return lower.Contains("neon") || lower.Contains("sign") || lower.Contains("light")
+                || lower.Contains("paint") || lower.Contains("orange") || lower.Contains("hologram")
+                || lower.Contains("billboard") || lower.Contains("glow") || lower.Contains("marking")
+                || lower.Contains("emissive") || lower.Contains("hazard");
+        }
+
         private Material MakeMaterial(string name, Color color, float metallic = 0f, float smoothness = 0.25f)
         {
+            if (!IsSignalColour(name)) color = Desaturate(color, SurfaceDesaturation);
             var material = new Material(LitShader) { name = name, color = color };
 			if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
             material.SetFloat("_Metallic", metallic);
@@ -525,7 +546,9 @@ namespace RoadRage.UnityRemake
             {
                 var emissionTexture = BiomeTexture(pack, emission);
                 if (emissionTexture != null) material.SetTexture("_EmissionMap", emissionTexture);
-                material.SetColor("_EmissionColor", new Color(1.6f, 2.1f, 2.7f));
+                // One fixed blue-white applied to every emissive biome surface. At full
+                // strength it put a cyan wash over lit windows in every zone at once.
+                material.SetColor("_EmissionColor", Desaturate(new Color(1.6f, 2.1f, 2.7f), 0.45f));
                 material.EnableKeyword("_EMISSION");
             }
             return material;
@@ -4770,7 +4793,7 @@ namespace RoadRage.UnityRemake
         }
     }
 
-    public sealed class ArcadeCarController : MonoBehaviour
+    public sealed class ArcadeCarController : MonoBehaviour, IRoadVehicle
     {
         public float SpeedKph { get; internal set; } = 0f;
         public float CountdownTimer { get; set; } = 3.2f;
@@ -4778,6 +4801,29 @@ namespace RoadRage.UnityRemake
         /// Measured from the spawned vehicle so collision matches the mesh.
         public float HalfLength { get; internal set; } = 2.5f;
         public float HalfWidth { get; internal set; } = 1.3f;
+        // --- IRoadVehicle -------------------------------------------------------
+        public float ContactDistance => RoadDistance;
+        public float ContactLateral => LateralOffset;
+        public float ContactHalfLength => HalfLength;
+        public float ContactHalfWidth => HalfWidth;
+        public float ContactHeight => verticalOffset;
+        /// Heaviest thing on the road by a wide margin. Being shoved off your line by
+        /// scenery traffic reads as losing the car, so the player absorbs the smallest
+        /// share of every correction.
+        public float ContactMass => HalfLength * HalfWidth * 4f;
+        /// False while the aftertouch director owns the transform during a crash tumble.
+        public bool ContactActive => isActiveAndEnabled && !ClearsTraffic;
+
+        public void ApplyContactPush(float alongRoad, float acrossRoad)
+        {
+            RoadDistance += alongRoad;
+            LateralOffset += acrossRoad;
+        }
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+        // ------------------------------------------------------------------------
+
         public float DistanceKm => totalDistance / 1000f;
         public float RoadDistance { get; internal set; } = 5f;
         public float LateralOffset { get; internal set; } = -2.25f;
@@ -4847,6 +4893,15 @@ namespace RoadRage.UnityRemake
         /// correction would not reach the transform until the following frame.
         internal void SyncToRoad() =>
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f + verticalOffset);
+
+        /// Resolve contacts against every other vehicle once all of them have moved,
+        /// then re-place. Update has already positioned the car; this is what carries
+        /// the correction onto the transform in the same frame.
+        private void LateUpdate()
+        {
+            VehicleContacts.ResolveOncePerFrame();
+            if (isActiveAndEnabled) SyncToRoad();
+        }
         public float AirtimeDuration { get; private set; }
 
         private float verticalOffset;

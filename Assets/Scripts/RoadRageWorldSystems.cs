@@ -97,9 +97,12 @@ namespace RoadRage.UnityRemake
         }
     }
 
-    public sealed class TrafficCarController : MonoBehaviour
+    public sealed class TrafficCarController : MonoBehaviour, IRoadVehicle
     {
         private static readonly List<TrafficCarController> ActiveCars = new();
+        /// Read-only view for systems that need to act on every car - the ramp director
+        /// tests each one for a launch the same way it tests the player.
+        public static IReadOnlyList<TrafficCarController> All => ActiveCars;
 
         public float RoadDistance { get; private set; }
         /// Signed fraction of the carriageway, -1 (outer left) to 1 (outer right).
@@ -133,6 +136,7 @@ namespace RoadRage.UnityRemake
 
         private float cruiseSpeedKph;
         private float currentSpeedKph;
+        public float SpeedKph => currentSpeedKph;
         private float wreckRoll;
         private int variationSeed;
 
@@ -227,6 +231,26 @@ namespace RoadRage.UnityRemake
                 return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
             }
         }
+        // --- IRoadVehicle -------------------------------------------------------
+        public float ContactDistance => RoadDistance;
+        public float ContactLateral => LaneOffset;
+        public float ContactHalfLength => LongitudinalExtent;
+        public float ContactHalfWidth => LateralExtent;
+        public float ContactHeight => verticalOffset;
+        /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
+        /// the pair meeting in the middle.
+        public float ContactMass => HalfLength * HalfWidth;
+        public bool ContactActive => isActiveAndEnabled;
+
+        public void ApplyContactPush(float alongRoad, float acrossRoad)
+        {
+            RoadDistance += alongRoad;
+            // Into the separation channel, never laneDrift - behaviour rewrites that
+            // every frame and would throw the correction away.
+            separation = Mathf.Clamp(separation + acrossRoad, -MaxSeparation, MaxSeparation);
+        }
+        // ------------------------------------------------------------------------
+
         public bool IsViolator => Violation != Offence.None && !IsWreck;
         private float weavePhase;
         private float weaveRate;
@@ -386,94 +410,50 @@ namespace RoadRage.UnityRemake
             // now are. All the movement finishes first; LateUpdate then separates
             // everything once, against final positions.
             separation = Mathf.MoveTowards(separation, 0f, SeparationRelax * Time.deltaTime);
+            TickAirtime(Time.deltaTime);
         }
 
-        /// One separation pass per frame for the whole set, then each car places itself.
+        /// Geometry is resolved by the shared pass across every vehicle on the road -
+        /// traffic, police and the player alike - then this car places itself. Reactions
+        /// (crashes, pileup damage) stay here because they are traffic's own rules.
         private void LateUpdate()
         {
-            if (separationFrame != Time.frameCount)
+            VehicleContacts.ResolveOncePerFrame();
+            if (reactionFrame != Time.frameCount)
             {
-                separationFrame = Time.frameCount;
-                SeparateAll();
+                reactionFrame = Time.frameCount;
+                ReactToContacts();
             }
             PlaceOnRoad();
         }
 
-        private static int separationFrame = -1;
-        /// Contact is resolved by relaxation rather than in one shot: pushing A off B can
-        /// put A inside C, and in a pileup that cascades. Three passes settles a dense
-        /// cluster; one pass leaves the overlaps the player actually sees.
-        private const int SeparationPasses = 3;
-        /// Small positive gap so hulls come to rest touching rather than exactly
-        /// coincident, which is what reads as clipping when two cars idle side by side.
-        private const float ContactSkin = 0.08f;
-        /// Set by ResolvePlayerCollision so the shared pass can include the player.
-        private static ArcadeCarController player;
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
 
-        /// False while the aftertouch director owns the transform during a crash tumble
-        /// (it disables the controller and animates the wreck itself), and while the car
-        /// is high enough to clear traffic on a jump. Syncing the car back onto the road
-        /// in either state would yank it out of the sequence being played.
-        private static bool PlayerIsDriving =>
-            player != null && player.isActiveAndEnabled && !player.ClearsTraffic;
+        private static int reactionFrame = -1;
 
-        private static void SeparateAll()
+        /// Each pair visited once. Runs after the separation pass, so a pair still
+        /// overlapping here is genuinely in contact rather than mid-correction.
+        private static void ReactToContacts()
         {
-            for (var i = ActiveCars.Count - 1; i >= 0; i--)
-                if (ActiveCars[i] == null) ActiveCars.RemoveAt(i);
-
-            for (var pass = 0; pass < SeparationPasses; pass++)
+            for (var a = 0; a < ActiveCars.Count; a++)
             {
-                // Pairs are visited once, not once from each side: resolving a pair twice
-                // per frame applied the correction twice and made contact springy.
-                for (var a = 0; a < ActiveCars.Count; a++)
-                    for (var b = a + 1; b < ActiveCars.Count; b++)
-                        ActiveCars[a].SeparateFrom(ActiveCars[b], reactive: pass == 0);
+                var first = ActiveCars[a];
+                if (first == null) continue;
+                for (var b = a + 1; b < ActiveCars.Count; b++)
+                {
+                    var second = ActiveCars[b];
+                    if (second == null) continue;
 
-                if (!PlayerIsDriving) continue;
-                for (var a = 0; a < ActiveCars.Count; a++)
-                    SeparatePlayerFrom(ActiveCars[a]);
+                    var deltaDist = second.RoadDistance - first.RoadDistance;
+                    if (Mathf.Abs(deltaDist) > first.LongitudinalExtent + second.LongitudinalExtent) continue;
+                    var deltaLat = second.LaneOffset - first.LaneOffset;
+                    if (Mathf.Abs(deltaLat) > first.LateralExtent + second.LateralExtent) continue;
+                    if (Mathf.Abs(first.verticalOffset - second.verticalOffset) > 1.6f) continue;
+
+                    first.ReactToContact(second, deltaDist, deltaLat);
+                }
             }
-
-            // The player positions itself in Update, before this pass existed, so it has
-            // to be told about any correction made here or the mesh stays where it was.
-            if (PlayerIsDriving) player.SyncToRoad();
-        }
-
-        /// Minimum-translation resolution: push apart along whichever road axis is
-        /// overlapping least. Correcting both axes at once - which is what the old code
-        /// did - shunts a car that is merely alongside another one bodily up the road,
-        /// so overtaking traffic jerked instead of sliding past.
-        private void SeparateFrom(TrafficCarController other, bool reactive)
-        {
-            var deltaDist = other.RoadDistance - RoadDistance;
-            var reach = LongitudinalExtent + other.LongitudinalExtent + ContactSkin;
-            if (Mathf.Abs(deltaDist) > reach) return;
-
-            var deltaLat = other.LaneOffset - LaneOffset;
-            var latReach = LateralExtent + other.LateralExtent + ContactSkin;
-            if (Mathf.Abs(deltaLat) > latReach) return;
-
-            var overlapLong = reach - Mathf.Abs(deltaDist);
-            var overlapLat = latReach - Mathf.Abs(deltaLat);
-
-            if (overlapLat < overlapLong)
-            {
-                var sign = deltaLat >= 0f ? 1f : -1f;
-                var push = overlapLat * 0.5f;
-                other.separation = Mathf.Clamp(other.separation + sign * push, -MaxSeparation, MaxSeparation);
-                separation = Mathf.Clamp(separation - sign * push, -MaxSeparation, MaxSeparation);
-            }
-            else
-            {
-                var sign = deltaDist >= 0f ? 1f : -1f;
-                var push = overlapLong * 0.5f;
-                other.RoadDistance += sign * push;
-                RoadDistance -= sign * push;
-            }
-
-            if (!reactive) return;
-            ReactToContact(other, deltaDist, deltaLat);
         }
 
         private void ReactToContact(TrafficCarController other, float deltaDist, float deltaLat)
@@ -499,42 +479,42 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        /// Geometry only. The player's scoring and damage still run from its own Update
-        /// via ResolvePlayerCollision; this exists so traffic that moved *after* that
-        /// call cannot be left overlapping the player for a frame.
-        private static void SeparatePlayerFrom(TrafficCarController traffic)
+        // --- Airborne -----------------------------------------------------------
+        // Traffic had no vertical axis at all: PlaceOnRoad pinned every car to a fixed
+        // 0.16 m, so a ramp could only ever be driven through. Ramps are part of the
+        // road, and the road is shared, so traffic gets the same launch the player has.
+        private float verticalOffset;
+        private float verticalVelocity;
+        private const float Gravity = 26f;
+
+        public bool IsAirborne => verticalOffset > 0.05f;
+
+        public void LaunchAirtime(float power)
         {
-            var deltaDist = traffic.RoadDistance - player.RoadDistance;
-            var reach = player.HalfLength + traffic.LongitudinalExtent + ContactSkin;
-            if (Mathf.Abs(deltaDist) > reach) return;
-
-            var deltaLat = traffic.LaneOffset - player.LateralOffset;
-            var latReach = player.HalfWidth + traffic.LateralExtent + ContactSkin;
-            if (Mathf.Abs(deltaLat) > latReach) return;
-
-            var overlapLong = reach - Mathf.Abs(deltaDist);
-            var overlapLat = latReach - Mathf.Abs(deltaLat);
-
-            // The player takes the smaller share of every correction: being shoved by
-            // the physics you are not driving feels like losing the car.
-            if (overlapLat < overlapLong)
-            {
-                var sign = deltaLat >= 0f ? 1f : -1f;
-                traffic.separation = Mathf.Clamp(traffic.separation + sign * overlapLat * 0.7f,
-                                                 -MaxSeparation, MaxSeparation);
-                player.LateralOffset -= sign * overlapLat * 0.3f;
-            }
-            else
-            {
-                var sign = deltaDist >= 0f ? 1f : -1f;
-                traffic.RoadDistance += sign * overlapLong * 0.7f;
-                player.RoadDistance -= sign * overlapLong * 0.3f;
-            }
+            if (IsAirborne || IsWreck) return;
+            verticalVelocity = power;
+            verticalOffset = 0.05f;
         }
+
+        private void TickAirtime(float delta)
+        {
+            if (!IsAirborne && verticalVelocity <= 0f) return;
+            verticalVelocity -= Gravity * delta;
+            verticalOffset += verticalVelocity * delta;
+            if (verticalOffset > 0f) return;
+
+            verticalOffset = 0f;
+            // A car that lands hard enough spins out - the landing is the payoff, and it
+            // gives the player something to weave through afterwards.
+            var wasFalling = verticalVelocity;
+            verticalVelocity = 0f;
+            if (wasFalling < -14f && !IsWreck) Crash(Random.Range(-1f, 1f), currentSpeedKph);
+        }
+        // ------------------------------------------------------------------------
 
         private void PlaceOnRoad()
         {
-            transform.position = RoadPath.Point(RoadDistance, LaneOffset, 0.16f);
+            transform.position = RoadPath.Point(RoadDistance, LaneOffset, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
             transform.rotation = facing * Quaternion.Euler(0f, WreckYaw, wreckRoll);
@@ -623,12 +603,10 @@ namespace RoadRage.UnityRemake
             return null;
         }
 
+        /// Gameplay only. Geometry for the player is resolved by the shared vehicle
+        /// pass, which includes police and traffic on the same footing.
         public static void ResolvePlayerCollision(ArcadeCarController driver)
         {
-            // Cached so the shared LateUpdate pass can include the player without the
-            // traffic having to go looking for it.
-            player = driver;
-
             for (var i = ActiveCars.Count - 1; i >= 0; i--)
             {
                 var traffic = ActiveCars[i];
@@ -643,10 +621,10 @@ namespace RoadRage.UnityRemake
                 // the test, so contact only registered once the meshes had already
                 // interpenetrated by that much. They are compared at full size now, with
                 // a small positive skin, so the hit lands as the bumpers meet.
-                var reach = driver.HalfLength + traffic.LongitudinalExtent + ContactSkin;
+                var reach = driver.HalfLength + traffic.LongitudinalExtent;
                 if (Mathf.Abs(longitudinal) > reach) continue;
                 var lateral = traffic.LaneOffset - driver.LateralOffset;
-                var lateralReach = driver.HalfWidth + traffic.LateralExtent + ContactSkin;
+                var lateralReach = driver.HalfWidth + traffic.LateralExtent;
                 if (Mathf.Abs(lateral) > lateralReach) continue;
 
                 // Special Vehicle: Car Hauler ramp jump from behind
@@ -661,10 +639,8 @@ namespace RoadRage.UnityRemake
                     continue;
                 }
 
-                // 1. Anti-penetration, through the same minimum-translation helper the
-                // traffic uses - and writing into the separation channel rather than
-                // laneDrift, which the victim's own behaviour would overwrite next frame.
-                SeparatePlayerFrom(traffic);
+                // Anti-penetration is handled by the shared vehicle pass; only the
+                // gameplay consequences of the contact are decided here.
                 if (longitudinal > 0f)
                 {
                     // Momentum transfer: the car you rear-end is carried along rather
