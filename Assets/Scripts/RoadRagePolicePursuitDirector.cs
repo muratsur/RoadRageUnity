@@ -165,6 +165,18 @@ namespace RoadRage.UnityRemake
                         SpawnRoadblock();
                     }
                 }
+
+                // Spike strips from three stars: the tool that answers simply holding
+                // the throttle down, which is otherwise the solution to every pursuit.
+                if (HeatLevel >= 3)
+                {
+                    spikeTimer += Time.deltaTime;
+                    if (spikeTimer >= 11f)
+                    {
+                        spikeTimer = 0f;
+                        SpawnSpikeStrip();
+                    }
+                }
             }
 
             // 4. The pursuit's two endings.
@@ -184,6 +196,8 @@ namespace RoadRage.UnityRemake
                 AddHeat(Time.deltaTime / 22f);
                 UpdatePursuitOutcome();
             }
+
+            UpdateSpikeStrips();
 
             // 5. Clean up stale roadblocks
             for (var i = activeRoadblocks.Count - 1; i >= 0; i--)
@@ -251,6 +265,11 @@ namespace RoadRage.UnityRemake
                 if (activePolice[i] != null) Destroy(activePolice[i].gameObject);
             activePolice.Clear();
 
+            for (var i = activeSpikes.Count - 1; i >= 0; i--)
+                if (activeSpikes[i].Root != null) Destroy(activeSpikes[i].Root);
+            activeSpikes.Clear();
+            spikeTimer = 0f;
+
             HeatLevel = 0;
             HeatProgress = 0f;
             PursuitBounty = 0f;
@@ -279,6 +298,93 @@ namespace RoadRage.UnityRemake
             cop.Initialize(playerController, HeatLevel, spawnDist, spawnLane, slot);
             activePolice.Add(cop);
             unitsDispatched++;
+        }
+
+        /// A live spike strip laid across part of the carriageway.
+        ///
+        /// Promised in this class's own summary since it was written and never built.
+        /// It is the one pursuit tool that punishes the obvious answer to a chase -
+        /// holding the throttle down in a straight line - so without it every pursuit
+        /// has the same solution.
+        private struct SpikeStrip
+        {
+            public float Distance;
+            public float Lane;
+            public float HalfWidth;
+            public GameObject Root;
+            public bool Spent;
+        }
+
+        private readonly List<SpikeStrip> activeSpikes = new();
+        private float spikeTimer;
+
+        private void SpawnSpikeStrip()
+        {
+            var targetDist = playerController.RoadDistance + 190f;
+            var halfWidth = RoadPath.HalfWidthAt(targetDist);
+            // Deliberately never the full carriageway. A hazard with no way past it is
+            // not a decision, it is a toll - the player has to be able to read the gap
+            // and take it.
+            var stripHalf = halfWidth * 0.42f;
+            var side = Random.value > 0.5f ? 1f : -1f;
+            var lane = side * (halfWidth - stripHalf);
+
+            var root = new GameObject("Police Spike Strip");
+            root.transform.position = RoadPath.Point(targetDist, lane, 0.06f);
+            root.transform.rotation = RoadPath.Rotation(targetDist);
+
+            var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            strip.name = "Spikes";
+            strip.transform.SetParent(root.transform, false);
+            strip.transform.localScale = new Vector3(stripHalf * 2f, 0.12f, 1.1f);
+            var collider = strip.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+            var renderer = strip.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                { name = "Spike Strip", color = new Color(0.85f, 0.72f, 0.12f) };
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.8f);
+                renderer.sharedMaterial = mat;
+            }
+
+            activeSpikes.Add(new SpikeStrip
+            {
+                Distance = targetDist, Lane = lane, HalfWidth = stripHalf, Root = root, Spent = false
+            });
+            GameState.Show(side > 0f ? "⚠️ SPIKES RIGHT - GO LEFT!" : "⚠️ SPIKES LEFT - GO RIGHT!");
+        }
+
+        private void UpdateSpikeStrips()
+        {
+            for (var i = activeSpikes.Count - 1; i >= 0; i--)
+            {
+                var spike = activeSpikes[i];
+                if (spike.Root == null) { activeSpikes.RemoveAt(i); continue; }
+
+                if (playerController.RoadDistance - spike.Distance > 70f)
+                {
+                    Destroy(spike.Root);
+                    activeSpikes.RemoveAt(i);
+                    continue;
+                }
+
+                if (spike.Spent) continue;
+                if (Mathf.Abs(playerController.RoadDistance - spike.Distance) > 2.2f) continue;
+                if (Mathf.Abs(playerController.LateralOffset - spike.Lane) > spike.HalfWidth) continue;
+
+                spike.Spent = true;
+                activeSpikes[i] = spike;
+
+                // Costly but never a run-ender on its own: it takes the speed that was
+                // keeping you ahead, which is what makes the next few seconds matter.
+                playerController.SpeedKph *= 0.45f;
+                GameState.ApplyDamage(12f);
+                GameState.Show("💥 SPIKED! TYRES SHREDDED");
+                if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.7f);
+                if (RoadRageHapticsDirector.Instance != null)
+                    RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.8f);
+            }
         }
 
         private void SpawnRoadblock()

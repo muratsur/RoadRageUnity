@@ -421,6 +421,7 @@ namespace RoadRage.UnityRemake
 					TrafficCarController.PlayerDistance = controller.RoadDistance;
 					UpdateStreaming(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
+					EscalateTraffic();
 				}
 			}
 
@@ -4539,9 +4540,61 @@ namespace RoadRage.UnityRemake
             TrafficCarController.Offence.Weaving,
         };
 
+        private Transform livingTraffic;
+        private float trafficTopUpTimer;
+
+        /// Cars on the road at full intensity versus at the start. Twelve is a busy
+        /// highway to begin with; by the time a run is going well it should be work.
+        private const int BaseTrafficCount = 12;
+        private const int PeakTrafficCount = 22;
+
+        /// Adds traffic as a run escalates.
+        ///
+        /// Traffic was spawned once at bootstrap and only recycled after that, so the
+        /// road at 10 km was exactly as busy as the road at 200 m. Density is the main
+        /// lever an endless driving game has for pacing, and it was not being pulled.
+        private void EscalateTraffic()
+        {
+            if (livingTraffic == null || GameState.RunOver) return;
+            trafficTopUpTimer -= Time.deltaTime;
+            if (trafficTopUpTimer > 0f) return;
+            trafficTopUpTimer = 2.5f;
+
+            var laneCount = LaneCountFor(BiomeIndexAt(TrafficCarController.PlayerDistance));
+            var ceiling = laneCount >= 3 ? PeakTrafficCount
+                        : laneCount == 2 ? Mathf.RoundToInt(PeakTrafficCount * 0.65f)
+                        : Mathf.RoundToInt(PeakTrafficCount * 0.45f);
+            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount, ceiling, GameState.RunIntensity));
+            if (TrafficCarController.All.Count >= target) return;
+
+            // Spawned well ahead so a car never appears in view.
+            var models = new[]
+            {
+                "SK_Veh_Preset_Sedan_01", "SK_Veh_Preset_Hatch_01", "SK_Veh_Preset_Sports_01",
+                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_01",
+                "SK_Veh_Preset_Ute_02", "SK_Veh_Preset_Ute_03", "SK_Veh_Preset_Ute_04"
+            };
+            var index = TrafficCarController.All.Count;
+            var lane = new[] { -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f }[index % 6];
+            var direction = lane < 0f ? 1f : -1f;
+            // Violators get more common as the run escalates, so the road grows more
+            // hostile rather than merely more crowded.
+            var violatorOdds = Mathf.Lerp(0.28f, 0.55f, GameState.RunIntensity);
+            var offence = Random.value < violatorOdds
+                ? OffenceCycle[index % OffenceCycle.Length]
+                : TrafficCarController.Offence.None;
+            var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
+                        * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
+
+            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", models[index % models.Length],
+                Color.white, TrafficCarController.PlayerDistance + Random.Range(320f, 520f),
+                lane, speed, direction, false, 0f, offence);
+        }
+
         private void BuildTraffic()
         {
             var trafficRoot = new GameObject("Living Highway Traffic").transform;
+            livingTraffic = trafficRoot;
             // Six presets out of the fifteen the pack ships, on a twelve-car spawn, meant
             // the same model appeared twice in a row often enough to read as a repeat.
             // The four utes and the four truck bodies are all here now, so a full block
