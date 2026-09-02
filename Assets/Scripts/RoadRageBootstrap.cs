@@ -1025,6 +1025,7 @@ namespace RoadRage.UnityRemake
             RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
             RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
             RenderSettings.ambientGroundColor = mood.Ground;
+            RenderSettings.ambientIntensity = mood.AmbientIntensity;
             RenderSettings.haloStrength = 0f;
             RenderSettings.flareStrength = 0f;
 
@@ -1091,6 +1092,10 @@ namespace RoadRage.UnityRemake
             /// 0 = dry asphalt, 1 = soaked. Drives road smoothness so the reflection
             /// probe's captured neon actually shows up in the street.
             public float RoadWetness;
+            /// Multiplier on the ambient trilight. Lives on the mood so the per-frame
+            /// blend owns it too - it used to be set once by the city photoreal pass and
+            /// then left to drift out of step with the ambient colours around it.
+            public float AmbientIntensity;
         }
 
         /// How far every biome palette is pulled towards its own luminance. The moods
@@ -1116,7 +1121,7 @@ namespace RoadRage.UnityRemake
         /// bounce of 0.05, so anything the directional sun does not hit falls to black
         /// and the facades lose all their detail. Lifting the floor keeps the biome's
         /// hue and its darkness while letting shadowed surfaces still read.
-        private const float MinAmbientLuma = 0.14f;
+        private const float MinAmbientLuma = 0.22f;
 
         /// Raises a colour to a minimum luma without changing its hue.
         private static Color LiftToFloor(Color value, float floor)
@@ -1145,6 +1150,7 @@ namespace RoadRage.UnityRemake
         /// the camera clear colour all share one definition of how saturated a zone is.
         private static BiomeMood Neutralize(BiomeMood mood)
         {
+            if (mood.AmbientIntensity <= 0f) mood.AmbientIntensity = 1f;
             mood.Fog = Desaturate(mood.Fog, MoodDesaturation);
             mood.Sky = LiftToFloor(Desaturate(mood.Sky, MoodDesaturation), MinAmbientLuma);
             mood.Equator = LiftToFloor(Desaturate(mood.Equator, MoodDesaturation), MinAmbientLuma);
@@ -1210,8 +1216,9 @@ namespace RoadRage.UnityRemake
             {
                 FogDensity = 0.0075f, Fog = new Color(0.30f, 0.43f, 0.55f),
                 Sky = new Color(0.41f, 0.60f, 0.78f), Equator = new Color(0.23f, 0.34f, 0.43f),
-                Ground = new Color(0.16f, 0.18f, 0.16f), SunColor = new Color(0.98f, 0.98f, 0.95f),
-                SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.08f
+                Ground = new Color(0.20f, 0.22f, 0.20f), SunColor = new Color(0.98f, 0.98f, 0.95f),
+                SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
+                RoadWetness = 0.08f, AmbientIntensity = 1.25f
             },
             9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
@@ -1220,12 +1227,19 @@ namespace RoadRage.UnityRemake
                 Ground = new Color(0.35f, 0.35f, 0.35f), SunColor = new Color(1f, 1f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.15f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
-            8 => new BiomeMood // MANHATTAN
+            8 => new BiomeMood // MANHATTAN - wet night, but a lit one
             {
-                FogDensity = 0.009f, Fog = new Color(0.055f, 0.086f, 0.13f),
-                Sky = new Color(0.09f, 0.12f, 0.23f), Equator = new Color(0.09f, 0.16f, 0.29f),
-                Ground = new Color(0.04f, 0.05f, 0.08f), SunColor = new Color(0.65f, 0.75f, 1f),
-                SunIntensity = 0.9f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.62f
+                // Was an ambient sky of 0.12 luma over a 0.05 ground bounce with a 0.9
+                // sun: outside the directional light's reach every facade fell to black,
+                // so the buildings read as silhouettes with no surface at all. A night
+                // city is not an unlit one - the light comes off windows, wet asphalt
+                // and sky glow, and that is ambient, not the key. Still blue, still
+                // night, but the geometry is now visible.
+                FogDensity = 0.0055f, Fog = new Color(0.15f, 0.19f, 0.26f),
+                Sky = new Color(0.34f, 0.40f, 0.52f), Equator = new Color(0.28f, 0.33f, 0.42f),
+                Ground = new Color(0.16f, 0.18f, 0.21f), SunColor = new Color(0.82f, 0.88f, 1f),
+                SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
+                RoadWetness = 0.62f, AmbientIntensity = 1.35f
             },
             _ => new BiomeMood // GREENWOOD
             {
@@ -2285,6 +2299,7 @@ namespace RoadRage.UnityRemake
             RenderSettings.ambientSkyColor = Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
             RenderSettings.ambientEquatorColor = Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
             RenderSettings.ambientGroundColor = here.Ground;
+            RenderSettings.ambientIntensity = here.AmbientIntensity;
             if (sunLight != null)
             {
                 sunLight.color = here.SunColor;
@@ -2306,6 +2321,7 @@ namespace RoadRage.UnityRemake
             BloomIntensity = Mathf.Lerp(a.BloomIntensity, b.BloomIntensity, t),
             BloomThreshold = Mathf.Lerp(a.BloomThreshold, b.BloomThreshold, t),
             RoadWetness = Mathf.Lerp(a.RoadWetness, b.RoadWetness, t),
+            AmbientIntensity = Mathf.Lerp(a.AmbientIntensity, b.AmbientIntensity, t),
         };
 
         /// Landmark at a zone seam: an overpass you drive under, on concrete piers, with a
@@ -2878,33 +2894,15 @@ namespace RoadRage.UnityRemake
 			private void ApplyCityPhotorealMood(bool brooklyn)
 			{
 				RenderSettings.ambientMode = AmbientMode.Trilight;
-				RenderSettings.ambientIntensity = 1.25f;
-				RenderSettings.ambientSkyColor = brooklyn ? new Color(0.38f, 0.44f, 0.52f) : new Color(0.45f, 0.50f, 0.60f);
-				RenderSettings.ambientEquatorColor = new Color(0.35f, 0.38f, 0.44f);
-				RenderSettings.ambientGroundColor = new Color(0.20f, 0.22f, 0.25f);
 				RenderSettings.fog = true;
 
-				if (brooklyn)
-				{
-					RenderSettings.fogColor = new Color(0.36f, 0.42f, 0.50f);
-					RenderSettings.fogDensity = 0.0035f;
-				}
-				else
-				{
-					RenderSettings.fogColor = new Color(0.52f, 0.58f, 0.68f);
-					RenderSettings.fogDensity = 0.0022f;
-				}
-
-				var sceneLights = Object.FindObjectsByType<Light>();
-				for (var i = 0; i < sceneLights.Length; i++)
-				{
-					var sceneLight = sceneLights[i];
-					if (sceneLight.type != LightType.Directional || !sceneLight.isActiveAndEnabled) continue;
-					sceneLight.color = new Color(1.0f, 0.96f, 0.90f);
-					sceneLight.intensity = brooklyn ? 1.45f : 1.75f;
-					sceneLight.shadowStrength = 0.75f;
-				}
-
+				// Ambient colours, ambient intensity, fog and the key light used to be
+				// set here as well. BlendZoneLighting rewrites all of those every frame
+				// from the biome mood, so these assignments only survived until the next
+				// frame and the two definitions had been silently disagreeing ever since
+				// the Manhattan mood was restored on top of the photoreal pass. The mood
+				// is the single source of truth now; what is left here is the part
+				// nothing else owns.
 				if (reflectionProbe != null)
 				{
 					reflectionProbe.size = new Vector3(60f, 20f, 60f);
