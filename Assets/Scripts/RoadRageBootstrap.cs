@@ -2119,6 +2119,9 @@ namespace RoadRage.UnityRemake
                     var sourceName = i < renderer.sharedMaterials.Length && renderer.sharedMaterials[i] != null
                         ? renderer.sharedMaterials[i].name.ToLowerInvariant()
                         : string.Empty;
+                    var sourceMaterial = i < renderer.sharedMaterials.Length
+                        ? renderer.sharedMaterials[i]
+                        : null;
                     if (pack == "Synthwave" && resourceName.StartsWith("Car/"))
                     {
                         if (resourceName.Contains("SM_car_B1") || resourceName.Contains("SM_car_B2")) assigned[i] = materials["City Car B2"];
@@ -2148,6 +2151,8 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("window_car") || sourceName.Contains("glass")) assigned[i] = materials["Glass"];
                         else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = materials["City Windows"];
                         else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
+                        else if (KeepPackWallMaterials && pack == "Buildings" && sourceMaterial != null)
+                            assigned[i] = sourceMaterial;
                         else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = facadePass ? material : materials["City Concrete"];
                         else assigned[i] = material ?? materials["City Concrete"];
                     }
@@ -2504,17 +2509,28 @@ namespace RoadRage.UnityRemake
             return buildingCatalogue;
         }
 
-        /// Places a building on a plot rather than scaling it into a gap.
+        /// Let the NYC pack's own wall materials survive the material pass.
         ///
-        /// Two things make a street read as a street: every facade meets the pavement on
-        /// one continuous line, and a building is never wider than the plot it stands on.
-        /// The old code did neither - it centred each building at a random lateral and
-        /// then scaled it to a target height, so facades zigzagged and an oversized mesh
-        /// simply grew until EnsureOutsideRoad shoved it away from the road, leaving the
-        /// gap between the buildings and the pavement.
+        /// They were being replaced because they did not work: 27 of them pointed at the
+        /// HDRP/Lit shader, and HDRP is not installed here - Packages/manifest.json has
+        /// only render-pipelines.core and .universal - so every one was a dangling shader
+        /// reference. Prefabs/Parts/building_*_middle, the sections NYCVariants stacks,
+        /// reference seven apiece. Replacing them with a flat colour was the right call
+        /// while they were broken.
         ///
-        /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
-        /// it recognisable, and then positioned by its street-facing face.
+        /// They are not broken now. Tools/HdrpToUrp/convert.py rewrote all 27 onto URP/Lit
+        /// with their base and normal maps rebound and their tiling kept, so a brick wall
+        /// is photographed brick rather than a tint approximating one - which is what the
+        /// facade family in this file was standing in for.
+        ///
+        /// Only walls. Windows still take the procedural lit-pane grid and lamp heads
+        /// still take City Neon, because those two are the game's own night look rather
+        /// than a surface the pack got right: the pack's own window.001 is solid black
+        /// with no texture at all.
+        ///
+        /// Set false to go back to the flat facade family in one edit.
+        private const bool KeepPackWallMaterials = true;
+
         /// The facades a city block can be built from, chosen per building.
         private static readonly string[] FacadeFamily =
         {
@@ -2675,6 +2691,17 @@ namespace RoadRage.UnityRemake
             group.RecalculateBounds();
         }
 
+        /// Places a building on a plot rather than scaling it into a gap.
+        ///
+        /// Two things make a street read as a street: every facade meets the pavement on
+        /// one continuous line, and a building is never wider than the plot it stands on.
+        /// The old code did neither - it centred each building at a random lateral and
+        /// then scaled it to a target height, so facades zigzagged and an oversized mesh
+        /// simply grew until EnsureOutsideRoad shoved it away from the road, leaving the
+        /// gap between the buildings and the pavement.
+        ///
+        /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
+        /// it recognisable, and then positioned by its street-facing face.
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
