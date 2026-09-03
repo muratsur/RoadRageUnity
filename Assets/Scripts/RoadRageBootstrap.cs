@@ -2428,6 +2428,36 @@ namespace RoadRage.UnityRemake
             System.Array.IndexOf(FacadeFamily, name) >= 0
             || name == "City Skyline" || name == "Cyber Skyline";
 
+        /// City Windows is one shared material carrying one procedural pane-lit texture
+        /// (WindowEmissionGrid, seed 77031) so every window submesh in the game samples
+        /// the same 512px sheet - that is what makes every Manhattan tower show the exact
+        /// same lit/unlit fingerprint side by side, sharing one material is what keeps the
+        /// biome's draw calls low, so the fix is not a texture per building.
+        ///
+        /// The grid tiles cleanly in 12 x 12 cells, so shifting the sample by a whole
+        /// number of cells picks a different lit pattern without moving pane boundaries
+        /// inside a window - no seam, no distortion, same texture, same one draw call
+        /// family, just a different offset baked into this renderer's instance data via
+        /// MaterialPropertyBlock rather than the shared material.
+        private static void VaryWindowLighting(GameObject model, Material cityWindows, int hash)
+        {
+            if (model == null || cityWindows == null) return;
+            const int cells = 12;
+            var salted = unchecked(hash * -1640531527); // hash ^ golden-ratio multiplier,
+            var offsetU = (salted & 0x7fffffff) % cells / (float)cells;
+            var offsetV = (salted >> 8 & 0x7fffffff) % cells / (float)cells;
+            var block = new MaterialPropertyBlock();
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var usesWindows = false;
+                foreach (var m in renderer.sharedMaterials) if (m == cityWindows) { usesWindows = true; break; }
+                if (!usesWindows) continue;
+                renderer.GetPropertyBlock(block);
+                block.SetVector("_BaseMap_ST", new Vector4(1f, 1f, offsetU, offsetV));
+                renderer.SetPropertyBlock(block);
+            }
+        }
+
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
@@ -2476,6 +2506,8 @@ namespace RoadRage.UnityRemake
                     model.transform.position += Vector3.up *
                         (RoadPath.Point(distance, 0f, 0f).y - bounds.min.y + 0.05f);
             }
+            if (materials.TryGetValue("City Windows", out var cityWindows))
+                VaryWindowLighting(model, cityWindows, hash);
             return model;
         }
 
