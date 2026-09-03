@@ -2641,6 +2641,37 @@ namespace RoadRage.UnityRemake
         /// right: no system should need a flag to exercise. Since the foliage work has to
         /// be judged on this number rather than on how a frame looks, it needs to be one
         /// keypress away from wherever the player already is.
+        /// Names the meshes carrying the triangle load, worst first.
+        ///
+        /// Reported per mesh AND per instance: a mesh drawn 40 times at 5k triangles and
+        /// one drawn twice at 100k need opposite fixes - thin the placement, or replace
+        /// or decimate the asset - and a total alone cannot tell them apart.
+        private static void LogHeaviestMeshes(Dictionary<string, long> trisByMesh,
+                                              Dictionary<string, int> countByMesh, long totalTris)
+        {
+            if (trisByMesh.Count == 0 || totalTris <= 0) return;
+
+            var ranked = new List<KeyValuePair<string, long>>(trisByMesh);
+            ranked.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            var report = new System.Text.StringBuilder();
+            report.Append($"RR_MESH heaviest of {trisByMesh.Count} distinct meshes ")
+                  .Append($"({totalTris / 1000}k triangles total):");
+            var shown = Mathf.Min(HeaviestMeshCount, ranked.Count);
+            for (var i = 0; i < shown; i++)
+            {
+                var name = ranked[i].Key;
+                var tris = ranked[i].Value;
+                var instances = countByMesh.TryGetValue(name, out var n) ? n : 0;
+                var each = instances > 0 ? tris / instances : tris;
+                report.Append($"\n  {100f * tris / totalTris,5:0.0}%  {tris / 1000,7}k tris  ")
+                      .Append($"x{instances,-4} ({each / 1000f:0.0}k each)  {name}");
+            }
+            Debug.Log(report.ToString());
+        }
+
+        private const int HeaviestMeshCount = 10;
+
         /// Frames discarded after lifting the cap, then frames averaged. The first frames
         /// after uncapping still carry the capped pacing, and a single frame is noise.
         private const int CostProbeWarmupFrames = 30;
@@ -2674,6 +2705,13 @@ namespace RoadRage.UnityRemake
             foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
                 if (go != null && go.name.StartsWith("Chunk ")) chunkRoots.Add(go);
 
+            // Triangles per mesh, so the log names what is expensive instead of only
+            // saying how much there is. Manhattan reporting 3.2M triangles a chunk is a
+            // number nobody can act on; the same total attributed to a handful of meshes
+            // is a decision about those meshes.
+            var trisByMesh = new Dictionary<string, long>();
+            var countByMesh = new Dictionary<string, int>();
+
             foreach (var chunk in chunkRoots)
             {
                 var renderers = chunk.GetComponentsInChildren<Renderer>(true);
@@ -2681,8 +2719,18 @@ namespace RoadRage.UnityRemake
                 foreach (var r in renderers)
                 {
                     if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                    {
+                        long meshTris = 0;
                         for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
-                            totalTris += mf.sharedMesh.GetIndexCount(sm) / 3;
+                            meshTris += mf.sharedMesh.GetIndexCount(sm) / 3;
+                        totalTris += meshTris;
+
+                        var meshName = mf.sharedMesh.name;
+                        trisByMesh.TryGetValue(meshName, out var running);
+                        trisByMesh[meshName] = running + meshTris;
+                        countByMesh.TryGetValue(meshName, out var instances);
+                        countByMesh[meshName] = instances + 1;
+                    }
                     foreach (var m in r.sharedMaterials)
                         if (IsAlphaClipped(m)) { totalCutouts++; break; }
                 }
@@ -2730,6 +2778,8 @@ namespace RoadRage.UnityRemake
                       $"RR_COST uncapped over {CostProbeSampleFrames} frames: avg={avgFps:0.0} fps " +
                       $"worst={worstFps:0.0} fps budget={(RichDetailBudget ? "rich" : "low")} " +
                       $"(was capped at {priorTarget})");
+
+            LogHeaviestMeshes(trisByMesh, countByMesh, totalTris);
 
             costProbeRunning = false;
         }
