@@ -58,7 +58,7 @@ namespace RoadRage.Tools
             var update = args.Contains("--update-baseline");
             var baselinePath = Path.Combine(repo, "Tools/SymbolCheck/baseline.txt");
 
-            if (!Analyze(repo, out var files, out var calls, out var declaredCount)) return 2;
+            if (!Analyze(repo, out var files, out var calls, out var declaredCount, out var trees)) return 2;
             var found = calls.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
 
             if (update)
@@ -88,10 +88,20 @@ namespace RoadRage.Tools
 
             var added = found.Where(n => !baseline.Contains(n)).ToList();
 
-            Console.WriteLine($"SYMBOLCHECK {files.Count} files, {declaredCount} declared names, " +
-                              $"{found.Count} external calls, {added.Count} undeclared");
+            var missingAssets = MissingResourceReferences(repo, trees);
 
-            if (added.Count == 0) return 0;
+            Console.WriteLine($"SYMBOLCHECK {files.Count} files, {declaredCount} declared names, " +
+                              $"{found.Count} external calls, {added.Count} undeclared, " +
+                              $"{missingAssets.Count} missing assets");
+
+            foreach (var (call, line, file) in missingAssets)
+                Console.WriteLine($"SYMBOLCHECK MISSING ASSET {call}\n    {file}:{line}");
+
+            if (added.Count == 0 && missingAssets.Count == 0) return 0;
+            if (missingAssets.Count > 0)
+                Console.WriteLine($"SYMBOLCHECK FAILED: {missingAssets.Count} model reference(s) " +
+                                  "resolve to nothing under any Resources folder.");
+            if (added.Count == 0) return 1;
 
             foreach (var name in added)
             {
@@ -106,7 +116,8 @@ namespace RoadRage.Tools
         /// account for. Shared by the real check and the self test so the two can never
         /// drift into testing different code.
         private static bool Analyze(string repo, out List<string> files,
-            out Dictionary<string, List<string>> calls, out int declaredCount)
+            out Dictionary<string, List<string>> calls, out int declaredCount,
+            out List<SyntaxTree> trees)
         {
             files = SourceRoots
                 .Select(r => Path.Combine(repo, r))
@@ -116,6 +127,7 @@ namespace RoadRage.Tools
                 .ToList();
             calls = new Dictionary<string, List<string>>(StringComparer.Ordinal);
             declaredCount = 0;
+            trees = new List<SyntaxTree>();
 
             if (files.Count == 0)
             {
@@ -124,7 +136,7 @@ namespace RoadRage.Tools
                 return false;
             }
 
-            var trees = files
+            trees = files
                 .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), path: f))
                 .ToList();
             var declared = CollectDeclaredNames(trees);
@@ -149,7 +161,7 @@ namespace RoadRage.Tools
             const string expected = "ThisOneIsGenuinelyMissing";
             var fixture = Path.Combine(repo, "Tools/SymbolCheck/selftest");
 
-            if (!Analyze(fixture, out var files, out var calls, out _)) return 2;
+            if (!Analyze(fixture, out var files, out var calls, out _, out _)) return 2;
 
             var baseline = File.ReadAllLines(Path.Combine(fixture, "Tools/SymbolCheck/baseline.txt"))
                 .Where(l => l.Length > 0 && !l.StartsWith("#"))
@@ -170,6 +182,80 @@ namespace RoadRage.Tools
                                     "flagging something it should not. Do not trust its green runs.");
             return 1;
         }
+
+        /// Model references that resolve to nothing under any Resources folder.
+        ///
+        /// BiomeModel loads by string path, so a wrong one is not a compile error and not
+        /// a crash: it logs one warning per attempt and returns null, and the prop simply
+        /// never appears. BuildNeonCity asked for "Buildings/DemoCity/bus_stop" on every
+        /// fourth block - the DemoCity pack ships no bus stop - so a quarter of the biome's
+        /// blocks had a bench beside an empty pavement, and the warnings blended into a
+        /// console that was already full.
+        ///
+        /// Resolution mirrors BiomeModel's own fallback chain exactly:
+        ///   Biomes/{pack}/Meshes/{resource}  ->  {pack}/{resource}  ->  {resource}
+        ///
+        /// Literal arguments only. A call built from variables is skipped rather than
+        /// guessed at, so this under-reports and never invents a failure. Silently skipped
+        /// entirely when no Resources folder is checked out, so a sparse CI job that omits
+        /// the assets does not report every reference as missing.
+        private static List<(string Call, int Line, string File)> MissingResourceReferences(
+            string repo, List<SyntaxTree> trees)
+        {
+            var missing = new List<(string, int, string)>();
+            var assetsRoot = Path.Combine(repo, "Assets");
+            if (!Directory.Exists(assetsRoot)) return missing;
+
+            string[] modelExtensions = { ".prefab", ".fbx", ".obj", ".blend", ".dae" };
+            var loadable = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var resources in Directory.EnumerateDirectories(assetsRoot, "Resources",
+                         SearchOption.AllDirectories))
+            foreach (var file in Directory.EnumerateFiles(resources, "*", SearchOption.AllDirectories))
+            {
+                if (!modelExtensions.Contains(Path.GetExtension(file).ToLowerInvariant())) continue;
+                var rel = Path.GetRelativePath(resources, file).Replace('\\', '/');
+                loadable.Add(rel[..^Path.GetExtension(rel).Length]);
+            }
+            if (loadable.Count == 0)
+            {
+                // Saying nothing here would report "0 missing assets" for a checkout that
+                // simply has no assets to check - a green line meaning nothing, which is
+                // the failure this whole tool exists to stop repeating.
+                Console.WriteLine("SYMBOLCHECK asset check SKIPPED: no loadable models under any " +
+                                  "Resources folder. Check out Assets/Resources to run it.");
+                return missing;
+            }
+
+            foreach (var tree in trees)
+            {
+                var text = tree.GetText();
+                foreach (var call in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+                {
+                    var callee = call.Expression switch
+                    {
+                        IdentifierNameSyntax id => id.Identifier.ValueText,
+                        MemberAccessExpressionSyntax ma => ma.Name.Identifier.ValueText,
+                        _ => null,
+                    };
+                    if (callee is not ("BiomeModel" or "PlaceBiomeModel" or "PlaceBiomeModelOnRoad")) continue;
+
+                    var args = call.ArgumentList.Arguments;
+                    if (args.Count < 2) continue;
+                    if (Literal(args[0]) is not { } pack || Literal(args[1]) is not { } resource) continue;
+
+                    if (loadable.Contains($"Biomes/{pack}/Meshes/{resource}")
+                        || loadable.Contains($"{pack}/{resource}")
+                        || loadable.Contains(resource)) continue;
+
+                    var line = text.Lines.GetLineFromPosition(call.SpanStart).LineNumber + 1;
+                    missing.Add(($"{pack}/{resource}", line, tree.FilePath));
+                }
+            }
+            return missing;
+        }
+
+        private static string Literal(ArgumentSyntax arg) =>
+            arg.Expression is LiteralExpressionSyntax lit && lit.Token.Value is string s ? s : null;
 
         /// Every name the project declares that a bare call could legitimately land on.
         /// Deliberately flat and generous: a name declared on any type counts. Narrowing

@@ -26,12 +26,14 @@ jobs:
       - name: Check out sources
         uses: actions/checkout@v4
         with:
-          # Only what the checker reads. The working tree carries several hundred MB
-          # of art, and Git LFS pointers are left unresolved on purpose - no asset is
-          # opened by this job.
+          # Only what the checker reads. Assets/Resources is included because the
+          # asset-reference check resolves model paths against it and would otherwise
+          # skip; with lfs:false every model arrives as a small pointer file, so this
+          # costs almost nothing and no asset is ever opened.
           sparse-checkout: |
             Assets/Scripts
             Assets/Editor
+            Assets/Resources
             Tools
           lfs: false
 

@@ -3743,9 +3743,17 @@ namespace RoadRage.UnityRemake
                 {
                     var side = block % 8 < 4 ? 1f : -1f;
                     var stopDistance = z + 6f;
-                    var stop = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bus_stop",
-                        materials["City Props"], stopDistance, side * 19.8f, 0.14f,
-                        new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "City Bus Stop");
+                    // Was "Buildings/DemoCity/bus_stop", which does not exist - the DemoCity
+                    // pack ships no bus stop - so every fourth block logged a missing-model
+                    // warning and left its bench standing beside nothing. Neon City's own
+                    // pack has a transit shelter that was sitting unreferenced.
+                    //
+                    // The -90 on X is not decoration: every CyberpunkCity mesh in this file
+                    // is placed that way because the pack is authored Z-up, and the old call
+                    // passed 0 because DemoCity is not.
+                    var stop = PlaceBiomeModelOnRoad("CyberpunkCity", "Tramstop/SM_Tram_stop",
+                        materials["Cyber Props"], stopDistance, side * 19.8f, 0.14f,
+                        new Vector3(-90f, side > 0f ? -90f : 90f, 0f), Vector3.one, "Neon Tram Stop");
                     if (stop != null) NormalizeModelHeight(stop, 3.2f, 0.14f);
 
                     var benchDistance = z + 12f;
