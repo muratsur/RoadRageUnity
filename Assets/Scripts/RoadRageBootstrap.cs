@@ -2598,13 +2598,10 @@ namespace RoadRage.UnityRemake
 
         /// How many weathered variants Tools/GrimeBake/bake.py writes per wall.
         ///
-        /// The baked textures are not in the repository: png is tracked through Git LFS,
-        /// and registering an LFS upload needs an endpoint this project's automation
-        /// cannot reach, so pushing the pointers would give everyone a checkout whose
-        /// textures fail to resolve. Running the tool once produces them locally, with
-        /// seeds and guids derived from the asset name so the result is identical for
-        /// everyone. Until then Resources.Load finds nothing, every wall keeps its clean
-        /// material, and this method is a no-op.
+        /// Resources.Load is used rather than a serialised reference because nothing in
+        /// this world is authored in a scene. If a variant is ever missing, the lookup
+        /// keeps only the clean material and this method leaves every wall alone, which
+        /// is the behaviour before the variants existed.
         private const int GrimeVariants = 3;
 
         /// Wall material name to its variants, index 0 being the clean original.

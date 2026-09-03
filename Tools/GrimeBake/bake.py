@@ -29,21 +29,13 @@ darkens a surface and lets its texture show through, so the brick pattern surviv
 the stain. Nothing is ever brightened, and a fully covered pixel still keeps the base
 colour scaled by the stain's own luminance rather than replacing it.
 
-WHY THE OUTPUT IS NOT IN THE REPOSITORY
+REPRODUCING IT
 
-The baked textures are png, which .gitattributes tracks through Git LFS, and GitHub
-only registers an LFS upload once the client calls its verify endpoint on lfs.github.com
-- a host this project's automation cannot reach. Pushing the pointers without that would
-give everyone a checkout whose textures fail to resolve, which is worse than not having
-them. So the inputs and the recipe are committed and the output is generated locally:
+The output is committed, but it is also reproducible: seeds and asset guids are derived
+from the asset name, so re-running writes byte-identical files rather than churning the
+repository with fresh noise.
 
-  python3 Tools/GrimeBake/bake.py
-
-That writes nine textures beside the pack's other ones and nine material variants into
-Resources, all with seeds and guids derived from the asset name, so two people running
-it get byte-identical results. Until it is run, WeatherWalls finds no variants and every
-wall keeps its clean material, which is the behaviour before this change.
-
+  python3 Tools/GrimeBake/bake.py            # rewrite the textures and materials
   python3 Tools/GrimeBake/bake.py --list      # what it would produce
   python3 Tools/GrimeBake/bake.py --dry-run   # coverage and seam figures, no writes
 """
