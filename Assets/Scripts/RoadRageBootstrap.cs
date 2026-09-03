@@ -128,6 +128,7 @@ namespace RoadRage.UnityRemake
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
+            if (HasCommandLineFlag("-lowdetail")) ForceLowDetailBudget(true);
             LogSky = HasCommandLineFlag("-skylog");
             if (LogSky) StartCoroutine(SkyAudit());
             ChaseCamera.LogCamera = HasCommandLineFlag("-camlog");
@@ -996,11 +997,34 @@ namespace RoadRage.UnityRemake
         /// that measurably is not there.
         public static bool RichDetailBudget { get; private set; } = true;
 
+        /// Overrides the platform test so the mobile budget can be exercised on desktop.
+        /// Set by -lowdetail, or from the editor via ForceLowDetailBudget before the world
+        /// builds. Null means "decide from the platform", which is the shipping behaviour.
+        private static bool? lowDetailOverride;
+
+        /// The budget path keyed purely off Application.isMobilePlatform, so the only way
+        /// to see what the thinning actually removes was to produce an Android build and
+        /// install it - rung 6 of the test ladder for a question rung 2 can answer. This
+        /// forces the same budget on desktop so the removal can be read off RR_COST.
+        ///
+        /// It does NOT emulate the device GPU: a desktop frame rate under this budget says
+        /// nothing about a Helio G85. What it does prove is how much geometry the budget
+        /// actually takes out, which is the part that was never measured. Chunks bake
+        /// scatter density at build time, so call this before the world builds.
+        public static void ForceLowDetailBudget(bool low)
+        {
+            lowDetailOverride = low;
+            ApplyPlatformQuality();
+            Debug.Log($"RR_QUALITY forced budget: RichDetailBudget={RichDetailBudget} " +
+                      "(rebuild the world for scatter density to take effect)");
+        }
+
         private static void ApplyPlatformQuality()
         {
-            RichDetailBudget = !Application.isMobilePlatform;
+            var lowDetail = lowDetailOverride ?? Application.isMobilePlatform;
+            RichDetailBudget = !lowDetail;
 
-            if (!Application.isMobilePlatform)
+            if (!lowDetail)
             {
                 QualitySettings.shadowDistance = 160f;
                 QualitySettings.shadowCascades = 4;
@@ -1012,8 +1036,11 @@ namespace RoadRage.UnityRemake
             QualitySettings.shadowCascades = 1;
             QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Low;
             QualitySettings.globalTextureMipmapLimit = 0;
-            Application.targetFrameRate = 60;
-            Debug.Log("RR_QUALITY mobile tier: no reflection probe, 70m 1-cascade shadows, 1024 textures");
+            // Only cap on a real handset. Capping a forced-low desktop run would clamp the
+            // frame rate to 60 and hide exactly the headroom the run is measuring.
+            if (Application.isMobilePlatform) Application.targetFrameRate = 60;
+            Debug.Log("RR_QUALITY mobile tier: no reflection probe, 70m 1-cascade shadows, " +
+                      $"1024 textures (forced={lowDetailOverride == true && !Application.isMobilePlatform})");
         }
 
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
@@ -2093,7 +2120,13 @@ namespace RoadRage.UnityRemake
         /// A static survives entering play mode when domain reload is off, so a
         /// catalogue built once would outlive the run that measured it.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetBuildingCatalogue() => buildingCatalogue = null;
+        private static void ResetBuildingCatalogue()
+        {
+            buildingCatalogue = null;
+            // Same reason: a budget forced for one measurement would silently stay forced
+            // for every later run in the same editor session and quietly invalidate it.
+            lowDetailOverride = null;
+        }
 
         /// A candidate building mesh, measured in its own right.
         ///
