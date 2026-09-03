@@ -3771,7 +3771,9 @@ namespace RoadRage.UnityRemake
                         frontageLine: FrontageSetback, plotWidth: 30f, hash: BlockHash(block, side * 7));
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
-                    if (block % 2 == 0)
+                    // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
+                    // reads as silhouette texture at best. First thing to go on a budget.
+                    if (block % 2 == 0 && RichDetailBudget)
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
@@ -3781,10 +3783,25 @@ namespace RoadRage.UnityRemake
                     }
 
                     // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
-                    var towerDistance = z + Random.Range(-10f, 10f);
-                    PlaceBuildingOnPlot(BuildingClass.MidBlock, materials["City Skyline"],
-                        "Manhattan Midtown Skyscraper", towerDistance, side,
-                        frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: BlockHash(block, side * 3));
+                    //
+                    // Thinned rather than dropped on a low budget. Measured cost: the
+                    // NYCVariants prefabs stack a mean of 5.1 sections of 18-25k triangles
+                    // each, so one placed tower is around 100k triangles, and RR_MESH found
+                    // building_8_middle and building_6_middle alone carrying 55% of
+                    // Manhattan's 25.3M triangles across 668 instances. Nothing here has an
+                    // LODGroup, so a background tower costs the same at 200 m as at 20 m.
+                    //
+                    // These sit at FrontageSetback + 26 m - behind the frontage line, read
+                    // as skyline rather than as street - so halving them is the cheapest
+                    // large cut available. Keeping every other block preserves the ragged
+                    // skyline; dropping them entirely leaves a visible flat horizon.
+                    if (RichDetailBudget || block % 2 == 0)
+                    {
+                        var towerDistance = z + Random.Range(-10f, 10f);
+                        PlaceBuildingOnPlot(BuildingClass.MidBlock, materials["City Skyline"],
+                            "Manhattan Midtown Skyscraper", towerDistance, side,
+                            frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: BlockHash(block, side * 3));
+                    }
 
                     // 4. NYC Street Lamposts with warm amber glow
                     var lampDistance = z + (side > 0 ? 10f : -7f);
