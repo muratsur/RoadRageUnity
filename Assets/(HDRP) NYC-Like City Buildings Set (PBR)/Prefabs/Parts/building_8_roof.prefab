@@ -329,46 +329,6 @@ PrefabInstance:
       propertyPath: m_LocalEulerAnglesHint.z
       value: 222.483
       objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Size.x
-      value: 46.445892
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Size.y
-      value: 37.063786
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Size.z
-      value: 1.13
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Material
-      value: 
-      objectReference: {fileID: 2100000, guid: 9fd7cc263e7c7db4aba12ab49bb6e23d, type: 2}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Offset.x
-      value: 2.8157997
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Offset.y
-      value: 12.460646
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_Offset.z
-      value: 0.45199996
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_UVBias.x
-      value: 0
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_UVScale.x
-      value: 1
-      objectReference: {fileID: 0}
-    - target: {fileID: 8810266082559041854, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}
-      propertyPath: m_FadeFactor
-      value: 0.345
-      objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_AddedGameObjects: []
   m_SourcePrefab: {fileID: 100100000, guid: 1efb18870e2b1ad41a5c9f7913394e96, type: 3}

@@ -36,19 +36,23 @@ def slot(name, guid):
             % (name, texture))
 
 
-def material(slots, shader=None):
+def material(slots, shader=None, keywords=("_MATERIAL_FEATURE_X",), floats=(), tags=""):
     return ("Material:\n  m_Name: t\n"
             "  m_Shader: {fileID: 4800000, guid: %s, type: 3}\n"
-            "  m_ValidKeywords:\n  - _MATERIAL_FEATURE_X\n"
+            "  m_ValidKeywords:\n%s"
             "  m_CustomRenderQueue: 2225\n"
+            "  stringTagMap:%s\n"
             "  disabledShaderPasses:\n  - MOTIONVECTORS\n  - TransparentDepthPrepass\n"
             "  m_SavedProperties:\n    serializedVersion: 3\n    m_TexEnvs:\n"
-            % (shader or convert.HDRP_LIT)) + "".join(slots)
+            % (shader or convert.HDRP_LIT,
+               "".join("  - %s\n" % k for k in keywords), tags)
+            ) + "".join(slots) + "    m_Floats:\n" + "".join(
+                "    - %s: %s\n" % (k, v) for k, v in floats)
 
 
-def run(directory, name, slots, dry_run=False, shader=None):
+def run(directory, name, slots, dry_run=False, shader=None, **kw):
     path = os.path.join(directory, name + ".mat")
-    open(path, "w").write(material(slots, shader))
+    open(path, "w").write(material(slots, shader, **kw))
     result = convert.convert(path, dry_run, KNOWN)
     return open(path).read(), result, path
 
@@ -88,9 +92,43 @@ def main():
         check("already URP: keywords match what is bound",
               "_METALLICSPECGLOSSMAP" in out and "_OCCLUSIONMAP" in out)
 
+        # a present-but-empty URP slot is the slot waiting to be written, not a binding
         out, _, _ = run(d, "empty", [slot("_NormalMap", REAL), slot("_BumpMap", None)])
+        check("empty slot: filled in place", "guid: " + REAL in out)
         check("empty slot: not duplicated", out.count("    - _BumpMap:\n") == 1)
-        check("empty slot: keyword stays off", "_NORMALMAP" not in out)
+        check("empty slot: _NORMALMAP enabled", "  - _NORMALMAP\n" in out)
+
+        # ...but a dangling texture must still not be copied into one
+        out, _, _ = run(d, "emptydangling", [slot("_NormalMap", MISSING), slot("_BumpMap", None)])
+        # the HDRP slot keeps its dangling guid, nothing is deleted; _BumpMap must not take it
+        bump = convert.texture_block(out, "_BumpMap")
+        check("empty slot, dangling source: _BumpMap left empty", bump is None)
+        check("empty slot, dangling source: keyword off", "_NORMALMAP" not in out)
+
+        # HDRP LitTessellation is the other source shader; URP has no tessellation, so
+        # the surface flags are the whole point of converting it rather than dropping it.
+        out, _, _ = run(d, "leaf", [slot("_BaseColorMap", REAL), slot("_NormalMap", REAL)],
+                        shader=convert.HDRP_LIT_TESSELLATION,
+                        keywords=("_ALPHATEST_ON", "_DOUBLESIDED_ON"),
+                        floats=(("_AlphaCutoffEnable", 1), ("_AlphaCutoff", "0.401"),
+                                ("_DoubleSidedEnable", 1)),
+                        tags="\n    RenderType: TransparentCutout")
+        check("tessellation: shader swapped to URP", convert.URP_LIT in out
+              and convert.HDRP_LIT_TESSELLATION not in out)
+        check("tessellation: maps carried over", "    - _BaseMap:\n" in out and "    - _BumpMap:\n" in out)
+        check("alpha clip: _AlphaClip set", "    - _AlphaClip: 1\n" in out)
+        check("alpha clip: cutoff carried from _AlphaCutoff", "    - _Cutoff: 0.401\n" in out)
+        check("alpha clip: _ALPHATEST_ON kept", "  - _ALPHATEST_ON\n" in out)
+        check("alpha clip: AlphaTest queue", "  m_CustomRenderQueue: 2450" in out)
+        check("alpha clip: RenderType TransparentCutout", "RenderType: TransparentCutout" in out)
+        check("double sided: _Cull 0", "    - _Cull: 0\n" in out)
+
+        # an opaque single-sided material must not pick up either flag
+        out, _, _ = run(d, "opaque", [slot("_BaseColorMap", REAL)],
+                        floats=(("_AlphaCutoffEnable", 0), ("_DoubleSidedEnable", 0)))
+        check("opaque: no alpha clip added", "_AlphaClip" not in out and "_ALPHATEST_ON" not in out)
+        check("opaque: stays single sided", "    - _Cull: 0\n" not in out)
+        check("opaque: queue taken from the shader", "  m_CustomRenderQueue: -1" in out)
 
         _, result, path = run(d, "urp", [], shader=convert.URP_LIT)
         before = open(path).read()

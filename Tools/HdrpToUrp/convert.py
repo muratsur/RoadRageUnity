@@ -48,7 +48,13 @@ Run with --dry-run to see the plan without writing.
 """
 import argparse, os, re, sys
 
+# Every HDRP shader that URP/Lit can stand in for. LitTessellation is here because URP
+# has no tessellation at all: the displacement is lost, but Leaves.mat set its
+# tessellation factors to the shader defaults and used the shader for its alpha clip and
+# double-sided flag, both of which URP/Lit does have.
 HDRP_LIT = "6e4ae4064600d784cac1e41a9e6f2e59"
+HDRP_LIT_TESSELLATION = "756bac9090102564582875f4c7e30202"
+SOURCES = (HDRP_LIT, HDRP_LIT_TESSELLATION)
 URP_LIT = "933532a4fcc9baf4fa0491de14d08ed7"
 
 # HDRP slot -> the URP slots it feeds, each with the keyword that switches it on.
@@ -67,14 +73,15 @@ SLOTS = {
 }
 
 
+SLOT_PATTERN = (r"^    - %s:\n"
+                r"^        m_Texture: \{(?P<tex>[^}]*)\}\n"
+                r"^        m_Scale: \{(?P<scale>[^}]*)\}\n"
+                r"^        m_Offset: \{(?P<offset>[^}]*)\}\n")
+
+
 def texture_block(source, slot):
     """The three lines Unity serialises for one texture slot, or None if unbound."""
-    m = re.search(
-        r"^    - %s:\n"
-        r"^        m_Texture: \{(?P<tex>[^}]*)\}\n"
-        r"^        m_Scale: \{(?P<scale>[^}]*)\}\n"
-        r"^        m_Offset: \{(?P<offset>[^}]*)\}\n" % re.escape(slot),
-        source, re.M)
+    m = re.search(SLOT_PATTERN % re.escape(slot), source, re.M)
     if not m or "fileID: 0}" in "{%s}" % m.group("tex"):
         return None
     return m.group("tex"), m.group("scale"), m.group("offset")
@@ -98,6 +105,20 @@ def project_texture_guids(root="Assets"):
     return guids
 
 
+def number(source, name, default=None):
+    """The value of a serialised float property, or default when it is not there."""
+    m = re.search(r"^    - %s: (-?[\d.eE+]+)$" % re.escape(name), source, re.M)
+    return float(m.group(1)) if m else default
+
+
+def set_number(source, name, value):
+    """Set a float property, adding it to m_Floats when the material has no such key."""
+    line = "    - %s: %s" % (name, value)
+    if re.search(r"^    - %s: " % re.escape(name), source, re.M):
+        return re.sub(r"^    - %s: .*$" % re.escape(name), line, source, count=1, flags=re.M)
+    return source.replace("    m_Floats:\n", "    m_Floats:\n" + line + "\n", 1)
+
+
 def bound(source, slot, known_guids):
     """Is this slot pointing at a texture that actually exists? A slot can be present
     and empty, and it can be present and dangling - epoxy.mat shipped a normal map guid
@@ -115,7 +136,8 @@ def convert(path, dry_run, known_guids=None):
         source = open(path, encoding="utf-8").read()
     except UnicodeDecodeError:
         return "binary"  # a binary-serialised material; no text to rewrite
-    if HDRP_LIT not in source:
+    shader = next((g for g in SOURCES if g in source), None)
+    if shader is None:
         return None
 
     # Some packs ship a material that carries both slot sets - the Arabic Neoclassical
@@ -123,22 +145,32 @@ def convert(path, dry_run, known_guids=None):
     # already filled in, each with its own texture, and only the shader guid points at
     # HDRP. Copying over those would replace real URP maps with the HDRP packing, so an
     # existing binding always wins and only empty slots are filled from the HDRP side.
+    #
+    # A URP slot can also be present and empty, which is how Unity serialises a slot the
+    # shader declares but nobody filled. That is not an existing binding to protect, it
+    # is the slot waiting to be written, so it gets filled in place. Skipping it cost
+    # Leaves.mat its normal map on the first run.
     copied = []
     additions = ""
+    fills = []
     for hdrp_slot, targets in SLOTS.items():
         source_bound = bound(source, hdrp_slot, known_guids)
         for urp_slot, _ in targets:
             if bound(source, urp_slot, known_guids) or not source_bound:
                 continue
-            if re.search(r"^    - %s:" % re.escape(urp_slot), source, re.M):
-                continue  # present but empty, and Unity will not tolerate a duplicate
             tex, scale, offset = texture_block(source, hdrp_slot)
-            additions += ("    - %s:\n        m_Texture: {%s}\n"
-                          "        m_Scale: {%s}\n        m_Offset: {%s}\n"
-                          % (urp_slot, tex, scale, offset))
+            block = ("    - %s:\n        m_Texture: {%s}\n"
+                     "        m_Scale: {%s}\n        m_Offset: {%s}\n"
+                     % (urp_slot, tex, scale, offset))
+            if re.search(r"^    - %s:" % re.escape(urp_slot), source, re.M):
+                fills.append((urp_slot, block))     # present but empty: fill, never duplicate
+            else:
+                additions += block
             copied.append("%s->%s" % (hdrp_slot, urp_slot))
 
-    updated = source.replace(HDRP_LIT, URP_LIT)
+    updated = source.replace(shader, URP_LIT)
+    for urp_slot, block in fills:
+        updated = re.sub(SLOT_PATTERN % re.escape(urp_slot), block, updated, count=1, flags=re.M)
     if additions:
         updated = updated.replace("    m_TexEnvs:\n", "    m_TexEnvs:\n" + additions, 1)
 
@@ -154,9 +186,35 @@ def convert(path, dry_run, known_guids=None):
     updated = re.sub(r"^  m_CustomRenderQueue: -?\d+$", "  m_CustomRenderQueue: -1",
                      updated, count=1, flags=re.M)
 
+    # Surface flags. HDRP and URP spell these differently and neither is a texture, so
+    # the shader swap alone would silently turn an alpha-clipped double-sided leaf into
+    # an opaque single-sided card: foliage would render as solid rectangles seen from
+    # one side only.
+    notes = []
+    clipped = number(source, "_AlphaCutoffEnable", 0) > 0.5 or "  - _ALPHATEST_ON\n" in source
+    if clipped:
+        cutoff = number(source, "_AlphaCutoff", number(source, "_Cutoff", 0.5))
+        updated = set_number(updated, "_AlphaClip", 1)
+        updated = set_number(updated, "_Cutoff", ("%g" % cutoff))
+        if "  - _ALPHATEST_ON\n" not in updated:
+            updated = updated.replace("  m_ValidKeywords:\n", "  m_ValidKeywords:\n  - _ALPHATEST_ON\n", 1) \
+                if "  m_ValidKeywords:\n" in updated else \
+                updated.replace("  m_ValidKeywords: []\n", "  m_ValidKeywords:\n  - _ALPHATEST_ON\n", 1)
+        # URP draws alpha-clipped surfaces in the AlphaTest queue, and its shader reports
+        # RenderType TransparentCutout so shader replacement passes pick it up.
+        updated = re.sub(r"^  m_CustomRenderQueue: -1$", "  m_CustomRenderQueue: 2450",
+                         updated, count=1, flags=re.M)
+        if "RenderType: TransparentCutout" not in updated:
+            updated = re.sub(r"^  stringTagMap:.*$", "  stringTagMap:\n    RenderType: TransparentCutout",
+                             updated, count=1, flags=re.M)
+        notes.append("alphaclip=%g" % cutoff)
+    if number(source, "_DoubleSidedEnable", 0) > 0.5:
+        updated = set_number(updated, "_Cull", 0)   # URP: 0 Off, 1 Front, 2 Back
+        notes.append("doublesided")
+
     if not dry_run:
         open(path, "w", encoding="utf-8", newline="").write(updated)
-    return copied + ["+%s" % k for k in enabled]
+    return copied + ["+%s" % k for k in enabled] + notes
 
 
 def main():
