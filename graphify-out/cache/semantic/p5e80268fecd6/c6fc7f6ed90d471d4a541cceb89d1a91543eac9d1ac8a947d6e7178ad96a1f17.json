@@ -1,0 +1,1 @@
+{"nodes": [], "edges": [], "hyperedges": [{"id": "android_build_configuration", "label": "Android Build Configuration", "nodes": ["utmp_debug_hash_key", "cmake_cache"], "relation": "form", "confidence": "EXTRACTED", "confidence_score": 1.0, "source_file": ".utmp/Debug/134o6k2p/arm64-v8a/metadata_generation_command.txt"}]}

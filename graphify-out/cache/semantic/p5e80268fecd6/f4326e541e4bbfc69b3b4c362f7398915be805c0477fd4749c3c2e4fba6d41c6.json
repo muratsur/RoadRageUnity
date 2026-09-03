@@ -1,0 +1,1 @@
+{"nodes": [{"id": "acc_lite_sprites_ui_tahometerarrow", "label": "Tachometer Needle Sprite", "file_type": "image", "source_file": "Assets/ACC_Lite/Sprites/UI/TahometerArrow.png", "rationale": "A red triangular needle used to indicate current RPM on the tachometer."}], "edges": [], "hyperedges": []}

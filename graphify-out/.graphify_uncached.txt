@@ -1,0 +1,1481 @@
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\CMakeCache.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\CMakeFiles\TargetDirectories.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\additional_project_files.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\build_file_index.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\metadata_generation_command.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\arm64-v8a\symbol_folder_index.txt
+C:\Users\Murat\Projects\RoadRageUnity\.utmp\Debug\134o6k2p\hash_key.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\API.html
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Documentation.html
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Licenses\LICENSE.jquery.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Readme.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Editor\PackageManagerAssembly\PackageImportList.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Prefabs\Readme_Dissolve_Respawn_.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EpicLeaderboard\CHANGELOG.md
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EpicLeaderboard\Documentation\Readme.md
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Fonts\license.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Scripts\Camera Howto.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Editor\ModulesListYG2.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Example\Content\Font\LICENSE.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\LICENSE.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Platforms\YandexGames\Scripts\Editor\TestLabel\TestLabel.html
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Platforms\YandexGames\Version.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\Platform\Editor\AsmdefPlatformCreate.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\Server\Editor\UpdatePluginYGTemp.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Third-Party Notices.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Version.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\LICENSE.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\README.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Cartoon Van by Fero Andezo\CREDITS.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\CREDITS.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Soma Animus\Neon Pulse – Free Action Arcade Music Pack\README.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Fonts\LiberationSans - OFL.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Resources\LineBreaking Following Characters.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Resources\LineBreaking Leading Characters.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Sprites\EmojiOne Attribution.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Info\README.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Fonts\OFL.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Fonts\Readme - Fonts.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Locations\Readme - Locations.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sdk\Fonts\COPYRIGHT.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\VPP Project Settings\Readme - Project Settings.txt
+C:\Users\Murat\Projects\RoadRageUnity\Assets\WebGLTemplates\YandexGames\index.html
+C:\Users\Murat\Projects\RoadRageUnity\PRODUCTION-GATES.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\CONTRIBUTING.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\LICENSE.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\README.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\_config.yml
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\CHANGELOG.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Documentation\APIReference.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Documentation\GettingStarted.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Documentation\Installation.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\LICENSE.md
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\README.md
+C:\Users\Murat\Projects\RoadRageUnity\ProjectSettings\ProjectVersion.txt
+C:\Users\Murat\Projects\RoadRageUnity\STORE-PAGE-COPY.md
+C:\Users\Murat\Projects\RoadRageUnity\Tools\UNITY-CLI.md
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Documentation\README.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Documentation\Documentation.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\GabrielAguiarProductions\Documentation - Free Quick Effects.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Manual EN PluginYG2.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Manual RU PluginYG2.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Info\Street Lights Pack 01 - Info Document.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Documentation\TextMesh Pro User Guide 2016.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Info\Traffic Lights System.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vefects\Trails VFX URP\Demo\Documentation\Vefects Trails VFX URP Info Doc.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vefects\Trails VFX URP\_ Extra\_ READ ME\VFX Courses.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Quick Start - Readme.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\DCbVS_Documentation.pdf
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_DecalBottom0047_7_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_DecalsLeaking0339_1_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_DecalsLeaking0340_2_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_DecalsStain0092_1_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_DecalsStain0094_2_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\(HDRP) NYC-Like City Buildings Set (PBR)\Materials\Textures\TexturesCom_Leaves0170_1_masked_S.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Models\Signs_pylon_tinajon_street lamps\textures\Props_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Models\Signs_pylon_tinajon_street lamps\textures\Props_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Models\Signs_pylon_tinajon_street lamps\textures\Props_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Models\Signs_pylon_tinajon_street lamps\textures\Props_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchBack_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchBack_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchBack_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchBack_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchFront_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchFront_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchFront_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardChurch_Textures\ChurchFront_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGraves_Textures\Graves_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGraves_Textures\Graves_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGraves_Textures\Graves_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGraves_Textures\Graves_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\GroundSidewalk_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\GroundSidewalk_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\GroundSidewalk_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\GroundSidewalk_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\Ground_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\Ground_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\Ground_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardGround_Textures\Ground_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardWall_Textures\GraveyardWall_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardWall_Textures\GraveyardWall_BaseColor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardWall_Textures\GraveyardWall_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\3DShapes\Colonial City LittlePack – Church Graveyard Environment\Textures\GraveyardWall_Textures\GraveyardWall_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\1200x630.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\512.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\UI\ButtonArrowUpSprite.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\UI\Tahometer.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\UI\TahometerArrow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\UI\TahometerInside.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Sprites\WhitePixel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Cars\SunLineGTE\SunLineGTE_Color1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Cars\SunLineGTE\SunLineGTE_ColorOrigin.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Cars\SunLineGTE\SunLineGTE_ColorOrigin_WithAlpha.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Cars\SunLineGTE\SunLineGTE_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Cars\SunLineGTE\SunLineGTE_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Particles\Particles-01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Test.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Wheel\Wheel_Wheel_AlbedoTransparency.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Wheel\Wheel_Wheel_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\Wheel\Wheel_Wheel_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\World\RoadDark.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\ACC_Lite\Textures\World\Road_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\Dirt_Mat_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\T_Road_Dirt_V03_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\T_Road_Dirt_V03_AlbedoTransparency.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\T_Road_Dirt_V03_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\T_Road_Dirt_V03_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\Dirty Version\T_Road_Dirt_V03_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\M_V03_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\T_Road_V03_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\T_Road_V03_AlbedoTransparency.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\T_Road_V03_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\T_Road_V03_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Materials\V3\T_Road_V03_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Mesh\Roads.fbm\T_Road_V03_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Mesh\Roads.fbm\T_Road_V03_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Arabic Neoclassical\Street Road\Mesh\Roads.fbm\T_Road_V03_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\CSS\fonts\fontello\fontello.svg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\CSS\fonts\fontello\unionpay-black.svg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\CSS\fonts\fontello\unionpay.svg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\bxbstudio-horizontal-white-x40.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\bxbstudio-horizontal-white-x64.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\discord-white-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\discord-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\facebook-white-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\facebook-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\favicon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\m-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\m-x64.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\mvc-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\mvc-x40.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\mvc-x64.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\trustpilot-white-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\trustpilot-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\youtube-white-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\logos\youtube-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Documentation\Files~\Images\m-x32.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Outline.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Outline_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Plain.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Plain_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Ridged.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\All Axis Backgrounds\AllAxis_Ridged_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Outline.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Outline_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Plain.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Plain_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Ridged.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Handles\Handle_Ridged_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Outline.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Outline_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Plain.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Plain_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Ridged.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Horizontal Backgrounds\Horizontal_Ridged_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Outline.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Outline_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Plain.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Plain_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Ridged.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started - Mobile\Textures\UI\Mobile\JoystickPack\Vertical Backgrounds\Vertical_Ridged_Arrows.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\BMW M3 GTR E46\Textures\6a00d83451db4269e200e55380b5f68834-800wi.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\BMW M3 GTR E46\Textures\achterlichtuit.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\BMW M3 GTR E46\Textures\nummerplaat.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\0abc2fadeb1da6c3d0256a12470f505b 1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\0abc2fadeb1da6c3d0256a12470f505b.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\266b980280b2730be9ccf8adfe5bea7d.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\7c380c16eb7a50a3466f9cbf8cf422d2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\aa06023d9dfd57ac3ff5111a3c64d00c 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\aa06023d9dfd57ac3ff5111a3c64d00c.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\fb64941664e2b4b03878fe6f0599a033.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\tail_indicator_lights.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\Lexus LFA\Textures\taillights_emission.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\VW Golf GTI\Textures\06-2015-vw-gti-fd - 복사본.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\VW Golf GTI\Textures\07-2015-vw-gti-fd - 복사본 (2).jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Cars\VW Golf GTI\Textures\07-2015-vw-gti-fd - 복사본.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\Caliper_BC.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\Caliper_M.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\Caliper_NM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\disk1_nm.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\disk3_d.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Models\Vehicles\Parts\Brakes\Textures\disk4_d.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Clean\Three_lane_road_clean_01_4K_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Clean\Three_lane_road_clean_01_4K_Base_Color.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Clean\Three_lane_road_clean_01_4K_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Clean\Three_lane_road_clean_01_4K_Map.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Clean\Three_lane_road_clean_01_4K_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Cracks\Three_lane_road_cracks_01_4K_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Cracks\Three_lane_road_cracks_01_4K_Base_Color.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Cracks\Three_lane_road_cracks_01_4K_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Cracks\Three_lane_road_cracks_01_4K_Map.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Cracks\Three_lane_road_cracks_01_4K_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Patches01\Three_lane_road_patches_01_4K_AO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Patches01\Three_lane_road_patches_01_4K_Base_Color.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Patches01\Three_lane_road_patches_01_4K_Height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Patches01\Three_lane_road_patches_01_4K_Map.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\Roads\ThreeLaneRoad\Patches01\Three_lane_road_patches_01_4K_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\Concrete_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\Dirt_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\Rock_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\TarmacCaution_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\Tarmac_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC Getting Started\Textures\UnityTrack\WaterBump.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\Speedmeter0\handbrake.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\Speedmeter0\left_indicator.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\Speedmeter0\right_indicator.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\Speedmeter0\stability_system.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\bxbstudio-horizontal-white.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\unity-white.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\UI\white.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\VFX\ASYMMETRIC-8-norm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\VFX\ASYMMETRIC-8.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\VFX\VehicleRimMark.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\BxB Studio\MVC\Textures\VFX\VehicleRimMark_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign Backing.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign Post 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign Post 2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_2_Hour_Parking_2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_2_Way_Street.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Added_Lane.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Center_Lane_Turn_Only.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Chevron.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Clearance_12_6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Crossroad.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Dead_End.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Divided_Highway.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Do_Not_Enter.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Exit_40_MPH.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Forward_Only.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Forward_or_Right.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Freeway_Exit.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Freeway_Exit_L.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Hill.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Keep_Right.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Left_Turn_Only.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Left_Turn_Yield_On_Green.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Merge.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Multilane_Use_8.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_No_Left_Turn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_No_Parking.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_No_Right_Turn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_No_U_Turn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_One_Way_L1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_One_Way_R1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Ped_Xing.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_RL.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Ramp_30_MPH.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Right_Lane_Ends_2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Right_Turn_Only.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Roundabout.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Roundabout_Chevron_3.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Sharp_RL.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Sharp_Right.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Sideroad_T.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Slight_Right.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Speed_25.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Speed_40.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Speed_55.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Speed_70.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Stop.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Sign_Yield.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\St_1st.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\St_Airport_Way.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\St_Main.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\St_Sunset.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Tab_25_MPH.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Tab_45_MPH.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Tab_Ahead.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\CS - Signs Free\Textures\Tab_Arrow_Diagonal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\Debris.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\DebrisParticleSheet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\Ramp02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\Ramp03.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\SmokePuff02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\SmokePuffParticleSheet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\TinyStones.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\FireExplosionEffects\Textures\ramp01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\DustPuffSmall.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\IceGrey.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\Ramp01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\Ramp02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\Ramp03.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Magic Effects\Textures\SmokePuff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\Clouds02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\DustMote.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\DustMoteParticle.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\DustPuffSmall.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\FireFlyWings.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\Ramp01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\SmokePuff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Misc Effects\Textures\Stripes.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Scenes\Main Scene with Legacy Particles\Lightmap-0_comp_dir.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Scenes\Main Scene with Legacy Particles\Lightmap-1_comp_dir.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Scenes\Main Scene with Legacy Particles\Lightmap-2_comp_dir.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Shared\Sprites\Info.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Shared\Sprites\TitleBorder.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Shared\Sprites\UnityLogo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Shared\Textures\DustPuffSmallParticleSheet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Smoke & Steam Effects\Textures\SmokePuff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Smoke & Steam Effects\Textures\TinyStones.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\Smoke & Steam Effects\Textures\Twinkle.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\TutorialInfo\Icons\Help_Icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\TutorialInfo\Icons\ParticlePack5x_Icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\WaterEffects\Textures\RippleAlbedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\WeaponEffects\Textures\DustPuffSmallParticleSheet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\WeaponEffects\Textures\TinyStones.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EffectExamples\WeaponEffects\Textures\TinyStonesParticleSheet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EpicLeaderboard\Runtime\Sprites\FlagBorder.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\EpicLeaderboard\Runtime\Sprites\FlagsRound.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Back.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Cancel (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Claim Reward.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Claim x2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Close (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Confirm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Continue.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Customize.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Daily Reward.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Disabled (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Disabled (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Disabled.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Free Spin.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Get Coins.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Highlighted (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Highlighted.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Home.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Leaderboard.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Level.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Missions.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Next Level.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Options.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Pause (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Pause.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Play (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Play.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Pressed.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Resume.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Retry.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Setting (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Setting.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Shop.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Start.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Unlock Now.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Upgrade (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Upgrade.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\Watch Ad.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\DARK Green empty.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\GOLDEN.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\GREY.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\Green empty.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\PINK.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\PURPLE.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\blue.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\cyan.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\green.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\light blue.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\light red.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\lightgrey.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\orange.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Buttons\empty_buttons\yellow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\ACHIEVEMENT!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\CONNECTION ERROR.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Claim reward (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Coin Earned.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\DEFEAT PANNEL.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Daily Reward (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\EXIT GAME.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Game Over.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\HUD Pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Level (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Level screen.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Level.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Limited Time PREMIUM OFFER!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Loading.......png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\MISSION COMPLETE.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Main Menu.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Multiply Reward (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Multiply Reward.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\NEW ITEM UNLOCKED.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\NEW UPDATE.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\New Loot!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\PREMIUM OFFER!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Pause (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Profile (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\RATE OUR GAMES!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\REMOVE ADS FOREVER_.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Resume Game.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\SHARE FOR REWARDS.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Settings (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Shop Panel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\UNLOCK NEW SKIN.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Victory Pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\WELCOME BACK!.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\GameUI\Watch Ad (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Back (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Close.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Cross (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Cross pressed (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Cross pressed.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Cross.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Gold Treasure box.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Group.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Help (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Info (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Info.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Next.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Notification.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Opened Gold Treasure box.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Pause (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Play (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Rate us (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Rate us.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Resume (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Share (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Share.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Untitled design - 2026-04-20T003058.439 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Untitled design - 2026-04-20T163344.301 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Upgrade-StarBase (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Upgrade-StarBase.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\Vector (6).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\ads icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\ads.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\badge(1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\badge.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\cart.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\character.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\character2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\click.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\codicon_debug-restart.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\coin.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\coinss.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\correct.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\crown.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\danger.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\flag.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\gift.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\heartt.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\help (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\help.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\home_icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\info(2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\leaderboard.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\left icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\lock.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\musicOn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\musicoff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\offer asset icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\offer badge.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\rank.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\rataing star (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\rataing star.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\rating.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\right icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\rotate.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\setting.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\shop.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\skull.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\soundoff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\soundon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\star golden.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\swipe.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\ticket.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\timer.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Icons\upgrade.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\1 lvl.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\2 lvl.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\CONNECTION ERROR popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Claim reward popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Coin Earned pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\DEFEAT PANNEL (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Daily Reward pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Day 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Day 2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Day 3.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Defeat title.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Frame 1583.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Frame 1584.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Game Over (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\HUD Pannel (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Later.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Level popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Level screen pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Main Menu pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\NEW ITEM UNLOCKED popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\New Loot! box.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\PREMIUM OFFER! popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 356 (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 356 (2).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 356.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 357.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 358.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 359 (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 359.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 361.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 363 (1).png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 363.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Rectangle 369.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Resume Game popup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\Settings pannel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\charactar icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\facebook-share-button-icon 1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\profile placeeholder.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\scroll bg.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Panel_Sprites\scroll icon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Toggle\Toggle_ON.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Hyper_Casual_UI\Sprites\Toggle\Toggle_Off.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\AiresBlock07.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\AsphaltCloseups0048_3_S_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BigY_onlyBest_dots.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Block-New.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BuildingsHighRise0292_2_L.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BuildingsHighRise0308_2_L wall.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BuildingsHighRise0308_2_L.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BuildingsOrnate0034_L.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BuildingsOrnate0116_L.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Bus.panel.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\BusStop.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\ConcreteNew0024_2_S_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\HighRiseResidential0021_2_L wall.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\HighRiseResidential0021_2_L.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\MarbleGreen0014_21_S.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\MetalBare0154_1_S_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\PDPhotos_001.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Page2Head.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0012_1_S_paz_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0019_M_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0038_S.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0052_Spaz3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0052_Spaz_02.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0054_M_paz.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0130_2_M_01.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0130_2_M_02.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0130_2_M_03.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0150_S_paz_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Shops0217_M_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\Tejado01Block01_5.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_5.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_6.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_7.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoAssetBlock01_8.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock02_5.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock03_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock03_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock03_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock03_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock03_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_5.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_6.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_7.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_8.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock04_9.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_0.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_3.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_4.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_5.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_6.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_7.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\TejadoBlock05_8.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\WoodPlanksBare0029_1_S.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\WrinklesFoil0005_M norm.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\WrinklesFoil0005_M.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\aires.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\bank_sign_01.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\billboard08.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\cartelBlock04.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\carteles.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\cartelesCalles.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\farola.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\highriseresidential0082_l_2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\light_wood_01.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\metalTent.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\panel.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\papeleraCompleta.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\papeleraRect.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\park.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\partealtaSemaforo.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\periodico.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\poster_kolomensky_com.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\repisa.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\semaforo.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\senal.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\sign-cocacola2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\sign-motorola1.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\sign_001.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\sign_002.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\stair.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\stairBlock07.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tent.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tent_002.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_01.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_02.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_03.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_04.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_05.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_06.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_07.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\tents_blocks_05-08_08.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\variosAcera.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Assets\Pictures\variosAcera2.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\BigTree_Textures\diffuse.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\BigTree_Textures\normal_specular.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\BigTree_Textures\shadow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\BigTree_Textures\translucency_gloss.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\Sources\Materials\tree_01_steam.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\Sources\Textures\BigTree_bark_normal.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\OutPost\Resources\Trees\Trees\BigTree_textures\normal_specular.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Example\Sprites\ButtonTextureYG.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Example\Sprites\PanelTextureYG.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\Debugging.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\IconPluginYG2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\ImageLoad.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\Platform.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\Settings.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\PluginYourGames\Scripts\EditorScr\Editor\Icons\TriggerYG.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\AddIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\ArrowIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\BankIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\BrowserIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\ContinuousParameterIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\CopyIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\CrossYellow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\Delete.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\DiscreteParameterIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\EventIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\FMODLogoBlack.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\FMODLogoWhite.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\FolderIconClosed.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\FolderIconOpen.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\LabeledParameterIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\LevelMeter.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\LevelMeterOff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\NotFound.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\Preview.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\PreviewEmitter.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\SearchIconBlack.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\SelectedAlt.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\SnapshotIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\StudioIcon.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TickGreen.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TransportOpen.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TransportPlayButtonOff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TransportPlayButtonOn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TransportStopButtonOff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\TransportStopButtonOn.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\FMOD\images\Wrench.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Cartoon Van by Fero Andezo\Exterior.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Cartoon Van by Fero Andezo\Interior.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Cartoon Van by Fero Andezo\Wheel.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Cartoon Van by Fero Andezo\Window.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\Stylized_Sand_001_ambientOcclusion.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\Stylized_Sand_001_basecolor.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\Stylized_Sand_001_height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\Stylized_Sand_001_normal.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Plugins\PrimeTween\Demo\Stylized Sand by Joao Paulo\Stylized_Sand_001_roughness.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_02_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_alien_organic_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_floor_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_floor_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_floor_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_floor_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_lights_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_lights_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_lights_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_lights_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_lights_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_modules_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_modules_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_modules_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_modules_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_modules_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_rock_01_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_rock_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_rock_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\AlienBiomass\Textures\T_rock_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Crate_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Crate_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Crate_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Lamp_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Lamp_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Lamp_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_Lamp_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_billboard_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_car_flying_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_car_flying_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_car_flying_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_car_flying_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_building_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_building_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_building_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_floor_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_floor_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_floor_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_trim_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_trim_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_concrete_trim_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_door_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_door_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_door_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_flying_car_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_flying_car_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_flying_car_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_flying_car_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_ground_texture_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_ground_texture_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_ground_texture_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_pipes_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_pipes_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_pipes_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_street_props_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_trash_bag_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_trash_bag_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_trash_bag_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_window_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_window_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\CyberpunkCity\Textures\T_window_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2-5_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2-5_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2-5_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_2_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_4_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_4_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_4_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_extra.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_extra_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_extra_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_highway.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_highway_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_highway_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_square.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_square_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\asphalt_square_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_bases.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_bases_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_facades.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_facades_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_interior.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_interior_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_interior_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_windows_wet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\building_windows_wet_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\highrise_facades.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\highrise_facades_em.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\highrise_facades_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\highway_wall.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\highway_wall_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\props_main.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\props_main_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\road_sideway_fences.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\road_sideway_fences_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\sideway_tile.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\sideway_tile_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\sideway_tile_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\vegetation_main.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\vegetation_main_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\vegetation_non_tp.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\DemoCity\Textures\vegetation_non_tp_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_desert_bush_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_desert_bush_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_desert_bush_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_grass_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_grass_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_grass_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_leaves_D_02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_leaves_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_leaves_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_stones_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_stones_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_stones_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_trunk_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_trunk_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ElderTreeGate\Textures\T_trunk_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_bush_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_bush_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_bush_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_ground_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_ground_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_mountain_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_mountain_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_mountain_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_plant_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_plant_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_plant_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_rock_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_roots_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_roots_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\ForestVillage\Textures\T_roots_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pole_props_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pole_props_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pole_props_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_props_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_props_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Pool_props_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Porch_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Porch_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_Porch_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_antenna_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_antenna_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_antenna_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_background_building_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_background_building_Emission.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_background_building_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_background_building_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_bricks_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_bricks_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_bricks_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_concrete_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_concrete_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_concrete_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_container_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_container_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_container_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_bush_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_bush_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_bush_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_plant_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_plant_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_desert_plant_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_door_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_door_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_door_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_floor_bricks_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_floor_bricks_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_floor_bricks_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_gate_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_gate_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_gate_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_03_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_03_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_ground_03_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_hollywood_Sign_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_hollywood_Sign_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_hollywood_Sign_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_industrial_props_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_industrial_props_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_industrial_props_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_leafs_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_leafs_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_leafs_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_metal_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_roof_tiles_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_roof_tiles_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_roof_tiles_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_solarpannel_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_solarpannel_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_solarpannel_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_tree_bark_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_tree_bark_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_tree_bark_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_vetegation_atlas_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_vetegation_atlas_basecolor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_vetegation_atlas_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_wood_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_wood_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HollywoodHills\Textures\T_wood_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_building_modules_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_chinese_signs_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_chinese_signs_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_chinese_signs_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_chinese_signs_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_detail_street_modules_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_detail_street_modules_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_detail_street_modules_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_food_market_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_food_market_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_food_market_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_ground_texture_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_market_detail_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_market_detail_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_market_detail_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_market_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_market_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_market_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_module_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_module_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_module_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_street_props_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_vegatables_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_vegatables_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\HongKong\Textures\T_vegatables_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_ship_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_ship_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_ship_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_ship_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_ship_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_snow_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_snow_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_snow_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_snow_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_trim_01_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_trim_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_trim_01_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_trim_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\IceStation\Textures\T_trim_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_jungle_plant_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_jungle_plant_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_jungle_plant_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_leafs_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_leafs_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_leafs_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_tree_bark_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_tree_bark_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\JungleRuins\Textures\T_tree_bark_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_grass_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_grass_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_grass_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_leafs_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_leafs_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_leafs_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_03_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_03_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_03_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_ground_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_ground_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_rock_ground_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_sand_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_sand_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_sand_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_sand_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_stones_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_stones_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_stones_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_tree_bark_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_tree_bark_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RedCanyon\Textures\T_tree_bark_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_bark_03_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_bark_03_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_bark_03_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_branch_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_branch_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_branch_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_flowers_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_flowers_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_flowers_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_ground_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_ground_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_ground_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_leaves_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_leaves_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_leaves_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pine_tree_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pine_tree_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pine_tree_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pinetree_bark_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pinetree_bark_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_pinetree_bark_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_small_rock_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_small_rock_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_small_rock_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_vetegation_atlas_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_vetegation_atlas_basecolor.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\RunicForest\Textures\T_vetegation_atlas_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_01_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_03_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_03_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_03_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_concrete_03_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_pipes_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_pipes_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_pipes_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_pipes_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_pipes_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_rust_modules_AORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_rust_modules_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_rust_modules_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Sewers\Textures\T_rust_modules_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Shared\Textures\T_asphalt_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Shared\Textures\T_asphalt_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Shared\Textures\T_asphalt_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_AORM_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Black.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Emissive_Mask.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_03.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_04.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_05.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_06.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_09.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_11.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_Pub_2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_01_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_01_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_B_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_pain_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_pain_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_pain_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_parts_02_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_parts_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_parts_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_parts_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_car_parts_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_concrete_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_concrete_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_concrete_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_default_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_detail_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_detail__02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_gradient.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_gradient_02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_grunge_A.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_grunge_A_2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_grunge_mask.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_noise.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_palm_tree_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_palm_tree_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_palm_tree_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_palm_tree_O.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_pub_07.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_pub_08.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_pub_10.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_road_sign_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_road_sign_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_road_sign_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_road_sign_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_square_window.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_square_window_mask.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_square_window_mask_02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_square_window_mask_03.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_square_window_mask_04.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_star.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_sun_stripes.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_synthwave_floor_E.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_synthwave_floor_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_white.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_window_02_D.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_window_02_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_window_02_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\Synthwave\Textures\T_window_02_RE.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_AirCompressorTank_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_AirCompressorTank_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_AirCompressorTank_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_AirCompressorTank_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator1_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator1_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator1_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator1_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator2_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator2_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator2_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Elevator2_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_MetalDoor_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_MetalDoor_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_MetalDoor_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_MetalDoor_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireMachine01_BC.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireMachine01_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireMachine01_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireMachine01_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireShelf_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireShelf_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireShelf_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireShelf_O.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_TireShelf_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Wall01a_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Wall01a_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Wall01a_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Wall01a_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Workbench_B.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Workbench_MSO.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Workbench_N.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Biomes\TireRepair\Textures\T_Workbench_ORM.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_graffiti_01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_graffiti_02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_graffiti_03.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_grime_patch.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_oil_stain.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_patch_repair.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_tag_01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_tag_02.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Decals\D_tyre_streak.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\bark_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\bark_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\bark_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\branch_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\branch_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\branch_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\ground_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\ground_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\ground_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\plant_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\plant_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\plant_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\rock_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\rock_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\rock_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\sign_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\sign_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\sign_emission.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\sign_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\vehicle_albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\vehicle_aorm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\vehicle_emission.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Hideout\Textures\vehicle_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\SoftDot.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Texture_01_A.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Texture_Emissive_01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Texture_Emissive_Indicator_01.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Veh_Tex_03_Carbon_Fibre.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Veh_Tex_07_Race_Yellow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Veh_Tex_13_Race_Blue.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Veh_Tex_24_Rust.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Resources\Vehicles\PolygonStreetRacer_Veh_Tex_RR_Orange.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Light_Emissive.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_A_BaseMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_A_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_A_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_Glass_BaseMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_Glass_MaskMap.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Sat Productions\G-01\Street Lights Pack 01\Textures\Street_Light_Glass_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Resources\Sprite Assets\InlineIcons.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\TextMesh Pro\Sprites\EmojiOne.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_cross_road_2x_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_post_01_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_simple_body_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_simple_lights_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_straight_road_2x_crosswalk_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_straight_road_2x_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_straight_road_2x_height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_straight_sidewalk_2x_diff.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Traffic Lights System\Textures\tl_straight_sidewalk_2x_height.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\UnityTechnologies\ParticlePack\TutorialInfo\Icons\ReadmeLogo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-blue.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-green.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-racer-dirty.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-racer.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-red.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_color-silver.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_refl-dirty.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_refl.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_spec-dirty.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_spec.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_test-flat_wheels.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\L200 Pickup Truck\Textures\truck_test-wheels.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Pixelactive City\Textures\PalmBark.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Pixelactive City\Textures\PalmBranch.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\BaseTex.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\BaseTex_Dark.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\BaseTex_Detail.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\TexturePainted.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\VehiclePhysicsLogo-Grid.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\VehiclePhysicsLogo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\asphalt.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\asphalt_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\plate3.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Playground\Textures\plate5solo_512x256.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\100.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\150.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\200.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\300.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\50.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\Arrow Left Red.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\Arrow Left.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\Arrow Right.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\Chevron Left Red.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Models\Track add-ons\Textures\Chevron Right Red.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Asphalt\asphalt.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Asphalt\asphalt_normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Skybox3\oback6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Skybox3\ofront6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Skybox3\oleft6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Skybox3\oright6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Skybox3\otop6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Edy's Vehicle Physics + Logo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Edy's Vehicle Physics flat.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Edy's Vehicle Physics shadow.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics Logo framed grid.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics Logo framed.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics Logo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics Text.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics banner small.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics banner.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\Vehicle Physics for Unity banner.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\VehiclePhysicsLogo-Decal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\Textures\Vehicle Physics Logo\VehiclePhysicsLogo-Normals.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard 1px Rounded Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard 1px Rounded Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard 2px Rounded Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard 2px Rounded Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard 2px Rounded Box Style Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard Squared Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Hard Squared Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 12px Rounded Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 12px Rounded Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 1px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 2px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 3px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 6px Rounded Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft 6px Rounded Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft Rounded Background.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Sample Assets\Art\UI Widgets\Soft Rounded Border.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\1px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\2px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\3px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\4px Line.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\Dashboard Icons.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\General UI Icons.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\Help Figures.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\Needle.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Scenes\UI\Textures\Telemetry Chart mockup.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Specs\JPickup Specs.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupDash.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupGlass.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupGrill.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupInterior_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupInterior_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupInterior_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupLicencePlate_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupLicencePlate_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupLights.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPaint_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPaint_Occlusion.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPartsGeneric_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPartsGeneric_MetallicSmoothness.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPartsGeneric_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupPlateSpecGloss.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupTyreBlur_AlbedoTransparency.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupTyreTest_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupTyre_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupTyre_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\JPickup\Textures\JPickupWheelAlloy.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\Sport Coupe\Textures\EdyPlate_Albedo.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\Sport Coupe\Textures\EdyPlate_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\Sport Coupe\Textures\SportCoupe_Details.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Vehicle Physics Pro\Vehicles\Sport Coupe\Textures\SportCoupe_Details_Normal.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-0.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-1.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-10.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-11.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-12.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-2.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-3.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-4.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-5.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-6.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-7.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-8.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Scenes\demo_city_night\ReflectionProbe-9.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2-5_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2-5_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2-5_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_2_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_4_tracks.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_4_tracks_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_4_tracks_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_extra.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_extra_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_extra_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_highway.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_highway_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_highway_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_square.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_square_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\asphalt_square_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_bases.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_bases_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_facades.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_facades_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_interior.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_interior_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_interior_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_windows_wet.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\building_windows_wet_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\highrise_facades.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\highrise_facades_em.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\highrise_facades_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\highway_wall.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\highway_wall_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\props_main.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\props_main_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\road_sideway_fences.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\road_sideway_fences_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\sideway_tile.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\sideway_tile_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\sideway_tile_oc.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\vegetation_main.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\vegetation_main_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\vegetation_non_tp.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\Versatile Studio Assets\Demo City By Versatile Studio\Textures\vegetation_non_tp_nm.png
+C:\Users\Murat\Projects\RoadRageUnity\Assets\WebGLTemplates\YandexGames\thumbnail.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\Samples~\Simple Ball Movement\Textures\Ball.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.inputs-manager\Samples~\Simple Ball Movement\Textures\Plane.jpg
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\box.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\caret-down.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\caret-left.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\caret-right.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\caret-up.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\chart.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\check-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\check.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\chevron-down.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\chevron-left.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\chevron-right.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\chevron-up.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\clone.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\cog.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\cross.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\exclamation-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\exclamation-square.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\exclamation-triangle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\eye.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\pencil.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\plus.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\reload.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\save.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\sort.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Personal\trash.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\box.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\caret-down.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\caret-left.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\caret-right.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\caret-up.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\chart.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\check-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\check.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\chevron-down.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\chevron-left.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\chevron-right.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\chevron-up.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\clone.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\cog.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\cross.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\exclamation-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\exclamation-square.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\exclamation-triangle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\eye.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\pencil.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\plus.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\reload.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\save.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\sort.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\Pro\trash.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\check-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\check.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\exclamation-circle.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\exclamation-square.png
+C:\Users\Murat\Projects\RoadRageUnity\Packages\dev.bxbstudio.utilities\Resources\Editor\Icons\exclamation-triangle.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_alien.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_brooklyn.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_canyon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_greenwood.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_hollywood.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_neon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_sewer.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_snow.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\check_tire.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\final_brooklyn.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\final_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\final_neon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\fog1_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem2_brooklyn.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem2_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem2_neon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem3_brooklyn.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem3_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem4_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem5_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem6_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem7_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem8_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem_brooklyn.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem_manhattan.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\prem_neon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn2.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn_final.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn_fix2.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn_fixed.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn_horizon.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_brooklyn_v4.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_manhattan_fix2.png
+C:\Users\Murat\Projects\RoadRageUnity\Screenshots\test_manhattan_horizon.png

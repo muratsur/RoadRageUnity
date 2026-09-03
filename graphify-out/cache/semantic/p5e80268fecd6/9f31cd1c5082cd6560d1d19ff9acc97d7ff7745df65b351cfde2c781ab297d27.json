@@ -1,0 +1,1 @@
+{"nodes": [{"id": "textures_leaves_0170", "label": "Leaves Texture (Alpha Masked)", "file_type": "image", "source_file": "Assets/(HDRP) NYC-Like City Buildings Set (PBR)/Materials/Textures/TexturesCom_Leaves0170_1_masked_S.png", "rationale": "Visual asset likely contributing to the overdraw issues described in Gate A."}], "edges": [], "hyperedges": []}

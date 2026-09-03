@@ -1,0 +1,1 @@
+{"nodes": [{"id": "acc_lite_textures_test", "label": "Test Texture", "file_type": "image", "source_file": "Assets/ACC_Lite/Textures/Test.png", "rationale": "A 1m x 1m grid texture used for scaling and testing environments."}], "edges": [], "hyperedges": []}
