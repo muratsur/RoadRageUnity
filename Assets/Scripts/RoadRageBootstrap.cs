@@ -517,8 +517,76 @@ namespace RoadRage.UnityRemake
 
         private Texture2D Texture(string name) => Resources.Load<Texture2D>($"Hideout/Textures/{name}");
 
+        /// Textures that were stored once per biome pack while being byte-identical.
+        ///
+        /// One leaf texture was held five times under three different names, an asphalt
+        /// normal three times, tree bark three times: 48 files, 180 MB, all shipping in
+        /// every build because everything under Resources ships whether it is referenced
+        /// or not. Deleting the copies is not enough on its own - these are loaded by
+        /// runtime path, not by GUID, so a missing file returns null and the material
+        /// silently falls back to flat colour rather than failing loudly.
+        ///
+        /// So each removed (pack, name) maps to the copy that was kept. Generated from
+        /// the LFS content hashes, so every entry is byte-identical to what it replaces
+        /// and no biome renders differently.
+        private static readonly Dictionary<string, string> DedupedBiomeTextures =
+            new Dictionary<string, string>
+        {
+            { "ElderTreeGate/T_leaves_D_02",              "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "ElderTreeGate/T_leaves_N",                 "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "ElderTreeGate/T_stones_D",                 "Biomes/RedCanyon/Textures/T_stones_D" },
+            { "ElderTreeGate/T_stones_N",                 "Biomes/RedCanyon/Textures/T_stones_N" },
+            { "ForestVillage/T_bush_D",                   "Biomes/ElderTreeGate/Textures/T_desert_bush_D" },
+            { "ForestVillage/T_bush_MSO",                 "Biomes/ElderTreeGate/Textures/T_desert_bush_MSO" },
+            { "ForestVillage/T_bush_N",                   "Biomes/ElderTreeGate/Textures/T_desert_bush_N" },
+            { "HollywoodHills/T_desert_bush_D",           "Biomes/ElderTreeGate/Textures/T_desert_bush_D" },
+            { "HollywoodHills/T_desert_bush_MSO",         "Biomes/ElderTreeGate/Textures/T_desert_bush_MSO" },
+            { "HollywoodHills/T_desert_bush_N",           "Biomes/ElderTreeGate/Textures/T_desert_bush_N" },
+            { "HollywoodHills/T_desert_plant_D",          "Biomes/ForestVillage/Textures/T_plant_D" },
+            { "HollywoodHills/T_desert_plant_MSO",        "Biomes/ForestVillage/Textures/T_plant_MSO" },
+            { "HollywoodHills/T_desert_plant_N",          "Biomes/ForestVillage/Textures/T_plant_N" },
+            { "HollywoodHills/T_leafs_D",                 "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "HollywoodHills/T_leafs_MSO",               "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "HollywoodHills/T_leafs_N",                 "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "HongKong/T_ground_texture_01_D",           "Biomes/CyberpunkCity/Textures/T_ground_texture_01_D" },
+            { "HongKong/T_ground_texture_01_MSO",         "Biomes/CyberpunkCity/Textures/T_ground_texture_01_MSO" },
+            { "HongKong/T_ground_texture_01_N",           "Biomes/CyberpunkCity/Textures/T_ground_texture_01_N" },
+            { "HongKong/T_street_props_02_MSO",           "Biomes/CyberpunkCity/Textures/T_street_props_02_MSO" },
+            { "JungleRuins/T_leafs_D",                    "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "JungleRuins/T_leafs_MSO",                  "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "JungleRuins/T_leafs_N",                    "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "JungleRuins/T_tree_bark_D",                "Biomes/HollywoodHills/Textures/T_tree_bark_D" },
+            { "JungleRuins/T_tree_bark_MSO",              "Biomes/HollywoodHills/Textures/T_tree_bark_MSO" },
+            { "JungleRuins/T_tree_bark_N",                "Biomes/HollywoodHills/Textures/T_tree_bark_N" },
+            { "RedCanyon/T_grass_D",                      "Biomes/ElderTreeGate/Textures/T_grass_D" },
+            { "RedCanyon/T_grass_MSO",                    "Biomes/ElderTreeGate/Textures/T_grass_MSO" },
+            { "RedCanyon/T_grass_N",                      "Biomes/ElderTreeGate/Textures/T_grass_N" },
+            { "RedCanyon/T_leafs_MSO",                    "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "RedCanyon/T_stones_MSO",                   "Biomes/ElderTreeGate/Textures/T_stones_MSO" },
+            { "RedCanyon/T_tree_bark_D",                  "Biomes/HollywoodHills/Textures/T_tree_bark_D" },
+            { "RedCanyon/T_tree_bark_MSO",                "Biomes/HollywoodHills/Textures/T_tree_bark_MSO" },
+            { "RedCanyon/T_tree_bark_N",                  "Biomes/HollywoodHills/Textures/T_tree_bark_N" },
+            { "RunicForest/T_ground_02_D",                "Biomes/HollywoodHills/Textures/T_ground_02_D" },
+            { "RunicForest/T_ground_02_MSO",              "Biomes/HollywoodHills/Textures/T_ground_02_MSO" },
+            { "RunicForest/T_ground_02_N",                "Biomes/HollywoodHills/Textures/T_ground_02_N" },
+            { "RunicForest/T_leaves_D",                   "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "RunicForest/T_leaves_MSO",                 "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "RunicForest/T_leaves_N",                   "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "RunicForest/T_vetegation_atlas_MSO",       "Biomes/HollywoodHills/Textures/T_vetegation_atlas_MSO" },
+            { "RunicForest/T_vetegation_atlas_basecolor", "Biomes/HollywoodHills/Textures/T_vetegation_atlas_basecolor" },
+            { "RunicForest/T_vetegation_atlas_normal",    "Biomes/HollywoodHills/Textures/T_vetegation_atlas_normal" },
+            { "Shared/T_asphalt_D",                       "Biomes/CyberpunkCity/Textures/T_ground_texture_01_D" },
+            { "Shared/T_asphalt_MSO",                     "Biomes/CyberpunkCity/Textures/T_ground_texture_01_MSO" },
+            { "Shared/T_asphalt_N",                       "Biomes/CyberpunkCity/Textures/T_ground_texture_01_N" },
+            { "Synthwave/T_car_B_02_E",                   "Biomes/Synthwave/Textures/T_car_B_01_E" },
+            { "Synthwave/T_car_B_02_N",                   "Biomes/Synthwave/Textures/T_car_B_01_N" },
+        };
+
         private Texture2D BiomeTexture(string pack, string name) =>
-            Resources.Load<Texture2D>($"Biomes/{pack}/Textures/{name}");
+            Resources.Load<Texture2D>(
+                DedupedBiomeTextures.TryGetValue($"{pack}/{name}", out var shared)
+                    ? shared
+                    : $"Biomes/{pack}/Textures/{name}");
 
         /// Applies a repacked _MSO map (R=metallic, G=occlusion, A=smoothness) to a material.
         /// URP reads metallic/smoothness from _MetallicGlossMap and occlusion from
