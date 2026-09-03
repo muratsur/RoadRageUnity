@@ -2624,6 +2624,25 @@ namespace RoadRage.UnityRemake
         private const float MinPlotScale = 0.55f;
         private const float MaxPlotScale = 1.9f;
 
+        /// Mesh names already reported as badly sized.
+        ///
+        /// The warning below fires per placement, and Manhattan normalises street
+        /// furniture, lamps, traffic lights, shelters and rooftop props - hundreds per
+        /// world build, more with every chunk streamed in. That is a console at 999+
+        /// warnings within a minute of pressing Play, which is not a diagnostic, it is a
+        /// place other diagnostics go to hide: it is what buried the empty material
+        /// palette (fixed in 22729e0) and a prop pointing at a model that did not exist
+        /// (8ca67b1) for an entire session.
+        ///
+        /// The signal is per mesh, not per instance - the same mesh clamped four hundred
+        /// times is one fact - so it is reported once per name. Cleared on
+        /// SubsystemRegistration below, so entering play mode reports afresh rather than
+        /// staying silent about a mesh a previous run already named.
+        private static readonly HashSet<string> clampReported = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetClampReports() => clampReported.Clear();
+
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f,
             float maxFootprint = 0f)
         {
@@ -2639,9 +2658,10 @@ namespace RoadRage.UnityRemake
             // a misshapen one.
             var wanted = targetHeight / bounds.size.y;
             var scale = Mathf.Clamp(wanted, MinModelScale, MaxModelScale);
-            if (!Mathf.Approximately(scale, wanted))
+            if (!Mathf.Approximately(scale, wanted) && clampReported.Add(model.name))
                 Debug.LogWarning($"[CITY] {model.name} native height {bounds.size.y:0.00}m needs {wanted:0.0}x " +
-                                 $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong in a building roster.");
+                                 $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong " +
+                                 "in a building roster. Reported once per mesh name per run.");
             model.transform.localScale *= scale;
             if (!TryGetCombinedBounds(model, out bounds)) return;
 
