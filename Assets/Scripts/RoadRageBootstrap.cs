@@ -2509,24 +2509,32 @@ namespace RoadRage.UnityRemake
             return buildingCatalogue;
         }
 
-        /// Let the NYC pack's own wall materials survive the material pass.
+        /// Let a building keep the material its own mesh shipped with.
         ///
-        /// They were being replaced because they did not work: 27 of them pointed at the
-        /// HDRP/Lit shader, and HDRP is not installed here - Packages/manifest.json has
-        /// only render-pipelines.core and .universal - so every one was a dangling shader
-        /// reference. Prefabs/Parts/building_*_middle, the sections NYCVariants stacks,
-        /// reference seven apiece. Replacing them with a flat colour was the right call
-        /// while they were broken.
+        /// Which material that is takes some tracing, and I got it wrong the first time.
+        /// BuildingCatalogue loads Resources/Buildings/NYC/building_1..8, and those FBX
+        /// importers are set to external materials with a recursive-up name search
+        /// (materialLocation 0, materialSearch 1). So Unity resolves each submesh against
+        /// Resources/Buildings/NYC/Materials, the folder sitting beside the FBX. The
+        /// source pack's own Materials folder is never read at runtime, and neither are
+        /// its Prefabs - nothing under Resources points into them.
         ///
-        /// They are not broken now. Tools/HdrpToUrp/convert.py rewrote all 27 onto URP/Lit
-        /// with their base and normal maps rebound and their tiling kept, so a brick wall
-        /// is photographed brick rather than a tint approximating one - which is what the
-        /// facade family in this file was standing in for.
+        /// That resolved set was stripped. Every one of its surface materials was on
+        /// URP/Lit with an empty _BaseMap and a white _BaseColor, so a wall arrived flat
+        /// white and whatever tint this pass applied became the entire surface. That is
+        /// the real reason the city read as one flat colour per building, and why the
+        /// facade family here had to exist at all.
         ///
-        /// Only walls. Windows still take the procedural lit-pane grid and lamp heads
-        /// still take City Neon, because those two are the game's own night look rather
-        /// than a surface the pack got right: the pack's own window.001 is solid black
-        /// with no texture at all.
+        /// Tools/MaterialTextures/rebind.py put the bindings back, taking them from each
+        /// pack's intact twin of the same name under its Models/Materials - the set the
+        /// FBX was authored against - so a brick wall is photographed brick at the tiling
+        /// its UVs were laid out for. 22 materials across the NYC and USA biomes.
+        ///
+        /// Walls only, and by falling through rather than by naming: lamps, signs,
+        /// billboards, glass, windows and trim are all matched by the branches above this
+        /// one and keep the game's own night look. The eight window and light materials
+        /// in the resolved set are still deliberately unbound, because City Windows and
+        /// City Neon replace them.
         ///
         /// Set false to go back to the flat facade family in one edit.
         private const bool KeepPackWallMaterials = true;
