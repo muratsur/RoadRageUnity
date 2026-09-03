@@ -53,29 +53,12 @@ namespace RoadRage.Tools
         public static int Main(string[] args)
         {
             var repo = args.FirstOrDefault(a => !a.StartsWith("-")) ?? ".";
+            if (args.Contains("--selftest")) return SelfTest(repo);
+
             var update = args.Contains("--update-baseline");
             var baselinePath = Path.Combine(repo, "Tools/SymbolCheck/baseline.txt");
 
-            var files = SourceRoots
-                .Select(r => Path.Combine(repo, r))
-                .Where(Directory.Exists)
-                .SelectMany(d => Directory.EnumerateFiles(d, "*.cs", SearchOption.AllDirectories))
-                .OrderBy(f => f, StringComparer.Ordinal)
-                .ToList();
-
-            if (files.Count == 0)
-            {
-                Console.Error.WriteLine($"SYMBOLCHECK no sources found under {string.Join(", ", SourceRoots)}");
-                return 2;
-            }
-
-            var trees = files
-                .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), path: f))
-                .ToList();
-
-            var declared = CollectDeclaredNames(trees);
-            var calls = CollectUnresolvedCalls(trees, declared);
-
+            if (!Analyze(repo, out var files, out var calls, out var declaredCount)) return 2;
             var found = calls.Keys.OrderBy(n => n, StringComparer.Ordinal).ToList();
 
             if (update)
@@ -105,7 +88,7 @@ namespace RoadRage.Tools
 
             var added = found.Where(n => !baseline.Contains(n)).ToList();
 
-            Console.WriteLine($"SYMBOLCHECK {files.Count} files, {declared.Count} declared names, " +
+            Console.WriteLine($"SYMBOLCHECK {files.Count} files, {declaredCount} declared names, " +
                               $"{found.Count} external calls, {added.Count} undeclared");
 
             if (added.Count == 0) return 0;
@@ -116,6 +99,75 @@ namespace RoadRage.Tools
                 foreach (var site in calls[name].Take(5)) Console.WriteLine($"    {site}");
             }
             Console.WriteLine($"SYMBOLCHECK FAILED: {added.Count} name(s) called but declared nowhere.");
+            return 1;
+        }
+
+        /// Parses the project's own sources and returns the unqualified calls it cannot
+        /// account for. Shared by the real check and the self test so the two can never
+        /// drift into testing different code.
+        private static bool Analyze(string repo, out List<string> files,
+            out Dictionary<string, List<string>> calls, out int declaredCount)
+        {
+            files = SourceRoots
+                .Select(r => Path.Combine(repo, r))
+                .Where(Directory.Exists)
+                .SelectMany(d => Directory.EnumerateFiles(d, "*.cs", SearchOption.AllDirectories))
+                .OrderBy(f => f, StringComparer.Ordinal)
+                .ToList();
+            calls = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+            declaredCount = 0;
+
+            if (files.Count == 0)
+            {
+                Console.Error.WriteLine($"SYMBOLCHECK no sources found under " +
+                                        $"{string.Join(", ", SourceRoots)} in {repo}");
+                return false;
+            }
+
+            var trees = files
+                .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), path: f))
+                .ToList();
+            var declared = CollectDeclaredNames(trees);
+            declaredCount = declared.Count;
+            calls = CollectUnresolvedCalls(trees, declared);
+            return true;
+        }
+
+        /// Proves the checker still detects a call to something that does not exist.
+        ///
+        /// This exists because the harness it replaced failed silently for weeks: it kept
+        /// reporting a healthy-looking error count while being structurally incapable of
+        /// seeing a missing method. A check that can quietly stop checking is worse than
+        /// no check, so this one is asked to catch a planted bug on every run.
+        ///
+        /// The fixture also carries the constructs most likely to produce a false alarm -
+        /// a local function used above its declaration, delegate-typed field, local and
+        /// parameter invocations, a call into another file, nameof(), a static on the
+        /// calling class, and a real Unity API. Exactly one name in it is undefined.
+        private static int SelfTest(string repo)
+        {
+            const string expected = "ThisOneIsGenuinelyMissing";
+            var fixture = Path.Combine(repo, "Tools/SymbolCheck/selftest");
+
+            if (!Analyze(fixture, out var files, out var calls, out _)) return 2;
+
+            var baseline = File.ReadAllLines(Path.Combine(fixture, "Tools/SymbolCheck/baseline.txt"))
+                .Where(l => l.Length > 0 && !l.StartsWith("#"))
+                .ToHashSet(StringComparer.Ordinal);
+            var flagged = calls.Keys.Where(n => !baseline.Contains(n))
+                .OrderBy(n => n, StringComparer.Ordinal).ToList();
+
+            if (flagged.Count == 1 && flagged[0] == expected)
+            {
+                Console.WriteLine($"SYMBOLCHECK selftest OK: caught {expected} " +
+                                  $"and nothing else across {files.Count} fixture files");
+                return 0;
+            }
+
+            Console.Error.WriteLine($"SYMBOLCHECK SELFTEST FAILED: expected exactly [{expected}], " +
+                                    $"got [{string.Join(", ", flagged)}]");
+            Console.Error.WriteLine("The checker is no longer catching undefined names, or is " +
+                                    "flagging something it should not. Do not trust its green runs.");
             return 1;
         }
 

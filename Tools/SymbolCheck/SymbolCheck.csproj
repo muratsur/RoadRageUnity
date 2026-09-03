@@ -9,4 +9,11 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2" />
   </ItemGroup>
+  <ItemGroup>
+    <!-- selftest/ holds deliberately broken C# for the checker to analyse as text.
+         It must never be compiled: it inherits from a type that does not exist and
+         calls a method that does not exist, both on purpose. -->
+    <Compile Remove="selftest/**/*.cs" />
+    <None Include="selftest/**/*.cs" />
+  </ItemGroup>
 </Project>
