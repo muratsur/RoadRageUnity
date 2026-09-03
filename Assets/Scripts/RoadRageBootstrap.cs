@@ -795,7 +795,26 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Low Bark", new Color(0.18f, 0.12f, 0.075f), 0f, 0.12f);
             MakeMaterial("Low Leaf", new Color(0.09f, 0.31f, 0.12f), 0f, 0.08f);
             MakeMaterial("Sidewalk", new Color(0.24f, 0.25f, 0.29f), 0.08f, 0.34f);
-            MakeMaterial("City Neon", new Color(0.17f, 0.45f, 0.72f), 0.48f, 0.72f);
+            // Everything the material pass calls a light source lands here: lamp heads
+            // (any submesh named light/lamp/farola), signs, holograms, and the kerb glow
+            // ribbons. It was a plain Lit material with no emission, so none of it glowed
+            // - a "neon" that was only shiny blue paint, and lamp heads that stayed dark
+            // even once the lights they stand for were switched back on in 41fb537.
+            //
+            // ApplyCityPhotorealSignature has been setting this material's _EmissionColor
+            // per biome the whole time. Without the keyword that write did nothing, which
+            // is why the intent reads as present and the result never showed.
+            //
+            // Emission on URP Lit, not Unlit: the variant is kept alive by
+            // Assets/Resources/EmissiveVariantAnchor.mat, and ten other runtime materials
+            // in this file already depend on it - Cyber Hologram and Cyber Neon Strip
+            // twenty lines below, in this same family. Unlit is what the windows use
+            // because a window pane should ignore scene lighting entirely; a lamp housing
+            // should still take it.
+            var cityNeon = MakeMaterial("City Neon", new Color(0.17f, 0.45f, 0.72f), 0.48f, 0.72f);
+            cityNeon.SetColor("_EmissionColor", new Color(0.34f, 0.72f, 1.15f));
+            cityNeon.EnableKeyword("_EMISSION");
+            cityNeon.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
 			var sign = MakeMaterial("Hideout Sign PBR", Color.white, 0.12f, 0.48f);
 			sign.mainTexture = Texture("sign_albedo");
@@ -3981,9 +4000,18 @@ namespace RoadRage.UnityRemake
 				if (materials.TryGetValue("City Neon", out var neon))
 				{
 					if (neon.HasProperty("_EmissionColor"))
+					{
 						neon.SetColor("_EmissionColor", brooklyn
 							? new Color(0.32f, 0.58f, 1f, 1f)
 							: new Color(0.58f, 0.34f, 1.08f, 1f));
+						// Belt and braces. The keyword is enabled where the material is
+						// built, but this write is the reason the material has an emission
+						// colour at all, and it should not depend on somewhere else having
+						// switched it on first - that is exactly how it came to be setting
+						// a colour nothing ever read.
+						neon.EnableKeyword("_EMISSION");
+						neon.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+					}
 				}
 
 				if (materials.TryGetValue("Hideout Vehicle PBR", out var vehicle))
