@@ -6,6 +6,57 @@ using UnityEngine.SceneManagement;
 
 namespace RoadRage.UnityRemake
 {
+    /// Keeps only the street lights nearest the player switched on.
+    ///
+    /// The renderer is Forward with an additional-lights-per-object limit of 4, so beyond
+    /// a handful URP is choosing which lights apply to each surface every frame - and as
+    /// the car moves that choice changes, which is a light popping on a wall. A live world
+    /// is eight 150 m chunks with lamps down both sides, so leaving every one of them
+    /// enabled is both the popping and a pile of culling work for lights a kilometre away.
+    ///
+    /// So the pool sorts by distance a few times a second and enables a fixed number. The
+    /// budget is small deliberately: with a per-object limit of 4, more than about a dozen
+    /// in play buys nothing a driver can see.
+    internal static class LocalLights
+    {
+        private const float SweepSeconds = 0.25f;
+
+        private static readonly List<Light> pool = new();
+        private static float nextSweep;
+
+        /// Statics outlive a domain reload while the GameObjects they point at do not.
+        /// Same reset every other static in this file needs, for the same reason.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void Reset()
+        {
+            pool.Clear();
+            nextSweep = 0f;
+        }
+
+        public static void Register(Light light)
+        {
+            if (light != null) pool.Add(light);
+        }
+
+        public static int Live { get; private set; }
+
+        public static void Focus(Vector3 focus, int budget)
+        {
+            if (Time.unscaledTime < nextSweep) return;
+            nextSweep = Time.unscaledTime + SweepSeconds;
+
+            // Chunk unload destroys these, so the pool is full of holes by design.
+            pool.RemoveAll(light => light == null);
+
+            pool.Sort((a, b) =>
+                (a.transform.position - focus).sqrMagnitude
+                .CompareTo((b.transform.position - focus).sqrMagnitude));
+
+            Live = Mathf.Min(budget, pool.Count);
+            for (var i = 0; i < pool.Count; i++) pool[i].enabled = i < budget;
+        }
+    }
+
     public sealed class RoadRageBootstrap : MonoBehaviour
     {
         private const float RoadWidth = RoadPath.Width;
@@ -450,6 +501,9 @@ namespace RoadRage.UnityRemake
 					UpdateStreaming(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
 					EscalateTraffic();
+					// Four per object is the renderer's limit; a dozen in play is already
+					// more than any one surface can use. Mobile gets a third of that.
+					LocalLights.Focus(car.position, RichDetailBudget ? 12 : 4);
 				}
 			}
 
@@ -4353,10 +4407,44 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// One multiplier over every street light, so brightness is a single number rather
+        /// than fourteen call sites. The intensities the callers pass were authored when
+        /// these lights last worked; this respects them at 1.0 and exists to be turned
+        /// once, looked at, and left alone.
+        private const float StreetLightGain = 1f;
+
+        /// Street lamps, sign glow, garage and facility lights.
+        ///
+        /// This method was an empty body. Fourteen call sites across every biome computed
+        /// a world position, a colour, an intensity and a range, and handed them to
+        /// nothing - so Manhattan at night had no street lighting whatsoever and every
+        /// facade outside the directional light's reach fell to whatever the ambient term
+        /// gave it. That is the "everywhere is black" of it.
+        ///
+        /// They were removed because they read as flat discs on the road. Two things about
+        /// this build make that likely and both are addressed here rather than by deleting
+        /// the lights again: the renderer is Forward with an additional-lights-per-object
+        /// limit of 4, so beyond four the nearest ones simply pop in and out as you drive;
+        /// and additional-light shadows are enabled project-wide, so each point light was
+        /// rendering a shadow cubemap for a lamp post.
         private void CreateLocalLight(Vector3 position, Color color, float intensity, float range)
         {
-            // Point light discs completely removed per design across all biomes.
-            // Atmospheric lighting is provided cleanly by Directional Sun, Sky Ambient, Emissive Maps, and Reflection Probes.
+            var holder = Adopt(new GameObject("Local Light"));
+            holder.transform.position = position;
+
+            var light = holder.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.intensity = intensity * StreetLightGain;
+            light.range = range;
+            // A lamp post does not need to cast shadows, and with additional-light shadows
+            // on in the pipeline asset, letting it would mean a cubemap render apiece.
+            light.shadows = LightShadows.None;
+            // Off until the pool decides it is one of the nearest, so the budget is never
+            // exceeded even for a frame.
+            light.enabled = false;
+
+            LocalLights.Register(light);
         }
 
         /// ScatterBand wants a GameObject-returning spawn; the lamp builder returns void.
