@@ -2609,8 +2609,30 @@ namespace RoadRage.UnityRemake
         /// right: no system should need a flag to exercise. Since the foliage work has to
         /// be judged on this number rather than on how a frame looks, it needs to be one
         /// keypress away from wherever the player already is.
+        /// Frames discarded after lifting the cap, then frames averaged. The first frames
+        /// after uncapping still carry the capped pacing, and a single frame is noise.
+        private const int CostProbeWarmupFrames = 30;
+        private const int CostProbeSampleFrames = 120;
+        private bool costProbeRunning;
+
         private void LogLiveWorldCost()
         {
+            if (costProbeRunning) return;
+            StartCoroutine(CostProbe());
+        }
+
+        /// Counts are read immediately; the frame rate is sampled with the cap lifted.
+        ///
+        /// Boot sets Application.targetFrameRate = 120, and this log used to report a
+        /// single 1/unscaledDeltaTime against it. Three Greenwood runs whose geometry
+        /// differed by 3x - 675, 675 and 240 renderers a chunk, 19.6M down to 6.7M
+        /// triangles - all reported 121-123 FPS, because none of them was measuring
+        /// anything except the ceiling. The capture path already knew this (see
+        /// FrameCapture.Initialize) and uncapped; the keypress path never did.
+        private System.Collections.IEnumerator CostProbe()
+        {
+            costProbeRunning = true;
+
             long totalRenderers = 0, totalCutouts = 0, totalTris = 0;
             foreach (var pair in liveChunks)
             {
@@ -2626,11 +2648,44 @@ namespace RoadRage.UnityRemake
                         if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { totalCutouts++; break; }
                 }
             }
+
+            var priorTarget = Application.targetFrameRate;
+            var priorVsync = QualitySettings.vSyncCount;
+            Application.targetFrameRate = -1;
+            QualitySettings.vSyncCount = 0;
+
+            for (var i = 0; i < CostProbeWarmupFrames; i++) yield return null;
+
+            var elapsed = 0f;
+            var worstFrame = 0f;
+            for (var i = 0; i < CostProbeSampleFrames; i++)
+            {
+                yield return null;
+                var dt = Time.unscaledDeltaTime;
+                elapsed += dt;
+                if (dt > worstFrame) worstFrame = dt;
+            }
+
+            Application.targetFrameRate = priorTarget;
+            QualitySettings.vSyncCount = priorVsync;
+
             var chunks = Mathf.Max(1, liveChunks.Count);
+            var avgFps = CostProbeSampleFrames / Mathf.Max(elapsed, 0.0001f);
+            var worstFps = 1f / Mathf.Max(worstFrame, 0.0001f);
+            // Gate A wants a sustained figure, so the worst frame in the window is the
+            // one that decides the gate - an average hides exactly the stalls that fail it.
+            // The 850 / 824 baseline is Greenwood's alpha-test canopy and means nothing
+            // anywhere else, so it is only printed where it applies.
+            var baseline = biomeName == "GREENWOOD" ? " (Gate A measured Greenwood at 850 / 824)" : "";
             Debug.Log($"RR_COST {biomeName} live: chunks={liveChunks.Count} " +
                       $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}\n" +
-                      $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks} " +
-                      $"(Gate A measured Greenwood at 850 / 824) fps={1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f):0}");
+                      $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks}" +
+                      $"{baseline}\n" +
+                      $"RR_COST uncapped over {CostProbeSampleFrames} frames: avg={avgFps:0.0} fps " +
+                      $"worst={worstFps:0.0} fps budget={(RichDetailBudget ? "rich" : "low")} " +
+                      $"(was capped at {priorTarget})");
+
+            costProbeRunning = false;
         }
 
         private void BuildChunk(int index)
