@@ -799,6 +799,21 @@ namespace RoadRage.UnityRemake
             BiomeMaterial("Demo Props", "DemoCity", "props_main", "props_main_nm", Color.white, 0.45f, 0.50f);
             BiomeMaterial("Demo Fence", "DemoCity", "road_sideway_fences", "road_sideway_fences_nm", Color.white, 0.65f, 0.45f);
             BiomeSurface(BiomeMaterial("City Concrete", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.42f, 0.46f, 0.54f), 0.18f, 0.42f), "Synthwave", "T_concrete_MSO");
+            // A real Manhattan block is brick, limestone, sandstone and glass, not one
+            // grey. The NYC pack does ship that variety - its meshes carry Brick_Modern,
+            // Plaster_Rough, OldWood2 and Paint_Epoxy slots - but every one of those
+            // materials is HDRP/Lit, which does not render in this URP project, so the
+            // material pass replaces them all. It was replacing them with a single
+            // concrete grey. These give it something to choose between instead.
+            //
+            // Same albedo and normal as the concrete, so no new textures ship; the tint,
+            // metallic and smoothness carry the difference. Each is passed through
+            // MakeMaterial's 0.35 desaturation like every other surface, which is why the
+            // tints start further from grey than the finished facade should look.
+            BiomeSurface(BiomeMaterial("City Brick", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.55f, 0.33f, 0.26f), 0.04f, 0.22f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Limestone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.80f, 0.76f, 0.67f), 0.05f, 0.30f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Sandstone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.70f, 0.57f, 0.42f), 0.05f, 0.26f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Glass Tower", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.30f, 0.37f, 0.42f), 0.55f, 0.80f), "Synthwave", "T_concrete_MSO");
             BiomeSurface(BiomeMaterial("City Windows", "Synthwave", "T_window_02_D", "T_window_02_N", new Color(0.58f, 0.72f, 1f), 0.34f, 0.72f, "T_window_02_RE"), "Synthwave", "T_window_02_MSO");
             // Emissive skyline for distant towers - the pack's own RE sheet is flat grey,
             // so the procedural pane grid gives real lit windows (Unlit, see Cyber Window).
@@ -2015,7 +2030,12 @@ namespace RoadRage.UnityRemake
                     }
                     else if (pack == "CyberpunkCity" || pack == "Buildings" || resourceName.Contains("Buildings/"))
                     {
-                        var skylinePass = material != null && material.name == "Cyber Skyline";
+                        // This tested material.name == "Cyber Skyline" exactly. Manhattan
+                        // passes "City Skyline", so it never matched, and both the frontage
+                        // and the skyline towers fell through to City Concrete - which is
+                        // why every building in the biome was the same grey regardless of
+                        // what the caller asked for.
+                        var facadePass = material != null && IsFacadeMaterial(material.name);
                         if (sourceName.Contains("hologram") || sourceName.Contains("sign") || sourceName.Contains("light") || sourceName.Contains("lamp") || sourceName.Contains("farola")) assigned[i] = materials["City Neon"];
                         else if (sourceName.Contains("billboard") || sourceName.Contains("panel")) assigned[i] = materials["City Billboard"];
                         else if (sourceName.Contains("streetlamp") || sourceName.Contains("pole") || sourceName.Contains("post")) assigned[i] = materials["City Asphalt Trim"];
@@ -2023,7 +2043,7 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("window_car") || sourceName.Contains("glass")) assigned[i] = materials["Glass"];
                         else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = materials["City Windows"];
                         else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
-                        else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = skylinePass ? material : materials["City Concrete"];
+                        else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = facadePass ? material : materials["City Concrete"];
                         else assigned[i] = material ?? materials["City Concrete"];
                     }
                     else if (pack == "HongKong")
@@ -2390,6 +2410,24 @@ namespace RoadRage.UnityRemake
         ///
         /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
         /// it recognisable, and then positioned by its street-facing face.
+        /// The facades a city block can be built from, chosen per building.
+        private static readonly string[] FacadeFamily =
+        {
+            "City Brick", "City Limestone", "City Sandstone", "City Concrete", "City Glass Tower"
+        };
+
+        /// Picks a facade deterministically, so a block looks the same every time its
+        /// chunk is rebuilt while neighbouring plots differ from each other.
+        private Material FacadeMaterial(int hash) =>
+            materials[FacadeFamily[(hash & 0x7fffffff) % FacadeFamily.Length]];
+
+        /// Does this material describe a building wall? The wall branch of the material
+        /// pass hands the caller's choice through only for these, so a prop that happens
+        /// to arrive with some other material still gets the default treatment.
+        private static bool IsFacadeMaterial(string name) =>
+            System.Array.IndexOf(FacadeFamily, name) >= 0
+            || name == "City Skyline" || name == "Cyber Skyline";
+
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
@@ -3861,9 +3899,12 @@ namespace RoadRage.UnityRemake
                     var frontDistance = z + (side > 0 ? 3f : -4f);
 
                     // 1. Street frontage, on a plot, meeting a continuous facade line.
-                    PlaceBuildingOnPlot(BuildingClass.Frontage, materials["City Concrete"],
+                    // Facade picked per plot, so neighbours differ the way a real street
+                    // does. The hash is the block's, so a chunk rebuilt later is identical.
+                    var frontageHash = BlockHash(block, side * 7);
+                    PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
-                        frontageLine: FrontageSetback, plotWidth: 30f, hash: BlockHash(block, side * 7));
+                        frontageLine: FrontageSetback, plotWidth: 30f, hash: frontageHash);
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
@@ -3893,9 +3934,12 @@ namespace RoadRage.UnityRemake
                     if (RichDetailBudget || block % 2 == 0)
                     {
                         var towerDistance = z + Random.Range(-10f, 10f);
-                        PlaceBuildingOnPlot(BuildingClass.MidBlock, materials["City Skyline"],
+                        // Salted differently from the frontage so a block's tower and its
+                        // street building are not cut from the same stone.
+                        var towerHash = BlockHash(block, side * 3);
+                        PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
                             "Manhattan Midtown Skyscraper", towerDistance, side,
-                            frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: BlockHash(block, side * 3));
+                            frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: towerHash);
                     }
 
                     // 4. NYC Street Lamposts with warm amber glow
