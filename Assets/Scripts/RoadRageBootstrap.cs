@@ -814,6 +814,18 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("City Limestone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.80f, 0.76f, 0.67f), 0.05f, 0.30f), "Synthwave", "T_concrete_MSO");
             BiomeSurface(BiomeMaterial("City Sandstone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.70f, 0.57f, 0.42f), 0.05f, 0.26f), "Synthwave", "T_concrete_MSO");
             BiomeSurface(BiomeMaterial("City Glass Tower", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.30f, 0.37f, 0.42f), 0.55f, 0.80f), "Synthwave", "T_concrete_MSO");
+            // Storefront awning canvas. Named without "sign"/"paint"/"billboard" etc, so
+            // it takes the same 0.35 desaturation as the rest of the street - fabric
+            // outside a bodega is not a light source, and after the mood grade a pure hue
+            // here would read as gaudy against the muted brick and stone. Pitched well
+            // past the finished colour, same as the facade tints, so what survives the
+            // desaturation and the grade still reads as red, green, navy et al rather than
+            // collapsing toward the wall behind it.
+            MakeMaterial("Awning Red", new Color(0.72f, 0.10f, 0.09f), 0f, 0.20f);
+            MakeMaterial("Awning Green", new Color(0.09f, 0.44f, 0.20f), 0f, 0.20f);
+            MakeMaterial("Awning Navy", new Color(0.09f, 0.16f, 0.40f), 0f, 0.20f);
+            MakeMaterial("Awning Burgundy", new Color(0.42f, 0.08f, 0.18f), 0f, 0.20f);
+            MakeMaterial("Awning Gold", new Color(0.70f, 0.52f, 0.10f), 0.05f, 0.30f);
             BiomeSurface(BiomeMaterial("City Windows", "Synthwave", "T_window_02_D", "T_window_02_N", new Color(0.58f, 0.72f, 1f), 0.34f, 0.72f, "T_window_02_RE"), "Synthwave", "T_window_02_MSO");
             // Emissive skyline for distant towers - the pack's own RE sheet is flat grey,
             // so the procedural pane grid gives real lit windows (Unlit, see Cyber Window).
@@ -2458,6 +2470,35 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        private static readonly string[] AwningPalette =
+        {
+            "Awning Red", "Awning Green", "Awning Navy", "Awning Burgundy", "Awning Gold"
+        };
+
+        /// A shop awning: a slab jutting from the wall at door height plus a short drop
+        /// valance at its outer lip, the two visual cues that read as "awning" rather than
+        /// "ledge" from a moving car. Two Cube primitives - the same GameObject.
+        /// CreatePrimitive() path already used for lamp posts - so this is ~24 triangles
+        /// total, not worth measuring against a biome that costs 3M+ a chunk.
+        ///
+        /// Placed at a fixed size and a fixed offset from the frontage line rather than
+        /// fitted to the building behind it: there is no door position to fit to (the NYC
+        /// meshes carry no submesh that identifies one), so this is a recurring street
+        /// fixture like the lamp posts and traffic lights beside it, not an attachment.
+        private void BuildStorefrontAwning(float distance, float side, int hash)
+        {
+            var colour = materials[AwningPalette[(hash & 0x7fffffff) % AwningPalette.Length]];
+            const float overhang = 1.25f;
+            const float centreHeight = 3.15f;
+            var canopyLateral = side * (FrontageSetback - overhang * 0.5f);
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning", distance, canopyLateral,
+                centreHeight, new Vector3(overhang, 0.14f, 4.5f), colour, Vector3.zero, false);
+
+            var valanceLateral = side * (FrontageSetback - overhang);
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning Valance", distance, valanceLateral,
+                centreHeight - 0.32f, new Vector3(0.06f, 0.5f, 4.5f), colour, Vector3.zero, false);
+        }
+
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
@@ -3937,6 +3978,12 @@ namespace RoadRage.UnityRemake
                     PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
                         frontageLine: FrontageSetback, plotWidth: 30f, hash: frontageHash);
+
+                    // Not every storefront has an awning out front. One in five bare walls
+                    // keeps the rhythm from turning into wallpaper.
+                    var awningHash = BlockHash(block, side * 17);
+                    if (awningHash % 5 != 0)
+                        BuildStorefrontAwning(frontDistance, side, awningHash);
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
