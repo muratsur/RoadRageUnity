@@ -2513,6 +2513,55 @@ namespace RoadRage.UnityRemake
                 centreHeight - 0.32f, new Vector3(0.06f, 0.5f, 4.5f), colour, Vector3.zero, false);
         }
 
+        /// Screen height below which a background tower is drawn as a box instead of as
+        /// its full mesh. Screen-relative, so it is an apparent-size rule rather than a
+        /// distance one: with a 60 degree field of view this swaps a 60 m tower at roughly
+        /// 870 m and a 25 m one at roughly 360 m. Lower it to keep full detail further out
+        /// at more cost; raise it to save more and swap sooner. One number, one place.
+        private const float SkylineImpostorHeight = 0.06f;
+
+        /// Draws a distant skyline tower as a single box.
+        ///
+        /// Nothing in this biome had an LODGroup, so every tower cost the same at 200 m as
+        /// at 20 m. Measured: the NYCVariants prefabs stack a mean of 5.1 sections of
+        /// 18-25k triangles, so one tower is around 100k, and BuildCyberSprawl places about
+        /// 24 buildings per 150 m chunk - roughly 2.4M of the 3.16M triangles a chunk.
+        ///
+        /// The stand-in is a cube, 12 triangles, wearing the same facade material. That is
+        /// a real loss of detail, which is why this is applied only to MidBlock towers:
+        /// they sit behind the frontage line and read as skyline, while the street
+        /// frontages the player drives past keep their full mesh at every distance.
+        ///
+        /// The box is left unparented so Adopt puts it under the chunk root, whose
+        /// transform is identity - world size and local scale are then the same number,
+        /// and none of the rotated-parent arithmetic that PRODUCTION-GATES section 8 calls
+        /// this project's recurring fault is needed. It is destroyed with the chunk like
+        /// anything else under that root, and buildings never move after placement.
+        private void AddSkylineImpostor(GameObject model, Material facade)
+        {
+            var detailed = model.GetComponentsInChildren<Renderer>(true);
+            if (detailed.Length == 0 || !TryGetCombinedBounds(model, out var bounds)) return;
+
+            var box = Primitive(PrimitiveType.Cube, "Skyline Impostor",
+                bounds.center, bounds.size, facade);
+            if (box == null) return;
+            var boxRenderer = box.GetComponent<Renderer>();
+            if (boxRenderer == null) return;
+            // Beyond the shadow distance by the time it is showing, and a box's shadow
+            // would not match the silhouette it stands in for anyway.
+            boxRenderer.shadowCastingMode = ShadowCastingMode.Off;
+
+            var group = model.AddComponent<LODGroup>();
+            group.SetLODs(new[]
+            {
+                new LOD(SkylineImpostorHeight, detailed),
+                // Zero, not a cull threshold: a tower that vanished at the edge of the
+                // streamed world would pop a hole in the skyline. It stays a box.
+                new LOD(0f, new[] { boxRenderer }),
+            });
+            group.RecalculateBounds();
+        }
+
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
@@ -2563,6 +2612,7 @@ namespace RoadRage.UnityRemake
             }
             if (materials.TryGetValue("City Windows", out var cityWindows))
                 VaryWindowLighting(model, cityWindows, hash);
+            if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material);
             return model;
         }
 
