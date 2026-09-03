@@ -49,3 +49,7 @@ graphify-out/
 Tools/SymbolCheck/bin/
 Tools/SymbolCheck/obj/
 !Tools/SymbolCheck/SymbolCheck.csproj
+
+# Python bytecode from the tools under Tools/
+__pycache__/
+*.pyc

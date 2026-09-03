@@ -2587,6 +2587,89 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// The three wall surfaces that read as a building exterior, and so are worth
+        /// weathering. The pack's other wall materials - rope, plastic, wood - are trim.
+        private static readonly string[] GrimedWalls =
+        {
+            "TexturesCom_Brick_Modern_1K_albedo",
+            "TexturesCom_Plaster_Rough_1K_albedo",
+            "TexturesCom_Paint_Epoxy_1K_albedo",
+        };
+
+        /// How many weathered variants Tools/GrimeBake/bake.py writes per wall.
+        ///
+        /// The baked textures are not in the repository: png is tracked through Git LFS,
+        /// and registering an LFS upload needs an endpoint this project's automation
+        /// cannot reach, so pushing the pointers would give everyone a checkout whose
+        /// textures fail to resolve. Running the tool once produces them locally, with
+        /// seeds and guids derived from the asset name so the result is identical for
+        /// everyone. Until then Resources.Load finds nothing, every wall keeps its clean
+        /// material, and this method is a no-op.
+        private const int GrimeVariants = 3;
+
+        /// Wall material name to its variants, index 0 being the clean original.
+        /// Rebuilt on demand: a domain reload wipes this while the chunks that used it
+        /// survive, which is the same trap that produced duplicate worlds earlier.
+        private Dictionary<string, Material[]> wallGrime;
+
+        /// Weathers a building, so a street is not a row of identically clean facades.
+        ///
+        /// The NYC pack shipped this variation as HDRP decal projectors. Drawing those
+        /// under URP would mean adding the Decal Renderer Feature, a screen-space pass,
+        /// and hundreds of live projectors per block, in a biome already over its
+        /// triangle budget. Baking the same stains into the albedo costs nothing at all
+        /// at render time - the wall was going to sample a texture either way.
+        ///
+        /// One level per building rather than per section, so a tower is weathered
+        /// consistently up its height while its neighbours differ. A quarter of buildings
+        /// draw the clean original, because a street where everything is stained reads as
+        /// uniformly as one where nothing is.
+        ///
+        /// This swaps sharedMaterials rather than using a MaterialPropertyBlock: the
+        /// variants are different textures, not different parameters, so there is nothing
+        /// a property block could override. It costs one material per wall per grime
+        /// level, which is twelve materials across the biome.
+        private void WeatherWalls(GameObject model, int hash)
+        {
+            if (model == null) return;
+            if (wallGrime == null)
+            {
+                wallGrime = new Dictionary<string, Material[]>();
+                foreach (var wall in GrimedWalls)
+                {
+                    var clean = Resources.Load<Material>($"Buildings/NYC/Materials/{wall}");
+                    if (clean == null) continue;
+                    var variants = new List<Material> { clean };
+                    for (var v = 1; v <= GrimeVariants; v++)
+                    {
+                        var grimed = Resources.Load<Material>(
+                            $"Buildings/NYC/Materials/{wall}_grime{v}");
+                        if (grimed != null) variants.Add(grimed);
+                    }
+                    wallGrime[wall] = variants.ToArray();
+                }
+            }
+            if (wallGrime.Count == 0) return;
+
+            var pick = (hash & 0x7fffffff);
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var current = renderer.sharedMaterials;
+                Material[] swapped = null;
+                for (var i = 0; i < current.Length; i++)
+                {
+                    if (current[i] == null) continue;
+                    if (!wallGrime.TryGetValue(current[i].name, out var variants)) continue;
+                    if (variants.Length < 2) continue;
+                    var chosen = variants[pick % variants.Length];
+                    if (chosen == current[i]) continue;
+                    swapped ??= (Material[])current.Clone();
+                    swapped[i] = chosen;
+                }
+                if (swapped != null) renderer.sharedMaterials = swapped;
+            }
+        }
+
         /// Class/plot combinations already reported. Reset with the rest of the
         /// domain-reload state so a fresh run reports again.
         private static readonly HashSet<string> fitReported = new();
@@ -2778,6 +2861,7 @@ namespace RoadRage.UnityRemake
             }
             if (materials.TryGetValue("City Windows", out var cityWindows))
                 VaryWindowLighting(model, cityWindows, hash);
+            WeatherWalls(model, hash);
             if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material);
             return model;
         }
