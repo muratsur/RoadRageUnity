@@ -1454,7 +1454,13 @@ namespace RoadRage.UnityRemake
                 // hint, not a wash.
                 FogDensity = 0.0055f, Fog = new Color(0.19f, 0.20f, 0.22f),
                 Sky = new Color(0.40f, 0.42f, 0.46f), Equator = new Color(0.33f, 0.35f, 0.38f),
-                Ground = new Color(0.185f, 0.19f, 0.20f), SunColor = new Color(0.94f, 0.96f, 1f),
+                // Ground bounce was under half the sky, which is backwards for this street.
+                // A dry field at night bounces almost nothing, so a low ground term is
+                // right there; wet asphalt under a lit city throws a lot back up, and it
+                // lands on the bottom few storeys - the only part of a facade a driver
+                // ever looks at. Raising it lifts building bases without touching the sky,
+                // so the night stays a night. One number if it wants tuning.
+                Ground = new Color(0.30f, 0.31f, 0.33f), SunColor = new Color(0.94f, 0.96f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.62f, AmbientIntensity = 1.35f
             },
@@ -2484,6 +2490,10 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Class/plot combinations already reported. Reset with the rest of the
+        /// domain-reload state so a fresh run reports again.
+        private static readonly HashSet<string> fitReported = new();
+
         private static readonly string[] AwningPalette =
         {
             "Awning Red", "Awning Green", "Awning Navy", "Awning Burgundy", "Awning Gold"
@@ -2499,18 +2509,48 @@ namespace RoadRage.UnityRemake
         /// fitted to the building behind it: there is no door position to fit to (the NYC
         /// meshes carry no submesh that identifies one), so this is a recurring street
         /// fixture like the lamp posts and traffic lights beside it, not an attachment.
-        private void BuildStorefrontAwning(float distance, float side, int hash)
+        private void BuildStorefrontAwning(GameObject building, float distance, float side, int hash)
         {
+            // No wall, no awning. This is what left canopies hanging in mid-air: the
+            // awning went up on every block that passed the hash test, while
+            // PlaceBuildingOnPlot returns null whenever nothing in the catalogue fits the
+            // plot - so a block with no frontage building still got a canopy, attached to
+            // nothing.
+            if (building == null || !TryGetCombinedBounds(building, out var bounds)) return;
+
+            // And measure where the facade actually ended up rather than trusting the line
+            // it was asked to meet. PRODUCTION-GATES section 8 calls "requested bounds are
+            // not measured bounds" this project's recurring fault; an awning positioned off
+            // a constant while the wall behind it is positioned off its own geometry is
+            // exactly that shape of bug waiting to happen.
+            var roadRight = RoadPath.Right(distance);
+            var roadCentre = RoadPath.Point(distance, 0f, 0f);
+            var facade = float.PositiveInfinity;
+            for (var x = -1; x <= 1; x += 2)
+            for (var y = -1; y <= 1; y += 2)
+            for (var z = -1; z <= 1; z += 2)
+            {
+                var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                facade = Mathf.Min(facade, Vector3.Dot(corner - roadCentre, roadRight) * side);
+            }
+            if (float.IsInfinity(facade)) return;
+
             var colour = materials[AwningPalette[(hash & 0x7fffffff) % AwningPalette.Length]];
             const float overhang = 1.25f;
-            const float centreHeight = 3.15f;
-            var canopyLateral = side * (FrontageSetback - overhang * 0.5f);
-            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning", distance, canopyLateral,
-                centreHeight, new Vector3(overhang, 0.14f, 4.5f), colour, Vector3.zero, false);
+            const float embed = 0.2f;      // buried in the wall, so no gap can open up
+            const float aboveDoor = 3.15f;
+            // Height off the building's own base rather than off the road, so a canopy
+            // cannot drift when the two sit at different elevations.
+            var baseHeight = bounds.min.y - roadCentre.y + aboveDoor;
 
-            var valanceLateral = side * (FrontageSetback - overhang);
+            var depth = overhang + embed;
+            var canopyLateral = side * (facade + (embed - overhang) * 0.5f);
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning", distance, canopyLateral,
+                baseHeight, new Vector3(depth, 0.14f, 4.5f), colour, Vector3.zero, false);
+
+            var valanceLateral = side * (facade - overhang);
             PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning Valance", distance, valanceLateral,
-                centreHeight - 0.32f, new Vector3(0.06f, 0.5f, 4.5f), colour, Vector3.zero, false);
+                baseHeight - 0.32f, new Vector3(0.06f, 0.5f, 4.5f), colour, Vector3.zero, false);
         }
 
         /// Screen height below which a background tower is drawn as a box instead of as
@@ -2576,6 +2616,14 @@ namespace RoadRage.UnityRemake
             }
             if (fitting.Count == 0) return null;
 
+            // How many distinct buildings this plot size can actually draw on. "Every
+            // building looks the same" is a number, not an impression, and it is this one
+            // - the catalogue can hold sixty entries while a 30 m plot fits six of them.
+            // Once per class and width, not per building.
+            if (fitReported.Add($"{wanted}/{plotWidth:0}"))
+                Debug.Log($"RR_CITY {wanted} plots {plotWidth:0}m wide can use " +
+                          $"{fitting.Count} of {catalogue.Count} catalogued buildings");
+
             var chosen = fitting[Mathf.Abs(hash) % fitting.Count];
 
             // Scale to fill the plot's width, capped so a small mesh is not blown up and
@@ -2583,10 +2631,20 @@ namespace RoadRage.UnityRemake
             // of a real building are not ours to invent.
             var scale = Mathf.Clamp(plotWidth / chosen.Width, MinPlotScale, MaxPlotScale);
 
+            // Same mesh, different building. The catalogue only offers what fits the plot,
+            // so a street runs through its options fast and then repeats them - which is
+            // the "copy paste buildings" of it. Stretching the storey height per plot
+            // changes the silhouette and the window rhythm without another asset, and
+            // buildings genuinely differ in floor height. Y only: the model is rotated
+            // about Y alone, so local Y is world up and nothing skews.
+            var storey = 0.85f + (hash >> 5) % 41 / 100f;   // 0.85 to 1.25
+            var footprint = Vector3.one * scale;
+            footprint.y *= storey;
+
             var facing = side > 0f ? -90f : 90f;
             var model = PlaceBiomeModelOnRoad("Buildings", chosen.Resource, material,
                 distance, side * (frontageLine + chosen.Depth * scale * 0.5f), 0f,
-                new Vector3(0f, facing, 0f), Vector3.one * scale, label, enforceClearance: false);
+                new Vector3(0f, facing, 0f), footprint, label, enforceClearance: false);
             if (model == null) return null;
 
             // Ground it, then set the street-facing face exactly on the frontage line so
@@ -2641,7 +2699,11 @@ namespace RoadRage.UnityRemake
         private static readonly HashSet<string> clampReported = new();
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
-        private static void ResetClampReports() => clampReported.Clear();
+        private static void ResetClampReports()
+        {
+            clampReported.Clear();
+            fitReported.Clear();
+        }
 
         private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f,
             float maxFootprint = 0f)
@@ -4091,7 +4153,7 @@ namespace RoadRage.UnityRemake
                     // Facade picked per plot, so neighbours differ the way a real street
                     // does. The hash is the block's, so a chunk rebuilt later is identical.
                     var frontageHash = BlockHash(block, side * 7);
-                    PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
+                    var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
                         frontageLine: FrontageSetback, plotWidth: 30f, hash: frontageHash);
 
@@ -4099,7 +4161,7 @@ namespace RoadRage.UnityRemake
                     // keeps the rhythm from turning into wallpaper.
                     var awningHash = BlockHash(block, side * 17);
                     if (awningHash % 5 != 0)
-                        BuildStorefrontAwning(frontDistance, side, awningHash);
+                        BuildStorefrontAwning(frontage, frontDistance, side, awningHash);
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
