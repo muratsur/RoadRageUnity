@@ -77,7 +77,20 @@ namespace RoadRage.UnityRemake
 		public static IReadOnlyList<string> LockedBiomes => ComingSoon;
 		public bool PickerOpen { get; private set; }
 
-        public static RoadRageBootstrap Instance { get; private set; }
+        /// Recompiling while play mode is running reloads the domain: statics reset, but
+        /// the GameObjects they pointed at survive. A plain auto-property therefore came
+        /// back null with the bootstrap still sitting in the scene, and everything reading
+        /// Instance silently got nothing. Re-find it instead of trusting the static.
+        private static RoadRageBootstrap instance;
+        public static RoadRageBootstrap Instance
+        {
+            get
+            {
+                if (instance == null) instance = FindAnyObjectByType<RoadRageBootstrap>();
+                return instance;
+            }
+            private set => instance = value;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureWorld()
@@ -2652,11 +2665,18 @@ namespace RoadRage.UnityRemake
         {
             costProbeRunning = true;
 
+            // Walk the scene, not liveChunks. A domain reload can empty that dictionary
+            // while the chunk objects keep rendering, and a probe that trusts it reports
+            // half the world - which is how a Greenwood hierarchy holding two full sets of
+            // Chunk -1..6 still logged chunks=8.
             long totalRenderers = 0, totalCutouts = 0, totalTris = 0;
-            foreach (var pair in liveChunks)
+            var chunkRoots = new List<GameObject>();
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+                if (go != null && go.name.StartsWith("Chunk ")) chunkRoots.Add(go);
+
+            foreach (var chunk in chunkRoots)
             {
-                if (pair.Value == null) continue;
-                var renderers = pair.Value.GetComponentsInChildren<Renderer>(true);
+                var renderers = chunk.GetComponentsInChildren<Renderer>(true);
                 totalRenderers += renderers.Length;
                 foreach (var r in renderers)
                 {
@@ -2688,15 +2708,22 @@ namespace RoadRage.UnityRemake
             Application.targetFrameRate = priorTarget;
             QualitySettings.vSyncCount = priorVsync;
 
-            var chunks = Mathf.Max(1, liveChunks.Count);
+            var chunks = Mathf.Max(1, chunkRoots.Count);
             var avgFps = CostProbeSampleFrames / Mathf.Max(elapsed, 0.0001f);
             var worstFps = 1f / Mathf.Max(worstFrame, 0.0001f);
+            // Say so when the streamer has lost track of part of what it is drawing:
+            // every count above is then real, but the world is not the one intended.
+            var orphans = chunkRoots.Count - liveChunks.Count;
+            if (orphans != 0)
+                Debug.LogWarning($"RR_COST {chunkRoots.Count} chunk roots in the scene but " +
+                                 $"{liveChunks.Count} tracked ({orphans:+#;-#;0} untracked). The counts " +
+                                 "below are what renders; the difference is a leak, not content.");
             // Gate A wants a sustained figure, so the worst frame in the window is the
             // one that decides the gate - an average hides exactly the stalls that fail it.
             // The 850 / 824 baseline is Greenwood's alpha-test canopy and means nothing
             // anywhere else, so it is only printed where it applies.
             var baseline = biomeName == "GREENWOOD" ? " (Gate A measured Greenwood at 850 / 824)" : "";
-            Debug.Log($"RR_COST {biomeName} live: chunks={liveChunks.Count} " +
+            Debug.Log($"RR_COST {biomeName} live: chunks={chunkRoots.Count} tracked={liveChunks.Count} " +
                       $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}\n" +
                       $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks}" +
                       $"{baseline}\n" +
@@ -2707,8 +2734,38 @@ namespace RoadRage.UnityRemake
             costProbeRunning = false;
         }
 
+        /// Reset by the same domain reload that empties liveChunks, so the sweep below
+        /// runs again exactly when the dictionary has been lost.
+        private bool orphanChunkSweepDone;
+
+        /// Destroys chunk roots this instance is not tracking.
+        ///
+        /// liveChunks is a plain Dictionary, so a recompile during play mode empties it
+        /// while the chunk GameObjects it referenced stay in the scene. The streamer then
+        /// finds no chunks, rebuilds every one, and the world quietly renders twice - two
+        /// full sets of Chunk -1..6 in the hierarchy, double the foliage, and a cost probe
+        /// that walks liveChunks reporting only half of what is actually drawn.
+        private void PurgeOrphanChunks()
+        {
+            orphanChunkSweepDone = true;
+            var purged = 0;
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                if (go == null || !go.name.StartsWith("Chunk ")) continue;
+                if (liveChunks.ContainsValue(go)) continue;
+                go.SetActive(false);
+                Destroy(go);
+                purged++;
+            }
+            if (purged > 0)
+                Debug.LogWarning($"RR_STREAM purged {purged} orphaned chunk root(s) left by a domain " +
+                                 "reload. Without this the world renders twice and every RR_COST " +
+                                 "reading understates what is on screen.");
+        }
+
         private void BuildChunk(int index)
         {
+            if (!orphanChunkSweepDone) PurgeOrphanChunks();
             if (liveChunks.ContainsKey(index)) return;
             var start = index * ChunkLength;
             var biomeIndex = BiomeIndexAt(start + ChunkLength * 0.5f);
