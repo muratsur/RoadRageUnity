@@ -269,18 +269,25 @@ namespace RoadRage.UnityRemake
                 RoadRageAudioBridge.Instance.PlayTakedownStinger();
             }
 
-            // 3. Launch nearby traffic with radial explosion physics
-            var colliders = Physics.OverlapSphere(origin, 22f);
+            // 3. Launch nearby traffic with radial explosion physics.
+            //
+            // Found through the traffic registry, not OverlapSphere. Traffic is spawned
+            // with every collider destroyed and none on the root, so the sphere had
+            // nothing to hit and this blast has never moved a single car.
             var vehiclesBlown = 0;
-
-            foreach (var col in colliders)
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
             {
-                var traffic = col.GetComponentInParent<TrafficCarController>();
-                if (traffic != null && !impactedTraffic.Contains(traffic))
+                var traffic = cars[i];
+                if (traffic != null && !impactedTraffic.Contains(traffic) &&
+                    (traffic.transform.position - origin).sqrMagnitude < 22f * 22f)
                 {
                     impactedTraffic.Add(traffic);
                     vehiclesBlown++;
 
+                    // Hand it over before touching the rigidbody, or the controller
+                    // forces it kinematic again on the next frame and the impulse is lost.
+                    traffic.ReleaseToPhysics();
                     var trb = traffic.GetComponent<Rigidbody>();
                     if (trb == null) trb = traffic.gameObject.AddComponent<Rigidbody>();
                     trb.isKinematic = false;
@@ -309,13 +316,18 @@ namespace RoadRage.UnityRemake
         {
             if (playerTransform == null) return;
 
-            var hits = Physics.OverlapSphere(playerTransform.position, 3.2f);
-            foreach (var hit in hits)
+            // Same again: the registry, because there are no traffic colliders to find.
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
             {
-                var traffic = hit.GetComponentInParent<TrafficCarController>();
-                if (traffic != null && !impactedTraffic.Contains(traffic))
+                var traffic = cars[i];
+                if (traffic != null && !impactedTraffic.Contains(traffic) &&
+                    (traffic.transform.position - playerTransform.position).sqrMagnitude < 3.2f * 3.2f)
                 {
                     impactedTraffic.Add(traffic);
+                    // Hand it over before touching the rigidbody, or the controller
+                    // forces it kinematic again on the next frame and the impulse is lost.
+                    traffic.ReleaseToPhysics();
                     var trb = traffic.GetComponent<Rigidbody>();
                     if (trb == null) trb = traffic.gameObject.AddComponent<Rigidbody>();
                     trb.isKinematic = false;

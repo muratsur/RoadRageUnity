@@ -24,36 +24,30 @@ Material:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_Name: Leaves
-  m_Shader: {fileID: 4800000, guid: 756bac9090102564582875f4c7e30202, type: 3}
+  m_Shader: {fileID: 4800000, guid: 933532a4fcc9baf4fa0491de14d08ed7, type: 3}
   m_Parent: {fileID: 0}
   m_ModifiedSerializedProperties: 0
   m_ValidKeywords:
   - _ALPHATEST_ON
-  - _DISABLE_SSR_TRANSPARENT
-  - _DOUBLESIDED_ON
-  - _MATERIAL_FEATURE_SUBSURFACE_SCATTERING
-  - _MATERIAL_FEATURE_TRANSMISSION
   - _NORMALMAP
-  - _NORMALMAP_TANGENT_SPACE
   m_InvalidKeywords:
   - _WINDQUALITY_BEST
   m_LightmapFlags: 4
   m_EnableInstancingVariants: 0
   m_DoubleSidedGI: 1
-  m_CustomRenderQueue: 2475
+  m_CustomRenderQueue: 2450
   stringTagMap:
     MotionVector: User
     RenderType: TransparentCutout
-  disabledShaderPasses:
-  - TransparentDepthPrepass
-  - TransparentDepthPostpass
-  - TransparentBackface
-  - RayTracingPrepass
-  - MOTIONVECTORS
+  disabledShaderPasses: []
   m_LockedProperties: 
   m_SavedProperties:
     serializedVersion: 3
     m_TexEnvs:
+    - _BaseMap:
+        m_Texture: {fileID: 2800000, guid: 798e610d3254a594b9818a32839bebc1, type: 3}
+        m_Scale: {x: 1, y: 1}
+        m_Offset: {x: 0, y: 0}
     - _AnisotropyMap:
         m_Texture: {fileID: 0}
         m_Scale: {x: 1, y: 1}
@@ -71,7 +65,7 @@ Material:
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _BumpMap:
-        m_Texture: {fileID: 0}
+        m_Texture: {fileID: 2800000, guid: 7b02dc6400537d649acc103c530645bf, type: 3}
         m_Scale: {x: 1, y: 1}
         m_Offset: {x: 0, y: 0}
     - _CoatMaskMap:
@@ -160,6 +154,8 @@ Material:
         m_Offset: {x: 0, y: 0}
     m_Ints: []
     m_Floats:
+    - _Cull: 0
+    - _AlphaClip: 1
     - Diffusion_Profile: 0
     - EFFECT_BILLBOARD: 0
     - EFFECT_EXTRA_TEX: 1

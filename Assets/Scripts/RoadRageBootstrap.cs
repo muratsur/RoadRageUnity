@@ -6,6 +6,57 @@ using UnityEngine.SceneManagement;
 
 namespace RoadRage.UnityRemake
 {
+    /// Keeps only the street lights nearest the player switched on.
+    ///
+    /// The renderer is Forward with an additional-lights-per-object limit of 4, so beyond
+    /// a handful URP is choosing which lights apply to each surface every frame - and as
+    /// the car moves that choice changes, which is a light popping on a wall. A live world
+    /// is eight 150 m chunks with lamps down both sides, so leaving every one of them
+    /// enabled is both the popping and a pile of culling work for lights a kilometre away.
+    ///
+    /// So the pool sorts by distance a few times a second and enables a fixed number. The
+    /// budget is small deliberately: with a per-object limit of 4, more than about a dozen
+    /// in play buys nothing a driver can see.
+    internal static class LocalLights
+    {
+        private const float SweepSeconds = 0.25f;
+
+        private static readonly List<Light> pool = new();
+        private static float nextSweep;
+
+        /// Statics outlive a domain reload while the GameObjects they point at do not.
+        /// Same reset every other static in this file needs, for the same reason.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void Reset()
+        {
+            pool.Clear();
+            nextSweep = 0f;
+        }
+
+        public static void Register(Light light)
+        {
+            if (light != null) pool.Add(light);
+        }
+
+        public static int Live { get; private set; }
+
+        public static void Focus(Vector3 focus, int budget)
+        {
+            if (Time.unscaledTime < nextSweep) return;
+            nextSweep = Time.unscaledTime + SweepSeconds;
+
+            // Chunk unload destroys these, so the pool is full of holes by design.
+            pool.RemoveAll(light => light == null);
+
+            pool.Sort((a, b) =>
+                (a.transform.position - focus).sqrMagnitude
+                .CompareTo((b.transform.position - focus).sqrMagnitude));
+
+            Live = Mathf.Min(budget, pool.Count);
+            for (var i = 0; i < pool.Count; i++) pool[i].enabled = i < budget;
+        }
+    }
+
     public sealed class RoadRageBootstrap : MonoBehaviour
     {
         private const float RoadWidth = RoadPath.Width;
@@ -18,12 +69,21 @@ namespace RoadRage.UnityRemake
 
             public MaterialDict(RoadRageBootstrap owner) => this.owner = owner;
 
+            /// Keys already reported missing. Building one chunk performs hundreds of
+            /// lookups, so warning per lookup buried the console under thousands of
+            /// identical lines - which is how the condition below went unnoticed while
+            /// it was actively replacing the world's materials.
+            private readonly HashSet<string> reported = new();
+
             public Material this[string key]
             {
                 get
                 {
                     if (inner.TryGetValue(key, out var mat) && mat != null) return mat;
-                    Debug.LogWarning($"[RoadRage] Material '{key}' was not found in dictionary, creating automatic fallback.");
+                    if (reported.Add(key))
+                        Debug.LogWarning($"[RoadRage] Material '{key}' was not in the dictionary; " +
+                                         "substituting a flat fallback. It will not alpha-clip, tile " +
+                                         "or take a surface map, so foliage and glass render as solid.");
                     var fallback = owner.MakeMaterial(key, new Color(0.6f, 0.5f, 0.4f));
                     inner[key] = fallback;
                     return fallback;
@@ -31,9 +91,14 @@ namespace RoadRage.UnityRemake
                 set => inner[key] = value;
             }
 
+            public int Count => inner.Count;
             public bool ContainsKey(string key) => inner.ContainsKey(key);
             public bool TryGetValue(string key, out Material mat) => inner.TryGetValue(key, out mat);
-            public void Clear() => inner.Clear();
+            public void Clear()
+            {
+                inner.Clear();
+                reported.Clear();
+            }
         }
 
         private readonly MaterialDict materials;
@@ -77,7 +142,20 @@ namespace RoadRage.UnityRemake
 		public static IReadOnlyList<string> LockedBiomes => ComingSoon;
 		public bool PickerOpen { get; private set; }
 
-        public static RoadRageBootstrap Instance { get; private set; }
+        /// Recompiling while play mode is running reloads the domain: statics reset, but
+        /// the GameObjects they pointed at survive. A plain auto-property therefore came
+        /// back null with the bootstrap still sitting in the scene, and everything reading
+        /// Instance silently got nothing. Re-find it instead of trusting the static.
+        private static RoadRageBootstrap instance;
+        public static RoadRageBootstrap Instance
+        {
+            get
+            {
+                if (instance == null) instance = FindAnyObjectByType<RoadRageBootstrap>();
+                return instance;
+            }
+            private set => instance = value;
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void EnsureWorld()
@@ -128,6 +206,7 @@ namespace RoadRage.UnityRemake
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
+            if (HasCommandLineFlag("-lowdetail")) ForceLowDetailBudget(true);
             LogSky = HasCommandLineFlag("-skylog");
             if (LogSky) StartCoroutine(SkyAudit());
             ChaseCamera.LogCamera = HasCommandLineFlag("-camlog");
@@ -421,6 +500,10 @@ namespace RoadRage.UnityRemake
 					TrafficCarController.PlayerDistance = controller.RoadDistance;
 					UpdateStreaming(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
+					EscalateTraffic();
+					// Four per object is the renderer's limit; a dozen in play is already
+					// more than any one surface can use. Mobile gets a third of that.
+					LocalLights.Focus(car.position, RichDetailBudget ? 12 : 4);
 				}
 			}
 
@@ -430,6 +513,19 @@ namespace RoadRage.UnityRemake
 				lastToggleTime = Time.unscaledTime;
 				if (PickerOpen) ClosePicker();
 				else OpenPicker();
+			}
+
+			// P measures the loaded world against Gate A's numbers.
+			if (GameInput.GetPKeyPressed()) LogLiveWorldCost();
+
+
+			// K cycles weather. Random weather per run means two runs of the same biome can
+			// differ by about a factor of two in light, which invalidates any A/B of a
+			// lighting change. Pin it to CLEAR to compare like with like.
+			if (GameInput.GetKKeyPressed())
+			{
+				activeWeather = (WeatherKind)(((int)activeWeather + 1) % System.Enum.GetValues(typeof(WeatherKind)).Length);
+				Debug.Log($"[WEATHER] {activeWeather}");
 			}
 
 			// N key cycles to next biome
@@ -452,8 +548,29 @@ namespace RoadRage.UnityRemake
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 
+        /// How far a surface tint is pulled towards neutral. Desaturating the lighting
+        /// alone was not enough: the world geometry carries its own colour, and a biome
+        /// like Alien Biomass is mostly violet organics and violet rock, so it still read
+        /// as a single hue under a neutral key. BiomeMaterial funnels through here, so
+        /// this is the one place every generated surface tint passes.
+        private const float SurfaceDesaturation = 0.35f;
+
+        /// Colour that carries meaning is exempt. Road markings, hazard cones, brake
+        /// lights, neon and signage are how the player reads the road at speed - washing
+        /// those out to fix the scenery would cost more than it gained. Only the
+        /// environment is neutralised.
+        private static bool IsSignalColour(string name)
+        {
+            var lower = name.ToLowerInvariant();
+            return lower.Contains("neon") || lower.Contains("sign") || lower.Contains("light")
+                || lower.Contains("paint") || lower.Contains("orange") || lower.Contains("hologram")
+                || lower.Contains("billboard") || lower.Contains("glow") || lower.Contains("marking")
+                || lower.Contains("emissive") || lower.Contains("hazard");
+        }
+
         private Material MakeMaterial(string name, Color color, float metallic = 0f, float smoothness = 0.25f)
         {
+            if (!IsSignalColour(name)) color = Desaturate(color, SurfaceDesaturation);
             var material = new Material(LitShader) { name = name, color = color };
 			if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
             material.SetFloat("_Metallic", metallic);
@@ -468,8 +585,76 @@ namespace RoadRage.UnityRemake
 
         private Texture2D Texture(string name) => Resources.Load<Texture2D>($"Hideout/Textures/{name}");
 
+        /// Textures that were stored once per biome pack while being byte-identical.
+        ///
+        /// One leaf texture was held five times under three different names, an asphalt
+        /// normal three times, tree bark three times: 48 files, 180 MB, all shipping in
+        /// every build because everything under Resources ships whether it is referenced
+        /// or not. Deleting the copies is not enough on its own - these are loaded by
+        /// runtime path, not by GUID, so a missing file returns null and the material
+        /// silently falls back to flat colour rather than failing loudly.
+        ///
+        /// So each removed (pack, name) maps to the copy that was kept. Generated from
+        /// the LFS content hashes, so every entry is byte-identical to what it replaces
+        /// and no biome renders differently.
+        private static readonly Dictionary<string, string> DedupedBiomeTextures =
+            new Dictionary<string, string>
+        {
+            { "ElderTreeGate/T_leaves_D_02",              "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "ElderTreeGate/T_leaves_N",                 "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "ElderTreeGate/T_stones_D",                 "Biomes/RedCanyon/Textures/T_stones_D" },
+            { "ElderTreeGate/T_stones_N",                 "Biomes/RedCanyon/Textures/T_stones_N" },
+            { "ForestVillage/T_bush_D",                   "Biomes/ElderTreeGate/Textures/T_desert_bush_D" },
+            { "ForestVillage/T_bush_MSO",                 "Biomes/ElderTreeGate/Textures/T_desert_bush_MSO" },
+            { "ForestVillage/T_bush_N",                   "Biomes/ElderTreeGate/Textures/T_desert_bush_N" },
+            { "HollywoodHills/T_desert_bush_D",           "Biomes/ElderTreeGate/Textures/T_desert_bush_D" },
+            { "HollywoodHills/T_desert_bush_MSO",         "Biomes/ElderTreeGate/Textures/T_desert_bush_MSO" },
+            { "HollywoodHills/T_desert_bush_N",           "Biomes/ElderTreeGate/Textures/T_desert_bush_N" },
+            { "HollywoodHills/T_desert_plant_D",          "Biomes/ForestVillage/Textures/T_plant_D" },
+            { "HollywoodHills/T_desert_plant_MSO",        "Biomes/ForestVillage/Textures/T_plant_MSO" },
+            { "HollywoodHills/T_desert_plant_N",          "Biomes/ForestVillage/Textures/T_plant_N" },
+            { "HollywoodHills/T_leafs_D",                 "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "HollywoodHills/T_leafs_MSO",               "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "HollywoodHills/T_leafs_N",                 "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "HongKong/T_ground_texture_01_D",           "Biomes/CyberpunkCity/Textures/T_ground_texture_01_D" },
+            { "HongKong/T_ground_texture_01_MSO",         "Biomes/CyberpunkCity/Textures/T_ground_texture_01_MSO" },
+            { "HongKong/T_ground_texture_01_N",           "Biomes/CyberpunkCity/Textures/T_ground_texture_01_N" },
+            { "HongKong/T_street_props_02_MSO",           "Biomes/CyberpunkCity/Textures/T_street_props_02_MSO" },
+            { "JungleRuins/T_leafs_D",                    "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "JungleRuins/T_leafs_MSO",                  "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "JungleRuins/T_leafs_N",                    "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "JungleRuins/T_tree_bark_D",                "Biomes/HollywoodHills/Textures/T_tree_bark_D" },
+            { "JungleRuins/T_tree_bark_MSO",              "Biomes/HollywoodHills/Textures/T_tree_bark_MSO" },
+            { "JungleRuins/T_tree_bark_N",                "Biomes/HollywoodHills/Textures/T_tree_bark_N" },
+            { "RedCanyon/T_grass_D",                      "Biomes/ElderTreeGate/Textures/T_grass_D" },
+            { "RedCanyon/T_grass_MSO",                    "Biomes/ElderTreeGate/Textures/T_grass_MSO" },
+            { "RedCanyon/T_grass_N",                      "Biomes/ElderTreeGate/Textures/T_grass_N" },
+            { "RedCanyon/T_leafs_MSO",                    "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "RedCanyon/T_stones_MSO",                   "Biomes/ElderTreeGate/Textures/T_stones_MSO" },
+            { "RedCanyon/T_tree_bark_D",                  "Biomes/HollywoodHills/Textures/T_tree_bark_D" },
+            { "RedCanyon/T_tree_bark_MSO",                "Biomes/HollywoodHills/Textures/T_tree_bark_MSO" },
+            { "RedCanyon/T_tree_bark_N",                  "Biomes/HollywoodHills/Textures/T_tree_bark_N" },
+            { "RunicForest/T_ground_02_D",                "Biomes/HollywoodHills/Textures/T_ground_02_D" },
+            { "RunicForest/T_ground_02_MSO",              "Biomes/HollywoodHills/Textures/T_ground_02_MSO" },
+            { "RunicForest/T_ground_02_N",                "Biomes/HollywoodHills/Textures/T_ground_02_N" },
+            { "RunicForest/T_leaves_D",                   "Biomes/RedCanyon/Textures/T_leafs_D" },
+            { "RunicForest/T_leaves_MSO",                 "Biomes/ElderTreeGate/Textures/T_leaves_MSO" },
+            { "RunicForest/T_leaves_N",                   "Biomes/RedCanyon/Textures/T_leafs_N" },
+            { "RunicForest/T_vetegation_atlas_MSO",       "Biomes/HollywoodHills/Textures/T_vetegation_atlas_MSO" },
+            { "RunicForest/T_vetegation_atlas_basecolor", "Biomes/HollywoodHills/Textures/T_vetegation_atlas_basecolor" },
+            { "RunicForest/T_vetegation_atlas_normal",    "Biomes/HollywoodHills/Textures/T_vetegation_atlas_normal" },
+            { "Shared/T_asphalt_D",                       "Biomes/CyberpunkCity/Textures/T_ground_texture_01_D" },
+            { "Shared/T_asphalt_MSO",                     "Biomes/CyberpunkCity/Textures/T_ground_texture_01_MSO" },
+            { "Shared/T_asphalt_N",                       "Biomes/CyberpunkCity/Textures/T_ground_texture_01_N" },
+            { "Synthwave/T_car_B_02_E",                   "Biomes/Synthwave/Textures/T_car_B_01_E" },
+            { "Synthwave/T_car_B_02_N",                   "Biomes/Synthwave/Textures/T_car_B_01_N" },
+        };
+
         private Texture2D BiomeTexture(string pack, string name) =>
-            Resources.Load<Texture2D>($"Biomes/{pack}/Textures/{name}");
+            Resources.Load<Texture2D>(
+                DedupedBiomeTextures.TryGetValue($"{pack}/{name}", out var shared)
+                    ? shared
+                    : $"Biomes/{pack}/Textures/{name}");
 
         /// Applies a repacked _MSO map (R=metallic, G=occlusion, A=smoothness) to a material.
         /// URP reads metallic/smoothness from _MetallicGlossMap and occlusion from
@@ -525,7 +710,9 @@ namespace RoadRage.UnityRemake
             {
                 var emissionTexture = BiomeTexture(pack, emission);
                 if (emissionTexture != null) material.SetTexture("_EmissionMap", emissionTexture);
-                material.SetColor("_EmissionColor", new Color(1.6f, 2.1f, 2.7f));
+                // One fixed blue-white applied to every emissive biome surface. At full
+                // strength it put a cyan wash over lit windows in every zone at once.
+                material.SetColor("_EmissionColor", Desaturate(new Color(1.6f, 2.1f, 2.7f), 0.45f));
                 material.EnableKeyword("_EMISSION");
             }
             return material;
@@ -608,7 +795,26 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Low Bark", new Color(0.18f, 0.12f, 0.075f), 0f, 0.12f);
             MakeMaterial("Low Leaf", new Color(0.09f, 0.31f, 0.12f), 0f, 0.08f);
             MakeMaterial("Sidewalk", new Color(0.24f, 0.25f, 0.29f), 0.08f, 0.34f);
-            MakeMaterial("City Neon", new Color(0.17f, 0.45f, 0.72f), 0.48f, 0.72f);
+            // Everything the material pass calls a light source lands here: lamp heads
+            // (any submesh named light/lamp/farola), signs, holograms, and the kerb glow
+            // ribbons. It was a plain Lit material with no emission, so none of it glowed
+            // - a "neon" that was only shiny blue paint, and lamp heads that stayed dark
+            // even once the lights they stand for were switched back on in 41fb537.
+            //
+            // ApplyCityPhotorealSignature has been setting this material's _EmissionColor
+            // per biome the whole time. Without the keyword that write did nothing, which
+            // is why the intent reads as present and the result never showed.
+            //
+            // Emission on URP Lit, not Unlit: the variant is kept alive by
+            // Assets/Resources/EmissiveVariantAnchor.mat, and ten other runtime materials
+            // in this file already depend on it - Cyber Hologram and Cyber Neon Strip
+            // twenty lines below, in this same family. Unlit is what the windows use
+            // because a window pane should ignore scene lighting entirely; a lamp housing
+            // should still take it.
+            var cityNeon = MakeMaterial("City Neon", new Color(0.17f, 0.45f, 0.72f), 0.48f, 0.72f);
+            cityNeon.SetColor("_EmissionColor", new Color(0.34f, 0.72f, 1.15f));
+            cityNeon.EnableKeyword("_EMISSION");
+            cityNeon.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
 
 			var sign = MakeMaterial("Hideout Sign PBR", Color.white, 0.12f, 0.48f);
 			sign.mainTexture = Texture("sign_albedo");
@@ -680,6 +886,33 @@ namespace RoadRage.UnityRemake
             BiomeMaterial("Demo Props", "DemoCity", "props_main", "props_main_nm", Color.white, 0.45f, 0.50f);
             BiomeMaterial("Demo Fence", "DemoCity", "road_sideway_fences", "road_sideway_fences_nm", Color.white, 0.65f, 0.45f);
             BiomeSurface(BiomeMaterial("City Concrete", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.42f, 0.46f, 0.54f), 0.18f, 0.42f), "Synthwave", "T_concrete_MSO");
+            // A real Manhattan block is brick, limestone, sandstone and glass, not one
+            // grey. The NYC pack does ship that variety - its meshes carry Brick_Modern,
+            // Plaster_Rough, OldWood2 and Paint_Epoxy slots - but every one of those
+            // materials is HDRP/Lit, which does not render in this URP project, so the
+            // material pass replaces them all. It was replacing them with a single
+            // concrete grey. These give it something to choose between instead.
+            //
+            // Same albedo and normal as the concrete, so no new textures ship; the tint,
+            // metallic and smoothness carry the difference. Each is passed through
+            // MakeMaterial's 0.35 desaturation like every other surface, which is why the
+            // tints start further from grey than the finished facade should look.
+            BiomeSurface(BiomeMaterial("City Brick", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.55f, 0.33f, 0.26f), 0.04f, 0.22f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Limestone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.80f, 0.76f, 0.67f), 0.05f, 0.30f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Sandstone", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.70f, 0.57f, 0.42f), 0.05f, 0.26f), "Synthwave", "T_concrete_MSO");
+            BiomeSurface(BiomeMaterial("City Glass Tower", "Synthwave", "T_concrete_D", "T_concrete_N", new Color(0.30f, 0.37f, 0.42f), 0.55f, 0.80f), "Synthwave", "T_concrete_MSO");
+            // Storefront awning canvas. Named without "sign"/"paint"/"billboard" etc, so
+            // it takes the same 0.35 desaturation as the rest of the street - fabric
+            // outside a bodega is not a light source, and after the mood grade a pure hue
+            // here would read as gaudy against the muted brick and stone. Pitched well
+            // past the finished colour, same as the facade tints, so what survives the
+            // desaturation and the grade still reads as red, green, navy et al rather than
+            // collapsing toward the wall behind it.
+            MakeMaterial("Awning Red", new Color(0.72f, 0.10f, 0.09f), 0f, 0.20f);
+            MakeMaterial("Awning Green", new Color(0.09f, 0.44f, 0.20f), 0f, 0.20f);
+            MakeMaterial("Awning Navy", new Color(0.09f, 0.16f, 0.40f), 0f, 0.20f);
+            MakeMaterial("Awning Burgundy", new Color(0.42f, 0.08f, 0.18f), 0f, 0.20f);
+            MakeMaterial("Awning Gold", new Color(0.70f, 0.52f, 0.10f), 0.05f, 0.30f);
             BiomeSurface(BiomeMaterial("City Windows", "Synthwave", "T_window_02_D", "T_window_02_N", new Color(0.58f, 0.72f, 1f), 0.34f, 0.72f, "T_window_02_RE"), "Synthwave", "T_window_02_MSO");
             // Emissive skyline for distant towers - the pack's own RE sheet is flat grey,
             // so the procedural pane grid gives real lit windows (Unlit, see Cyber Window).
@@ -688,8 +921,13 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("City Sign", "Synthwave", "T_road_sign_D", "T_road_sign_N", Color.white, 0.18f, 0.48f, "T_road_sign_E"), "Synthwave", "T_road_sign_MSO");
             // The buildings carry MI_window_* and MI_neon_* slots that all resolve to City Windows;
             // at night in NEON CITY that emission is the main light source, so push it hard.
+            // This emission is the main light source at night, so a near-pure violet
+            // here dyed every wall, road and car in the zone. Desaturating the source is
+            // what actually fixes the cast; Desaturate preserves luma so it stays as
+            // bright a key as before.
             if (biomeName == Biomes[5])
-                materials["City Windows"].SetColor("_EmissionColor", new Color(3.4f, 2.5f, 4.8f));
+                materials["City Windows"].SetColor("_EmissionColor",
+                    Desaturate(new Color(3.4f, 2.5f, 4.8f), 0.55f));
             BiomeSurface(BiomeMaterial("City Car Paint", "Synthwave", "T_car_pain_D", "T_car_pain_N", Color.white, 0.58f, 0.72f), "Synthwave", "T_car_pain_MSO");
             BiomeSurface(BiomeMaterial("City Car Parts", "Synthwave", "T_car_parts_D", "T_car_parts_N", Color.white, 0.68f, 0.62f, "T_car_parts_E"), "Synthwave", "T_car_parts_MSO");
             BiomeSurface(BiomeMaterial("City Car B1", "Synthwave", "T_car_B_01_D", "T_car_B_01_N", Color.white, 0.52f, 0.72f, "T_car_B_01_E"), "Synthwave", "T_car_B_01_MSO");
@@ -707,7 +945,7 @@ namespace RoadRage.UnityRemake
                 billboard.mainTexture = advertisement;
                 if (billboard.HasProperty("_BaseMap")) billboard.SetTexture("_BaseMap", advertisement);
                 billboard.SetTexture("_EmissionMap", advertisement);
-                billboard.SetColor("_EmissionColor", new Color(1.9f, 1.3f, 2.4f));
+                billboard.SetColor("_EmissionColor", Desaturate(new Color(1.9f, 1.3f, 2.4f), 0.45f));
                 billboard.EnableKeyword("_EMISSION");
             }
             BiomeSurface(BiomeMaterial("City Palm", "Synthwave", "T_palm_tree_D", "T_palm_tree_N", Color.white, 0.1f, 0.35f), "Synthwave", "T_palm_tree_MSO");
@@ -900,11 +1138,14 @@ namespace RoadRage.UnityRemake
                 "T_concrete_building_D", "T_concrete_building_N",
                 new Color(0.52f, 0.55f, 0.64f), 0.1f, 0.3f, null), "CyberpunkCity", "T_concrete_building_MSO");
 
-            var hologram = MakeMaterial("Cyber Hologram", new Color(0.22f, 0.86f, 1f), 0.1f, 0.85f);
-            hologram.SetColor("_EmissionColor", new Color(0.45f, 1.0f, 1.2f));
+            // Signage keeps more of its hue than architecture does - a sign is meant to
+            // read as coloured light. It is the surfaces they spill onto that were the
+            // problem, and those are handled by the mood and grade above.
+            var hologram = MakeMaterial("Cyber Hologram", Desaturate(new Color(0.22f, 0.86f, 1f), 0.35f), 0.1f, 0.85f);
+            hologram.SetColor("_EmissionColor", Desaturate(new Color(0.45f, 1.0f, 1.2f), 0.35f));
             hologram.EnableKeyword("_EMISSION");
-            var neonStrip = MakeMaterial("Cyber Neon Strip", new Color(1f, 0.22f, 0.62f), 0.2f, 0.8f);
-            neonStrip.SetColor("_EmissionColor", new Color(1.1f, 0.4f, 0.8f));
+            var neonStrip = MakeMaterial("Cyber Neon Strip", Desaturate(new Color(1f, 0.22f, 0.62f), 0.35f), 0.2f, 0.8f);
+            neonStrip.SetColor("_EmissionColor", Desaturate(new Color(1.1f, 0.4f, 0.8f), 0.35f));
             neonStrip.EnableKeyword("_EMISSION");
 
             BiomeSurface(BiomeMaterial("Kowloon Building", "HongKong", "T_building_modules_D", "T_building_modules_N",
@@ -943,9 +1184,70 @@ namespace RoadRage.UnityRemake
         /// Texture size is handled at import time (BiomeTextureImporter); these are the
         /// parts that can still be dialled back at runtime.
         
+        /// One budget flag every added system checks before spending.
+        ///
+        /// PRODUCTION-GATES records Greenwood at 31 FPS on a desktop GPU and under 1 FPS
+        /// on a Helio G85, with a stop-work rule at 30 FPS on desktop. Anything added
+        /// after that has to be able to switch itself off rather than assume headroom
+        /// that measurably is not there.
+        public static bool RichDetailBudget { get; private set; } = true;
+
+        /// Overrides the platform test so the mobile budget can be exercised on desktop.
+        /// Set by -lowdetail, or from the editor via ForceLowDetailBudget before the world
+        /// builds. Null means "decide from the platform", which is the shipping behaviour.
+        private static bool? lowDetailOverride;
+
+#if UNITY_EDITOR
+        /// Backing store for the override. A plain static is not enough: entering play mode
+        /// wipes statics when domain reload is on, and the SubsystemRegistration reset below
+        /// clears them when it is off - so an override set before pressing Play was lost
+        /// either way, and the run measured the very path it was meant to replace. The two
+        /// identical GREENWOOD readings (5402 renderers, 4886 cutout, both times) were that
+        /// bug, not a budget that does nothing. An editor pref outlives both.
+        private const string LowDetailPrefKey = "RoadRage.ForceLowDetailBudget";
+#endif
+
+        /// The budget path keyed purely off Application.isMobilePlatform, so the only way
+        /// to see what the thinning actually removes was to produce an Android build and
+        /// install it - rung 6 of the test ladder for a question rung 2 can answer. This
+        /// forces the same budget on desktop so the removal can be read off RR_COST.
+        ///
+        /// It does NOT emulate the device GPU: a desktop frame rate under this budget says
+        /// nothing about a Helio G85. What it does prove is how much geometry the budget
+        /// actually takes out, which is the part that was never measured.
+        ///
+        /// Safe to call before OR after entering play mode. Chunks bake scatter density at
+        /// build time, so the world still has to rebuild for it to show up in RR_COST.
+        public static void ForceLowDetailBudget(bool low)
+        {
+            lowDetailOverride = low;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.SetBool(LowDetailPrefKey, low);
+#endif
+            ApplyPlatformQuality();
+            Debug.Log($"RR_QUALITY forced budget: RichDetailBudget={RichDetailBudget} " +
+                      "(rebuild the world for scatter density to take effect)");
+        }
+
+        /// Drops back to deciding from the platform. Worth calling explicitly once a
+        /// forced measurement is done, since the pref otherwise persists across editor
+        /// sessions and every later reading would silently be off the shipping path.
+        public static void ClearDetailBudgetOverride()
+        {
+            lowDetailOverride = null;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.DeleteKey(LowDetailPrefKey);
+#endif
+            ApplyPlatformQuality();
+            Debug.Log($"RR_QUALITY budget override cleared: RichDetailBudget={RichDetailBudget}");
+        }
+
         private static void ApplyPlatformQuality()
         {
-            if (!Application.isMobilePlatform)
+            var lowDetail = lowDetailOverride ?? Application.isMobilePlatform;
+            RichDetailBudget = !lowDetail;
+
+            if (!lowDetail)
             {
                 QualitySettings.shadowDistance = 160f;
                 QualitySettings.shadowCascades = 4;
@@ -957,8 +1259,11 @@ namespace RoadRage.UnityRemake
             QualitySettings.shadowCascades = 1;
             QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Low;
             QualitySettings.globalTextureMipmapLimit = 0;
-            Application.targetFrameRate = 60;
-            Debug.Log("RR_QUALITY mobile tier: no reflection probe, 70m 1-cascade shadows, 1024 textures");
+            // Only cap on a real handset. Capping a forced-low desktop run would clamp the
+            // frame rate to 60 and hide exactly the headroom the run is measuring.
+            if (Application.isMobilePlatform) Application.targetFrameRate = 60;
+            Debug.Log("RR_QUALITY mobile tier: no reflection probe, 70m 1-cascade shadows, " +
+                      $"1024 textures (forced={lowDetailOverride == true && !Application.isMobilePlatform})");
         }
 
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
@@ -991,9 +1296,11 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = mood.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(mood.Fog, weather.FogTint, weather.FogTintAmount);
-            RenderSettings.ambientSkyColor = Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
-            RenderSettings.ambientEquatorColor = Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
-            RenderSettings.ambientGroundColor = mood.Ground;
+            RenderSettings.ambientSkyColor = ScaleRgb(
+                Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f), mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientEquatorColor = ScaleRgb(
+                Color.Lerp(mood.Equator, weather.FogTint, weather.FogTintAmount * 0.4f), mood.AmbientIntensity * AmbientTrim);
+            RenderSettings.ambientGroundColor = ScaleRgb(mood.Ground, mood.AmbientIntensity * AmbientTrim);
             RenderSettings.haloStrength = 0f;
             RenderSettings.flareStrength = 0f;
 
@@ -1020,8 +1327,11 @@ namespace RoadRage.UnityRemake
 			bloom.active = false;
 			// Without tonemapping every HDR highlight clips flat, which is a large part
 			// of the "plastic toy" read. ACES gives filmic rolloff on the bright end.
+			// ACES rolls the highlights off filmically but it also shifts hue and lifts
+			// saturation, which is a large part of the over-cooked look. Neutral does the
+			// range remap only and leaves the grading to ColorAdjustments below.
 			var tonemap = volume.profile.Add<Tonemapping>();
-			tonemap.mode.Override(TonemappingMode.ACES);
+			tonemap.mode.Override(TonemappingMode.Neutral);
 
 			// Slight motion blur sells speed and hides the low-poly silhouettes.
 			var motionBlur = volume.profile.Add<MotionBlur>();
@@ -1029,12 +1339,18 @@ namespace RoadRage.UnityRemake
 			motionBlur.clamp.Override(0.04f);
 
 			var color = volume.profile.Add<ColorAdjustments>();
-			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd);
-			color.contrast.Override(6f);
-			color.saturation.Override(-2f);
+			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim);
+			// Contrast and saturation were stacked on top of an ACES curve that already
+			// pushes both, so every biome graded out as a poster. Neutral tonemapping
+			// leaves hue and saturation alone, and the grade now only takes colour away.
+			// Contrast is what separates a facade from the sky at night, and unlike the
+			// tonemapper it adds no saturation, so it can carry the punch ACES used to.
+			color.contrast.Override(14f);
+			color.saturation.Override(GradeSaturation);
 			var vignette = volume.profile.Add<Vignette>();
 			vignette.intensity.Override(0.20f);
 			vignette.smoothness.Override(0.68f);
+
         }
 
         private struct BiomeMood
@@ -1052,11 +1368,93 @@ namespace RoadRage.UnityRemake
             /// 0 = dry asphalt, 1 = soaked. Drives road smoothness so the reflection
             /// probe's captured neon actually shows up in the street.
             public float RoadWetness;
+            /// Multiplier on the ambient trilight. Lives on the mood so the per-frame
+            /// blend owns it too - it used to be set once by the city photoreal pass and
+            /// then left to drift out of step with the ambient colours around it.
+            public float AmbientIntensity;
+        }
+
+        /// How far every biome palette is pulled towards its own luminance. The moods
+        /// were authored as near-pure hues (a violet Neon City sky at 0.32/0.16/0.52, a
+        /// bottle-green sewer, a magenta Alien Biomass) and those colours multiply into
+        /// ambient, fog and the sun, so every surface in the zone inherited the cast.
+        /// Pulling them most of the way to neutral keeps each biome's identity readable
+        /// while taking the poster-paint saturation out of the frame.
+        private const float MoodDesaturation = 0.45f;
+        /// Ground bounce carries the strongest cast because it lights the underside of
+        /// every car, so it loses slightly more than the sky does.
+        private const float GroundDesaturation = 0.55f;
+        /// Final global trim in the colour grade, on top of the neutral tonemapper.
+        private const float GradeSaturation = -10f;
+
+        /// Neutral tonemapping is a plain range remap where ACES applied a filmic
+        /// S-curve, so swapping to it removed the midtone lift and the shoulder punch
+        /// ACES was quietly providing. On a night biome that reads as "dark and flat".
+        /// This puts the brightness back without putting the colour cast back.
+        private const float NeutralToneCompensation = 0.45f;
+
+        /// Ambient floor, in luma. Manhattan runs an ambient sky of 0.12 and a ground
+        /// bounce of 0.05, so anything the directional sun does not hit falls to black
+        /// and the facades lose all their detail. Lifting the floor keeps the biome's
+        /// hue and its darkness while letting shadowed surfaces still read.
+        private const float MinAmbientLuma = 0.22f;
+
+        /// Settled values. These were dialled in play mode against the actual frame
+        /// with a pair of trim keys; the keys are gone now that the numbers are known.
+        private const float AmbientTrim = 1f;
+        private const float ExposureTrim = 0f;
+
+        /// Scales RGB only. Multiplying a Color by a float also scales alpha, which is
+        /// meaningless for an ambient colour and shows up as a stray 1.35 in the logs.
+        private static Color ScaleRgb(Color value, float gain) =>
+            new Color(value.r * gain, value.g * gain, value.b * gain, value.a);
+
+        /// Raises a colour to a minimum luma without changing its hue.
+        private static Color LiftToFloor(Color value, float floor)
+        {
+            var luma = value.r * 0.2126f + value.g * 0.7152f + value.b * 0.0722f;
+            if (luma >= floor) return value;
+            // Lerp towards white rather than scaling, so a near-black colour lifts to a
+            // readable grey instead of amplifying whatever tint it happened to have.
+            var t = Mathf.InverseLerp(luma, 1f, floor);
+            return Color.Lerp(value, Color.white, t);
+        }
+
+        /// Rec.709 luma. Lerping a colour towards its own luma desaturates it without
+        /// changing brightness, so a desaturated mood keeps the exposure it was tuned at.
+        private static Color Desaturate(Color value, float amount)
+        {
+            var luma = value.r * 0.2126f + value.g * 0.7152f + value.b * 0.0722f;
+            return new Color(
+                Mathf.Lerp(value.r, luma, amount),
+                Mathf.Lerp(value.g, luma, amount),
+                Mathf.Lerp(value.b, luma, amount),
+                value.a);
+        }
+
+        /// Applied to every mood on the way out, so BuildLighting, BlendZoneLighting and
+        /// the camera clear colour all share one definition of how saturated a zone is.
+        private static BiomeMood Neutralize(BiomeMood mood)
+        {
+            if (mood.AmbientIntensity <= 0f) mood.AmbientIntensity = 1f;
+            mood.Fog = Desaturate(mood.Fog, MoodDesaturation);
+            mood.Sky = LiftToFloor(Desaturate(mood.Sky, MoodDesaturation), MinAmbientLuma);
+            mood.Equator = LiftToFloor(Desaturate(mood.Equator, MoodDesaturation), MinAmbientLuma);
+            mood.Ground = LiftToFloor(Desaturate(mood.Ground, GroundDesaturation), MinAmbientLuma * 0.7f);
+            // Key light keeps more of its warmth than the ambient does - a fully neutral
+            // sun flattens the shading, and a tinted key reads as time of day, not as
+            // a colour filter over the whole frame.
+            mood.SunColor = Desaturate(mood.SunColor, MoodDesaturation * 0.55f);
+            return mood;
         }
 
         private BiomeMood Mood() => Mood(System.Array.IndexOf(Biomes, biomeName));
 
-        private BiomeMood Mood(int biomeIndex) => biomeIndex switch
+        private BiomeMood Mood(int biomeIndex) => Neutralize(RawMood(biomeIndex));
+
+        /// Authored palettes. Read these through Mood() so the neutral pass is never
+        /// bypassed; this is only separate so the per-biome values stay editable.
+        private static BiomeMood RawMood(int biomeIndex) => biomeIndex switch
         {
             1 => new BiomeMood // SNOW STATION
             {
@@ -1104,8 +1502,9 @@ namespace RoadRage.UnityRemake
             {
                 FogDensity = 0.0075f, Fog = new Color(0.30f, 0.43f, 0.55f),
                 Sky = new Color(0.41f, 0.60f, 0.78f), Equator = new Color(0.23f, 0.34f, 0.43f),
-                Ground = new Color(0.16f, 0.18f, 0.16f), SunColor = new Color(0.98f, 0.98f, 0.95f),
-                SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.08f
+                Ground = new Color(0.20f, 0.22f, 0.20f), SunColor = new Color(0.98f, 0.98f, 0.95f),
+                SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
+                RoadWetness = 0.08f, AmbientIntensity = 1.25f
             },
             9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
@@ -1114,12 +1513,29 @@ namespace RoadRage.UnityRemake
                 Ground = new Color(0.35f, 0.35f, 0.35f), SunColor = new Color(1f, 1f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.15f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
             },
-            8 => new BiomeMood // MANHATTAN
+            8 => new BiomeMood // MANHATTAN - wet night, but a lit one
             {
-                FogDensity = 0.009f, Fog = new Color(0.055f, 0.086f, 0.13f),
-                Sky = new Color(0.09f, 0.12f, 0.23f), Equator = new Color(0.09f, 0.16f, 0.29f),
-                Ground = new Color(0.04f, 0.05f, 0.08f), SunColor = new Color(0.65f, 0.75f, 1f),
-                SunIntensity = 0.9f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.62f
+                // Was an ambient sky of 0.12 luma over a 0.05 ground bounce with a 0.9
+                // sun: outside the directional light's reach every facade fell to black,
+                // so the buildings read as silhouettes with no surface at all. A night
+                // city is not an unlit one - the light comes off windows, wet asphalt
+                // and sky glow, and that is ambient, not the key. Still blue, still
+                // night, but the geometry is now visible.
+                // Raising the ambient 4x also multiplied its blue tint, so the cast came
+                // back louder than before even though the mood is desaturated on the way
+                // out. At this brightness the hue has to be neutral at source - a cool
+                // hint, not a wash.
+                FogDensity = 0.0055f, Fog = new Color(0.19f, 0.20f, 0.22f),
+                Sky = new Color(0.40f, 0.42f, 0.46f), Equator = new Color(0.33f, 0.35f, 0.38f),
+                // Ground bounce was under half the sky, which is backwards for this street.
+                // A dry field at night bounces almost nothing, so a low ground term is
+                // right there; wet asphalt under a lit city throws a lot back up, and it
+                // lands on the bottom few storeys - the only part of a facade a driver
+                // ever looks at. Raising it lifts building bases without touching the sky,
+                // so the night stays a night. One number if it wants tuning.
+                Ground = new Color(0.30f, 0.31f, 0.33f), SunColor = new Color(0.94f, 0.96f, 1f),
+                SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
+                RoadWetness = 0.62f, AmbientIntensity = 1.35f
             },
             _ => new BiomeMood // GREENWOOD
             {
@@ -1671,6 +2087,17 @@ namespace RoadRage.UnityRemake
                 return null;
             }
             var model = Adopt(Instantiate(prefab));
+            // The NYC set was authored for HDRP and hangs Decal Projectors off the
+            // building parts - fifteen on a single storey. HDRP is not installed here,
+            // so each one arrives as a GameObject whose script cannot resolve: no
+            // geometry, no effect, one missing-script warning apiece, and a few hundred
+            // dead transforms per city block. They are dropped on instantiate.
+            foreach (var child in model.GetComponentsInChildren<Transform>(true))
+            {
+                if (child == null || child == model.transform) continue;
+                if (child.name.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                    DestroyImmediate(child.gameObject);
+            }
             foreach (var l in model.GetComponentsInChildren<Light>(true))
             {
                 DestroyImmediate(l.gameObject == model ? l : l.gameObject);
@@ -1692,6 +2119,9 @@ namespace RoadRage.UnityRemake
                     var sourceName = i < renderer.sharedMaterials.Length && renderer.sharedMaterials[i] != null
                         ? renderer.sharedMaterials[i].name.ToLowerInvariant()
                         : string.Empty;
+                    var sourceMaterial = i < renderer.sharedMaterials.Length
+                        ? renderer.sharedMaterials[i]
+                        : null;
                     if (pack == "Synthwave" && resourceName.StartsWith("Car/"))
                     {
                         if (resourceName.Contains("SM_car_B1") || resourceName.Contains("SM_car_B2")) assigned[i] = materials["City Car B2"];
@@ -1708,7 +2138,12 @@ namespace RoadRage.UnityRemake
                     }
                     else if (pack == "CyberpunkCity" || pack == "Buildings" || resourceName.Contains("Buildings/"))
                     {
-                        var skylinePass = material != null && material.name == "Cyber Skyline";
+                        // This tested material.name == "Cyber Skyline" exactly. Manhattan
+                        // passes "City Skyline", so it never matched, and both the frontage
+                        // and the skyline towers fell through to City Concrete - which is
+                        // why every building in the biome was the same grey regardless of
+                        // what the caller asked for.
+                        var facadePass = material != null && IsFacadeMaterial(material.name);
                         if (sourceName.Contains("hologram") || sourceName.Contains("sign") || sourceName.Contains("light") || sourceName.Contains("lamp") || sourceName.Contains("farola")) assigned[i] = materials["City Neon"];
                         else if (sourceName.Contains("billboard") || sourceName.Contains("panel")) assigned[i] = materials["City Billboard"];
                         else if (sourceName.Contains("streetlamp") || sourceName.Contains("pole") || sourceName.Contains("post")) assigned[i] = materials["City Asphalt Trim"];
@@ -1716,7 +2151,9 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("window_car") || sourceName.Contains("glass")) assigned[i] = materials["Glass"];
                         else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = materials["City Windows"];
                         else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
-                        else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = skylinePass ? material : materials["City Concrete"];
+                        else if (KeepPackWallMaterials && pack == "Buildings" && sourceMaterial != null)
+                            assigned[i] = sourceMaterial;
+                        else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = facadePass ? material : materials["City Concrete"];
                         else assigned[i] = material ?? materials["City Concrete"];
                     }
                     else if (pack == "HongKong")
@@ -1913,12 +2350,587 @@ namespace RoadRage.UnityRemake
         }
 
         /// Scales a model to a target height and sits its base on the ground.
-        private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f)
+        /// A building mesh should not need to be blown up more than an order of
+        /// magnitude to reach its target height. Beyond that the source is the wrong
+        /// asset for the job and scaling it only produces something the wrong shape.
+        private const float MinModelScale = 0.05f;
+        private const float MaxModelScale = 12f;
+
+        /// A static survives entering play mode when domain reload is off, so a
+        /// catalogue built once would outlive the run that measured it.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetBuildingCatalogue()
+        {
+            buildingCatalogue = null;
+            lowDetailOverride = null;
+#if UNITY_EDITOR
+            // Restore a deliberately forced budget across the play-mode boundary, but say
+            // so loudly every single run. The risk this guards is a measurement taken
+            // months later on a forced budget and recorded as the shipping desktop path;
+            // a warning in the console every boot is what makes that impossible to miss.
+            if (UnityEditor.EditorPrefs.HasKey(LowDetailPrefKey))
+            {
+                lowDetailOverride = UnityEditor.EditorPrefs.GetBool(LowDetailPrefKey);
+                Debug.LogWarning($"RR_QUALITY detail budget is FORCED to low={lowDetailOverride} " +
+                                 "by an editor pref, not by the platform. Any RR_COST or FPS " +
+                                 "reading from this run is NOT the shipping desktop path. " +
+                                 "Call RoadRageBootstrap.ClearDetailBudgetOverride() to drop it.");
+            }
+#endif
+        }
+
+        /// A candidate building mesh, measured in its own right.
+        ///
+        /// Sizing buildings by scaling whatever mesh a hash picked to a target height
+        /// cannot work when the roster runs from 0.65 m props to 228 m city blocks: the
+        /// same rule turns one into a 93x-wide monster and the other into a stub. So
+        /// every candidate is measured first and used only where it fits.
+        private struct BuildingEntry
+        {
+            public string Resource;
+            public float Height;
+            public float Width;   // larger horizontal extent
+            public float Depth;   // smaller horizontal extent
+            public BuildingClass Class;
+        }
+
+        /// What a mesh actually is, decided from its own proportions rather than from
+        /// the list it happened to be written into.
+        private enum BuildingClass
+        {
+            /// Too small or too squat to be a building. Never placed as one.
+            NotABuilding,
+            /// Fits a street plot: fronts the sidewalk.
+            Frontage,
+            /// Needs a deeper plot: sits behind the frontage line.
+            MidBlock,
+            /// A whole city block. Background skyline only, far from the road.
+            Skyline
+        }
+
+        private static List<BuildingEntry> buildingCatalogue;
+
+        /// Measures a prefab without instantiating it, by combining each mesh's local
+        /// bounds through the hierarchy into the prefab root's space.
+        private static bool TryMeasurePrefab(GameObject prefab, out Vector3 size)
+        {
+            size = Vector3.zero;
+            var filters = prefab.GetComponentsInChildren<MeshFilter>(true);
+            if (filters.Length == 0) return false;
+
+            var toRoot = prefab.transform.worldToLocalMatrix;
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+            var found = false;
+            foreach (var filter in filters)
+            {
+                var mesh = filter.sharedMesh;
+                if (mesh == null) continue;
+                var local = toRoot * filter.transform.localToWorldMatrix;
+                var b = mesh.bounds;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var point = b.center + Vector3.Scale(b.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f));
+                    var world = local.MultiplyPoint3x4(point);
+                    min = Vector3.Min(min, world);
+                    max = Vector3.Max(max, world);
+                    found = true;
+                }
+            }
+            if (!found) return false;
+            size = max - min;
+            return size.y > 0.001f;
+        }
+
+        /// Only the genuinely-not-a-building test is absolute. Everything else is decided
+        /// by rank once the whole set is measured - see AssignClasses.
+        private static bool IsBuildingShaped(float height) => height >= 4f;
+
+        /// Splits the measured set into thirds by width: narrowest front the street,
+        /// widest go to the skyline.
+        ///
+        /// The first attempt used absolute cutoffs - under 34 m fronts the street, over
+        /// 80 m is skyline - and produced zero frontage buildings, because nothing in
+        /// this set is narrower than 34 m. Numbers picked from intuition about what a
+        /// building "should" measure describe no particular asset set. Ranking cannot
+        /// empty a bucket: whatever is narrowest here fronts the street, whatever that
+        /// turns out to be.
+        private static void AssignClasses(List<BuildingEntry> entries)
+        {
+            entries.Sort((a, b) => a.Width.CompareTo(b.Width));
+            var third = Mathf.Max(1, entries.Count / 3);
+            for (var i = 0; i < entries.Count; i++)
+            {
+                var entry = entries[i];
+                entry.Class = i < third ? BuildingClass.Frontage
+                            : i < third * 2 ? BuildingClass.MidBlock
+                            : BuildingClass.Skyline;
+                entries[i] = entry;
+            }
+        }
+
+        /// Built once per run from every mesh the city blocks can draw on, so placement
+        /// picks by measured fit instead of by list position.
+        private static List<BuildingEntry> BuildingCatalogue()
+        {
+            if (buildingCatalogue != null) return buildingCatalogue;
+            buildingCatalogue = new List<BuildingEntry>();
+
+            var candidates = new List<string>(NycVariants) { "Buildings/USA/building" };
+            for (var i = 1; i <= 8; i++) candidates.Add($"Buildings/NYC/building_{i}");
+            candidates.Add("Buildings/NYCBlock6/builds");
+            candidates.Add("Buildings/NYCBlock6/shops");
+
+            var rejected = 0;
+            foreach (var resource in candidates)
+            {
+                var prefab = Resources.Load<GameObject>(resource);
+                if (prefab == null) continue;
+                if (!TryMeasurePrefab(prefab, out var size)) continue;
+
+                var width = Mathf.Max(size.x, size.z);
+                var depth = Mathf.Min(size.x, size.z);
+                if (!IsBuildingShaped(size.y))
+                {
+                    rejected++;
+                    Debug.LogWarning($"[CITY] rejected {resource}: {size.y:0.00}m tall, {width:0.0}x{depth:0.0}m - not a building");
+                    continue;
+                }
+                buildingCatalogue.Add(new BuildingEntry
+                {
+                    Resource = resource, Height = size.y, Width = width, Depth = depth
+                });
+            }
+            AssignClasses(buildingCatalogue);
+
+            return buildingCatalogue;
+        }
+
+        /// Let a building keep the material its own mesh shipped with.
+        ///
+        /// Which material that is takes some tracing, and I got it wrong the first time.
+        /// BuildingCatalogue loads Resources/Buildings/NYC/building_1..8, and those FBX
+        /// importers are set to external materials with a recursive-up name search
+        /// (materialLocation 0, materialSearch 1). So Unity resolves each submesh against
+        /// Resources/Buildings/NYC/Materials, the folder sitting beside the FBX. The
+        /// source pack's own Materials folder is never read at runtime, and neither are
+        /// its Prefabs - nothing under Resources points into them.
+        ///
+        /// That resolved set was stripped. Every one of its surface materials was on
+        /// URP/Lit with an empty _BaseMap and a white _BaseColor, so a wall arrived flat
+        /// white and whatever tint this pass applied became the entire surface. That is
+        /// the real reason the city read as one flat colour per building, and why the
+        /// facade family here had to exist at all.
+        ///
+        /// Tools/MaterialTextures/rebind.py put the bindings back, taking them from each
+        /// pack's intact twin of the same name under its Models/Materials - the set the
+        /// FBX was authored against - so a brick wall is photographed brick at the tiling
+        /// its UVs were laid out for. 22 materials across the NYC and USA biomes.
+        ///
+        /// Walls only, and by falling through rather than by naming: lamps, signs,
+        /// billboards, glass, windows and trim are all matched by the branches above this
+        /// one and keep the game's own night look. The eight window and light materials
+        /// in the resolved set are still deliberately unbound, because City Windows and
+        /// City Neon replace them.
+        ///
+        /// Set false to go back to the flat facade family in one edit.
+        private const bool KeepPackWallMaterials = true;
+
+        /// The facades a city block can be built from, chosen per building.
+        private static readonly string[] FacadeFamily =
+        {
+            "City Brick", "City Limestone", "City Sandstone", "City Concrete", "City Glass Tower"
+        };
+
+        /// Picks a facade deterministically, so a block looks the same every time its
+        /// chunk is rebuilt while neighbouring plots differ from each other.
+        private Material FacadeMaterial(int hash) =>
+            materials[FacadeFamily[(hash & 0x7fffffff) % FacadeFamily.Length]];
+
+        /// Does this material describe a building wall? The wall branch of the material
+        /// pass hands the caller's choice through only for these, so a prop that happens
+        /// to arrive with some other material still gets the default treatment.
+        private static bool IsFacadeMaterial(string name) =>
+            System.Array.IndexOf(FacadeFamily, name) >= 0
+            || name == "City Skyline" || name == "Cyber Skyline";
+
+        /// City Windows is one shared material carrying one procedural pane-lit texture
+        /// (WindowEmissionGrid, seed 77031) so every window submesh in the game samples
+        /// the same 512px sheet - that is what makes every Manhattan tower show the exact
+        /// same lit/unlit fingerprint side by side, sharing one material is what keeps the
+        /// biome's draw calls low, so the fix is not a texture per building.
+        ///
+        /// The grid tiles cleanly in 12 x 12 cells, so shifting the sample by a whole
+        /// number of cells picks a different lit pattern without moving pane boundaries
+        /// inside a window - no seam, no distortion, same texture, same one draw call
+        /// family, just a different offset baked into this renderer's instance data via
+        /// MaterialPropertyBlock rather than the shared material.
+        private static void VaryWindowLighting(GameObject model, Material cityWindows, int hash)
+        {
+            if (model == null || cityWindows == null) return;
+            const int cells = 12;
+            var salted = unchecked(hash * -1640531527); // hash ^ golden-ratio multiplier,
+            var offsetU = (salted & 0x7fffffff) % cells / (float)cells;
+            var offsetV = (salted >> 8 & 0x7fffffff) % cells / (float)cells;
+            var block = new MaterialPropertyBlock();
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var usesWindows = false;
+                foreach (var m in renderer.sharedMaterials) if (m == cityWindows) { usesWindows = true; break; }
+                if (!usesWindows) continue;
+                renderer.GetPropertyBlock(block);
+                block.SetVector("_BaseMap_ST", new Vector4(1f, 1f, offsetU, offsetV));
+                renderer.SetPropertyBlock(block);
+            }
+        }
+
+        /// The three wall surfaces that read as a building exterior, and so are worth
+        /// weathering. The pack's other wall materials - rope, plastic, wood - are trim.
+        private static readonly string[] GrimedWalls =
+        {
+            "TexturesCom_Brick_Modern_1K_albedo",
+            "TexturesCom_Plaster_Rough_1K_albedo",
+            "TexturesCom_Paint_Epoxy_1K_albedo",
+        };
+
+        /// How many weathered variants Tools/GrimeBake/bake.py writes per wall.
+        ///
+        /// Resources.Load is used rather than a serialised reference because nothing in
+        /// this world is authored in a scene. If a variant is ever missing, the lookup
+        /// keeps only the clean material and this method leaves every wall alone, which
+        /// is the behaviour before the variants existed.
+        private const int GrimeVariants = 3;
+
+        /// Wall material name to its variants, index 0 being the clean original.
+        /// Rebuilt on demand: a domain reload wipes this while the chunks that used it
+        /// survive, which is the same trap that produced duplicate worlds earlier.
+        private Dictionary<string, Material[]> wallGrime;
+
+        /// Weathers a building, so a street is not a row of identically clean facades.
+        ///
+        /// The NYC pack shipped this variation as HDRP decal projectors. Drawing those
+        /// under URP would mean adding the Decal Renderer Feature, a screen-space pass,
+        /// and hundreds of live projectors per block, in a biome already over its
+        /// triangle budget. Baking the same stains into the albedo costs nothing at all
+        /// at render time - the wall was going to sample a texture either way.
+        ///
+        /// One level per building rather than per section, so a tower is weathered
+        /// consistently up its height while its neighbours differ. A quarter of buildings
+        /// draw the clean original, because a street where everything is stained reads as
+        /// uniformly as one where nothing is.
+        ///
+        /// This swaps sharedMaterials rather than using a MaterialPropertyBlock: the
+        /// variants are different textures, not different parameters, so there is nothing
+        /// a property block could override. It costs one material per wall per grime
+        /// level, which is twelve materials across the biome.
+        private void WeatherWalls(GameObject model, int hash)
+        {
+            if (model == null) return;
+            if (wallGrime == null)
+            {
+                wallGrime = new Dictionary<string, Material[]>();
+                foreach (var wall in GrimedWalls)
+                {
+                    var clean = Resources.Load<Material>($"Buildings/NYC/Materials/{wall}");
+                    if (clean == null) continue;
+                    var variants = new List<Material> { clean };
+                    for (var v = 1; v <= GrimeVariants; v++)
+                    {
+                        var grimed = Resources.Load<Material>(
+                            $"Buildings/NYC/Materials/{wall}_grime{v}");
+                        if (grimed != null) variants.Add(grimed);
+                    }
+                    wallGrime[wall] = variants.ToArray();
+                }
+            }
+            if (wallGrime.Count == 0) return;
+
+            var pick = (hash & 0x7fffffff);
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+            {
+                var current = renderer.sharedMaterials;
+                Material[] swapped = null;
+                for (var i = 0; i < current.Length; i++)
+                {
+                    if (current[i] == null) continue;
+                    if (!wallGrime.TryGetValue(current[i].name, out var variants)) continue;
+                    if (variants.Length < 2) continue;
+                    var chosen = variants[pick % variants.Length];
+                    if (chosen == current[i]) continue;
+                    swapped ??= (Material[])current.Clone();
+                    swapped[i] = chosen;
+                }
+                if (swapped != null) renderer.sharedMaterials = swapped;
+            }
+        }
+
+        /// Class/plot combinations already reported. Reset with the rest of the
+        /// domain-reload state so a fresh run reports again.
+        private static readonly HashSet<string> fitReported = new();
+
+        private static readonly string[] AwningPalette =
+        {
+            "Awning Red", "Awning Green", "Awning Navy", "Awning Burgundy", "Awning Gold"
+        };
+
+        /// A shop awning: a slab jutting from the wall at door height plus a short drop
+        /// valance at its outer lip, the two visual cues that read as "awning" rather than
+        /// "ledge" from a moving car. Two Cube primitives - the same GameObject.
+        /// CreatePrimitive() path already used for lamp posts - so this is ~24 triangles
+        /// total, not worth measuring against a biome that costs 3M+ a chunk.
+        ///
+        /// Placed at a fixed size and a fixed offset from the frontage line rather than
+        /// fitted to the building behind it: there is no door position to fit to (the NYC
+        /// meshes carry no submesh that identifies one), so this is a recurring street
+        /// fixture like the lamp posts and traffic lights beside it, not an attachment.
+        private void BuildStorefrontAwning(GameObject building, float distance, float side, int hash)
+        {
+            // No wall, no awning. This is what left canopies hanging in mid-air: the
+            // awning went up on every block that passed the hash test, while
+            // PlaceBuildingOnPlot returns null whenever nothing in the catalogue fits the
+            // plot - so a block with no frontage building still got a canopy, attached to
+            // nothing.
+            if (building == null || !TryGetCombinedBounds(building, out var bounds)) return;
+
+            // And measure where the facade actually ended up rather than trusting the line
+            // it was asked to meet. PRODUCTION-GATES section 8 calls "requested bounds are
+            // not measured bounds" this project's recurring fault; an awning positioned off
+            // a constant while the wall behind it is positioned off its own geometry is
+            // exactly that shape of bug waiting to happen.
+            var roadRight = RoadPath.Right(distance);
+            var roadCentre = RoadPath.Point(distance, 0f, 0f);
+            var facade = float.PositiveInfinity;
+            for (var x = -1; x <= 1; x += 2)
+            for (var y = -1; y <= 1; y += 2)
+            for (var z = -1; z <= 1; z += 2)
+            {
+                var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                facade = Mathf.Min(facade, Vector3.Dot(corner - roadCentre, roadRight) * side);
+            }
+            if (float.IsInfinity(facade)) return;
+
+            var colour = materials[AwningPalette[(hash & 0x7fffffff) % AwningPalette.Length]];
+            const float overhang = 1.25f;
+            const float embed = 0.2f;      // buried in the wall, so no gap can open up
+            const float aboveDoor = 3.15f;
+            // Height off the building's own base rather than off the road, so a canopy
+            // cannot drift when the two sit at different elevations.
+            var baseHeight = bounds.min.y - roadCentre.y + aboveDoor;
+
+            var depth = overhang + embed;
+            var canopyLateral = side * (facade + (embed - overhang) * 0.5f);
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning", distance, canopyLateral,
+                baseHeight, new Vector3(depth, 0.14f, 4.5f), colour, Vector3.zero, false);
+
+            var valanceLateral = side * (facade - overhang);
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning Valance", distance, valanceLateral,
+                baseHeight - 0.32f, new Vector3(0.06f, 0.5f, 4.5f), colour, Vector3.zero, false);
+        }
+
+        /// Screen height below which a background tower is drawn as a box instead of as
+        /// its full mesh. Screen-relative, so it is an apparent-size rule rather than a
+        /// distance one: with a 60 degree field of view this swaps a 60 m tower at roughly
+        /// 870 m and a 25 m one at roughly 360 m. Lower it to keep full detail further out
+        /// at more cost; raise it to save more and swap sooner. One number, one place.
+        private const float SkylineImpostorHeight = 0.06f;
+
+        /// Draws a distant skyline tower as a single box.
+        ///
+        /// Nothing in this biome had an LODGroup, so every tower cost the same at 200 m as
+        /// at 20 m. Measured: the NYCVariants prefabs stack a mean of 5.1 sections of
+        /// 18-25k triangles, so one tower is around 100k, and BuildCyberSprawl places about
+        /// 24 buildings per 150 m chunk - roughly 2.4M of the 3.16M triangles a chunk.
+        ///
+        /// The stand-in is a cube, 12 triangles, wearing the same facade material. That is
+        /// a real loss of detail, which is why this is applied only to MidBlock towers:
+        /// they sit behind the frontage line and read as skyline, while the street
+        /// frontages the player drives past keep their full mesh at every distance.
+        ///
+        /// The box is left unparented so Adopt puts it under the chunk root, whose
+        /// transform is identity - world size and local scale are then the same number,
+        /// and none of the rotated-parent arithmetic that PRODUCTION-GATES section 8 calls
+        /// this project's recurring fault is needed. It is destroyed with the chunk like
+        /// anything else under that root, and buildings never move after placement.
+        private void AddSkylineImpostor(GameObject model, Material facade)
+        {
+            var detailed = model.GetComponentsInChildren<Renderer>(true);
+            if (detailed.Length == 0 || !TryGetCombinedBounds(model, out var bounds)) return;
+
+            var box = Primitive(PrimitiveType.Cube, "Skyline Impostor",
+                bounds.center, bounds.size, facade);
+            if (box == null) return;
+            var boxRenderer = box.GetComponent<Renderer>();
+            if (boxRenderer == null) return;
+            // Beyond the shadow distance by the time it is showing, and a box's shadow
+            // would not match the silhouette it stands in for anyway.
+            boxRenderer.shadowCastingMode = ShadowCastingMode.Off;
+
+            var group = model.AddComponent<LODGroup>();
+            group.SetLODs(new[]
+            {
+                new LOD(SkylineImpostorHeight, detailed),
+                // Zero, not a cull threshold: a tower that vanished at the edge of the
+                // streamed world would pop a hole in the skyline. It stays a box.
+                new LOD(0f, new[] { boxRenderer }),
+            });
+            group.RecalculateBounds();
+        }
+
+        /// Places a building on a plot rather than scaling it into a gap.
+        ///
+        /// Two things make a street read as a street: every facade meets the pavement on
+        /// one continuous line, and a building is never wider than the plot it stands on.
+        /// The old code did neither - it centred each building at a random lateral and
+        /// then scaled it to a target height, so facades zigzagged and an oversized mesh
+        /// simply grew until EnsureOutsideRoad shoved it away from the road, leaving the
+        /// gap between the buildings and the pavement.
+        ///
+        /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
+        /// it recognisable, and then positioned by its street-facing face.
+        private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
+            float distance, float side, float frontageLine, float plotWidth, int hash)
+        {
+            var catalogue = BuildingCatalogue();
+            var fitting = new List<BuildingEntry>();
+            foreach (var entry in catalogue)
+            {
+                if (entry.Class != wanted) continue;
+                // Usable if it can be brought within the plot without shrinking so far
+                // that it stops reading as a building.
+                if (entry.Width * MinPlotScale <= plotWidth) fitting.Add(entry);
+            }
+            if (fitting.Count == 0) return null;
+
+            // How many distinct buildings this plot size can actually draw on. "Every
+            // building looks the same" is a number, not an impression, and it is this one
+            // - the catalogue can hold sixty entries while a 30 m plot fits six of them.
+            // Once per class and width, not per building.
+            if (fitReported.Add($"{wanted}/{plotWidth:0}"))
+                Debug.Log($"RR_CITY {wanted} plots {plotWidth:0}m wide can use " +
+                          $"{fitting.Count} of {catalogue.Count} catalogued buildings");
+
+            var chosen = fitting[Mathf.Abs(hash) % fitting.Count];
+
+            // Scale to fill the plot's width, capped so a small mesh is not blown up and
+            // a large one is not shrunk into a model. Height follows - the proportions
+            // of a real building are not ours to invent.
+            var scale = Mathf.Clamp(plotWidth / chosen.Width, MinPlotScale, MaxPlotScale);
+
+            // Same mesh, different building. The catalogue only offers what fits the plot,
+            // so a street runs through its options fast and then repeats them - which is
+            // the "copy paste buildings" of it. Stretching the storey height per plot
+            // changes the silhouette and the window rhythm without another asset, and
+            // buildings genuinely differ in floor height. Y only: the model is rotated
+            // about Y alone, so local Y is world up and nothing skews.
+            var storey = 0.85f + (hash >> 5) % 41 / 100f;   // 0.85 to 1.25
+            var footprint = Vector3.one * scale;
+            footprint.y *= storey;
+
+            var facing = side > 0f ? -90f : 90f;
+            var model = PlaceBiomeModelOnRoad("Buildings", chosen.Resource, material,
+                distance, side * (frontageLine + chosen.Depth * scale * 0.5f), 0f,
+                new Vector3(0f, facing, 0f), footprint, label, enforceClearance: false);
+            if (model == null) return null;
+
+            // Ground it, then set the street-facing face exactly on the frontage line so
+            // the whole block shares one facade.
+            if (TryGetCombinedBounds(model, out var bounds))
+            {
+                var roadRight = RoadPath.Right(distance);
+                var roadCenter = RoadPath.Point(distance, 0f, 0f);
+                var nearest = float.PositiveInfinity;
+                for (var x = -1; x <= 1; x += 2)
+                for (var y = -1; y <= 1; y += 2)
+                for (var z = -1; z <= 1; z += 2)
+                {
+                    var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(x, y, z));
+                    var projection = Vector3.Dot(corner - roadCenter, roadRight) * side;
+                    nearest = Mathf.Min(nearest, projection);
+                }
+                model.transform.position += roadRight * (side * (frontageLine - nearest));
+
+                if (TryGetCombinedBounds(model, out bounds))
+                    model.transform.position += Vector3.up *
+                        (RoadPath.Point(distance, 0f, 0f).y - bounds.min.y + 0.05f);
+            }
+            if (materials.TryGetValue("City Windows", out var cityWindows))
+                VaryWindowLighting(model, cityWindows, hash);
+            WeatherWalls(model, hash);
+            if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material);
+            return model;
+        }
+
+        /// Scale band for a building on a plot. Outside this the mesh stops looking like
+        /// the thing it was modelled as, which is worse than an imperfect fit.
+        /// Distance from the road centreline to the facade line. Road half-width plus
+        /// the shoulder and the pavement - every frontage meets the pavement here.
+        private const float FrontageSetback = 17.5f;
+        private const float MinPlotScale = 0.55f;
+        private const float MaxPlotScale = 1.9f;
+
+        /// Mesh names already reported as badly sized.
+        ///
+        /// The warning below fires per placement, and Manhattan normalises street
+        /// furniture, lamps, traffic lights, shelters and rooftop props - hundreds per
+        /// world build, more with every chunk streamed in. That is a console at 999+
+        /// warnings within a minute of pressing Play, which is not a diagnostic, it is a
+        /// place other diagnostics go to hide: it is what buried the empty material
+        /// palette (fixed in 22729e0) and a prop pointing at a model that did not exist
+        /// (8ca67b1) for an entire session.
+        ///
+        /// The signal is per mesh, not per instance - the same mesh clamped four hundred
+        /// times is one fact - so it is reported once per name. Cleared on
+        /// SubsystemRegistration below, so entering play mode reports afresh rather than
+        /// staying silent about a mesh a previous run already named.
+        private static readonly HashSet<string> clampReported = new();
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetClampReports()
+        {
+            clampReported.Clear();
+            fitReported.Clear();
+        }
+
+        private static void NormalizeModelHeight(GameObject model, float targetHeight, float groundHeight = 0.05f,
+            float maxFootprint = 0f)
         {
             if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.01f) return;
             var groundY = model.transform.position.y;
-            model.transform.localScale *= targetHeight / bounds.size.y;
+
+            // Uniform scale to a target height only behaves when the roster's meshes are
+            // roughly comparable. This one spans 0.65 m to 228 m native, so reaching a
+            // 60 m building from a 0.65 m mesh takes 93x - which widens and deepens it by
+            // 93x too, running its walls out through the sidewalk and across the road.
+            // That is the "buildings not on the ground" report: they are grounded exactly
+            // right and simply enormous. Cap the factor and take a shorter building over
+            // a misshapen one.
+            var wanted = targetHeight / bounds.size.y;
+            var scale = Mathf.Clamp(wanted, MinModelScale, MaxModelScale);
+            if (!Mathf.Approximately(scale, wanted) && clampReported.Add(model.name))
+                Debug.LogWarning($"[CITY] {model.name} native height {bounds.size.y:0.00}m needs {wanted:0.0}x " +
+                                 $"for {targetHeight:0.0}m - clamped to {scale:0.0}x. This mesh does not belong " +
+                                 "in a building roster. Reported once per mesh name per run.");
+            model.transform.localScale *= scale;
             if (!TryGetCombinedBounds(model, out bounds)) return;
+
+            // Height alone does not describe a building. Several of these meshes are
+            // whole city blocks, so normalising them to a plausible height left
+            // footprints of 111 m and 167 m across - dropped onto a plot about 25 m wide
+            // between the kerb and the block behind. They swallowed the sidewalk and ran
+            // into their neighbours. Scale down further to fit the plot, keeping the
+            // proportions, and accept a shorter building.
+            if (maxFootprint > 0f)
+            {
+                var widest = Mathf.Max(bounds.size.x, bounds.size.z);
+                if (widest > maxFootprint)
+                {
+                    model.transform.localScale *= maxFootprint / widest;
+                    if (!TryGetCombinedBounds(model, out bounds)) return;
+                }
+            }
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
@@ -2097,8 +3109,278 @@ namespace RoadRage.UnityRemake
         private static bool NoCanopy;
         private static bool LogSky;
 
+        /// The measurement Gate A was decided on: renderers, triangles and how many of
+        /// those renderers are alpha-tested. Greenwood measured 850 / 824 at the time.
+        private static void LogChunkCost(GameObject root, string biome, float seg)
+        {
+            var renderers = root.GetComponentsInChildren<Renderer>(true);
+            long tris = 0;
+            var cutouts = 0;
+            foreach (var r in renderers)
+            {
+                if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                {
+                    var mesh = mf.sharedMesh;
+                    for (var s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
+                }
+                foreach (var m in r.sharedMaterials)
+                    if (IsAlphaClipped(m)) { cutouts++; break; }
+            }
+            Debug.Log($"RR_COST {biome} seg={seg:0}: renderers={renderers.Length} tris={tris} cutoutRenderers={cutouts}");
+        }
+
+        /// Is this material alpha-clipped? Three tests, because no single one holds.
+        ///
+        /// The keyword alone was the original test and it is not dependable on a material
+        /// built at runtime with new Material(): PRODUCTION-GATES section 8 already records
+        /// that URP's stripper never scans those, and one Greenwood session reported
+        /// cutout=0, cutout=1693 and cutout=4886 for the same biome while the leaves
+        /// visibly clipped correctly the whole time. A cost probe that swings by 4886 on
+        /// identical content is not measuring the content.
+        ///
+        /// _AlphaClip is what URP's shader actually branches on, and the AlphaTest queue
+        /// is where it puts the result, so either standing alone still means clipped.
+        private static bool IsAlphaClipped(Material m)
+        {
+            if (m == null) return false;
+            if (m.IsKeywordEnabled("_ALPHATEST_ON")) return true;
+            if (m.HasProperty("_AlphaClip") && m.GetFloat("_AlphaClip") > 0.5f) return true;
+            return m.renderQueue >= 2225 && m.renderQueue <= 2500;
+        }
+
+        /// Measures every chunk currently loaded and totals them.
+        ///
+        /// The cost log was reachable only through a -profile command-line flag, which
+        /// cannot be passed from the editor and which Gate C names as a smell in its own
+        /// right: no system should need a flag to exercise. Since the foliage work has to
+        /// be judged on this number rather than on how a frame looks, it needs to be one
+        /// keypress away from wherever the player already is.
+        /// Names the meshes carrying the triangle load, worst first.
+        ///
+        /// Reported per mesh AND per instance: a mesh drawn 40 times at 5k triangles and
+        /// one drawn twice at 100k need opposite fixes - thin the placement, or replace
+        /// or decimate the asset - and a total alone cannot tell them apart.
+        /// Names an object and its parents up to the chunk, so a mesh called Cube.008 is
+        /// reported as whatever the placement code called the thing holding it.
+        private static string OwnerTrail(Transform t)
+        {
+            var trail = t.name;
+            var parent = t.parent;
+            for (var depth = 0; parent != null && depth < 3; depth++)
+            {
+                if (parent.name.StartsWith("Chunk ")) break;
+                trail = parent.name + "/" + trail;
+                parent = parent.parent;
+            }
+            return trail;
+        }
+
+        private static void LogHeaviestMeshes(Dictionary<string, long> trisByMesh,
+                                              Dictionary<string, int> countByMesh,
+                                              Dictionary<string, string> exampleOwner, long totalTris)
+        {
+            if (trisByMesh.Count == 0 || totalTris <= 0) return;
+
+            var ranked = new List<KeyValuePair<string, long>>(trisByMesh);
+            ranked.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            var report = new System.Text.StringBuilder();
+            report.Append($"RR_MESH heaviest of {trisByMesh.Count} distinct meshes ")
+                  .Append($"({totalTris / 1000}k triangles total):");
+            var shown = Mathf.Min(HeaviestMeshCount, ranked.Count);
+            for (var i = 0; i < shown; i++)
+            {
+                var name = ranked[i].Key;
+                var tris = ranked[i].Value;
+                var instances = countByMesh.TryGetValue(name, out var n) ? n : 0;
+                var each = instances > 0 ? tris / instances : tris;
+                var owner = exampleOwner.TryGetValue(name, out var o) ? o : "?";
+                report.Append($"\n  {100f * tris / totalTris,5:0.0}%  {tris / 1000,7}k tris  ")
+                      .Append($"x{instances,-4} ({each / 1000f:0.0}k each)  {name}")
+                      .Append($"\n         in: {owner}");
+            }
+            Debug.Log(report.ToString());
+        }
+
+        private const int HeaviestMeshCount = 10;
+
+        /// Frames discarded after lifting the cap, then frames averaged. The first frames
+        /// after uncapping still carry the capped pacing, and a single frame is noise.
+        private const int CostProbeWarmupFrames = 30;
+        private const int CostProbeSampleFrames = 120;
+        private bool costProbeRunning;
+
+        private void LogLiveWorldCost()
+        {
+            if (costProbeRunning) return;
+            StartCoroutine(CostProbe());
+        }
+
+        /// Counts are read immediately; the frame rate is sampled with the cap lifted.
+        ///
+        /// Boot sets Application.targetFrameRate = 120, and this log used to report a
+        /// single 1/unscaledDeltaTime against it. Three Greenwood runs whose geometry
+        /// differed by 3x - 675, 675 and 240 renderers a chunk, 19.6M down to 6.7M
+        /// triangles - all reported 121-123 FPS, because none of them was measuring
+        /// anything except the ceiling. The capture path already knew this (see
+        /// FrameCapture.Initialize) and uncapped; the keypress path never did.
+        private System.Collections.IEnumerator CostProbe()
+        {
+            costProbeRunning = true;
+
+            // Walk the scene, not liveChunks. A domain reload can empty that dictionary
+            // while the chunk objects keep rendering, and a probe that trusts it reports
+            // half the world - which is how a Greenwood hierarchy holding two full sets of
+            // Chunk -1..6 still logged chunks=8.
+            long totalRenderers = 0, totalCutouts = 0, totalTris = 0;
+            var chunkRoots = new List<GameObject>();
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+                if (go != null && go.name.StartsWith("Chunk ")) chunkRoots.Add(go);
+
+            // Triangles per mesh, so the log names what is expensive instead of only
+            // saying how much there is. Manhattan reporting 3.2M triangles a chunk is a
+            // number nobody can act on; the same total attributed to a handful of meshes
+            // is a decision about those meshes.
+            var trisByMesh = new Dictionary<string, long>();
+            var countByMesh = new Dictionary<string, int>();
+            // One example owner per mesh. A mesh name alone can be unidentifiable: the NYC
+            // pack ships meshes called Cube.008 and Light1, its .meta files record no name
+            // table, and the FBXs are LFS-stored - so nothing in the repo says what they
+            // are. The placement code does name what it spawns ("NYC Street Lamp",
+            // "Manhattan Midtown Skyscraper"), so recording one owning object identifies
+            // the call site that produced the cost.
+            var exampleOwner = new Dictionary<string, string>();
+
+            foreach (var chunk in chunkRoots)
+            {
+                var renderers = chunk.GetComponentsInChildren<Renderer>(true);
+                totalRenderers += renderers.Length;
+                foreach (var r in renderers)
+                {
+                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                    {
+                        long meshTris = 0;
+                        for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
+                            meshTris += mf.sharedMesh.GetIndexCount(sm) / 3;
+                        totalTris += meshTris;
+
+                        var meshName = mf.sharedMesh.name;
+                        trisByMesh.TryGetValue(meshName, out var running);
+                        trisByMesh[meshName] = running + meshTris;
+                        countByMesh.TryGetValue(meshName, out var instances);
+                        countByMesh[meshName] = instances + 1;
+                        if (!exampleOwner.ContainsKey(meshName))
+                            exampleOwner[meshName] = OwnerTrail(r.transform);
+                    }
+                    foreach (var m in r.sharedMaterials)
+                        if (IsAlphaClipped(m)) { totalCutouts++; break; }
+                }
+            }
+
+            var priorTarget = Application.targetFrameRate;
+            var priorVsync = QualitySettings.vSyncCount;
+            Application.targetFrameRate = -1;
+            QualitySettings.vSyncCount = 0;
+
+            for (var i = 0; i < CostProbeWarmupFrames; i++) yield return null;
+
+            var elapsed = 0f;
+            var worstFrame = 0f;
+            for (var i = 0; i < CostProbeSampleFrames; i++)
+            {
+                yield return null;
+                var dt = Time.unscaledDeltaTime;
+                elapsed += dt;
+                if (dt > worstFrame) worstFrame = dt;
+            }
+
+            Application.targetFrameRate = priorTarget;
+            QualitySettings.vSyncCount = priorVsync;
+
+            var chunks = Mathf.Max(1, chunkRoots.Count);
+            var avgFps = CostProbeSampleFrames / Mathf.Max(elapsed, 0.0001f);
+            var worstFps = 1f / Mathf.Max(worstFrame, 0.0001f);
+            // Say so when the streamer has lost track of part of what it is drawing:
+            // every count above is then real, but the world is not the one intended.
+            var orphans = chunkRoots.Count - liveChunks.Count;
+            if (orphans != 0)
+                Debug.LogWarning($"RR_COST {chunkRoots.Count} chunk roots in the scene but " +
+                                 $"{liveChunks.Count} tracked ({orphans:+#;-#;0} untracked). The counts " +
+                                 "below are what renders; the difference is a leak, not content.");
+            // Gate A wants a sustained figure, so the worst frame in the window is the
+            // one that decides the gate - an average hides exactly the stalls that fail it.
+            // The 850 / 824 baseline is Greenwood's alpha-test canopy and means nothing
+            // anywhere else, so it is only printed where it applies.
+            var baseline = biomeName == "GREENWOOD" ? " (Gate A measured Greenwood at 850 / 824)" : "";
+            Debug.Log($"RR_COST {biomeName} live: chunks={chunkRoots.Count} tracked={liveChunks.Count} " +
+                      $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}\n" +
+                      $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks}" +
+                      $"{baseline}\n" +
+                      $"RR_COST uncapped over {CostProbeSampleFrames} frames: avg={avgFps:0.0} fps " +
+                      $"worst={worstFps:0.0} fps budget={(RichDetailBudget ? "rich" : "low")} " +
+                      $"(was capped at {priorTarget})");
+
+            LogHeaviestMeshes(trisByMesh, countByMesh, exampleOwner, totalTris);
+
+            costProbeRunning = false;
+        }
+
+        /// Reset by the same domain reload that empties liveChunks, so the sweep below
+        /// runs again exactly when the dictionary has been lost.
+        private bool orphanChunkSweepDone;
+
+        /// Destroys chunk roots this instance is not tracking.
+        ///
+        /// liveChunks is a plain Dictionary, so a recompile during play mode empties it
+        /// while the chunk GameObjects it referenced stay in the scene. The streamer then
+        /// finds no chunks, rebuilds every one, and the world quietly renders twice - two
+        /// full sets of Chunk -1..6 in the hierarchy, double the foliage, and a cost probe
+        /// that walks liveChunks reporting only half of what is actually drawn.
+        /// Rebuilds the material palette if a domain reload emptied it.
+        ///
+        /// materials and liveChunks are both plain instance fields, so recompiling while
+        /// play mode runs resets both while every GameObject they described survives. The
+        /// chunk half of that is handled by PurgeOrphanChunks above; this is the other
+        /// half, and it was doing quiet damage: with the dictionary empty the streamer
+        /// still rebuilt the world, and every materials[key] lookup fell through to the
+        /// flat fallback. A Greenwood built in that state reported cutout=0 across 5585
+        /// renderers, against cutout=4886 for the same biome after a ReloadBiome - not a
+        /// keyword that reads differently, but a forest genuinely wearing solid brown
+        /// stand-ins with no alpha clip on any of them.
+        ///
+        /// ReloadBiome recovered by accident, because step 5 calls BuildMaterials itself.
+        /// Streaming had no such step.
+        private void EnsureMaterialsBuilt()
+        {
+            if (materials.Count > 0) return;
+            Debug.LogWarning("RR_MATERIALS palette was empty at stream time - rebuilding. A " +
+                             "domain reload (a recompile during play) clears it while the world " +
+                             "it built stays in the scene.");
+            BuildMaterials();
+        }
+
+        private void PurgeOrphanChunks()
+        {
+            orphanChunkSweepDone = true;
+            var purged = 0;
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+            {
+                if (go == null || !go.name.StartsWith("Chunk ")) continue;
+                if (liveChunks.ContainsValue(go)) continue;
+                go.SetActive(false);
+                Destroy(go);
+                purged++;
+            }
+            if (purged > 0)
+                Debug.LogWarning($"RR_STREAM purged {purged} orphaned chunk root(s) left by a domain " +
+                                 "reload. Without this the world renders twice and every RR_COST " +
+                                 "reading understates what is on screen.");
+        }
+
         private void BuildChunk(int index)
         {
+            if (!orphanChunkSweepDone) PurgeOrphanChunks();
+            EnsureMaterialsBuilt();
             if (liveChunks.ContainsKey(index)) return;
             var start = index * ChunkLength;
             var biomeIndex = BiomeIndexAt(start + ChunkLength * 0.5f);
@@ -2120,21 +3402,7 @@ namespace RoadRage.UnityRemake
 
             if (ProfileChunks)
             {
-                var renderers = root.GetComponentsInChildren<Renderer>(true);
-                long tris = 0;
-                var cutouts = 0;
-                foreach (var r in renderers)
-                {
-                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
-                    {
-                        var mesh = mf.sharedMesh;
-                        for (var s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
-                    }
-                    foreach (var m in r.sharedMaterials)
-                        if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { cutouts++; break; }
-                }
-                Debug.Log($"RR_COST {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} " +
-                          $"seg={segStart:0}: renderers={renderers.Length} tris={tris} cutoutRenderers={cutouts}");
+                LogChunkCost(root, Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)], segStart);
             }
 
             ClearRoadCorridor(chunkRoot);
@@ -2165,9 +3433,13 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = here.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(here.Fog, weather.FogTint, weather.FogTintAmount);
-            RenderSettings.ambientSkyColor = Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f);
-            RenderSettings.ambientEquatorColor = Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f);
-            RenderSettings.ambientGroundColor = here.Ground;
+            // ambientIntensity is only honoured when the ambient source is Skybox; in
+            // Trilight Unity uses the three colours as given and ignores it entirely,
+            // so setting it was a no-op. Fold the gain into the colours instead.
+            var gain = here.AmbientIntensity * AmbientTrim;
+            RenderSettings.ambientSkyColor = ScaleRgb(Color.Lerp(here.Sky, weather.FogTint, weather.FogTintAmount * 0.6f), gain);
+            RenderSettings.ambientEquatorColor = ScaleRgb(Color.Lerp(here.Equator, weather.FogTint, weather.FogTintAmount * 0.4f), gain);
+            RenderSettings.ambientGroundColor = ScaleRgb(here.Ground, gain);
             if (sunLight != null)
             {
                 sunLight.color = here.SunColor;
@@ -2189,6 +3461,7 @@ namespace RoadRage.UnityRemake
             BloomIntensity = Mathf.Lerp(a.BloomIntensity, b.BloomIntensity, t),
             BloomThreshold = Mathf.Lerp(a.BloomThreshold, b.BloomThreshold, t),
             RoadWetness = Mathf.Lerp(a.RoadWetness, b.RoadWetness, t),
+            AmbientIntensity = Mathf.Lerp(a.AmbientIntensity, b.AmbientIntensity, t),
         };
 
         /// Landmark at a zone seam: an overpass you drive under, on concrete piers, with a
@@ -2669,7 +3942,7 @@ namespace RoadRage.UnityRemake
                     var facing = side > 0f ? -90f : 90f;
                     var isNyc = block % 2 == 0;
                     var frontageMesh = isNyc
-                        ? $"Buildings/NYC/building_{1 + (BlockHash(block, side * 7) % 13)}"
+                        ? NycVariants[BlockHash(block, side * 7) % NycVariants.Length]
                         : towers[BlockHash(block, side) % towers.Length];
                     var frontagePack = isNyc ? "Buildings" : "Synthwave";
                     var frontageDistance = z + (side > 0 ? 4f : -5f) + Random.Range(-2.5f, 2.5f);
@@ -2741,9 +4014,17 @@ namespace RoadRage.UnityRemake
                 {
                     var side = block % 8 < 4 ? 1f : -1f;
                     var stopDistance = z + 6f;
-                    var stop = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bus_stop",
-                        materials["City Props"], stopDistance, side * 19.8f, 0.14f,
-                        new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "City Bus Stop");
+                    // Was "Buildings/DemoCity/bus_stop", which does not exist - the DemoCity
+                    // pack ships no bus stop - so every fourth block logged a missing-model
+                    // warning and left its bench standing beside nothing. Neon City's own
+                    // pack has a transit shelter that was sitting unreferenced.
+                    //
+                    // The -90 on X is not decoration: every CyberpunkCity mesh in this file
+                    // is placed that way because the pack is authored Z-up, and the old call
+                    // passed 0 because DemoCity is not.
+                    var stop = PlaceBiomeModelOnRoad("CyberpunkCity", "Tramstop/SM_Tram_stop",
+                        materials["Cyber Props"], stopDistance, side * 19.8f, 0.14f,
+                        new Vector3(-90f, side > 0f ? -90f : 90f, 0f), Vector3.one, "Neon Tram Stop");
                     if (stop != null) NormalizeModelHeight(stop, 3.2f, 0.14f);
 
                     var benchDistance = z + 12f;
@@ -2761,33 +4042,15 @@ namespace RoadRage.UnityRemake
 			private void ApplyCityPhotorealMood(bool brooklyn)
 			{
 				RenderSettings.ambientMode = AmbientMode.Trilight;
-				RenderSettings.ambientIntensity = 1.25f;
-				RenderSettings.ambientSkyColor = brooklyn ? new Color(0.38f, 0.44f, 0.52f) : new Color(0.45f, 0.50f, 0.60f);
-				RenderSettings.ambientEquatorColor = new Color(0.35f, 0.38f, 0.44f);
-				RenderSettings.ambientGroundColor = new Color(0.20f, 0.22f, 0.25f);
 				RenderSettings.fog = true;
 
-				if (brooklyn)
-				{
-					RenderSettings.fogColor = new Color(0.36f, 0.42f, 0.50f);
-					RenderSettings.fogDensity = 0.0035f;
-				}
-				else
-				{
-					RenderSettings.fogColor = new Color(0.52f, 0.58f, 0.68f);
-					RenderSettings.fogDensity = 0.0022f;
-				}
-
-				var sceneLights = Object.FindObjectsByType<Light>();
-				for (var i = 0; i < sceneLights.Length; i++)
-				{
-					var sceneLight = sceneLights[i];
-					if (sceneLight.type != LightType.Directional || !sceneLight.isActiveAndEnabled) continue;
-					sceneLight.color = new Color(1.0f, 0.96f, 0.90f);
-					sceneLight.intensity = brooklyn ? 1.45f : 1.75f;
-					sceneLight.shadowStrength = 0.75f;
-				}
-
+				// Ambient colours, ambient intensity, fog and the key light used to be
+				// set here as well. BlendZoneLighting rewrites all of those every frame
+				// from the biome mood, so these assignments only survived until the next
+				// frame and the two definitions had been silently disagreeing ever since
+				// the Manhattan mood was restored on top of the photoreal pass. The mood
+				// is the single source of truth now; what is left here is the part
+				// nothing else owns.
 				if (reflectionProbe != null)
 				{
 					reflectionProbe.size = new Vector3(60f, 20f, 60f);
@@ -2853,9 +4116,18 @@ namespace RoadRage.UnityRemake
 				if (materials.TryGetValue("City Neon", out var neon))
 				{
 					if (neon.HasProperty("_EmissionColor"))
+					{
 						neon.SetColor("_EmissionColor", brooklyn
 							? new Color(0.32f, 0.58f, 1f, 1f)
 							: new Color(0.58f, 0.34f, 1.08f, 1f));
+						// Belt and braces. The keyword is enabled where the material is
+						// built, but this write is the reason the material has an emission
+						// colour at all, and it should not depend on somewhere else having
+						// switched it on first - that is exactly how it came to be setting
+						// a colour nothing ever read.
+						neon.EnableKeyword("_EMISSION");
+						neon.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
+					}
 				}
 
 				if (materials.TryGetValue("Hideout Vehicle PBR", out var vehicle))
@@ -3053,21 +4325,10 @@ namespace RoadRage.UnityRemake
                 return junk;
             });
 
-            var nycSkyscrapers = new[]
-            {
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2", "Buildings/NYC/building_3",
-                "Buildings/NYC/building_4", "Buildings/NYC/building_5", "Buildings/NYC/building_6",
-                "Buildings/NYC/building_7", "Buildings/NYC/building_8", "Buildings/NYC/building_9",
-                "Buildings/NYC/building_10", "Buildings/NYC/building_11", "Buildings/NYC/building_12",
-                "Buildings/NYC/building_13", "Buildings/USA/building"
-            };
-
-            var nycFrontageBlocks = new[]
-            {
-                "Buildings/NYCBlock6/builds", "Buildings/NYCBlock6/shops",
-                "Buildings/NYC/building_1", "Buildings/NYC/building_2",
-                "Buildings/NYC/building_3", "Buildings/USA/building"
-            };
+            // The skyscraper and frontage rosters that used to live here are gone.
+            // Picking a mesh from a list and scaling it to a target height is what
+            // produced 93x-wide frontages and 167 m-deep towers; BuildingCatalogue
+            // measures every candidate instead and PlaceBuildingOnPlot picks by fit.
 
             var nycRooftops = new[]
             {
@@ -3086,19 +4347,24 @@ namespace RoadRage.UnityRemake
                     var facing = side > 0f ? -90f : 90f;
                     var frontDistance = z + (side > 0 ? 3f : -4f);
 
-                    // 1. Authentic NYC Street Frontages (Brownstones, Bodegas, Shops)
-                    var frontMesh = nycFrontageBlocks[BlockHash(block, side * 7) % nycFrontageBlocks.Length];
-                    var front = PlaceBiomeModelOnRoad("Buildings", frontMesh,
-                        materials["City Concrete"], frontDistance, side * Random.Range(16.5f, 21.5f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Frontage");
-                    if (front != null)
-                    {
-                        NormalizeModelHeight(front, Random.Range(34f, 62f));
-                        EnsureOutsideRoad(front, frontDistance, side);
-                    }
+                    // 1. Street frontage, on a plot, meeting a continuous facade line.
+                    // Facade picked per plot, so neighbours differ the way a real street
+                    // does. The hash is the block's, so a chunk rebuilt later is identical.
+                    var frontageHash = BlockHash(block, side * 7);
+                    var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
+                        "NYC Street Frontage", frontDistance, side,
+                        frontageLine: FrontageSetback, plotWidth: 30f, hash: frontageHash);
+
+                    // Not every storefront has an awning out front. One in five bare walls
+                    // keeps the rhythm from turning into wallpaper.
+                    var awningHash = BlockHash(block, side * 17);
+                    if (awningHash % 5 != 0)
+                        BuildStorefrontAwning(frontage, frontDistance, side, awningHash);
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
-                    if (block % 2 == 0)
+                    // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
+                    // reads as silhouette texture at best. First thing to go on a budget.
+                    if (block % 2 == 0 && RichDetailBudget)
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
@@ -3108,12 +4374,28 @@ namespace RoadRage.UnityRemake
                     }
 
                     // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
-                    var towerDistance = z + Random.Range(-10f, 10f);
-                    var towerMesh = nycSkyscrapers[BlockHash(block, side * 3) % nycSkyscrapers.Length];
-                    var tower = PlaceBiomeModelOnRoad("Buildings", towerMesh,
-                        materials["City Skyline"], towerDistance, side * Random.Range(36f, 75f), 0f,
-                        new Vector3(0f, facing, 0f), Vector3.one, "Manhattan Midtown Skyscraper");
-                    if (tower != null) NormalizeModelHeight(tower, Random.Range(70f, 160f));
+                    //
+                    // Thinned rather than dropped on a low budget. Measured cost: the
+                    // NYCVariants prefabs stack a mean of 5.1 sections of 18-25k triangles
+                    // each, so one placed tower is around 100k triangles, and RR_MESH found
+                    // building_8_middle and building_6_middle alone carrying 55% of
+                    // Manhattan's 25.3M triangles across 668 instances. Nothing here has an
+                    // LODGroup, so a background tower costs the same at 200 m as at 20 m.
+                    //
+                    // These sit at FrontageSetback + 26 m - behind the frontage line, read
+                    // as skyline rather than as street - so halving them is the cheapest
+                    // large cut available. Keeping every other block preserves the ragged
+                    // skyline; dropping them entirely leaves a visible flat horizon.
+                    if (RichDetailBudget || block % 2 == 0)
+                    {
+                        var towerDistance = z + Random.Range(-10f, 10f);
+                        // Salted differently from the frontage so a block's tower and its
+                        // street building are not cut from the same stone.
+                        var towerHash = BlockHash(block, side * 3);
+                        PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
+                            "Manhattan Midtown Skyscraper", towerDistance, side,
+                            frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: towerHash);
+                    }
 
                     // 4. NYC Street Lamposts with warm amber glow
                     var lampDistance = z + (side > 0 ? 10f : -7f);
@@ -3269,10 +4551,44 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// One multiplier over every street light, so brightness is a single number rather
+        /// than fourteen call sites. The intensities the callers pass were authored when
+        /// these lights last worked; this respects them at 1.0 and exists to be turned
+        /// once, looked at, and left alone.
+        private const float StreetLightGain = 1f;
+
+        /// Street lamps, sign glow, garage and facility lights.
+        ///
+        /// This method was an empty body. Fourteen call sites across every biome computed
+        /// a world position, a colour, an intensity and a range, and handed them to
+        /// nothing - so Manhattan at night had no street lighting whatsoever and every
+        /// facade outside the directional light's reach fell to whatever the ambient term
+        /// gave it. That is the "everywhere is black" of it.
+        ///
+        /// They were removed because they read as flat discs on the road. Two things about
+        /// this build make that likely and both are addressed here rather than by deleting
+        /// the lights again: the renderer is Forward with an additional-lights-per-object
+        /// limit of 4, so beyond four the nearest ones simply pop in and out as you drive;
+        /// and additional-light shadows are enabled project-wide, so each point light was
+        /// rendering a shadow cubemap for a lamp post.
         private void CreateLocalLight(Vector3 position, Color color, float intensity, float range)
         {
-            // Point light discs completely removed per design across all biomes.
-            // Atmospheric lighting is provided cleanly by Directional Sun, Sky Ambient, Emissive Maps, and Reflection Probes.
+            var holder = Adopt(new GameObject("Local Light"));
+            holder.transform.position = position;
+
+            var light = holder.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = color;
+            light.intensity = intensity * StreetLightGain;
+            light.range = range;
+            // A lamp post does not need to cast shadows, and with additional-light shadows
+            // on in the pipeline asset, letting it would mean a cubemap render apiece.
+            light.shadows = LightShadows.None;
+            // Off until the pool decides it is one of the nearest, so the budget is never
+            // exceeded even for a frame.
+            light.enabled = false;
+
+            LocalLights.Register(light);
         }
 
         /// ScatterBand wants a GameObject-returning spawn; the lamp builder returns void.
@@ -3299,7 +4615,13 @@ namespace RoadRage.UnityRemake
 
         /// Density multiplier for scatter passes. Lowering this on weaker hardware thins
         /// every biome uniformly instead of needing per-biome mobile variants.
-        private float ScatterDensity => QualitySettings.GetQualityLevel() <= 1 ? 0.55f : 1f;
+        /// Foliage thinning. The mobile figure is not a guess at a nice-looking density:
+        /// Gate A measured the device at under 1 FPS with the desktop set, and screen
+        /// coverage of alpha-tested foliage is the thing that has to come down.
+        private float ScatterDensity =>
+            !RichDetailBudget ? 0.34f
+            : QualitySettings.GetQualityLevel() <= 1 ? 0.55f
+            : 1f;
 
         /// Scatters a prop along a lateral band beside the road. Biomes read as real when
         /// props sit in overlapping depth bands (verge / near / mid / far) rather than as a
@@ -3877,12 +5199,23 @@ namespace RoadRage.UnityRemake
 
             // Trunks packed right against the shoulder. Canopies overhang the road.
             if (NoCanopy) return;
-            ScatterBand(10f, 26f, 38f, (d, l, s) => ForestTree(d, l, 12f, 17f));
-            ScatterBand(11f, 34f, 52f, (d, l, s) => ForestTree(d, l, 16f, 24f));
-            ScatterBand(10f, 27f, 42f, (d, l, s) => ForestTree(d, l, 13f, 21f));
-            ScatterBand(11f, 30f, 54f, (d, l, s) => ForestTree(d, l, 12f, 20f));
-            ScatterBand(11f, 36f, 66f, (d, l, s) => ForestTree(d, l, 12f, 19f));
-            // Far canopy
+
+            // Gate A measured Greenwood as alpha-test overdraw, not geometry or draw
+            // calls: 850 renderers a chunk of which 824 are cutout, 126 FPS with the
+            // canopy and 457 without, while Hollywood draws more triangles and runs four
+            // times faster. The only lever that moves it is less foliage covering the
+            // screen - instancing and LODs were measured and did nothing.
+            //
+            // Five near bands used to run here, all spanning 26-66 m. They overlapped
+            // almost entirely, so most of what they added was a second and third layer
+            // of leaf cards over the same ground - which is precisely the cost, since
+            // alpha test defeats early-Z and every overlapping card shades again. Three
+            // bands cover the same span with the layering that was being paid for twice.
+            ScatterBand(10f, 26f, 40f, (d, l, s) => ForestTree(d, l, 12f, 18f));
+            ScatterBand(11f, 32f, 54f, (d, l, s) => ForestTree(d, l, 15f, 24f));
+            ScatterBand(11f, 38f, 66f, (d, l, s) => ForestTree(d, l, 12f, 20f));
+            // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
+            // over the camera - so it keeps the forest reading as deep.
             ScatterBand(17f, 60f, 140f, (d, l, s) => ForestTree(d, l, 14f, 24f));
             // Bushes and deadfall break up the ground between trunks.
             ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
@@ -3890,8 +5223,9 @@ namespace RoadRage.UnityRemake
                 return SpawnForestPiece("ForestVillage|Vegetation/SM_bush", d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
             });
 
-            // Wider grass coverage
-            ScatterBand(3.4f, 20f, 55f, (d, l, s) =>
+            // Ground cover. Low to the camera rather than over it, but at 3.4 m spacing
+            // it was the single densest band in the biome and every card is cutout.
+            ScatterBand(4.6f, 20f, 55f, (d, l, s) =>
             {
                 return ForestPlant(d, l, 0.7f, 1.5f, "Forest Ground Cover");
             });
@@ -3999,6 +5333,13 @@ namespace RoadRage.UnityRemake
 			// Replace the fallback blockout with whichever Street Racer preset is selected
 			// in the garage. Each car carries its own livery from the shipped catalogue.
 			var selected = GameState.CurrentCar;
+			// Measured off the spawned mesh below, then applied once the controller
+			// exists. It used to be written straight onto car.GetComponent<Arcade...>()
+			// from inside this block - but the controller is not added until the end of
+			// the method, so that GetComponent returned null every time and the player
+			// silently kept the 2.5 m / 1.3 m placeholder hull no matter which car was
+			// selected. The garage's long chassis were colliding as small hatchbacks.
+			var playerHull = Vector2.zero;
 			var racerPrefab = Resources.Load<GameObject>($"Vehicles/{selected.Mesh}");
 			if (racerPrefab != null)
 			{
@@ -4056,15 +5397,8 @@ namespace RoadRage.UnityRemake
 				// Collision radius must match the mesh: fixed 4.3 m / 2.05 m radii were
 				// sized for a small car, so a 7.2 m truck overlapped a 5.0 m car by ~1.8 m
 				// before the hit registered - that overlap is the clipping.
-				if (TryGetCombinedBounds(racerVisual, out var playerFit))
-				{
-					var arcade = car.GetComponent<ArcadeCarController>();
-					if (arcade != null)
-					{
-						arcade.HalfLength = playerFit.size.z * 0.5f;
-						arcade.HalfWidth = playerFit.size.x * 0.5f;
-					}
-				}
+				if (TryGetLocalFootprint(racerVisual, out var playerHalfLength, out var playerHalfWidth))
+					playerHull = new Vector2(playerHalfLength, playerHalfWidth);
                 foreach (var renderer in racerVisual.GetComponentsInChildren<Renderer>(true))
                 {
 					renderer.enabled = true;
@@ -4093,7 +5427,22 @@ namespace RoadRage.UnityRemake
             var carCollider = car.gameObject.AddComponent<BoxCollider>();
             carCollider.size = new Vector3(2.15f, 1.2f, 4.4f);
             carCollider.center = new Vector3(0f, 0.25f, 0f);
-            car.gameObject.AddComponent<ArcadeCarController>().RoadDistance = startDistance + 5f;
+            var arcade = car.gameObject.AddComponent<ArcadeCarController>();
+            arcade.RoadDistance = startDistance + 5f;
+            if (playerHull.sqrMagnitude > 0f)
+            {
+                // Traffic is normalised to a known length before it is measured; the
+                // player's visual is left at its native prefab scale so the hand-tuned
+                // ride height keeps the tyres on the asphalt. That means the measurement
+                // here inherits whatever scale the FBX imported at, so it is clamped to
+                // the range a road vehicle can actually occupy - a motorbike at the low
+                // end, a semi cab at the high end - rather than trusted outright.
+                arcade.HalfLength = Mathf.Clamp(playerHull.x, 0.9f, 8f);
+                arcade.HalfWidth = Mathf.Clamp(playerHull.y, 0.4f, 1.8f);
+                // The trigger box follows the same measurement, so the collider the
+                // directors raycast against agrees with the hull the overlap test uses.
+                carCollider.size = new Vector3(arcade.HalfWidth * 2f, 1.2f, arcade.HalfLength * 2f);
+            }
             car.gameObject.AddComponent<RoadRageAudioAndVFX>();
         }
 
@@ -4120,6 +5469,34 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// The assembled building variants from the NYC set, mirrored into Resources.
+        /// The set ships these alongside the eight bare models - bottom/middle/roof
+        /// compositions with more storeys and more silhouettes than the meshes alone.
+        /// Shared by the Neon City frontage and the Manhattan blocks so both draw from
+        /// the same catalogue rather than each keeping a partly-wrong list of its own.
+        private static readonly string[] NycVariants =
+        {
+            "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_1_2", "Buildings/NYCVariants/building_1_3",
+            "Buildings/NYCVariants/building_1_4", "Buildings/NYCVariants/building_1_5", "Buildings/NYCVariants/building_2_1",
+            "Buildings/NYCVariants/building_2_2", "Buildings/NYCVariants/building_2_3", "Buildings/NYCVariants/building_2_4",
+            "Buildings/NYCVariants/building_2_5", "Buildings/NYCVariants/building_3_1", "Buildings/NYCVariants/building_3_2",
+            "Buildings/NYCVariants/building_3_3", "Buildings/NYCVariants/building_3_4", "Buildings/NYCVariants/building_3_5",
+            "Buildings/NYCVariants/building_4_1", "Buildings/NYCVariants/building_4_2", "Buildings/NYCVariants/building_4_3",
+            "Buildings/NYCVariants/building_4_4", "Buildings/NYCVariants/building_4_5", "Buildings/NYCVariants/building_5_1",
+            "Buildings/NYCVariants/building_5_2", "Buildings/NYCVariants/building_5_3", "Buildings/NYCVariants/building_5_4",
+            "Buildings/NYCVariants/building_5_5", "Buildings/NYCVariants/building_6_1", "Buildings/NYCVariants/building_6_2",
+            "Buildings/NYCVariants/building_6_3", "Buildings/NYCVariants/building_6_4", "Buildings/NYCVariants/building_6_5",
+            "Buildings/NYCVariants/building_6_6", "Buildings/NYCVariants/building_6_7", "Buildings/NYCVariants/building_6_8",
+            "Buildings/NYCVariants/building_6_9", "Buildings/NYCVariants/building_6_10", "Buildings/NYCVariants/building_8_1",
+            "Buildings/NYCVariants/building_8_2", "Buildings/NYCVariants/building_8_3", "Buildings/NYCVariants/building_8_4",
+            "Buildings/NYCVariants/building_8_5", "Buildings/NYCVariants/building_8_6", "Buildings/NYCVariants/building_8_7",
+            "Buildings/NYCVariants/building_8_8", "Buildings/NYCVariants/building_8_9", "Buildings/NYCVariants/building_8_10",
+            "Buildings/NYCVariants/building_9_1", "Buildings/NYCVariants/building_9_2", "Buildings/NYCVariants/building_9_3",
+            "Buildings/NYCVariants/building_9_4", "Buildings/NYCVariants/building_9_5", "Buildings/NYCVariants/building_9_6",
+            "Buildings/NYCVariants/building_9_7", "Buildings/NYCVariants/building_9_8", "Buildings/NYCVariants/building_9_9",
+            "Buildings/NYCVariants/building_9_10"
+        };
+
         private static readonly TrafficCarController.Offence[] OffenceCycle =
         {
             TrafficCarController.Offence.Weaving,
@@ -4128,14 +5505,77 @@ namespace RoadRage.UnityRemake
             TrafficCarController.Offence.Weaving,
         };
 
-        private void BuildTraffic()
+        private Transform livingTraffic;
+        private float trafficTopUpTimer;
+
+        /// Cars on the road at full intensity versus at the start. Twelve is a busy
+        /// highway to begin with; by the time a run is going well it should be work.
+        private const int BaseTrafficCount = 12;
+        /// Twenty-two cars is a desktop figure. On mobile the escalation still happens,
+        /// it just tops out where the frame budget does.
+        private static int PeakTrafficCount => RichDetailBudget ? 22 : 14;
+
+        /// Adds traffic as a run escalates.
+        ///
+        /// Traffic was spawned once at bootstrap and only recycled after that, so the
+        /// road at 10 km was exactly as busy as the road at 200 m. Density is the main
+        /// lever an endless driving game has for pacing, and it was not being pulled.
+        private void EscalateTraffic()
         {
-            var trafficRoot = new GameObject("Living Highway Traffic").transform;
+            if (livingTraffic == null || GameState.RunOver) return;
+            trafficTopUpTimer -= Time.deltaTime;
+            if (trafficTopUpTimer > 0f) return;
+            trafficTopUpTimer = 2.5f;
+
+            var laneCount = LaneCountFor(BiomeIndexAt(TrafficCarController.PlayerDistance));
+            var ceiling = laneCount >= 3 ? PeakTrafficCount
+                        : laneCount == 2 ? Mathf.RoundToInt(PeakTrafficCount * 0.65f)
+                        : Mathf.RoundToInt(PeakTrafficCount * 0.45f);
+            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount, ceiling, GameState.RunIntensity));
+            if (TrafficCarController.All.Count >= target) return;
+
+            // Spawned well ahead so a car never appears in view.
             var models = new[]
             {
                 "SK_Veh_Preset_Sedan_01", "SK_Veh_Preset_Hatch_01", "SK_Veh_Preset_Sports_01",
-                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_02"
+                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_01",
+                "SK_Veh_Preset_Ute_02", "SK_Veh_Preset_Ute_03", "SK_Veh_Preset_Ute_04"
             };
+            var index = TrafficCarController.All.Count;
+            var lane = new[] { -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f }[index % 6];
+            var direction = lane < 0f ? 1f : -1f;
+            // Violators get more common as the run escalates, so the road grows more
+            // hostile rather than merely more crowded.
+            var violatorOdds = Mathf.Lerp(0.28f, 0.55f, GameState.RunIntensity);
+            var offence = Random.value < violatorOdds
+                ? OffenceCycle[index % OffenceCycle.Length]
+                : TrafficCarController.Offence.None;
+            var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
+                        * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
+
+            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", models[index % models.Length],
+                Color.white, TrafficCarController.PlayerDistance + Random.Range(320f, 520f),
+                lane, speed, direction, false, 0f, offence);
+        }
+
+        private void BuildTraffic()
+        {
+            var trafficRoot = new GameObject("Living Highway Traffic").transform;
+            livingTraffic = trafficRoot;
+            // Six presets out of the fifteen the pack ships, on a twelve-car spawn, meant
+            // the same model appeared twice in a row often enough to read as a repeat.
+            // The four utes and the four truck bodies are all here now, so a full block
+            // of traffic no longer duplicates.
+            var models = new[]
+            {
+                "SK_Veh_Preset_Sedan_01", "SK_Veh_Preset_Hatch_01", "SK_Veh_Preset_Sports_01",
+                "SK_Veh_Preset_Muscle_01", "SK_Veh_Preset_Exotic_01", "SK_Veh_Preset_Ute_01",
+                "SK_Veh_Preset_Ute_02", "SK_Veh_Preset_Ute_03", "SK_Veh_Preset_Ute_04"
+            };
+            // Distinct bodies for the two special roles, so a tanker and a hauler in the
+            // same block are not the same lorry twice.
+            var tankers = new[] { "SK_Veh_Preset_Truck_01", "SK_Veh_Preset_Truck_02" };
+            var haulers = new[] { "SK_Veh_Preset_Truck_03", "SK_Veh_Preset_Truck_04" };
             var palette = new[]
             {
                 new Color(0.82f, 0.10f, 0.08f), new Color(0.10f, 0.34f, 0.88f),
@@ -4169,12 +5609,12 @@ namespace RoadRage.UnityRemake
                 if (i == 4 || i == 9)
                 {
                     role = TrafficCarController.VehicleRole.FuelTanker;
-                    model = "SK_Veh_Preset_Truck_01";
+                    model = tankers[i % tankers.Length];
                 }
                 else if (i == 6 || i == 11)
                 {
                     role = TrafficCarController.VehicleRole.CarHauler;
-                    model = "SK_Veh_Preset_Truck_03";
+                    model = haulers[i % haulers.Length];
                 }
 
                 CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", model,
@@ -4183,7 +5623,7 @@ namespace RoadRage.UnityRemake
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length}");
             BuildAccidentScene(trafficRoot, startDistance + 210f, -1f, models[1], models[3]);
-            BuildAccidentScene(trafficRoot, startDistance + 470f, 1f, models[0], models[4]);
+            BuildAccidentScene(trafficRoot, startDistance + 470f, 1f, models[0], models[8]);
         }
 
         private TrafficCarController CreateTrafficVehicle(Transform parent, string name, string modelName,
@@ -4270,16 +5710,81 @@ namespace RoadRage.UnityRemake
                     if (typeName.Contains("Halo") || typeName.Contains("Flare") || typeName.Contains("LensFlare") || typeName.Contains("Light"))
                         DestroyImmediate(b);
                 }
-                NormalizeVehicleVisual(visual, 4.75f);
+                NormalizeVehicleVisual(visual, VehicleLengthFor(modelName));
             }
             var controller = root.gameObject.AddComponent<TrafficCarController>();
             controller.Role = role;
-            if (TryGetCombinedBounds(root.gameObject, out var tb))
-                controller.SetFootprint(tb.size.z * 0.5f, tb.size.x * 0.5f);
-            if (role == TrafficCarController.VehicleRole.CarHauler) controller.SetFootprint(4.8f, 1.4f);
-            else if (role == TrafficCarController.VehicleRole.FuelTanker) controller.SetFootprint(4.5f, 1.4f);
+            // Hull comes from the mesh, always. The hand-set role footprints that used
+            // to override this described vehicles two to three times longer than what
+            // was actually being drawn, which is the other half of the clipping: the
+            // hull and the model were not the same object.
+            if (TryGetLocalFootprint(root.gameObject, out var halfLength, out var halfWidth))
+                controller.SetFootprint(halfLength, halfWidth);
             controller.Initialize(distance, lane, speed, direction, wreck, wreckYaw, offence);
             return controller;
+        }
+
+        /// Hull footprint measured in the vehicle root's own frame.
+        ///
+        /// The previous measurement read a world-space AABB (Renderer.bounds) taken
+        /// before the car had been rotated onto the road, so "length" was whichever way
+        /// the model happened to point inside its chunk - and the Synty presets import
+        /// Z-up and are then rolled 90 degrees, which leaves the long axis across world
+        /// Z on most of them. A 4.75 m car was registering as roughly 2 m long and
+        /// 4.75 m wide, so the longitudinal reach the overlap test used was less than
+        /// half of what it should have been: two cars had to bury a quarter of their
+        /// length in one another before contact registered. That is the clipping.
+        ///
+        /// Measuring in local space fixes the axes, and since a road vehicle is always
+        /// longer than it is wide the larger horizontal extent is the length regardless
+        /// of which way a given FBX was authored.
+        private static bool TryGetLocalFootprint(GameObject item, out float halfLength, out float halfWidth)
+        {
+            halfLength = 0f;
+            halfWidth = 0f;
+            var renderers = item.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return false;
+
+            var toLocal = item.transform.worldToLocalMatrix;
+            var min = new Vector3(float.MaxValue, float.MaxValue, float.MaxValue);
+            var max = new Vector3(float.MinValue, float.MinValue, float.MinValue);
+            foreach (var renderer in renderers)
+            {
+                var bounds = renderer.bounds;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var world = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f));
+                    var local = toLocal.MultiplyPoint3x4(world);
+                    min = Vector3.Min(min, local);
+                    max = Vector3.Max(max, local);
+                }
+            }
+
+            var size = max - min;
+            halfLength = Mathf.Max(size.x, size.z) * 0.5f;
+            halfWidth = Mathf.Min(size.x, size.z) * 0.5f;
+            return halfLength > 0.01f && halfWidth > 0.01f;
+        }
+
+        /// Kerb-weight lengths in metres, so a lorry is a lorry. Every traffic vehicle
+        /// used to be normalised to a flat 4.75 m, which shrank the trucks to hatchback
+        /// size on screen while their collision hulls stayed hand-set at 9.6 m and 9.0 m
+        /// - a lorry reserved twice its own visible length of road and the traffic
+        /// behind it braked for empty asphalt.
+        private static float VehicleLengthFor(string modelName)
+        {
+            if (modelName.Contains("Motorbike")) return 2.15f;
+            if (modelName.Contains("Hatch")) return 4.15f;
+            if (modelName.Contains("Sports")) return 4.45f;
+            if (modelName.Contains("Exotic")) return 4.55f;
+            if (modelName.Contains("Sedan")) return 4.85f;
+            if (modelName.Contains("Muscle")) return 5.05f;
+            if (modelName.Contains("Ute")) return 5.45f;
+            if (modelName.Contains("Truck")) return 9.20f;
+            return 4.60f;
         }
 
         private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
@@ -4583,7 +6088,7 @@ namespace RoadRage.UnityRemake
         }
     }
 
-    public sealed class ArcadeCarController : MonoBehaviour
+    public sealed class ArcadeCarController : MonoBehaviour, IRoadVehicle
     {
         public float SpeedKph { get; internal set; } = 0f;
         public float CountdownTimer { get; set; } = 3.2f;
@@ -4591,6 +6096,29 @@ namespace RoadRage.UnityRemake
         /// Measured from the spawned vehicle so collision matches the mesh.
         public float HalfLength { get; internal set; } = 2.5f;
         public float HalfWidth { get; internal set; } = 1.3f;
+        // --- IRoadVehicle -------------------------------------------------------
+        public float ContactDistance => RoadDistance;
+        public float ContactLateral => LateralOffset;
+        public float ContactHalfLength => HalfLength;
+        public float ContactHalfWidth => HalfWidth;
+        public float ContactHeight => verticalOffset;
+        /// Heaviest thing on the road by a wide margin. Being shoved off your line by
+        /// scenery traffic reads as losing the car, so the player absorbs the smallest
+        /// share of every correction.
+        public float ContactMass => HalfLength * HalfWidth * 4f;
+        /// False while the aftertouch director owns the transform during a crash tumble.
+        public bool ContactActive => isActiveAndEnabled && !ClearsTraffic;
+
+        public void ApplyContactPush(float alongRoad, float acrossRoad)
+        {
+            RoadDistance += alongRoad;
+            LateralOffset += acrossRoad;
+        }
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+        // ------------------------------------------------------------------------
+
         public float DistanceKm => totalDistance / 1000f;
         public float RoadDistance { get; internal set; } = 5f;
         public float LateralOffset { get; internal set; } = -2.25f;
@@ -4651,6 +6179,24 @@ namespace RoadRage.UnityRemake
         public float SteerInput => Mathf.Clamp(GameInput.GetSteer() + TouchSteer, -1f, 1f);
         public float LateralVelocity => lateralVelocity;
         public bool IsAirborne => verticalOffset > 0.05f;
+        /// High enough to pass over traffic rather than through it. Contact and
+        /// separation are both skipped above this, so a jump clears the cars below.
+        internal bool ClearsTraffic => verticalOffset >= 1.6f;
+
+        /// Re-applies the road-space position. Update places the car, then the shared
+        /// separation pass runs in LateUpdate and may still move it; without this the
+        /// correction would not reach the transform until the following frame.
+        internal void SyncToRoad() =>
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f + verticalOffset);
+
+        /// Resolve contacts against every other vehicle once all of them have moved,
+        /// then re-place. Update has already positioned the car; this is what carries
+        /// the correction onto the transform in the same frame.
+        private void LateUpdate()
+        {
+            VehicleContacts.ResolveOncePerFrame();
+            if (isActiveAndEnabled) SyncToRoad();
+        }
         public float AirtimeDuration { get; private set; }
 
         private float verticalOffset;
@@ -4796,7 +6342,7 @@ namespace RoadRage.UnityRemake
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             
             // Only test ground collision if not flying high over cars
-            if (verticalOffset < 1.6f)
+            if (!ClearsTraffic)
             {
                 TrafficCarController.ResolvePlayerCollision(this);
             }
@@ -4818,19 +6364,10 @@ namespace RoadRage.UnityRemake
             nextImpactTime = Time.time + 0.35f;
             var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
 
-            // Physical anti-penetration pushback: separate the two vehicle hulls so they NEVER pass inside each other!
-            var minLongitudinal = (HalfLength + traffic.HalfLength) * 0.98f;
-            if (Mathf.Abs(longitudinalGap) < minLongitudinal)
-            {
-                var delta = Mathf.Sign(longitudinalGap) * (minLongitudinal - Mathf.Abs(longitudinalGap));
-                RoadDistance += delta * 0.6f;
-            }
-            var minLateral = (HalfWidth + traffic.HalfWidth) * 0.92f;
-            if (Mathf.Abs(lateralGap) < minLateral)
-            {
-                var deltaLat = Mathf.Sign(lateralGap) * (minLateral - Mathf.Abs(lateralGap));
-                LateralOffset -= deltaLat * 0.75f;
-            }
+            // Anti-penetration is no longer done here. It used to push on both axes at
+            // once with its own shrunken hull sizes, fighting the traffic's separate
+            // resolution of the same contact; both now go through the single relaxation
+            // pass in TrafficCarController, which runs after every vehicle has moved.
 
             // Armour is the reason to drive a truck: it cuts how much speed an impact
             // scrubs off and how far you get shoved. Upgrades and ram bars stack on top of the chassis.
@@ -5404,11 +6941,26 @@ namespace RoadRage.UnityRemake
             {
                 var heat = RoadRagePolicePursuitDirector.Instance.HeatLevel;
                 var stars = new string('★', heat) + new string('☆', 5 - heat);
-                var heatText = $"🚨 WANTED: {stars}  (HEAT {heat})";
+                var director = RoadRagePolicePursuitDirector.Instance;
+                var heatText = $"🚨 WANTED: {stars}   ${Mathf.RoundToInt(director.PursuitBounty)}";
                 var flash = Mathf.Sin(Time.unscaledTime * 8f) > 0f;
                 var prevColor = titleStyle.normal.textColor;
                 titleStyle.normal.textColor = flash ? new Color(1f, 0.25f, 0.2f) : new Color(0.2f, 0.65f, 1f);
-                GUI.Label(new Rect(Screen.width * 0.5f - 180f, 76f, 360f, 36f), heatText, titleStyle);
+                GUI.Label(new Rect(Screen.width * 0.5f - 200f, 76f, 400f, 36f), heatText, titleStyle);
+
+                // Which way the pursuit is going. Both endings used to arrive with no
+                // warning, so a chase read as noise rather than as something the player
+                // was winning or losing.
+                var bust = director.BustProgress;
+                var evade = director.EvadeProgress;
+                if (bust > 0.01f || evade > 0.01f)
+                {
+                    var losing = bust > evade;
+                    titleStyle.normal.textColor = losing ? new Color(1f, 0.35f, 0.25f) : new Color(0.45f, 1f, 0.55f);
+                    var pct = Mathf.RoundToInt((losing ? bust : evade) * 100f);
+                    GUI.Label(new Rect(Screen.width * 0.5f - 200f, 110f, 400f, 32f),
+                        losing ? $"BUSTED IN... {100 - pct}%" : $"LOSING THEM... {pct}%", titleStyle);
+                }
                 titleStyle.normal.textColor = prevColor;
             }
             GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
@@ -6523,6 +8075,44 @@ namespace RoadRage.UnityRemake
             }
             catch {}
             return false;
+        }
+
+        /// Cycles weather. Weather is rolled at random per run, and storm halves the sun
+        /// while doubling the fog, so two runs of the same biome are not comparable unless
+        /// the weather is pinned - which quietly invalidated every A/B of the lighting.
+        /// P logs the render cost of the loaded world - the measurement Gate A was
+        /// decided on. Not a debug flag: foliage work has to be judged on this number
+        /// and it should not need a command-line argument to read.
+        public static bool GetPKeyPressed()
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && kb.pKey.wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(KeyCode.P)) return true;
+        	}
+        	catch {}
+        	return false;
+        }
+
+        public static bool GetKKeyPressed()
+        {
+        	try
+        	{
+        		var kb = UnityEngine.InputSystem.Keyboard.current;
+        		if (kb != null && kb.kKey.wasPressedThisFrame) return true;
+        	}
+        	catch {}
+        	try
+        	{
+        		if (Input.GetKeyDown(KeyCode.K)) return true;
+        	}
+        	catch {}
+        	return false;
         }
 
         public static bool GetGKeyPressed()

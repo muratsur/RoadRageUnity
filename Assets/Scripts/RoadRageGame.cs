@@ -89,6 +89,15 @@ namespace RoadRage.UnityRemake
         public static int Takedowns;
         public static float RunDistanceKm;
 
+        /// 0 at the start of a run, 1 once it has become as busy as it gets.
+        ///
+        /// Nothing scaled with distance before this. Traffic count, violator frequency
+        /// and cruise speeds were all fixed at bootstrap, so minute twenty of a run was
+        /// identical to minute one and the only thing that changed was the score. An
+        /// endless game with a flat difficulty curve has no arc to it - there is nothing
+        /// to survive, only something to continue.
+        public static float RunIntensity => Mathf.Clamp01(RunDistanceKm / 6f);
+
         /// Run state. Without these the run never ended, AwardCash was never called, and
         /// the garage economy was unreachable by playing - only the login bonus fed it.
         public const float MaxIntegrity = 100f;

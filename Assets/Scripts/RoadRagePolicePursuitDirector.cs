@@ -25,6 +25,36 @@ namespace RoadRage.UnityRemake
         public IReadOnlyList<PoliceVehicleController> ActivePolice => activePolice;
         private readonly List<GameObject> activeRoadblocks = new();
 
+        /// Bounty earned so far in this pursuit. Paid out on escape, lost on a bust -
+        /// which is what makes staying in a pursuit a decision rather than an accident.
+        public float PursuitBounty { get; private set; }
+        /// Seconds the player has been clear of every cruiser, and seconds they have
+        /// been pinned. The two ends of the pursuit.
+        private float evadeTimer;
+        private float bustTimer;
+        private float pursuitSeconds;
+        /// Units sent this pursuit. With an empty list the nearest-cruiser distance is
+        /// infinite, so the evade timer ran before anything had been dispatched and the
+        /// pursuit could end before a single cruiser existed - sirens, then nothing.
+        private int unitsDispatched;
+
+        /// 0-1 towards shaking them, and towards being taken. Surfaced so the HUD can
+        /// show the player which way a pursuit is going; without that both endings
+        /// arrive unannounced and a pursuit reads as noise.
+        public float EvadeProgress => HeatLevel > 0 && unitsDispatched > 0
+            ? Mathf.Clamp01(evadeTimer / EvadeSecondsFor(HeatLevel)) : 0f;
+        public float BustProgress => Mathf.Clamp01(bustTimer / BustSeconds);
+
+        /// No cruiser within this and the player is running clear.
+        private const float EvadeRadius = 135f;
+        /// Pinned means slow with a cruiser in contact range.
+        private const float BustSpeedKph = 38f;
+        private const float BustRadius = 14f;
+        private const float BustSeconds = 3.5f;
+        /// Cooldown lengthens with heat, so shaking five stars is real work and shaking
+        /// one is not. Two stars is a few seconds of clear road; five is most of a minute.
+        private static float EvadeSecondsFor(int heat) => 5f + heat * 4.5f;
+
         private float spawnTimer;
         private float roadblockTimer;
         private float sirenAudioTimer;
@@ -112,8 +142,12 @@ namespace RoadRage.UnityRemake
             if (HeatLevel > 0)
             {
                 spawnTimer += Time.deltaTime;
-                var maxUnits = Mathf.Min(HeatLevel, 3);
-                var spawnInterval = Mathf.Max(3.5f, 9f - HeatLevel * 1.2f);
+                // Heat 1 sent one cruiser and capped there, which is trivially outrun -
+                // the pursuit was over before it registered. Escalation has to be felt.
+                var maxUnits = Mathf.Min(1 + HeatLevel, RoadRageBootstrap.RichDetailBudget ? 5 : 3);
+                var spawnInterval = Mathf.Max(2.5f, 8f - HeatLevel * 1.2f);
+                // The first unit of a pursuit does not wait out the interval.
+                if (unitsDispatched == 0) spawnTimer = spawnInterval;
 
                 if (spawnTimer >= spawnInterval && activePolice.Count < maxUnits)
                 {
@@ -131,9 +165,41 @@ namespace RoadRage.UnityRemake
                         SpawnRoadblock();
                     }
                 }
+
+                // Spike strips from three stars: the tool that answers simply holding
+                // the throttle down, which is otherwise the solution to every pursuit.
+                if (HeatLevel >= 3)
+                {
+                    spikeTimer += Time.deltaTime;
+                    if (spikeTimer >= 11f)
+                    {
+                        spikeTimer = 0f;
+                        SpawnSpikeStrip();
+                    }
+                }
             }
 
-            // 4. Clean up stale roadblocks
+            // 4. The pursuit's two endings.
+            //
+            // Until now heat only ever went up, cruisers never left, and there was no
+            // busted state - so there was nothing the player could actually do about the
+            // police, win or lose. A pursuit needs an exit at both ends to be a
+            // mechanic: outrun them and get paid, or get pinned and lose the purse.
+            if (HeatLevel > 0)
+            {
+                pursuitSeconds += Time.deltaTime;
+                PursuitBounty += Time.deltaTime * (35f + HeatLevel * 55f);
+                // Staying in a pursuit escalates it. Takedowns were the only source of
+                // heat, so a chase never grew on its own and every pursuit stayed at the
+                // star it started on - the escalation the whole system is built around
+                // simply never happened.
+                AddHeat(Time.deltaTime / 22f);
+                UpdatePursuitOutcome();
+            }
+
+            UpdateSpikeStrips();
+
+            // 5. Clean up stale roadblocks
             for (var i = activeRoadblocks.Count - 1; i >= 0; i--)
             {
                 var rb = activeRoadblocks[i];
@@ -143,6 +209,75 @@ namespace RoadRage.UnityRemake
                     activeRoadblocks.RemoveAt(i);
                 }
             }
+        }
+
+        private void UpdatePursuitOutcome()
+        {
+            var nearest = float.MaxValue;
+            var pinning = 0;
+            for (var i = activePolice.Count - 1; i >= 0; i--)
+            {
+                var cop = activePolice[i];
+                if (cop == null) { activePolice.RemoveAt(i); continue; }
+                var gap = Mathf.Abs(cop.RoadDistance - playerController.RoadDistance);
+                nearest = Mathf.Min(nearest, gap);
+                if (gap < BustRadius) pinning++;
+            }
+
+            // Escape: clear of every unit for long enough that they have lost the trail.
+            // Only once something has actually been sent.
+            evadeTimer = unitsDispatched > 0 && nearest > EvadeRadius ? evadeTimer + Time.deltaTime : 0f;
+            if (evadeTimer >= EvadeSecondsFor(HeatLevel))
+            {
+                EndPursuit(escaped: true);
+                return;
+            }
+
+            // Bust: pinned slow with a unit on you. Being slow is only fatal while they
+            // are alongside, so braking to dodge traffic is not punished by itself.
+            var pinned = pinning > 0 && playerController.SpeedKph < BustSpeedKph;
+            bustTimer = pinned ? bustTimer + Time.deltaTime : Mathf.MoveTowards(bustTimer, 0f, Time.deltaTime * 2f);
+            if (bustTimer >= BustSeconds) EndPursuit(escaped: false);
+        }
+
+        private void EndPursuit(bool escaped)
+        {
+            // A long pursuit pays more than the sum of its seconds. Surviving five stars
+            // for a minute should feel different from shaking one star immediately, and
+            // a flat rate makes those the same thing.
+            var endurance = 1f + Mathf.Clamp01(pursuitSeconds / 90f) * 0.75f;
+            var payout = Mathf.RoundToInt(PursuitBounty * endurance);
+            if (escaped)
+            {
+                GameState.Award(payout, $"🚔 LOST THEM  +{payout}");
+                if (RoadRageBoostDirector.Instance != null)
+                    RoadRageBoostDirector.Instance.AddBoost(60f, "CLEAN GETAWAY");
+            }
+            else
+            {
+                GameState.Show($"🚨 BUSTED  -{payout}");
+                GameState.Score = Mathf.Max(0, GameState.Score - payout);
+                GameState.ApplyDamage(22f);
+                GameState.Combo = 0;
+            }
+
+            for (var i = activePolice.Count - 1; i >= 0; i--)
+                if (activePolice[i] != null) Destroy(activePolice[i].gameObject);
+            activePolice.Clear();
+
+            for (var i = activeSpikes.Count - 1; i >= 0; i--)
+                if (activeSpikes[i].Root != null) Destroy(activeSpikes[i].Root);
+            activeSpikes.Clear();
+            spikeTimer = 0f;
+
+            HeatLevel = 0;
+            HeatProgress = 0f;
+            PursuitBounty = 0f;
+            unitsDispatched = 0;
+            pursuitSeconds = 0f;
+            evadeTimer = 0f;
+            bustTimer = 0f;
+            spawnTimer = 0f;
         }
 
         private void SpawnPoliceUnit()
@@ -162,6 +297,94 @@ namespace RoadRage.UnityRemake
             var cop = copObj.AddComponent<PoliceVehicleController>();
             cop.Initialize(playerController, HeatLevel, spawnDist, spawnLane, slot);
             activePolice.Add(cop);
+            unitsDispatched++;
+        }
+
+        /// A live spike strip laid across part of the carriageway.
+        ///
+        /// Promised in this class's own summary since it was written and never built.
+        /// It is the one pursuit tool that punishes the obvious answer to a chase -
+        /// holding the throttle down in a straight line - so without it every pursuit
+        /// has the same solution.
+        private struct SpikeStrip
+        {
+            public float Distance;
+            public float Lane;
+            public float HalfWidth;
+            public GameObject Root;
+            public bool Spent;
+        }
+
+        private readonly List<SpikeStrip> activeSpikes = new();
+        private float spikeTimer;
+
+        private void SpawnSpikeStrip()
+        {
+            var targetDist = playerController.RoadDistance + 190f;
+            var halfWidth = RoadPath.HalfWidthAt(targetDist);
+            // Deliberately never the full carriageway. A hazard with no way past it is
+            // not a decision, it is a toll - the player has to be able to read the gap
+            // and take it.
+            var stripHalf = halfWidth * 0.42f;
+            var side = Random.value > 0.5f ? 1f : -1f;
+            var lane = side * (halfWidth - stripHalf);
+
+            var root = new GameObject("Police Spike Strip");
+            root.transform.position = RoadPath.Point(targetDist, lane, 0.06f);
+            root.transform.rotation = RoadPath.Rotation(targetDist);
+
+            var strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            strip.name = "Spikes";
+            strip.transform.SetParent(root.transform, false);
+            strip.transform.localScale = new Vector3(stripHalf * 2f, 0.12f, 1.1f);
+            var collider = strip.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+            var renderer = strip.GetComponent<Renderer>();
+            if (renderer != null)
+            {
+                var mat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
+                { name = "Spike Strip", color = new Color(0.85f, 0.72f, 0.12f) };
+                if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.8f);
+                renderer.sharedMaterial = mat;
+            }
+
+            activeSpikes.Add(new SpikeStrip
+            {
+                Distance = targetDist, Lane = lane, HalfWidth = stripHalf, Root = root, Spent = false
+            });
+            GameState.Show(side > 0f ? "⚠️ SPIKES RIGHT - GO LEFT!" : "⚠️ SPIKES LEFT - GO RIGHT!");
+        }
+
+        private void UpdateSpikeStrips()
+        {
+            for (var i = activeSpikes.Count - 1; i >= 0; i--)
+            {
+                var spike = activeSpikes[i];
+                if (spike.Root == null) { activeSpikes.RemoveAt(i); continue; }
+
+                if (playerController.RoadDistance - spike.Distance > 70f)
+                {
+                    Destroy(spike.Root);
+                    activeSpikes.RemoveAt(i);
+                    continue;
+                }
+
+                if (spike.Spent) continue;
+                if (Mathf.Abs(playerController.RoadDistance - spike.Distance) > 2.2f) continue;
+                if (Mathf.Abs(playerController.LateralOffset - spike.Lane) > spike.HalfWidth) continue;
+
+                spike.Spent = true;
+                activeSpikes[i] = spike;
+
+                // Costly but never a run-ender on its own: it takes the speed that was
+                // keeping you ahead, which is what makes the next few seconds matter.
+                playerController.SpeedKph *= 0.45f;
+                GameState.ApplyDamage(12f);
+                GameState.Show("💥 SPIKED! TYRES SHREDDED");
+                if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.7f);
+                if (RoadRageHapticsDirector.Instance != null)
+                    RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.8f);
+            }
         }
 
         private void SpawnRoadblock()
@@ -205,8 +428,14 @@ namespace RoadRage.UnityRemake
         public void NotifyPoliceDestroyed(PoliceVehicleController cop)
         {
             activePolice.Remove(cop);
-            GameState.Award(750 + HeatLevel * 250, "🚨 COP TAKEDOWN!");
-            GameState.Show($"🚨 COP TAKEDOWN! +${750 + HeatLevel * 250}");
+            var value = 750 + HeatLevel * 250;
+            GameState.Award(value, "🚨 COP TAKEDOWN!");
+            // Wrecking a cruiser should pay into the pursuit it belongs to and feed the
+            // boost that made it possible - that loop of risk paying for more speed is
+            // the whole reason to take one on rather than simply outrun it.
+            PursuitBounty += value * 0.5f;
+            if (RoadRageBoostDirector.Instance != null)
+                RoadRageBoostDirector.Instance.AddBoost(45f, "COP TAKEDOWN");
         }
 
         public void ResetPursuit()
@@ -230,12 +459,89 @@ namespace RoadRage.UnityRemake
     /// <summary>
     /// AI controller for high-speed police pursuit cruisers with flashing lightbars and PIT maneuvers.
     /// </summary>
-    public sealed class PoliceVehicleController : MonoBehaviour
+    public sealed class PoliceVehicleController : MonoBehaviour, IRoadVehicle
     {
         public float RoadDistance { get; internal set; }
         public float LateralOffset { get; internal set; }
         public float SpeedKph { get; internal set; } = 95f;
         public int SlotIndex { get; private set; }
+
+        // --- IRoadVehicle -------------------------------------------------------
+        // Cruisers used to resolve against each other and against the player, but never
+        // against traffic - so a pursuit unit drove clean through the cars it was
+        // chasing. Joining the shared registry is the fix; the duplicated resolution
+        // below it is gone.
+        public float ContactDistance => RoadDistance;
+        public float ContactLateral => LateralOffset;
+        public float ContactHalfLength => hullHalfLength;
+        public float ContactHalfWidth => hullHalfWidth;
+        public float ContactHeight => 0f;
+        /// A little heavier than civilian traffic: an interceptor shoulders a hatchback
+        /// out of the way rather than being deflected off the player's tail by it.
+        public float ContactMass => hullHalfLength * hullHalfWidth * 1.35f;
+        public bool ContactActive => isActiveAndEnabled && !isWrecked;
+
+        public void ApplyContactPush(float alongRoad, float acrossRoad)
+        {
+            RoadDistance += alongRoad;
+            LateralOffset += acrossRoad;
+        }
+
+        /// Measured off the spawned mesh, like every other vehicle. The 4.8 m / 2.4 m
+        /// constants this replaces were a guess that matched no car in the game.
+        private float hullHalfLength = 2.4f;
+        private float hullHalfWidth = 1.2f;
+        /// Slightly wider than the separation skin, so contact registers on the frame
+        /// the hulls meet rather than never.
+        private const float ContactMargin = 0.35f;
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+
+        private void LateUpdate()
+        {
+            VehicleContacts.ResolveOncePerFrame();
+            if (isWrecked) return;
+            CheckTrafficImpact();
+            var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
+            LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
+            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
+        }
+        // ------------------------------------------------------------------------
+
+        /// A cruiser that piles into traffic wrecks, like anything else on this road.
+        ///
+        /// Until it joined the shared contact registry a cruiser could only be stopped
+        /// by the player hitting it, so the traffic it was weaving through at 140 km/h
+        /// was scenery to it. Making it mortal to the world is what turns a pursuit into
+        /// something the player can fight with the road rather than only outrun: brake
+        /// hard, let them commit to a gap that closes, and the highway does the work.
+        private void CheckTrafficImpact()
+        {
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car == null || car.IsAirborne) continue;
+
+                var alongRoad = Mathf.Abs(car.RoadDistance - RoadDistance);
+                if (alongRoad > hullHalfLength + car.LongitudinalExtent + ContactMargin) continue;
+                var acrossRoad = Mathf.Abs(car.LaneOffset - LateralOffset);
+                if (acrossRoad > hullHalfWidth + car.LateralExtent + ContactMargin) continue;
+
+                // Closing speed decides it. Nudging a car at matched speed is a scrape;
+                // arriving 40 km/h faster than it is a wreck.
+                var closing = Mathf.Abs(SpeedKph - car.SpeedKph);
+                if (car.IsWreck || closing > 40f)
+                {
+                    GameState.Show("🚨 CRUISER WIPED OUT!");
+                    if (!car.IsWreck) car.Crash(acrossRoad, SpeedKph);
+                    WreckCop();
+                    return;
+                }
+                SpeedKph = Mathf.Min(SpeedKph, car.SpeedKph + 10f);
+            }
+        }
 
         private ArcadeCarController targetPlayer;
         private int unitHeatLevel;
@@ -259,8 +565,6 @@ namespace RoadRage.UnityRemake
 
         private Material redLedMat;
         private Material blueLedMat;
-        private Renderer[] redLeds;
-        private Renderer[] blueLeds;
 
         private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
         {
@@ -302,6 +606,10 @@ namespace RoadRage.UnityRemake
                 }
                 foreach (var col in vehicleInstance.GetComponentsInChildren<Collider>()) Destroy(col);
                 NormalizeVehicleVisual(vehicleInstance, 4.8f);
+                // Hull follows the mesh that was just normalised, so the cruiser
+                // collides as the car you can see rather than as a fixed guess.
+                hullHalfLength = 4.8f * 0.5f;
+                hullHalfWidth = Mathf.Max(0.8f, hullHalfLength * 0.42f);
             }
             else
             {
@@ -368,8 +676,35 @@ namespace RoadRage.UnityRemake
             b1.GetComponent<Renderer>().material = blueLedMat;
             Destroy(b1.GetComponent<Collider>());
 
-            redLeds = new[] { r1.GetComponent<Renderer>() };
-            blueLeds = new[] { b1.GetComponent<Renderer>() };
+            // The two Light fields have been declared since this class was written and
+            // never created, so a cruiser cast no light at all - the lightbar was two
+            // emissive cubes and nothing else. On a wet night street the flashing red
+            // and blue thrown onto the road is most of what a pursuit looks like.
+            // Ten realtime point lights across five cruisers is not affordable on a
+            // device that already cannot produce a frame. Where there is no budget the
+            // lens emission still pulses, which reads at distance; only the cast light
+            // is dropped.
+            if (RoadRageBootstrap.RichDetailBudget)
+            {
+                redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), Color.red);
+                blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
+            }
+        }
+
+        private static Light MakeStrobe(Transform parent, Vector3 localPosition, Color colour)
+        {
+            var holder = new GameObject("Strobe");
+            holder.transform.SetParent(parent, false);
+            holder.transform.localPosition = localPosition;
+            var light = holder.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.color = colour;
+            light.range = 18f;
+            light.intensity = 0f;
+            // No shadows: up to five cruisers carry two of these each, and a shadow-
+            // casting strobe apiece is not worth what it costs.
+            light.shadows = LightShadows.None;
+            return light;
         }
 
         private float wreckSlideDir;
@@ -402,6 +737,9 @@ namespace RoadRage.UnityRemake
             {
                 blueLedMat.SetColor("_EmissionColor", !isRed ? new Color(0.1f, 0.5f, 1f) * 5.5f : Color.black);
             }
+            // Same phase as the emission, so the cast light and the glowing lens agree.
+            if (redStrobe != null) redStrobe.intensity = isRed ? 5.5f : 0f;
+            if (blueStrobe != null) blueStrobe.intensity = isRed ? 0f : 5.5f;
 
             if (targetPlayer == null) return;
 
@@ -449,70 +787,29 @@ namespace RoadRage.UnityRemake
             var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
 
-            // 3. Continuous Inter-Police Anti-Penetration Resolution (Never merge or sink into each other!)
-            if (RoadRagePolicePursuitDirector.Instance != null)
-            {
-                var allCops = RoadRagePolicePursuitDirector.Instance.ActivePolice;
-                for (var i = allCops.Count - 1; i >= 0; i--)
-                {
-                    var other = allCops[i];
-                    if (other == null || other == this) continue;
+            // Anti-penetration - against other cruisers, the player AND traffic - is
+            // handled by the shared vehicle pass in LateUpdate, after everything has
+            // moved. The two hand-rolled resolvers that used to live here only knew
+            // about police and the player, which is why cruisers drove through traffic.
 
-                    var deltaDist = other.RoadDistance - RoadDistance;
-                    var reach = 4.8f;
-                    if (Mathf.Abs(deltaDist) > reach) continue;
-
-                    var deltaLat = other.LateralOffset - LateralOffset;
-                    var latReach = 2.4f;
-                    if (Mathf.Abs(deltaLat) > latReach) continue;
-
-                    // Physical pushback between cop cruisers
-                    var overlapDist = reach - Mathf.Abs(deltaDist);
-                    if (deltaDist > 0f)
-                    {
-                        other.RoadDistance += overlapDist * 0.5f;
-                        RoadDistance -= overlapDist * 0.5f;
-                    }
-                    else
-                    {
-                        RoadDistance += overlapDist * 0.5f;
-                        other.RoadDistance -= overlapDist * 0.5f;
-                    }
-
-                    var overlapLat = latReach - Mathf.Abs(deltaLat);
-                    var latSign = Mathf.Sign(deltaLat);
-                    if (Mathf.Abs(latSign) < 0.01f) latSign = (SlotIndex > other.SlotIndex ? 1f : -1f);
-                    other.LateralOffset += latSign * overlapLat * 0.55f;
-                    LateralOffset -= latSign * overlapLat * 0.55f;
-                }
-            }
-
-            // 4. Continuous Police-to-Player Anti-Penetration Resolution
-            var playerDistDelta = RoadPath.SignedDelta(RoadDistance, targetPlayer.RoadDistance);
-            var playerReachLong = 4.8f;
-            if (Mathf.Abs(playerDistDelta) < playerReachLong)
-            {
-                var playerDistLat = targetPlayer.LateralOffset - LateralOffset;
-                var playerReachLat = 2.25f;
-                if (Mathf.Abs(playerDistLat) < playerReachLat)
-                {
-                    var overlapLat = playerReachLat - Mathf.Abs(playerDistLat);
-                    var signLat = Mathf.Sign(playerDistLat);
-                    if (Mathf.Abs(signLat) < 0.01f) signLat = 1f;
-                    LateralOffset -= signLat * overlapLat * 0.7f;
-                    targetPlayer.LateralOffset += signLat * overlapLat * 0.3f;
-                }
-            }
-
-            transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
             transform.rotation = RoadPath.Rotation(RoadDistance);
 
-            // 5. Check for collision with player car
-            var playerPos = targetPlayer.transform.position;
-            var copPos = transform.position;
-            var dist = Vector3.Distance(playerPos, copPos);
-
-            if (dist < 3.2f)
+            // 5. Check for collision with player car.
+            //
+            // Measured in road space rather than from the two transforms. Placement
+            // moved to LateUpdate when the cruiser joined the shared contact pass, so
+            // by the time this runs transform.position still holds last frame's value -
+            // at pursuit speed that is most of a metre of error on a 3.2 m test.
+            // RoadDistance and LateralOffset are current on both vehicles here.
+            // Tested against the hulls, not a fixed 3.2 m radius. The shared contact
+            // pass holds these two 4.68 m apart longitudinally - the sum of their
+            // half-lengths plus the skin - so a 3.2 m test could never once be true and
+            // the cruiser simply drove alongside forever. That is the "police comes and
+            // drives by me": it was physically unable to reach.
+            var alongRoad = Mathf.Abs(RoadDistance - targetPlayer.RoadDistance);
+            var acrossRoad = Mathf.Abs(LateralOffset - targetPlayer.LateralOffset);
+            if (alongRoad < hullHalfLength + targetPlayer.HalfLength + ContactMargin &&
+                acrossRoad < hullHalfWidth + targetPlayer.HalfWidth + ContactMargin)
             {
                 OnCollideWithPlayer();
             }

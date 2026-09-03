@@ -1,0 +1,4 @@
+# Baseline for the self-test fixture. Destroy is a real Unity API used in A.cs;
+# everything else the fixture calls is declared inside the fixture, except the one
+# seeded bug the self test exists to catch.
+Destroy

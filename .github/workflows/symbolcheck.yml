@@ -1,0 +1,53 @@
+# Catches calls to methods that are defined nowhere in the project.
+#
+# This is deliberately not a Unity build. It needs no Unity licence and no engine
+# install, runs in well under a minute, and covers the one failure mode that a
+# stub-free `dotnet build` over the scripts structurally cannot see: Roslyn skips
+# method-body binding entirely once a compilation has any declaration-level error,
+# and compiling Assets/Scripts without UnityEngine produces hundreds of CS0246.
+# See Tools/SymbolCheck/Program.cs and PRODUCTION-GATES.md section 8.
+#
+# It is a floor, not rung 1 of the test ladder. A real Unity compile still decides
+# whether the project builds.
+name: SymbolCheck
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  symbolcheck:
+    name: Undefined method check
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+        with:
+          # Only what the checker reads. Assets/Resources is included because the
+          # asset-reference check resolves model paths against it and would otherwise
+          # skip; with lfs:false every model arrives as a small pointer file, so this
+          # costs almost nothing and no asset is ever opened.
+          sparse-checkout: |
+            Assets/Scripts
+            Assets/Editor
+            Assets/Resources
+            Tools
+          lfs: false
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      # Runs first and on its own. A checker that has quietly stopped checking would
+      # otherwise report a clean run over the real sources and tell us nothing - which
+      # is exactly how the harness this replaced stayed broken. The fixture plants one
+      # undefined call and this step fails unless it is found.
+      - name: Verify the checker still detects a planted bug
+        run: dotnet run --project Tools/SymbolCheck -- . --selftest
+
+      - name: Check the project for undefined methods
+        run: dotnet run --project Tools/SymbolCheck -- .
