@@ -2597,9 +2597,28 @@ namespace RoadRage.UnityRemake
                     for (var s = 0; s < mesh.subMeshCount; s++) tris += mesh.GetIndexCount(s) / 3;
                 }
                 foreach (var m in r.sharedMaterials)
-                    if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { cutouts++; break; }
+                    if (IsAlphaClipped(m)) { cutouts++; break; }
             }
             Debug.Log($"RR_COST {biome} seg={seg:0}: renderers={renderers.Length} tris={tris} cutoutRenderers={cutouts}");
+        }
+
+        /// Is this material alpha-clipped? Three tests, because no single one holds.
+        ///
+        /// The keyword alone was the original test and it is not dependable on a material
+        /// built at runtime with new Material(): PRODUCTION-GATES section 8 already records
+        /// that URP's stripper never scans those, and one Greenwood session reported
+        /// cutout=0, cutout=1693 and cutout=4886 for the same biome while the leaves
+        /// visibly clipped correctly the whole time. A cost probe that swings by 4886 on
+        /// identical content is not measuring the content.
+        ///
+        /// _AlphaClip is what URP's shader actually branches on, and the AlphaTest queue
+        /// is where it puts the result, so either standing alone still means clipped.
+        private static bool IsAlphaClipped(Material m)
+        {
+            if (m == null) return false;
+            if (m.IsKeywordEnabled("_ALPHATEST_ON")) return true;
+            if (m.HasProperty("_AlphaClip") && m.GetFloat("_AlphaClip") > 0.5f) return true;
+            return m.renderQueue >= 2225 && m.renderQueue <= 2500;
         }
 
         /// Measures every chunk currently loaded and totals them.
@@ -2645,7 +2664,7 @@ namespace RoadRage.UnityRemake
                         for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
                             totalTris += mf.sharedMesh.GetIndexCount(sm) / 3;
                     foreach (var m in r.sharedMaterials)
-                        if (m != null && m.IsKeywordEnabled("_ALPHATEST_ON")) { totalCutouts++; break; }
+                        if (IsAlphaClipped(m)) { totalCutouts++; break; }
                 }
             }
 
