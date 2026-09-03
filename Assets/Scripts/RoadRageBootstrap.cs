@@ -1002,6 +1002,16 @@ namespace RoadRage.UnityRemake
         /// builds. Null means "decide from the platform", which is the shipping behaviour.
         private static bool? lowDetailOverride;
 
+#if UNITY_EDITOR
+        /// Backing store for the override. A plain static is not enough: entering play mode
+        /// wipes statics when domain reload is on, and the SubsystemRegistration reset below
+        /// clears them when it is off - so an override set before pressing Play was lost
+        /// either way, and the run measured the very path it was meant to replace. The two
+        /// identical GREENWOOD readings (5402 renderers, 4886 cutout, both times) were that
+        /// bug, not a budget that does nothing. An editor pref outlives both.
+        private const string LowDetailPrefKey = "RoadRage.ForceLowDetailBudget";
+#endif
+
         /// The budget path keyed purely off Application.isMobilePlatform, so the only way
         /// to see what the thinning actually removes was to produce an Android build and
         /// install it - rung 6 of the test ladder for a question rung 2 can answer. This
@@ -1009,14 +1019,32 @@ namespace RoadRage.UnityRemake
         ///
         /// It does NOT emulate the device GPU: a desktop frame rate under this budget says
         /// nothing about a Helio G85. What it does prove is how much geometry the budget
-        /// actually takes out, which is the part that was never measured. Chunks bake
-        /// scatter density at build time, so call this before the world builds.
+        /// actually takes out, which is the part that was never measured.
+        ///
+        /// Safe to call before OR after entering play mode. Chunks bake scatter density at
+        /// build time, so the world still has to rebuild for it to show up in RR_COST.
         public static void ForceLowDetailBudget(bool low)
         {
             lowDetailOverride = low;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.SetBool(LowDetailPrefKey, low);
+#endif
             ApplyPlatformQuality();
             Debug.Log($"RR_QUALITY forced budget: RichDetailBudget={RichDetailBudget} " +
                       "(rebuild the world for scatter density to take effect)");
+        }
+
+        /// Drops back to deciding from the platform. Worth calling explicitly once a
+        /// forced measurement is done, since the pref otherwise persists across editor
+        /// sessions and every later reading would silently be off the shipping path.
+        public static void ClearDetailBudgetOverride()
+        {
+            lowDetailOverride = null;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.DeleteKey(LowDetailPrefKey);
+#endif
+            ApplyPlatformQuality();
+            Debug.Log($"RR_QUALITY budget override cleared: RichDetailBudget={RichDetailBudget}");
         }
 
         private static void ApplyPlatformQuality()
@@ -2123,9 +2151,21 @@ namespace RoadRage.UnityRemake
         private static void ResetBuildingCatalogue()
         {
             buildingCatalogue = null;
-            // Same reason: a budget forced for one measurement would silently stay forced
-            // for every later run in the same editor session and quietly invalidate it.
             lowDetailOverride = null;
+#if UNITY_EDITOR
+            // Restore a deliberately forced budget across the play-mode boundary, but say
+            // so loudly every single run. The risk this guards is a measurement taken
+            // months later on a forced budget and recorded as the shipping desktop path;
+            // a warning in the console every boot is what makes that impossible to miss.
+            if (UnityEditor.EditorPrefs.HasKey(LowDetailPrefKey))
+            {
+                lowDetailOverride = UnityEditor.EditorPrefs.GetBool(LowDetailPrefKey);
+                Debug.LogWarning($"RR_QUALITY detail budget is FORCED to low={lowDetailOverride} " +
+                                 "by an editor pref, not by the platform. Any RR_COST or FPS " +
+                                 "reading from this run is NOT the shipping desktop path. " +
+                                 "Call RoadRageBootstrap.ClearDetailBudgetOverride() to drop it.");
+            }
+#endif
         }
 
         /// A candidate building mesh, measured in its own right.
