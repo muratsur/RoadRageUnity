@@ -41,3 +41,11 @@ Thumbs.db
 
 # graphify knowledge graph — regenerate with `graphify update .`
 graphify-out/
+
+# SymbolCheck (Tools/SymbolCheck). Its build output is generated, but its project
+# file is source - the *.csproj rule above exists for Unity's generated
+# Assembly-CSharp.csproj and would otherwise swallow this one, leaving the tool
+# unbuildable on a fresh clone.
+Tools/SymbolCheck/bin/
+Tools/SymbolCheck/obj/
+!Tools/SymbolCheck/SymbolCheck.csproj

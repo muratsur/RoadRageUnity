@@ -247,6 +247,29 @@ comparing the `RR_NEAR` printed size against the lateral range passed in.
 
 Hard-won on 2026-08-03. Each cost real time; none is obvious from documentation.
 
+**Compiling the scripts without Unity proves nothing about method bodies.** Roslyn
+skips body binding entirely when a compilation has any declaration-level error, and
+compiling `Assets/Scripts` without UnityEngine produces hundreds of `CS0246`. One is
+enough. Verified directly:
+
+```csharp
+class KnownBase { }
+class C : KnownBase { void B() { DoesNotExist(); } }   // CS0103, caught
+class C : SomeUnknownBase { void B() { DoesNotExist(); } }   // silence
+```
+
+So a stub-free `dotnet build` over the scripts reports a stable error count that is
+identical whether or not the code calls methods that do not exist. Commit `ffaeb73`
+shipped calling `GetBracketKey()` and `GetExposureKey()`, neither of which existed,
+past exactly that check. Re-injecting both reproduces it: 722 `CS0246` / 10 `CS0103`
+with the bug present, byte-identical to without it, and neither name mentioned once.
+
+`Tools/symbolcheck.sh` covers this specific gap - it parses the project's own sources
+and reports any unqualified call whose name the project never declares, diffed against
+`Tools/SymbolCheck/baseline.txt`. Names only: it does not check argument counts or
+types, and it is not a substitute for rung 1 of the test ladder, which is a real Unity
+compile.
+
 **Shader variant stripping.** Materials built at runtime with `new Material()` are not
 scanned by URP's stripper, so `EnableKeyword` silently does nothing in a player build and
 every surface falls back to its plain float values — which rendered the canyon as chrome.

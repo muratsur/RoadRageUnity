@@ -1,0 +1,10 @@
+# Names called unqualified in this project that the project does not declare.
+# Everything here is a Unity API reached through MonoBehaviour or a using.
+# Regenerate with: dotnet run --project Tools/SymbolCheck -- . --update-baseline
+# A name appearing at check time that is NOT in this list is a call to
+# something that does not exist. See Program.cs for why csc cannot do this.
+Destroy
+DestroyImmediate
+Instantiate
+StartCoroutine
+StopCoroutine
