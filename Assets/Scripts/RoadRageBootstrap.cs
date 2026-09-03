@@ -18,12 +18,21 @@ namespace RoadRage.UnityRemake
 
             public MaterialDict(RoadRageBootstrap owner) => this.owner = owner;
 
+            /// Keys already reported missing. Building one chunk performs hundreds of
+            /// lookups, so warning per lookup buried the console under thousands of
+            /// identical lines - which is how the condition below went unnoticed while
+            /// it was actively replacing the world's materials.
+            private readonly HashSet<string> reported = new();
+
             public Material this[string key]
             {
                 get
                 {
                     if (inner.TryGetValue(key, out var mat) && mat != null) return mat;
-                    Debug.LogWarning($"[RoadRage] Material '{key}' was not found in dictionary, creating automatic fallback.");
+                    if (reported.Add(key))
+                        Debug.LogWarning($"[RoadRage] Material '{key}' was not in the dictionary; " +
+                                         "substituting a flat fallback. It will not alpha-clip, tile " +
+                                         "or take a surface map, so foliage and glass render as solid.");
                     var fallback = owner.MakeMaterial(key, new Color(0.6f, 0.5f, 0.4f));
                     inner[key] = fallback;
                     return fallback;
@@ -31,9 +40,14 @@ namespace RoadRage.UnityRemake
                 set => inner[key] = value;
             }
 
+            public int Count => inner.Count;
             public bool ContainsKey(string key) => inner.ContainsKey(key);
             public bool TryGetValue(string key, out Material mat) => inner.TryGetValue(key, out mat);
-            public void Clear() => inner.Clear();
+            public void Clear()
+            {
+                inner.Clear();
+                reported.Clear();
+            }
         }
 
         private readonly MaterialDict materials;
@@ -3001,6 +3015,29 @@ namespace RoadRage.UnityRemake
         /// finds no chunks, rebuilds every one, and the world quietly renders twice - two
         /// full sets of Chunk -1..6 in the hierarchy, double the foliage, and a cost probe
         /// that walks liveChunks reporting only half of what is actually drawn.
+        /// Rebuilds the material palette if a domain reload emptied it.
+        ///
+        /// materials and liveChunks are both plain instance fields, so recompiling while
+        /// play mode runs resets both while every GameObject they described survives. The
+        /// chunk half of that is handled by PurgeOrphanChunks above; this is the other
+        /// half, and it was doing quiet damage: with the dictionary empty the streamer
+        /// still rebuilt the world, and every materials[key] lookup fell through to the
+        /// flat fallback. A Greenwood built in that state reported cutout=0 across 5585
+        /// renderers, against cutout=4886 for the same biome after a ReloadBiome - not a
+        /// keyword that reads differently, but a forest genuinely wearing solid brown
+        /// stand-ins with no alpha clip on any of them.
+        ///
+        /// ReloadBiome recovered by accident, because step 5 calls BuildMaterials itself.
+        /// Streaming had no such step.
+        private void EnsureMaterialsBuilt()
+        {
+            if (materials.Count > 0) return;
+            Debug.LogWarning("RR_MATERIALS palette was empty at stream time - rebuilding. A " +
+                             "domain reload (a recompile during play) clears it while the world " +
+                             "it built stays in the scene.");
+            BuildMaterials();
+        }
+
         private void PurgeOrphanChunks()
         {
             orphanChunkSweepDone = true;
@@ -3022,6 +3059,7 @@ namespace RoadRage.UnityRemake
         private void BuildChunk(int index)
         {
             if (!orphanChunkSweepDone) PurgeOrphanChunks();
+            EnsureMaterialsBuilt();
             if (liveChunks.ContainsKey(index)) return;
             var start = index * ChunkLength;
             var biomeIndex = BiomeIndexAt(start + ChunkLength * 0.5f);
