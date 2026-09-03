@@ -2646,8 +2646,24 @@ namespace RoadRage.UnityRemake
         /// Reported per mesh AND per instance: a mesh drawn 40 times at 5k triangles and
         /// one drawn twice at 100k need opposite fixes - thin the placement, or replace
         /// or decimate the asset - and a total alone cannot tell them apart.
+        /// Names an object and its parents up to the chunk, so a mesh called Cube.008 is
+        /// reported as whatever the placement code called the thing holding it.
+        private static string OwnerTrail(Transform t)
+        {
+            var trail = t.name;
+            var parent = t.parent;
+            for (var depth = 0; parent != null && depth < 3; depth++)
+            {
+                if (parent.name.StartsWith("Chunk ")) break;
+                trail = parent.name + "/" + trail;
+                parent = parent.parent;
+            }
+            return trail;
+        }
+
         private static void LogHeaviestMeshes(Dictionary<string, long> trisByMesh,
-                                              Dictionary<string, int> countByMesh, long totalTris)
+                                              Dictionary<string, int> countByMesh,
+                                              Dictionary<string, string> exampleOwner, long totalTris)
         {
             if (trisByMesh.Count == 0 || totalTris <= 0) return;
 
@@ -2664,8 +2680,10 @@ namespace RoadRage.UnityRemake
                 var tris = ranked[i].Value;
                 var instances = countByMesh.TryGetValue(name, out var n) ? n : 0;
                 var each = instances > 0 ? tris / instances : tris;
+                var owner = exampleOwner.TryGetValue(name, out var o) ? o : "?";
                 report.Append($"\n  {100f * tris / totalTris,5:0.0}%  {tris / 1000,7}k tris  ")
-                      .Append($"x{instances,-4} ({each / 1000f:0.0}k each)  {name}");
+                      .Append($"x{instances,-4} ({each / 1000f:0.0}k each)  {name}")
+                      .Append($"\n         in: {owner}");
             }
             Debug.Log(report.ToString());
         }
@@ -2711,6 +2729,13 @@ namespace RoadRage.UnityRemake
             // is a decision about those meshes.
             var trisByMesh = new Dictionary<string, long>();
             var countByMesh = new Dictionary<string, int>();
+            // One example owner per mesh. A mesh name alone can be unidentifiable: the NYC
+            // pack ships meshes called Cube.008 and Light1, its .meta files record no name
+            // table, and the FBXs are LFS-stored - so nothing in the repo says what they
+            // are. The placement code does name what it spawns ("NYC Street Lamp",
+            // "Manhattan Midtown Skyscraper"), so recording one owning object identifies
+            // the call site that produced the cost.
+            var exampleOwner = new Dictionary<string, string>();
 
             foreach (var chunk in chunkRoots)
             {
@@ -2730,6 +2755,8 @@ namespace RoadRage.UnityRemake
                         trisByMesh[meshName] = running + meshTris;
                         countByMesh.TryGetValue(meshName, out var instances);
                         countByMesh[meshName] = instances + 1;
+                        if (!exampleOwner.ContainsKey(meshName))
+                            exampleOwner[meshName] = OwnerTrail(r.transform);
                     }
                     foreach (var m in r.sharedMaterials)
                         if (IsAlphaClipped(m)) { totalCutouts++; break; }
@@ -2779,7 +2806,7 @@ namespace RoadRage.UnityRemake
                       $"worst={worstFps:0.0} fps budget={(RichDetailBudget ? "rich" : "low")} " +
                       $"(was capped at {priorTarget})");
 
-            LogHeaviestMeshes(trisByMesh, countByMesh, totalTris);
+            LogHeaviestMeshes(trisByMesh, countByMesh, exampleOwner, totalTris);
 
             costProbeRunning = false;
         }
