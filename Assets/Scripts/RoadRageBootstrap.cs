@@ -978,7 +978,17 @@ namespace RoadRage.UnityRemake
                 billboard.SetColor("_EmissionColor", Desaturate(new Color(1.9f, 1.3f, 2.4f), 0.45f));
                 billboard.EnableKeyword("_EMISSION");
             }
-            BiomeSurface(BiomeMaterial("City Palm", "Synthwave", "T_palm_tree_D", "T_palm_tree_N", Color.white, 0.1f, 0.35f), "Synthwave", "T_palm_tree_MSO");
+            // Cutout, not opaque. Every other foliage material in the project goes through
+            // BiomeCutoutMaterial; this one went through BiomeMaterial, so the city trees
+            // drew their leaf cards as solid single-sided sheets with a palm texture
+            // stretched over them - the pale fans hanging over the Manhattan pavement.
+            //
+            // The measurement said so before anyone looked: RR_COST MANHATTAN reported
+            // cutout=0 across 11,682 renderers. A biome with trees in it cannot have zero
+            // alpha-clipped renderers, and that number sat in three separate readings
+            // being read as "no overdraw, good" rather than as "no foliage, broken".
+            BiomeSurface(BiomeCutoutMaterial("City Palm", "Synthwave", "T_palm_tree_D",
+                "T_palm_tree_N", Color.white), "Synthwave", "T_palm_tree_MSO");
             materials["Palm Frond"] = materials["City Palm"];
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
             MakeMaterial("City Props", new Color(0.44f, 0.43f, 0.42f), 0.15f, 0.30f);
