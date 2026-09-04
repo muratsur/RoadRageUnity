@@ -161,10 +161,43 @@ namespace RoadRage.Tools
             trees = files
                 .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), EditorParseOptions, path: f))
                 .ToList();
+            if (!ReportSyntaxErrors(trees)) return false;
             var declared = CollectDeclaredNames(trees);
             declaredCount = declared.Count;
             calls = CollectUnresolvedCalls(trees, declared);
             return true;
+        }
+
+        /// Fails on anything that does not parse, before any name analysis runs.
+        ///
+        /// The checker looked for undeclared names and unknown members, and assumed the
+        /// text it was given was C#. A file that does not parse produces neither kind of
+        /// finding - Roslyn recovers, hands back a tree, and the run comes up green - so
+        /// the one breakage that stops Unity dead was the one thing this could not see.
+        /// Merge conflict markers are the common case; a truncated file is the other.
+        ///
+        /// Reported before the name checks because there is no point analysing names in a
+        /// file whose structure is already wrong: one missing brace can nest half a file
+        /// inside a class and rename every type in it.
+        private static bool ReportSyntaxErrors(List<SyntaxTree> trees)
+        {
+            var errors = trees
+                .SelectMany(t => t.GetDiagnostics())
+                .Where(d => d.Severity == DiagnosticSeverity.Error)
+                .ToList();
+            if (errors.Count == 0) return true;
+
+            foreach (var d in errors.Take(20))
+            {
+                var line = d.Location.GetLineSpan().StartLinePosition.Line + 1;
+                Console.Error.WriteLine($"SYMBOLCHECK SYNTAX {d.Location.SourceTree?.FilePath}({line}): " +
+                                        $"{d.Id} {d.GetMessage()}");
+            }
+            if (errors.Count > 20)
+                Console.Error.WriteLine($"SYMBOLCHECK SYNTAX and {errors.Count - 20} more");
+            Console.Error.WriteLine($"SYMBOLCHECK FAILED: {errors.Count} file(s) do not parse. " +
+                                    "Nothing else was checked.");
+            return false;
         }
 
         /// Proves the checker still detects a call to something that does not exist.
