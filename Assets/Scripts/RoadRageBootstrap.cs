@@ -411,10 +411,6 @@ namespace RoadRage.UnityRemake
             }
 
             // 2. Clear old ramps & traffic
-            if (RoadRageRampDirector.Instance != null)
-            {
-                RoadRageRampDirector.Instance.ClearRamps();
-            }
 
             // 3. Destroy old traffic & leaked root objects
             var oldTraffic = GameObject.Find("Living Highway Traffic");
@@ -429,7 +425,7 @@ namespace RoadRage.UnityRemake
             {
                 if (go == null || go == gameObject || go.transform.parent != null) continue;
                 var n = go.name;
-                if (n.Contains("Garage") || n.Contains("Biomass") || n.Contains("Accident") || n.Contains("Chunk") || n.Contains("StuntRamp"))
+                if (n.Contains("Garage") || n.Contains("Biomass") || n.Contains("Accident") || n.Contains("Chunk"))
                 {
                     go.SetActive(false);
                     Destroy(go);
@@ -1969,8 +1965,25 @@ namespace RoadRage.UnityRemake
             }
 
             // Road Paint & Lane Striping
-            BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
-            BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
+            // A central reservation rather than a painted line. The two carriageways were
+            // separated by 12 cm of yellow paint at 3.8 cm high, which is a marking, not a
+            // division - at speed the road read as one wide strip with a stripe down it.
+            //
+            // 1.3 m either side of the centreline, raised to a kerb. The innermost traffic
+            // lane sits at 0.2 x half width, which is 2.7 m out, and a car is about 1.1 m
+            // to its flank - so the median stops 0.3 m short of anything that drives.
+            //
+            // It does NOT block crossing, and that is deliberate. Nothing in this world
+            // carries a collider; movement is on the rail. Driving the wrong way is a
+            // scoring mechanic - a wrong-way near miss pays double - so a solid divider
+            // would delete a feature that was ported from the shipped build two commits
+            // ago. Cars that cross will pass through it.
+            var medianMaterial = materials.TryGetValue("City Asphalt Trim", out var kerb)
+                ? kerb
+                : materials["White Paint"];
+            BuildRibbon("Median Reservation", -1.3f, 1.3f, 0.155f, medianMaterial);
+            BuildRibbon("Center Yellow L", -1.46f, -1.30f, 0.042f, materials["Yellow Paint"]);
+            BuildRibbon("Center Yellow R", 1.30f, 1.46f, 0.042f, materials["Yellow Paint"]);
             BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
             BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
 
@@ -3496,15 +3509,17 @@ namespace RoadRage.UnityRemake
 
         /// Lanes per direction. Forest, canyon and the sewer tunnel run a two-lane road
         /// (one each way) so the surroundings can crowd it; cities keep three each way.
-        private static int LaneCountFor(int biomeIndex) => biomeIndex switch
-        {
-            0 => 1,  // GREENWOOD  - country road
-            6 => 1,  // RED CANYON - desert two-lane
-            9 => 1,  // HOLLYWOOD  - hillside road; one lane each way left no room to pass
-            2 => 2,  // SEWER      - tunnel, narrower than a highway
-            1 => 2,  // SNOW       - remote highway
-            _ => 3,  // cities
-        };
+        /// Three lanes each way, everywhere. Half width is lanes x 4.5 m, so every biome
+        /// now runs the 27 m profile the road constants were written for.
+        ///
+        /// This used to vary: one lane on the country and hillside roads, two through the
+        /// sewer and the snow highway. Two things had to move with it. ScatterBand now
+        /// refuses to place inside the carriageway, because twenty-two roadside bands were
+        /// written as absolute distances that a 4.5 m half width cleared and a 13.5 m one
+        /// does not - they would have been standing on the tarmac. And the sewer tunnel
+        /// was widened, because its walls stood at 13.4 m and the road they enclose is now
+        /// 13.5 m to the kerb: the carriageway would have been wider than the tunnel.
+        private static int LaneCountFor(int biomeIndex) => 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4279,20 +4294,20 @@ namespace RoadRage.UnityRemake
 
         private void BuildSewerTunnel()
         {
-            BuildWallRibbon("Sewer Left Curved Wall", -13.4f, -0.05f, 10.2f, materials["Sewer Concrete"]);
-            BuildWallRibbon("Sewer Right Curved Wall", 13.4f, -0.05f, 10.2f, materials["Sewer Concrete"]);
-            BuildRibbon("Sewer Curved Ceiling", -13.6f, 13.6f, 10.2f, materials["Sewer Concrete"], -45f, WorldLength + 45f, 7f);
+            BuildWallRibbon("Sewer Left Curved Wall", -17.6f, -0.05f, 10.2f, materials["Sewer Concrete"]);
+            BuildWallRibbon("Sewer Right Curved Wall", 17.6f, -0.05f, 10.2f, materials["Sewer Concrete"]);
+            BuildRibbon("Sewer Curved Ceiling", -17.8f, 17.8f, 10.2f, materials["Sewer Concrete"], -45f, WorldLength + 45f, 7f);
 
             // Wall furniture mounted safely flush against tunnel walls (zero lane intrusion)
-            ScatterBand(10f, 12.8f, 13.3f, (d, l, s) =>
+            ScatterBand(10f, 17.0f, 17.5f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
                     d, l, Random.Range(2.5f, 6.5f), new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one * Random.Range(0.6f, 0.95f), "Wall Pipe", true));
-            ScatterBand(18f, 12.9f, 13.4f, (d, l, s) =>
+            ScatterBand(18f, 17.1f, 17.6f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_pillar", materials["Sewer Concrete"],
                     d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one * Random.Range(0.85f, 1.15f), "Tunnel Pillar", true));
-            ScatterBand(34f, 13.0f, 13.5f, (d, l, s) =>
+            ScatterBand(34f, 17.2f, 17.7f, (d, l, s) =>
                 PlaceBiomeModelOnRoad("Sewers", "SM_arch", materials["Sewer Concrete"],
                     d, l, 0f, new Vector3(0f, s > 0 ? -90f : 90f, 0f),
                     Vector3.one, "Side Arch", true));
@@ -4302,7 +4317,7 @@ namespace RoadRage.UnityRemake
                 if (((int)(z / 18f)) % 2 == 0)
                 {
                     PlaceBiomeModelOnRoad("Sewers", "SM_pipe_03", materials["Sewer Pipe"],
-                        z + 5f, -13.0f, 3.2f, new Vector3(0f, 90f, 0f), Vector3.one * 0.78f, "Wall-Mounted Sewer Pipe", true);
+                        z + 5f, -17.2f, 3.2f, new Vector3(0f, 90f, 0f), Vector3.one * 0.78f, "Wall-Mounted Sewer Pipe", true);
                     CreateLocalLight(RoadPath.Point(z, ((int)(z / 18f)) % 4 == 0 ? -10.8f : 10.8f, 6.3f),
                         new Color(0.2f, 1f, 0.56f), 13f, 14f);
                 }
@@ -5711,6 +5726,22 @@ namespace RoadRage.UnityRemake
             var shift = (float)v.NextDouble() * (farLateral - nearLateral) * 0.35f;
             var widen = 0.8f + (float)v.NextDouble() * 0.55f;
             if (v.NextDouble() < 0.12) return;   // occasional gap: a clearing, a vacant lot
+
+            // Never inside the carriageway. Every band here is written as an absolute
+            // distance from the centreline, chosen against whatever the road was when it
+            // was written - and the road just went to three lanes each way in every biome,
+            // which moved the kerb from 4.5 m to 13.5 m on the country roads. Twenty-two
+            // of these bands would now start on the tarmac.
+            //
+            // Clamped rather than dropped: a band pushed to the kerb still dresses the
+            // roadside, where skipping it would empty whole biomes of their undergrowth.
+            // The width is preserved, so a band that was 3 m deep stays 3 m deep.
+            var clearance = RoadPath.ClearanceAt(segStart) + 1.5f;
+            if (nearLateral < clearance)
+            {
+                farLateral += clearance - nearLateral;
+                nearLateral = clearance;
+            }
 
             var near = Mathf.Max(1f, nearLateral + shift);
             var far = Mathf.Max(near + 1f, nearLateral + shift + (farLateral - nearLateral) * widen);
@@ -7199,8 +7230,6 @@ namespace RoadRage.UnityRemake
 
             cameraObject.AddComponent<RoadRageImpactShakeDirector>();
 
-            var rampDirector = cameraObject.AddComponent<RoadRageRampDirector>();
-            rampDirector.BindPlayer(car);
 
             var audioBridge = cameraObject.AddComponent<RoadRageAudioBridge>();
 
