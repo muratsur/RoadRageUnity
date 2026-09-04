@@ -1476,6 +1476,12 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Read-only view for the editor menu's checkmark. Goes through ManhattanDaylight
+        /// rather than the pref, so the menu shows what the world will actually build
+        /// with - including a -manhattan=day command line and an in-session override,
+        /// neither of which is in EditorPrefs.
+        public static bool ManhattanIsDaylight => ManhattanDaylight;
+
         /// Switches Manhattan between its two moods. The world has to rebuild for the
         /// change to show, the same as the detail budget.
         public static void SetManhattanDaylight(bool daylight)
@@ -4365,7 +4371,14 @@ namespace RoadRage.UnityRemake
 			private void BuildManhattanPhotorealPass()
 			{
 				BuildCyberSprawl();
-				ApplyManhattanDaylightMood();
+				// Only in daylight. This was unconditional, and it is called per chunk
+				// build - after BuildLighting has already applied the biome mood, and
+				// again on every chunk the streamer adds. So it overwrote the ambient
+				// colours, the fog and every directional light with hardcoded overcast
+				// values, and re-overwrote them as you drove: Manhattan was daylight
+				// whatever the switch said, and ManhattanNightMood never survived to be
+				// seen. Night now leaves BuildLighting's result standing.
+				if (ManhattanDaylight) ApplyManhattanDaylightMood();
 			}
 
 			private void ApplyManhattanDaylightMood()
