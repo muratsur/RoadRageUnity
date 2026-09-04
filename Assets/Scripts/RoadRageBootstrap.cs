@@ -4783,17 +4783,11 @@ namespace RoadRage.UnityRemake
                     // reads as silhouette texture at best. First thing to go on a budget.
                     if (block % 2 == 0 && RichDetailBudget)
                     {
-                        var farDistance = z + Random.Range(-14f, 14f);
-                        var farMesh = synthTowers[BlockHash(block, side * 17) % synthTowers.Length];
-                        var farTower = PlaceBiomeModelOnRoad("Synthwave", farMesh,
-                            materials["City Skyline"], farDistance, side * Random.Range(100f, 160f), 0f,
-                            new Vector3(-90f, facing, 0f), Vector3.one, "Manhattan Horizon Tower");
-                        if (farTower != null)
-                        {
-                            NormalizeModelHeight(farTower, Random.Range(120f, 260f));
-                            SnapToGround(farTower, farDistance);
-                            EnsureOutsideRoad(farTower, farDistance, side);
-                        }
+                        var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
+                        var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 35f,
+                            new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
+                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 35f);
                     }
 
                     // Rooftop water tanks on frontage buildings
