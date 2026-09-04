@@ -3354,9 +3354,13 @@ namespace RoadRage.UnityRemake
             var ranked = new List<KeyValuePair<string, long>>(trisByMesh);
             ranked.Sort((a, b) => b.Value.CompareTo(a.Value));
 
-            var report = new System.Text.StringBuilder();
-            report.Append($"RR_MESH heaviest of {trisByMesh.Count} distinct meshes ")
-                  .Append($"({totalTris / 1000}k triangles total):");
+            // One entry a mesh, on one line each. The ranking used to be a single
+            // multi-line Debug.Log, and the Console list only ever showed its first two
+            // lines - so the report that names what is expensive showed the header and
+            // the worst offender, and hid the other nine behind a click nobody knew to
+            // make. The owner trail rides on the same line rather than a second one.
+            Debug.Log($"RR_MESH heaviest of {trisByMesh.Count} distinct meshes " +
+                      $"({totalTris / 1000}k triangles total):");
             var shown = Mathf.Min(HeaviestMeshCount, ranked.Count);
             for (var i = 0; i < shown; i++)
             {
@@ -3365,11 +3369,9 @@ namespace RoadRage.UnityRemake
                 var instances = countByMesh.TryGetValue(name, out var n) ? n : 0;
                 var each = instances > 0 ? tris / instances : tris;
                 var owner = exampleOwner.TryGetValue(name, out var o) ? o : "?";
-                report.Append($"\n  {100f * tris / totalTris,5:0.0}%  {tris / 1000,7}k tris  ")
-                      .Append($"x{instances,-4} ({each / 1000f:0.0}k each)  {name}")
-                      .Append($"\n         in: {owner}");
+                Debug.Log($"RR_MESH {100f * tris / totalTris,5:0.0}%  {tris / 1000,7}k tris  " +
+                          $"x{instances,-4} ({each / 1000f:0.0}k each)  {name}  in: {owner}");
             }
-            Debug.Log(report.ToString());
         }
 
         private const int HeaviestMeshCount = 10;
@@ -3507,11 +3509,15 @@ namespace RoadRage.UnityRemake
             // The 850 / 824 baseline is Greenwood's alpha-test canopy and means nothing
             // anywhere else, so it is only printed where it applies.
             var baseline = biomeName == "GREENWOOD" ? " (Gate A measured Greenwood at 850 / 824)" : "";
+            // One Debug.Log a line, not one call with embedded newlines. The Console list
+            // shows the first two lines of an entry and hides the rest behind a click, so
+            // a three-line result read as two lines with the frame rate - the number the
+            // probe exists to produce - silently missing.
             Debug.Log($"RR_COST {biomeName} live: chunks={chunkRoots.Count} tracked={liveChunks.Count} " +
-                      $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}\n" +
-                      $"RR_COST per chunk: renderers={totalRenderers / chunks} cutout={totalCutouts / chunks}" +
-                      $"{baseline}\n" +
-                      $"RR_COST uncapped over {CostProbeSampleFrames} frames: avg={avgFps:0.0} fps " +
+                      $"renderers={totalRenderers} cutout={totalCutouts} tris={totalTris}");
+            Debug.Log($"RR_COST per chunk: renderers={totalRenderers / chunks} " +
+                      $"cutout={totalCutouts / chunks}{baseline}");
+            Debug.Log($"RR_COST uncapped over {CostProbeSampleFrames} frames: avg={avgFps:0.0} fps " +
                       $"worst={worstFps:0.0} fps budget={(RichDetailBudget ? "rich" : "low")} " +
                       $"(was capped at {priorTarget})");
 
