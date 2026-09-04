@@ -2842,6 +2842,27 @@ namespace RoadRage.UnityRemake
         /// actually uses rather than one per building.
         private Dictionary<Material, Material[]> wallTints;
 
+        /// Does this material name describe a wall worth tinting?
+        ///
+        /// GrimedWalls names the NYCBlock6 pack's three walls. Manhattan is not built
+        /// from those: its buildings are the NYCVariants prefabs, whose parts wear
+        /// materials called brick, concrate and window out of the NYC-Like City Buildings
+        /// Set. So the grime bake and the tint both keyed on names nothing in the biome
+        /// was wearing, which is why the street stayed one shade of brown after both.
+        ///
+        /// Matched by substring, the same way the material assignment pass already
+        /// identifies a wall, rather than by an exact list that has to be kept in step
+        /// with whichever pack a biome happens to be built from.
+        private static bool IsTintableWall(string name)
+        {
+            var n = name.ToLowerInvariant();
+            if (n.Contains("window") || n.Contains("glass") || n.Contains("light")
+                || n.Contains("neon") || n.Contains("metal") || n.Contains("wood")) return false;
+            return n.Contains("brick") || n.Contains("concrate") || n.Contains("concrete")
+                || n.Contains("plaster") || n.Contains("epoxy") || n.Contains("stucco")
+                || n.Contains("highrise");
+        }
+
         private Material TintedWall(Material source, int tint)
         {
             if (tint <= 0 || source == null) return source;
@@ -2907,8 +2928,6 @@ namespace RoadRage.UnityRemake
                     wallGrime[wall] = variants.ToArray();
                 }
             }
-            if (wallGrime.Count == 0) return;
-
             var pick = (hash & 0x7fffffff);
             // Salted apart from the grime pick, so weathering and colour do not move
             // together and a street cannot end up with all its clean walls one shade.
@@ -2919,11 +2938,16 @@ namespace RoadRage.UnityRemake
                 Material[] swapped = null;
                 for (var i = 0; i < current.Length; i++)
                 {
-                    if (current[i] == null) continue;
-                    if (!wallGrime.TryGetValue(current[i].name, out var variants)) continue;
-                    if (variants.Length < 2) continue;
-                    var chosen = TintedWall(variants[pick % variants.Length], tint);
-                    if (chosen == current[i]) continue;
+                    var source = current[i];
+                    if (source == null) continue;
+                    // Grime first, where a baked variant exists for this wall, then the
+                    // tint on whatever came out. The two are independent: a wall with no
+                    // grime bake still gets a colour, which is the whole of Manhattan.
+                    var chosen = source;
+                    if (wallGrime.TryGetValue(source.name, out var variants) && variants.Length >= 2)
+                        chosen = variants[pick % variants.Length];
+                    if (IsTintableWall(chosen.name)) chosen = TintedWall(chosen, tint);
+                    if (chosen == source) continue;
                     swapped ??= (Material[])current.Clone();
                     swapped[i] = chosen;
                 }
@@ -3545,7 +3569,10 @@ namespace RoadRage.UnityRemake
 
             Debug.Log($"RR_PLACEMENT busiest of {renderersByPlacement.Count} placements " +
                       $"({totalRenderers} renderers total):");
-            var shown = Mathf.Min(HeaviestMeshCount, ranked.Count);
+            // All of them, not a top ten. The rows that answer "did the thing I just
+            // added actually get placed" are the small ones at the bottom, and a set
+            // piece every fifth block is never going to outrank a building.
+            var shown = ranked.Count;
             for (var i = 0; i < shown; i++)
             {
                 var name = ranked[i].Key;
@@ -6193,6 +6220,13 @@ namespace RoadRage.UnityRemake
             {
                 var mesh = filter.sharedMesh;
                 if (mesh == null || !smoothedMeshes.Add(mesh.GetEntityId())) continue;
+                // Ask before touching, do not catch afterwards. Mesh.vertices on a
+                // non-readable mesh logs "Not allowed to access vertices" to the Console
+                // and then throws, so the try/catch below swallowed the exception while
+                // every wiper blade and window on every vehicle still printed three
+                // errors. That is where a run's 287 errors came from - not the Fab
+                // plugin, which only ever contributes two.
+                if (!mesh.isReadable) continue;
                 try
                 {
                     var verts = mesh.vertices;
