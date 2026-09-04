@@ -23,7 +23,6 @@ namespace RoadRage.UnityRemake
         private ArcadeCarController playerController;
         private Camera mainCamera;
         private float originalFov = 64f;
-        private float nearMissCooldown;
         private float continuousBurnTimer;
         private int nearMissesDuringBurn;
         private bool startedBurnAtMax;
@@ -312,12 +311,6 @@ namespace RoadRage.UnityRemake
 
         private void DetectNearMisses()
         {
-            if (nearMissCooldown > 0f)
-            {
-                nearMissCooldown -= Time.deltaTime;
-                return;
-            }
-
             // Queried against the traffic registry rather than through physics.
             //
             // OverlapSphere found nothing here, ever: traffic cars are spawned with all
@@ -338,11 +331,29 @@ namespace RoadRage.UnityRemake
                     var lateralDist = Mathf.Abs(traffic.LaneOffset - playerController.LateralOffset);
                     var longDist = Mathf.Abs(traffic.RoadDistance - playerController.RoadDistance);
 
+                    // Re-arm once this car is well clear, the way the shipped build does
+                    // it. The 0.55 s cooldown that used to gate every near miss meant
+                    // threading a gap between two cars scored once - and the second car
+                    // is the one that was hard.
+                    if (longDist > 9f) traffic.NearMissArmed = true;
+                    if (!traffic.NearMissArmed) continue;
+
                     if (lateralDist < 2.6f && lateralDist > 0.8f && longDist < 4.2f)
                     {
-                        nearMissCooldown = 0.55f;
-                        AddBoost(20f, "⚡ NEAR MISS!");
-                        GameState.Award(150, "⚡ NEAR MISS");
+                        traffic.NearMissArmed = false;
+                        // A big rig is a bigger gap to thread and is worth more, and
+                        // passing on the oncoming side doubles it - that is the whole
+                        // risk-buys-boost trade the shipped game is built on, and this
+                        // paid a flat 150 whatever you did to earn it. Lateral is signed
+                        // the opposite way here: traffic with a negative lane runs the
+                        // player's direction, so the oncoming half is positive.
+                        var big = traffic.LongitudinalExtent > 3f;
+                        var wrongWay = playerController.LateralOffset > 1.5f;
+                        var points = (big ? 260 : 150) * (wrongWay ? 2 : 1);
+                        var label = wrongWay ? "⚡ WRONG-WAY PASS" : "⚡ NEAR MISS";
+
+                        AddBoost(wrongWay ? 32f : 20f, label + "!");
+                        GameState.Award(points, label);
                         GameState.BumpDaily("nearmiss", 1f);
                         if (IsBoosting) nearMissesDuringBurn++;
 

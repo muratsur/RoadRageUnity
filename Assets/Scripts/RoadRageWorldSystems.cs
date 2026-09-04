@@ -428,6 +428,14 @@ namespace RoadRage.UnityRemake
         /// than one that never stops - the shipped Godot build gates it the same way.
         public static bool SignalsActive;
 
+        /// Whether this car can still score the player a near miss.
+        ///
+        /// Per car, re-armed once it is well clear, rather than one cooldown across the
+        /// whole road. Threading a gap between two cars is two near misses in the shipped
+        /// build and was one here, because a single global timer swallowed the second -
+        /// and the second is the one that was hard.
+        public bool NearMissArmed { get; set; } = true;
+
         /// Distance between junctions. BuildCyberSprawl puts a traffic light on every
         /// second 22 m block, so the signals a driver can see stand 44 m apart and the
         /// stop line has to agree with them.
