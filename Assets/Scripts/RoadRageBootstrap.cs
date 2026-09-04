@@ -2716,25 +2716,82 @@ namespace RoadRage.UnityRemake
         ///
         /// The grid tiles cleanly in 12 x 12 cells, so shifting the sample by a whole
         /// number of cells picks a different lit pattern without moving pane boundaries
-        /// inside a window - no seam, no distortion, same texture, same one draw call
-        /// family, just a different offset baked into this renderer's instance data via
-        /// MaterialPropertyBlock rather than the shared material.
+        /// inside a window - no seam, no distortion, one texture throughout, just a
+        /// different offset. The offset lives in a small pool of materials rather than in
+        /// per-renderer instance data; see VaryWindowLighting for why the property block
+        /// that used to carry it was costing far more than the materials do.
+        /// How many lit-window patterns are in circulation. Twelve is enough that a
+        /// street does not repeat within sight; the old per-building offset drew from
+        /// 144 combinations, which nobody could tell apart from twelve at driving speed.
+        private const int WindowVariants = 12;
+
+        /// The variant pool, and the material it was built from. BuildMaterials makes new
+        /// Material objects on every biome reload, so a pool cached against the old one
+        /// would tint windows with a material nothing else in the world is using. Keyed on
+        /// the source so a reload rebuilds it; also covers a domain reload nulling both.
+        private static Material[] windowPool;
+        private static Material windowPoolSource;
+
+        private static Material[] WindowPool(Material cityWindows)
+        {
+            if (windowPool != null && windowPoolSource == cityWindows) return windowPool;
+
+            // Index 0 is the shared asset itself, so a twelfth of buildings add no
+            // material at all and the pool costs eleven.
+            var pool = new Material[WindowVariants];
+            pool[0] = cityWindows;
+            for (var i = 1; i < WindowVariants; i++)
+            {
+                // 5 and 7 are coprime with 12, so u and v each walk the whole grid and
+                // the pair does not repeat across the pool.
+                var variant = new Material(cityWindows)
+                {
+                    name = $"{cityWindows.name} Lit {i}",
+                };
+                variant.SetTextureOffset("_BaseMap",
+                    new Vector2(i * 5 % WindowVariants / (float)WindowVariants,
+                                i * 7 % WindowVariants / (float)WindowVariants));
+                pool[i] = variant;
+            }
+            windowPool = pool;
+            windowPoolSource = cityWindows;
+            Debug.Log($"RR_WINDOWS built {WindowVariants} lit-window variants from " +
+                      $"{cityWindows.name}");
+            return pool;
+        }
+
+        /// Gives each building its own lit-window pattern by swapping in one of a small
+        /// pool of materials.
+        ///
+        /// This used to set _BaseMap_ST through a MaterialPropertyBlock, which is the
+        /// right move under the built-in pipeline and the wrong one under URP: a renderer
+        /// carrying a property block is skipped by the SRP Batcher. Manhattan is where
+        /// that costs the most - measured at 30,667 draw calls for a 7.1 ms GPU frame
+        /// inside a 28.4 ms one, so the biome was submitting far more than it was
+        /// drawing - and the buildings this ran on are exactly what the batcher should be
+        /// collapsing.
+        ///
+        /// Swapping sharedMaterials keeps the batcher, for the same reason WeatherWalls
+        /// swaps rather than overrides. The cost is eleven materials for the whole biome.
         private static void VaryWindowLighting(GameObject model, Material cityWindows, int hash)
         {
             if (model == null || cityWindows == null) return;
-            const int cells = 12;
+            var pool = WindowPool(cityWindows);
             var salted = unchecked(hash * -1640531527); // hash ^ golden-ratio multiplier,
-            var offsetU = (salted & 0x7fffffff) % cells / (float)cells;
-            var offsetV = (salted >> 8 & 0x7fffffff) % cells / (float)cells;
-            var block = new MaterialPropertyBlock();
+            var chosen = pool[(salted & 0x7fffffff) % WindowVariants];
+            if (chosen == cityWindows) return;
+
             foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
             {
-                var usesWindows = false;
-                foreach (var m in renderer.sharedMaterials) if (m == cityWindows) { usesWindows = true; break; }
-                if (!usesWindows) continue;
-                renderer.GetPropertyBlock(block);
-                block.SetVector("_BaseMap_ST", new Vector4(1f, 1f, offsetU, offsetV));
-                renderer.SetPropertyBlock(block);
+                var current = renderer.sharedMaterials;
+                Material[] swapped = null;
+                for (var i = 0; i < current.Length; i++)
+                {
+                    if (current[i] != cityWindows) continue;
+                    swapped ??= (Material[])current.Clone();
+                    swapped[i] = chosen;
+                }
+                if (swapped != null) renderer.sharedMaterials = swapped;
             }
         }
 
