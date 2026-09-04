@@ -2961,7 +2961,12 @@ namespace RoadRage.UnityRemake
                     var chosen = source;
                     if (wallGrime.TryGetValue(source.name, out var variants) && variants.Length >= 2)
                         chosen = variants[pick % variants.Length];
-                    if (IsTintableWall(chosen.name)) chosen = TintedWall(chosen, tint);
+                    if (IsTintableWall(chosen.name))
+                    {
+                        var before = chosen;
+                        chosen = TintedWall(chosen, tint);
+                        if (chosen != before) tintedWalls++;
+                    }
                     if (chosen == source) continue;
                     swapped ??= (Material[])current.Clone();
                     swapped[i] = chosen;
@@ -5148,9 +5153,15 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Per-chunk tallies for the city builder, so a run says what it built instead of
+        /// leaving it to be judged from a screenshot. Three rounds of "is it there?" went
+        /// by on guesswork; a count is two lines and settles it.
+        private int builtSkybridges, builtPlazas, builtFrontages, tintedWalls;
+
         private void BuildCyberSprawl()
         {
             Random.InitState(41903 ^ chunkSeed);
+            builtSkybridges = builtPlazas = builtFrontages = tintedWalls = 0;
 
             // Ground-level NYC sidewalk clutter: fire hydrants, newspaper boxes, parking meters, chairs
             //
@@ -5202,7 +5213,7 @@ namespace RoadRage.UnityRemake
                 var block = Mathf.FloorToInt(z / 22f);
 
                 // One skybridge every five blocks, spanning the avenue overhead.
-                if (block % 5 == 3) BuildManhattanSkybridge(z);
+                if (block % 5 == 3) { BuildManhattanSkybridge(z); builtSkybridges++; }
 
                 for (var side = -1; side <= 1; side += 2)
                 {
@@ -5229,12 +5240,14 @@ namespace RoadRage.UnityRemake
                     if ((block + (side > 0 ? 0 : 3)) % 7 == 4)
                     {
                         BuildManhattanPlaza(frontDistance, side, block);
+                        builtPlazas++;
                         continue;
                     }
 
                     var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
                         frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
+                    if (frontage != null) builtFrontages++;
 
                     // Not every storefront has an awning out front. One in five bare walls
                     // keeps the rhythm from turning into wallpaper.
@@ -5341,6 +5354,9 @@ namespace RoadRage.UnityRemake
                     }
                 }
             }
+
+            Debug.Log($"RR_CITY chunk built {builtFrontages} frontage(s), {builtSkybridges} " +
+                      $"skybridge(s), {builtPlazas} plaza(s), {tintedWalls} tinted wall material(s)");
         }
 
         /// Cyberpunk and DemoCity street clutter dressed onto NEON CITY's sidewalks.
