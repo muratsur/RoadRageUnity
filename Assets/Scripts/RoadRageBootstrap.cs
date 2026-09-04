@@ -5663,7 +5663,13 @@ namespace RoadRage.UnityRemake
         private float ScatterDensity =>
             !RichDetailBudget ? 0.34f
             : QualitySettings.GetQualityLevel() <= 1 ? 0.55f
-            : 1f;
+            // 1.45 on desktop, up from 1.0. The budget for this was measured, not guessed:
+            // Greenwood runs at 341 fps average with 7.4 ms of GPU in a 9.9 ms frame, and
+            // the bush swap took 5.5M triangles out of it. The mobile and low tiers are
+            // untouched - that 0.34 is the figure Gate A arrived at after measuring the
+            // device at under 1 fps, and screen coverage of alpha-tested foliage is still
+            // what has to come down there.
+            : 1.45f;
 
         /// Scatters a prop along a lateral band beside the road. Biomes read as real when
         /// props sit in overlapping depth bands (verge / near / mid / far) rather than as a
@@ -6126,7 +6132,36 @@ namespace RoadRage.UnityRemake
             globalHorizonSky = new GameObject("Global Horizon Sky & Mountains");
             globalHorizonSky.AddComponent<GlobalHorizonFollower>();
 
-            if (biomeIndex == 9) // Hollywood Hills
+            if (biomeIndex == 0) // Greenwood
+            {
+                // A ridge closing off the forest horizon. ForestVillage ships SM_mountain
+                // and the biome already builds a Forest Mountain material for it, and
+                // neither was ever placed - Greenwood ended at a wall of trees with sky
+                // above it, which is what makes a forest read as a corridor rather than a
+                // valley.
+                //
+                // Both flanks and a back rank, none of it across the road. Parented to the
+                // horizon follower, so the ridge holds its distance instead of sliding past
+                // - a mountain you drive level with is a rock.
+                var ridge = new[]
+                {
+                    new Vector3(-520f, -30f, -260f), new Vector3(-560f, -30f, 140f),
+                    new Vector3(-480f, -30f, 520f),  new Vector3(520f, -30f, -300f),
+                    new Vector3(560f, -30f, 120f),   new Vector3(490f, -30f, 480f),
+                    new Vector3(-240f, -30f, 900f),  new Vector3(260f, -30f, 960f),
+                };
+                for (var i = 0; i < ridge.Length; i++)
+                {
+                    var peak = BiomeModel("ForestVillage", "Mountains/SM_mountain", materials["Forest Mountain"]);
+                    if (peak == null) continue;
+                    peak.name = $"Forest Horizon Mountain {i}";
+                    peak.transform.SetParent(globalHorizonSky.transform, false);
+                    peak.transform.localPosition = ridge[i];
+                    peak.transform.localRotation = Quaternion.Euler(0f, i * 47f, 0f);
+                    NormalizeModelHeight(peak, 150f + i % 3 * 45f, 0f);
+                }
+            }
+            else if (biomeIndex == 9) // Hollywood Hills
             {
                 // 1. Static Panoramic Mountains strictly on Left (-X) and Right (+X) flanks (NEVER across the road!)
                 var mountainOffsets = new[]
@@ -8273,7 +8308,7 @@ namespace RoadRage.UnityRemake
             }
             if (markedViolators.Count == 0) return;
 
-            const float width = 46f, height = 52f, subHeight = 22f;
+            const float width = 46f, height = 52f;
             float lastY = -9999f, lastX = -9999f;
             for (var i = 0; i < markedViolators.Count; i++)
             {
@@ -8302,7 +8337,7 @@ namespace RoadRage.UnityRemake
                 // Clustered traffic stacked their chips into one unreadable smudge;
                 // nudge later chips upward when they land on the previous one.
                 if (Mathf.Abs(y - lastY) < 30f && Mathf.Abs(x - lastX) < width + 24f)
-                    y = lastY - (height + subHeight + 8f);
+                    y = lastY - (height + 8f);
                 lastY = y;
                 lastX = x;
 
@@ -8311,17 +8346,22 @@ namespace RoadRage.UnityRemake
                     : 1f;
 
                 var prev = GUI.color;
-                GUI.color = new Color(0f, 0f, 0f, (isQuarry ? 0.66f : 0.42f) * pulse);
-                GUI.DrawTexture(new Rect(x, y, width, height + (isQuarry ? subHeight : 0f)), dimTexture);
+                // The mark alone. It used to sit on a black panel at 42-66% alpha with a
+                // distance readout under it, which is three pieces of chrome doing the job
+                // of one - and the panel is the part you actually see first, so the read
+                // was "dark box" before "red !".
+                //
+                // The panel was there for contrast against a bright sky, so that job moves
+                // to an outline: the glyph is drawn four times in black at one-pixel
+                // offsets and once in red on top. Costs four extra GUI.Labels on at most a
+                // handful of markers and needs no texture at all.
+                var markerRect = new Rect(x, y, width, height);
+                GUI.color = new Color(0f, 0f, 0f, (isQuarry ? 0.9f : 0.7f) * pulse);
+                for (var ox = -1; ox <= 1; ox += 2)
+                for (var oy = -1; oy <= 1; oy += 2)
+                    GUI.Label(new Rect(x + ox * 1.5f, y + oy * 1.5f, width, height), label, markerStyle);
                 GUI.color = new Color(tint.r, tint.g, tint.b, (isQuarry ? 1f : 0.85f) * pulse);
-                GUI.Label(new Rect(x, y, width, height), label, markerStyle);
-                if (isQuarry)
-                {
-                    GUI.color = new Color(1f, 1f, 1f, pulse);
-                    GUI.Label(new Rect(x - (132f - width) * 0.5f, y + height, 132f, subHeight),
-                        traffic.IsFleeing ? $"FLEEING \u00b7 {quarryGap:0} m" : $"{quarryGap:0} m",
-                        markerSubStyle);
-                }
+                GUI.Label(markerRect, label, markerStyle);
                 GUI.color = prev;
             }
         }
