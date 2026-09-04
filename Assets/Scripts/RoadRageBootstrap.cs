@@ -2812,6 +2812,59 @@ namespace RoadRage.UnityRemake
         /// is the behaviour before the variants existed.
         private const int GrimeVariants = 3;
 
+        /// Facade tints, multiplied into a wall's albedo. Index 0 is the untinted
+        /// original, so a seventh of buildings wear the pack texture as it ships.
+        ///
+        /// KeepPackWallMaterials hands every building in the pack its own wall material,
+        /// which is why FacadeMaterial's five-colour family never reaches a wall: the
+        /// pack branch returns sourceMaterial before the facade branch is reached. That
+        /// was the right call - the pack textures are far better than the flat family -
+        /// but it means one brick, one plaster and one epoxy across the whole biome, and
+        /// a street of identical colour.
+        ///
+        /// These stay close to white because they multiply a photographic albedo: a
+        /// saturated tint reads as coloured light on the wall rather than as a different
+        /// building. Painted brick, limestone, sandstone, soot-grey, verdigris and a cold
+        /// steel-blue, all of which a Manhattan block genuinely contains.
+        private static readonly Color[] FacadeTints =
+        {
+            new Color(1.00f, 1.00f, 1.00f),
+            new Color(0.88f, 0.68f, 0.60f),
+            new Color(0.95f, 0.94f, 0.88f),
+            new Color(1.00f, 0.92f, 0.78f),
+            new Color(0.78f, 0.78f, 0.80f),
+            new Color(0.78f, 0.86f, 0.80f),
+            new Color(0.74f, 0.81f, 0.92f),
+        };
+
+        /// Tinted wall materials, keyed on the material they were tinted from. Built on
+        /// demand and shared, so a biome costs at most six extra materials per wall it
+        /// actually uses rather than one per building.
+        private Dictionary<Material, Material[]> wallTints;
+
+        private Material TintedWall(Material source, int tint)
+        {
+            if (tint <= 0 || source == null) return source;
+            wallTints ??= new Dictionary<Material, Material[]>();
+            if (!wallTints.TryGetValue(source, out var variants))
+            {
+                variants = new Material[FacadeTints.Length];
+                variants[0] = source;
+                wallTints[source] = variants;
+            }
+            if (variants[tint] == null)
+            {
+                var tinted = new Material(source) { name = $"{source.name} Tint {tint}" };
+                // Swapping a material rather than setting a property block, for the same
+                // reason VaryWindowLighting does: a property block takes the renderer out
+                // of the SRP Batcher, which cost Manhattan 4,573 SetPass calls the last
+                // time something here did it.
+                tinted.SetColor("_BaseColor", FacadeTints[tint]);
+                variants[tint] = tinted;
+            }
+            return variants[tint];
+        }
+
         /// Wall material name to its variants, index 0 being the clean original.
         /// Rebuilt on demand: a domain reload wipes this while the chunks that used it
         /// survive, which is the same trap that produced duplicate worlds earlier.
@@ -2857,6 +2910,9 @@ namespace RoadRage.UnityRemake
             if (wallGrime.Count == 0) return;
 
             var pick = (hash & 0x7fffffff);
+            // Salted apart from the grime pick, so weathering and colour do not move
+            // together and a street cannot end up with all its clean walls one shade.
+            var tint = (unchecked(hash * 0x27d4eb2d) & 0x7fffffff) % FacadeTints.Length;
             foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
             {
                 var current = renderer.sharedMaterials;
@@ -2866,7 +2922,7 @@ namespace RoadRage.UnityRemake
                     if (current[i] == null) continue;
                     if (!wallGrime.TryGetValue(current[i].name, out var variants)) continue;
                     if (variants.Length < 2) continue;
-                    var chosen = variants[pick % variants.Length];
+                    var chosen = TintedWall(variants[pick % variants.Length], tint);
                     if (chosen == current[i]) continue;
                     swapped ??= (Material[])current.Clone();
                     swapped[i] = chosen;
@@ -3005,7 +3061,7 @@ namespace RoadRage.UnityRemake
             var fitting = new List<BuildingEntry>();
             foreach (var entry in catalogue)
             {
-                if (entry.Class != wanted) continue;
+                if (!ClassUsableFor(entry.Class, wanted)) continue;
                 // Usable if it can be brought within the plot without shrinking so far
                 // that it stops reading as a building.
                 if (entry.Width * MinPlotScale <= plotWidth) fitting.Add(entry);
@@ -3076,6 +3132,25 @@ namespace RoadRage.UnityRemake
         /// Distance from the road centreline to the facade line. Road half-width plus
         /// the shoulder and the pavement - every frontage meets the pavement here.
         private const float FrontageSetback = 17.5f;
+        /// Whether a catalogued building of one class may be placed on another's plot.
+        ///
+        /// The class is a size hint, not a licence. AssignClasses ranks the whole set by
+        /// width and cuts it in thirds, so a frontage plot could only ever draw on the
+        /// narrowest third - 21 of 64 - and a street runs through 21 buildings in a
+        /// couple of blocks. That is the measurable half of "every building looks the
+        /// same": RR_CITY has been printing the number all along.
+        ///
+        /// A MidBlock-width building that scales into a 30 m plot is a perfectly good
+        /// frontage, and MinPlotScale already refuses anything that would have to shrink
+        /// out of proportion to fit, so the fit test is the real guard and the class
+        /// filter was only narrowing the draw. Neighbouring classes are now allowed;
+        /// Skyline entries still stay off the street, because those are whole city blocks
+        /// and nothing about them reads at 30 m.
+        private static bool ClassUsableFor(BuildingClass entry, BuildingClass wanted) =>
+            entry == wanted
+            || (wanted == BuildingClass.Frontage && entry == BuildingClass.MidBlock)
+            || (wanted == BuildingClass.MidBlock && entry != BuildingClass.NotABuilding);
+
         private const float MinPlotScale = 0.55f;
         private const float MaxPlotScale = 1.9f;
 
@@ -4969,9 +5044,15 @@ namespace RoadRage.UnityRemake
                     // Facade picked per plot, so neighbours differ the way a real street
                     // does. The hash is the block's, so a chunk rebuilt later is identical.
                     var frontageHash = BlockHash(block, side * 7);
+                    // Plot width varies by block rather than being 30 m everywhere. It
+                    // feeds the scale clamp, so the same mesh comes out a different size
+                    // on a different lot - which is what a real street does, and what a
+                    // fixed width made impossible. Narrow enough a range that the facade
+                    // line still reads as continuous.
+                    var frontagePlot = 26f + (frontageHash >> 3 & 0x7fffffff) % 5 * 2f;
                     var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
-                        frontageLine: FrontageSetback, plotWidth: 30f, hash: frontageHash);
+                        frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
 
                     // Not every storefront has an awning out front. One in five bare walls
                     // keeps the rhythm from turning into wallpaper.
@@ -5028,9 +5109,10 @@ namespace RoadRage.UnityRemake
                         // Salted differently from the frontage so a block's tower and its
                         // street building are not cut from the same stone.
                         var towerHash = BlockHash(block, side * 3);
+                        var towerPlot = 40f + (towerHash >> 3 & 0x7fffffff) % 5 * 2f;
                         PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
                             "Manhattan Midtown Skyscraper", towerDistance, side,
-                            frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: towerHash);
+                            frontageLine: FrontageSetback + 26f, plotWidth: towerPlot, hash: towerHash);
                     }
 
                     // 4. NYC Street Lamposts with warm amber glow
