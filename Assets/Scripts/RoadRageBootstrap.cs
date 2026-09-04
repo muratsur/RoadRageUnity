@@ -3416,6 +3416,30 @@ namespace RoadRage.UnityRemake
             return trail;
         }
 
+        /// Merges a prop's child meshes into one batch, so it costs draw calls in
+        /// proportion to its materials rather than to how many pieces it was modelled in.
+        ///
+        /// The NYC roof sets are the reason this exists. RR_PLACEMENT measured NYC Rooftop
+        /// Water Tank at 7,675 renderers - 66.3% of everything Manhattan submits - for
+        /// 709k triangles, 92 apiece. They are not water tanks but whole rooftop clutter
+        /// sets shipped as one FBX of roughly 85 separate objects, and every object was
+        /// its own submission, on roofs 28-35 m up, seen from a car in a canyon. Top of
+        /// the renderer ranking and nowhere on the triangle one is exactly the shape a
+        /// draw call problem takes.
+        ///
+        /// Combine bakes the children's transforms into shared buffers, so it has to run
+        /// after the model is positioned and scaled - after NormalizeModelHeight, not
+        /// before - and the children must not move afterwards. Nothing moves these.
+        ///
+        /// It reads the source vertex data, which is why the nine roof FBXs are imported
+        /// with Read/Write enabled. That keeps a CPU copy of about 9 MB of mesh; worth
+        /// watching, and cheap against two thirds of the biome's submissions.
+        private static void CombineChildRenderers(GameObject model)
+        {
+            if (model == null) return;
+            StaticBatchingUtility.Combine(model);
+        }
+
         /// The name of the object the placement code created, found by walking up to the
         /// direct child of the chunk root. PlaceBiomeModelOnRoad and PlaceBuildingOnPlot
         /// both name what they spawn, so this is the label a row can be acted on by.
@@ -4881,14 +4905,11 @@ namespace RoadRage.UnityRemake
 
             // Ground-level NYC sidewalk clutter: fire hydrants, newspaper boxes, parking meters, chairs
             //
-            // 16 m rather than 10. At 10 m this was the densest band in the biome - a
-            // hydrant, a news box or a set of chairs every 10 m down both pavements, none
-            // of it looked at from a car, and all of it submitted every frame. Manhattan
-            // is bound on submission (30,667 draw calls for a 7.1 ms GPU frame in a
-            // 28.4 ms one), so a prop's cost here is what it takes to draw, not what it
-            // is made of. 16 m still reads as a populated street; it just stops being a
-            // continuous line of furniture.
-            ScatterBand(16f, 13.0f, 15.0f, (d, l, s) =>
+            // Thinned to 16 m once on the theory that the props were what Manhattan was
+            // submitting, then put back: RR_PLACEMENT measured this band at 139 renderers,
+            // 1.2% of the biome, and the thinning bought 0.9% of the renderer count in
+            // total. The submissions were never here.
+            ScatterBand(10f, 13.0f, 15.0f, (d, l, s) =>
             {
                 var pick = Random.value;
                 var propName = pick > 0.65f ? "Buildings/NYCBlock6/Fireplug"
@@ -4909,10 +4930,7 @@ namespace RoadRage.UnityRemake
             // Street trees, in front of the frontage line rather than behind it. Manhattan
             // reads as canyon walls without something breaking the vertical, and a tree is
             // the cheapest thing that does it at eye level.
-            // 26 m rather than 18, for the same reason. Trees do more work per instance
-            // than the clutter does - they break the canyon at eye level, which is the
-            // whole point of them - so they are thinned less.
-            ScatterBand(26f, 13.5f, 14.5f, (d, l, s) =>
+            ScatterBand(18f, 13.5f, 14.5f, (d, l, s) =>
             {
                 var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
                     materials["City Palm"], d, l, 0.14f,
@@ -4961,7 +4979,11 @@ namespace RoadRage.UnityRemake
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
                             materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 35f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
-                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 35f);
+                        if (roofProp != null)
+                        {
+                            NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 35f);
+                            CombineChildRenderers(roofProp);
+                        }
                     }
 
                     // Rooftop water tanks on frontage buildings
@@ -4971,7 +4993,11 @@ namespace RoadRage.UnityRemake
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
                             materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 28f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
-                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(3.5f, 6.5f), 28f);
+                        if (roofProp != null)
+                        {
+                            NormalizeModelHeight(roofProp, Random.Range(3.5f, 6.5f), 28f);
+                            CombineChildRenderers(roofProp);
+                        }
                     }
 
                     // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
