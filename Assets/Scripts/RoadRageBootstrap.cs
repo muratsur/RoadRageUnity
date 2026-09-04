@@ -5214,6 +5214,22 @@ namespace RoadRage.UnityRemake
             "ForestVillage|Vegetation/SM_plant1",
         };
 
+        /// The undergrowth band used to be one hardcoded mesh, ForestVillage's SM_bush,
+        /// and it was 31.7% of Greenwood on its own: 409 instances at 15.8k triangles
+        /// each, 6446k of the biome's 20357k. Its FBX is 1923 KB and imports with no
+        /// LODs; every other bush in the project is 25-70 KB. It was carrying scanned
+        /// density into a 1.6-3.2 m prop scattered every 5.5 m and read past at speed,
+        /// where none of that silhouette survives.
+        ///
+        /// These two are already in ForestPlants, so Greenwood has been drawing them all
+        /// along one band over - same biome, same "Forest Undergrowth" material, already
+        /// right by eye. The swap is 25 KB of mesh where 1923 KB was.
+        private static readonly string[] ForestBushes =
+        {
+            "RunicForest|Vegetation/SM_bush_01",
+            "RunicForest|Vegetation/SM_bush_02",
+        };
+
         private static readonly string[] JungleFronds =
         {
             "JungleRuins|Plants/SM_plant_02", "JungleRuins|Plants/SM_plant_03",
@@ -5688,7 +5704,8 @@ namespace RoadRage.UnityRemake
             // Bushes and deadfall break up the ground between trunks.
             ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
             {
-                return SpawnForestPiece("ForestVillage|Vegetation/SM_bush", d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
+                return SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
+                    d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
             });
 
             // Ground cover. Low to the camera rather than over it, but at 3.4 m spacing
