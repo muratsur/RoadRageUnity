@@ -3380,9 +3380,34 @@ namespace RoadRage.UnityRemake
         private const int CostProbeSampleFrames = 120;
         private bool costProbeRunning;
 
+        /// The keypress path only works while the Game view holds keyboard focus. In the
+        /// Editor that is easy to lose - clicking the Console to filter for RR_COST takes
+        /// it away - and a P pressed anywhere else never reaches Update, so the
+        /// measurement silently does not happen and the Console stays empty. Road
+        /// Rage/Measure Live World Cost calls this directly, with no focus to lose.
+        public static void MeasureLiveWorldCost()
+        {
+            var bootstrap = Instance;
+            if (bootstrap == null)
+            {
+                Debug.LogWarning("RR_COST no bootstrap in the scene. Enter play mode first.");
+                return;
+            }
+            bootstrap.LogLiveWorldCost();
+        }
+
         private void LogLiveWorldCost()
         {
-            if (costProbeRunning) return;
+            if (costProbeRunning)
+            {
+                Debug.Log("RR_COST probe already running.");
+                return;
+            }
+            // Announce the start. The sample takes a couple of seconds, during which a
+            // trigger that fired and a trigger that never arrived look identical - which
+            // is exactly the ambiguity that left an empty Console unexplained.
+            Debug.Log($"RR_COST probe started: {CostProbeWarmupFrames} warmup + " +
+                      $"{CostProbeSampleFrames} sampled frames, uncapped.");
             StartCoroutine(CostProbe());
         }
 
