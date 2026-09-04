@@ -3416,6 +3416,47 @@ namespace RoadRage.UnityRemake
             return trail;
         }
 
+        /// The name of the object the placement code created, found by walking up to the
+        /// direct child of the chunk root. PlaceBiomeModelOnRoad and PlaceBuildingOnPlot
+        /// both name what they spawn, so this is the label a row can be acted on by.
+        private static string PlacementName(Transform t)
+        {
+            var node = t;
+            while (node.parent != null && !node.parent.name.StartsWith("Chunk ")) node = node.parent;
+            return node.name;
+        }
+
+        /// Ranks placements by renderer count.
+        ///
+        /// The triangle ranking answers "what is heavy", which is the right question for
+        /// a GPU-bound biome. Manhattan was neither: 30,667 draw calls for a 7.1 ms GPU
+        /// frame inside a 28.4 ms one, so what mattered was how many things were being
+        /// submitted, and nothing in the log said. Triangles are still printed per row,
+        /// so the two rankings can be read against each other - a placement high here and
+        /// low there is cheap geometry submitted too many times, which is the shape a
+        /// draw call problem takes.
+        private static void LogBusiestPlacements(Dictionary<string, int> renderersByPlacement,
+                                                 Dictionary<string, long> trisByPlacement,
+                                                 long totalRenderers)
+        {
+            if (renderersByPlacement.Count == 0 || totalRenderers <= 0) return;
+
+            var ranked = new List<KeyValuePair<string, int>>(renderersByPlacement);
+            ranked.Sort((a, b) => b.Value.CompareTo(a.Value));
+
+            Debug.Log($"RR_PLACEMENT busiest of {renderersByPlacement.Count} placements " +
+                      $"({totalRenderers} renderers total):");
+            var shown = Mathf.Min(HeaviestMeshCount, ranked.Count);
+            for (var i = 0; i < shown; i++)
+            {
+                var name = ranked[i].Key;
+                var count = ranked[i].Value;
+                trisByPlacement.TryGetValue(name, out var tris);
+                Debug.Log($"RR_PLACEMENT {100f * count / totalRenderers,5:0.0}%  {count,6} renderers  " +
+                          $"{tris / 1000,7}k tris  ({(float)tris / count / 1000f:0.0}k each)  {name}");
+            }
+        }
+
         private static void LogHeaviestMeshes(Dictionary<string, long> trisByMesh,
                                               Dictionary<string, int> countByMesh,
                                               Dictionary<string, string> exampleOwner, long totalTris)
@@ -3518,6 +3559,13 @@ namespace RoadRage.UnityRemake
             // "Manhattan Midtown Skyscraper"), so recording one owning object identifies
             // the call site that produced the cost.
             var exampleOwner = new Dictionary<string, string>();
+            // Renderers per placement, which is a different question from triangles per
+            // mesh and the one Manhattan actually turned on. Its frame was CPU-bound on
+            // submission while the triangle ranking pointed at buildings, so a ranking by
+            // triangle is the wrong map for a draw call problem. Keyed by the name the
+            // placement code gave the object, so a row names a call site.
+            var renderersByPlacement = new Dictionary<string, int>();
+            var trisByPlacement = new Dictionary<string, long>();
 
             foreach (var chunk in chunkRoots)
             {
@@ -3525,12 +3573,17 @@ namespace RoadRage.UnityRemake
                 totalRenderers += renderers.Length;
                 foreach (var r in renderers)
                 {
+                    var placement = PlacementName(r.transform);
+                    renderersByPlacement.TryGetValue(placement, out var placed);
+                    renderersByPlacement[placement] = placed + 1;
                     if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
                     {
                         long meshTris = 0;
                         for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
                             meshTris += mf.sharedMesh.GetIndexCount(sm) / 3;
                         totalTris += meshTris;
+                        trisByPlacement.TryGetValue(placement, out var placedTris);
+                        trisByPlacement[placement] = placedTris + meshTris;
 
                         var meshName = mf.sharedMesh.name;
                         trisByMesh.TryGetValue(meshName, out var running);
@@ -3593,6 +3646,7 @@ namespace RoadRage.UnityRemake
                       $"(was capped at {priorTarget})");
 
             LogHeaviestMeshes(trisByMesh, countByMesh, exampleOwner, totalTris);
+            LogBusiestPlacements(renderersByPlacement, trisByPlacement, totalRenderers);
 
             costProbeRunning = false;
         }
@@ -4826,7 +4880,15 @@ namespace RoadRage.UnityRemake
             Random.InitState(41903 ^ chunkSeed);
 
             // Ground-level NYC sidewalk clutter: fire hydrants, newspaper boxes, parking meters, chairs
-            ScatterBand(10f, 13.0f, 15.0f, (d, l, s) =>
+            //
+            // 16 m rather than 10. At 10 m this was the densest band in the biome - a
+            // hydrant, a news box or a set of chairs every 10 m down both pavements, none
+            // of it looked at from a car, and all of it submitted every frame. Manhattan
+            // is bound on submission (30,667 draw calls for a 7.1 ms GPU frame in a
+            // 28.4 ms one), so a prop's cost here is what it takes to draw, not what it
+            // is made of. 16 m still reads as a populated street; it just stops being a
+            // continuous line of furniture.
+            ScatterBand(16f, 13.0f, 15.0f, (d, l, s) =>
             {
                 var pick = Random.value;
                 var propName = pick > 0.65f ? "Buildings/NYCBlock6/Fireplug"
@@ -4847,7 +4909,10 @@ namespace RoadRage.UnityRemake
             // Street trees, in front of the frontage line rather than behind it. Manhattan
             // reads as canyon walls without something breaking the vertical, and a tree is
             // the cheapest thing that does it at eye level.
-            ScatterBand(18f, 13.5f, 14.5f, (d, l, s) =>
+            // 26 m rather than 18, for the same reason. Trees do more work per instance
+            // than the clutter does - they break the canyon at eye level, which is the
+            // whole point of them - so they are thinned less.
+            ScatterBand(26f, 13.5f, 14.5f, (d, l, s) =>
             {
                 var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
                     materials["City Palm"], d, l, 0.14f,
