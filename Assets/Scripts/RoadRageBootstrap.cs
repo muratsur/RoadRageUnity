@@ -4983,6 +4983,122 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// A glazed pedestrian bridge across the avenue, the Gimbels kind.
+        ///
+        /// Built from primitives rather than from the pack bridge meshes. Those exist -
+        /// CyberpunkCity/Bridge/SM_bridge and SM_double_bridge, Synthwave/Bridge/SM_bridge
+        /// - but they are LFS-stored, so their span, pivot and orientation cannot be
+        /// measured from the repository, and a bridge that lands a pier on the
+        /// carriageway or falls short of the far pavement is worse than no bridge. A slab
+        /// and two glazed sides are fully determined by numbers in this file, the way the
+        /// storefront awnings and the sewer tunnel walls already are. Swapping in a pack
+        /// mesh is a good upgrade once somebody can look at one.
+        ///
+        /// Deck height clears everything that drives under it: the tallest traffic in the
+        /// game is a semi at about 4.2 m, and this sits at 14 m, which is also below the
+        /// point where the frontage buildings stop.
+        private void BuildManhattanSkybridge(float z)
+        {
+            const float deckHeight = 14f;
+            const float deckThickness = 0.9f;
+            const float deckLength = 5.5f;
+            // Both facade lines plus enough to bury the ends in the buildings, so no gap
+            // can open between the bridge and the wall it meets.
+            const float span = FrontageSetback * 2f + 3f;
+
+            var trim = materials["City Asphalt Trim"];
+            PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge", z, 0f, deckHeight,
+                new Vector3(span, deckThickness, deckLength), trim, Vector3.zero, false);
+
+            // Glazed sides, lit from the same window material the towers use, so a night
+            // avenue gets a bright band across it rather than a black slab.
+            var glazing = materials.TryGetValue("City Windows", out var windows) ? windows : trim;
+            for (var edge = -1; edge <= 1; edge += 2)
+                PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge Glazing",
+                    z + edge * (deckLength * 0.5f - 0.13f), 0f,
+                    deckHeight + deckThickness * 0.5f + 1.1f,
+                    new Vector3(span, 2.2f, 0.25f), glazing, Vector3.zero, false);
+
+            // Roof, so it reads as enclosed from below rather than as a floating floor.
+            PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge Roof", z, 0f,
+                deckHeight + 2.3f, new Vector3(span, 0.3f, deckLength), trim, Vector3.zero, false);
+
+            CreateLocalLight(RoadPath.Point(z, 0f, deckHeight + 1.2f),
+                new Color(1f, 0.94f, 0.82f), 16f, 9f);
+        }
+
+        /// An open plaza where a frontage building would have stood.
+        ///
+        /// The variety work gives the street more meshes and more colours, but a canyon
+        /// with no break in it still reads as a corridor - so every seventh block on a
+        /// side stops building and opens out instead. Paving back to the facade line,
+        /// trees and benches around the edge, a fountain in the middle.
+        ///
+        /// Everything here is a primitive or a prop already in the biome, and the paving
+        /// sits at the sidewalk's own height rather than the road's, so a plaza cannot
+        /// float or sink where the two differ.
+        private void BuildManhattanPlaza(float distance, float side, int block)
+        {
+            const float pavingHeight = 0.07f;
+            const float depth = 26f;
+            const float width = 20f;
+            // Centre of the plot, measured from the kerb back to behind the facade line.
+            var centreLateral = side * (RoadPath.HalfWidth + RoadPath.ShoulderWidth + depth * 0.5f);
+
+            PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Plaza Paving", distance, centreLateral,
+                pavingHeight, new Vector3(depth, 0.14f, width), materials["Sidewalk"],
+                Vector3.zero, false);
+
+            // Fountain: a basin and a plinth. Two cylinders read as one from a car, and
+            // the biome has nothing else with a curve in it at street level.
+            var stone = materials["City Concrete"];
+            PrimitiveOnRoad(PrimitiveType.Cylinder, "Manhattan Plaza Fountain", distance,
+                centreLateral, pavingHeight + 0.45f, new Vector3(6.5f, 0.45f, 6.5f), stone,
+                Vector3.zero, false);
+            PrimitiveOnRoad(PrimitiveType.Cylinder, "Manhattan Plaza Fountain", distance,
+                centreLateral, pavingHeight + 1.5f, new Vector3(1.6f, 1.1f, 1.6f), stone,
+                Vector3.zero, false);
+
+            // Trees and benches around the edge, on the block hash so a plaza is the same
+            // every time its chunk is rebuilt.
+            var props = materials["City Props"];
+            for (var i = 0; i < 4; i++)
+            {
+                var along = distance + (i < 2 ? -1f : 1f) * (width * 0.32f);
+                var across = centreLateral + side * (i % 2 == 0 ? -depth * 0.3f : depth * 0.3f);
+
+                var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
+                    materials["City Palm"], along, across, pavingHeight,
+                    new Vector3(0f, (BlockHash(block, i * 13) & 0x7fffffff) % 360, 0f), Vector3.one,
+                    "Manhattan Plaza Tree", false);
+                if (tree != null)
+                    NormalizeModelHeight(tree, 6.5f + (BlockHash(block, i * 7) & 0x7fffffff) % 3, pavingHeight);
+
+                var bench = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bench", props,
+                    along, across - side * 2.6f, pavingHeight,
+                    new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one,
+                    "Manhattan Plaza Bench", false);
+                if (bench != null) NormalizeModelHeight(bench, 1.0f, pavingHeight);
+            }
+
+            // Lamps at the two street-side corners, matching the avenue's own lighting so
+            // a plaza is not a dark hole in a lit street.
+            for (var corner = -1; corner <= 1; corner += 2)
+            {
+                var lampAlong = distance + corner * width * 0.4f;
+                var lampAcross = side * 13.0f;
+                var lamp = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/lampost2",
+                    materials["City Asphalt Trim"], lampAlong, lampAcross, pavingHeight,
+                    new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "NYC Street Lamp");
+                if (lamp != null)
+                {
+                    NormalizeModelHeight(lamp, 7.5f, pavingHeight);
+                    CreateLocalLight(RoadPath.Point(lampAlong, lampAcross, 6.8f),
+                        new Color(1f, 0.95f, 0.85f), 8f, 14f);
+                }
+            }
+        }
+
         private void BuildCyberSprawl()
         {
             Random.InitState(41903 ^ chunkSeed);
@@ -5035,6 +5151,10 @@ namespace RoadRage.UnityRemake
             for (var z = SegBegin(0f, 22f); z < segEnd; z += 22f)
             {
                 var block = Mathf.FloorToInt(z / 22f);
+
+                // One skybridge every five blocks, spanning the avenue overhead.
+                if (block % 5 == 3) BuildManhattanSkybridge(z);
+
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
@@ -5050,6 +5170,19 @@ namespace RoadRage.UnityRemake
                     // fixed width made impossible. Narrow enough a range that the facade
                     // line still reads as continuous.
                     var frontagePlot = 26f + (frontageHash >> 3 & 0x7fffffff) % 5 * 2f;
+
+                    // Every seventh block on a side opens out instead of building up. A
+                    // canyon with no break in it reads as a corridor however many
+                    // different buildings line it, so the variety work above needs
+                    // somewhere for the eye to rest as much as it needs more meshes.
+                    // Offset by side so the two pavements never open opposite each other
+                    // and leave the street with no walls at all.
+                    if ((block + (side > 0 ? 0 : 3)) % 7 == 4)
+                    {
+                        BuildManhattanPlaza(frontDistance, side, block);
+                        continue;
+                    }
+
                     var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
                         "NYC Street Frontage", frontDistance, side,
                         frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
