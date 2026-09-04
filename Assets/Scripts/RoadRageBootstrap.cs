@@ -2875,6 +2875,22 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Takes a model out of the shadow pass while leaving it lit and shadowed by
+        /// everything else.
+        ///
+        /// Manhattan submits 58.1M triangles against the 28.0M actually in the scene -
+        /// close to one extra full pass over the city - and it is bound on submission,
+        /// not on what it draws: 30,667 draw calls for a 7.1 ms GPU frame inside a
+        /// 28.4 ms one. A renderer that casts costs its draw call again per cascade, so
+        /// dropping the casters that nothing is looking at is worth more than dropping
+        /// the triangles.
+        private static void StopCastingShadows(GameObject model)
+        {
+            if (model == null) return;
+            foreach (var renderer in model.GetComponentsInChildren<Renderer>(true))
+                renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+        }
+
         /// Class/plot combinations already reported. Reset with the rest of the
         /// domain-reload state so a fresh run reports again.
         private static readonly HashSet<string> fitReported = new();
@@ -4928,9 +4944,15 @@ namespace RoadRage.UnityRemake
                         // Salted differently from the frontage so a block's tower and its
                         // street building are not cut from the same stone.
                         var towerHash = BlockHash(block, side * 3);
-                        PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
+                        var tower = PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
                             "Manhattan Midtown Skyscraper", towerDistance, side,
                             frontageLine: FrontageSetback + 26f, plotWidth: 44f, hash: towerHash);
+                        // The single largest block of shadow-pass submissions in the
+                        // biome, and the one least worth paying for. These are the tallest
+                        // things here and the furthest back, so each contributes several
+                        // stacked sections to the shadow pass while standing behind the
+                        // frontage that already shades the street.
+                        StopCastingShadows(tower);
                     }
 
                     // 4. NYC Street Lamposts with warm amber glow
