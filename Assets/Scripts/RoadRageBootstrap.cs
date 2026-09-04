@@ -2650,6 +2650,29 @@ namespace RoadRage.UnityRemake
             candidates.Add("Buildings/NYCBlock6/builds");
             candidates.Add("Buildings/NYCBlock6/shops");
 
+            // Architecture the NYC set does not contain.
+            //
+            // Everything above is the NYC-Like City Buildings Set: nineteen NYCVariants
+            // prefabs and eight FBXs, all assembled from the same eight part families -
+            // building_1..8 in bottom, middle and roof - wearing the same three materials.
+            // A street built from that is the same building over and over however it is
+            // recoloured, which is what tinting seven ways could not fix and what
+            // RR_CITY's counters proved was not a placement bug: the set is simply small.
+            //
+            // DemoCity is a whole city pack already in Resources, already used by this
+            // biome for its benches and trees, so its materials resolve. The mid-rise
+            // houses and office blocks are street-fronting buildings with silhouettes
+            // nothing in the NYC set has.
+            //
+            // Left out deliberately: small_house_1..3 for the same reason
+            // Buildings/USA/building was dropped, the factory buildings and chimney
+            // because an avenue is not an industrial estate, and the _bgr variants
+            // because those are flat background stand-ins.
+            for (var i = 1; i <= 5; i++) candidates.Add($"Buildings/DemoCity/mid_house_{i}");
+            candidates.Add("Buildings/DemoCity/mid_house_1_2");
+            candidates.Add("Buildings/DemoCity/mid_house_4_2");
+            for (var i = 1; i <= 4; i++) candidates.Add($"Buildings/DemoCity/office_building_{i}");
+
             var rejected = 0;
             foreach (var resource in candidates)
             {
