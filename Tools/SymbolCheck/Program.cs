@@ -89,15 +89,22 @@ namespace RoadRage.Tools
             var added = found.Where(n => !baseline.Contains(n)).ToList();
 
             var missingAssets = MissingResourceReferences(repo, trees);
+            var unknownMembers = UnknownTypeMembers(trees);
 
             Console.WriteLine($"SYMBOLCHECK {files.Count} files, {declaredCount} declared names, " +
                               $"{found.Count} external calls, {added.Count} undeclared, " +
-                              $"{missingAssets.Count} missing assets");
+                              $"{missingAssets.Count} missing assets, " +
+                              $"{unknownMembers.Count} unknown members");
 
             foreach (var (call, line, file) in missingAssets)
                 Console.WriteLine($"SYMBOLCHECK MISSING ASSET {call}\n    {file}:{line}");
+            foreach (var (site, line, file) in unknownMembers)
+                Console.WriteLine($"SYMBOLCHECK UNKNOWN MEMBER {site}\n    {file}:{line}");
 
-            if (added.Count == 0 && missingAssets.Count == 0) return 0;
+            if (added.Count == 0 && missingAssets.Count == 0 && unknownMembers.Count == 0) return 0;
+            if (unknownMembers.Count > 0)
+                Console.WriteLine($"SYMBOLCHECK FAILED: {unknownMembers.Count} member(s) named on a " +
+                                  "project type that does not declare them.");
             if (missingAssets.Count > 0)
                 Console.WriteLine($"SYMBOLCHECK FAILED: {missingAssets.Count} model reference(s) " +
                                   "resolve to nothing under any Resources folder.");
@@ -159,9 +166,10 @@ namespace RoadRage.Tools
         private static int SelfTest(string repo)
         {
             const string expected = "ThisOneIsGenuinelyMissing";
+            const string expectedMember = "D.ThisMemberDoesNotExist";
             var fixture = Path.Combine(repo, "Tools/SymbolCheck/selftest");
 
-            if (!Analyze(fixture, out var files, out var calls, out _, out _)) return 2;
+            if (!Analyze(fixture, out var files, out var calls, out _, out var trees)) return 2;
 
             var baseline = File.ReadAllLines(Path.Combine(fixture, "Tools/SymbolCheck/baseline.txt"))
                 .Where(l => l.Length > 0 && !l.StartsWith("#"))
@@ -169,16 +177,31 @@ namespace RoadRage.Tools
             var flagged = calls.Keys.Where(n => !baseline.Contains(n))
                 .OrderBy(n => n, StringComparer.Ordinal).ToList();
 
-            if (flagged.Count == 1 && flagged[0] == expected)
+            // The member check gets the same treatment. It shipped once in a form that
+            // could not fail - an unknown base class was assumed to hold any member, and
+            // since every type here derives from MonoBehaviour that answered yes to
+            // everything - so the fixture proves it on every run rather than on trust.
+            var members = UnknownTypeMembers(trees)
+                .Select(m => m.Site).OrderBy(m => m, StringComparer.Ordinal).ToList();
+
+            var namesOk = flagged.Count == 1 && flagged[0] == expected;
+            var membersOk = members.Count == 1 && members[0] == expectedMember;
+
+            if (namesOk && membersOk)
             {
-                Console.WriteLine($"SYMBOLCHECK selftest OK: caught {expected} " +
-                                  $"and nothing else across {files.Count} fixture files");
+                Console.WriteLine($"SYMBOLCHECK selftest OK: caught {expected} and " +
+                                  $"{expectedMember}, and nothing else, across {files.Count} " +
+                                  "fixture files");
                 return 0;
             }
 
-            Console.Error.WriteLine($"SYMBOLCHECK SELFTEST FAILED: expected exactly [{expected}], " +
-                                    $"got [{string.Join(", ", flagged)}]");
-            Console.Error.WriteLine("The checker is no longer catching undefined names, or is " +
+            if (!namesOk)
+                Console.Error.WriteLine($"SYMBOLCHECK SELFTEST FAILED: expected exactly [{expected}], " +
+                                        $"got [{string.Join(", ", flagged)}]");
+            if (!membersOk)
+                Console.Error.WriteLine($"SYMBOLCHECK SELFTEST FAILED: expected exactly " +
+                                        $"[{expectedMember}], got [{string.Join(", ", members)}]");
+            Console.Error.WriteLine("The checker is no longer catching what it claims to, or is " +
                                     "flagging something it should not. Do not trust its green runs.");
             return 1;
         }
@@ -317,6 +340,136 @@ namespace RoadRage.Tools
                 }
             }
             return unresolved;
+        }
+
+        /// Statics reachable on any UnityEngine.Object subclass. A project type deriving
+        /// from MonoBehaviour inherits these, and this tool cannot see the base class, so
+        /// without the list every Foo.Destroy(x) would be reported.
+        private static readonly HashSet<string> UnityInheritedStatics = new(StringComparer.Ordinal)
+        {
+            "Destroy", "DestroyImmediate", "Instantiate", "DontDestroyOnLoad",
+            "FindObjectOfType", "FindObjectsOfType", "FindAnyObjectByType",
+            "FindFirstObjectByType", "FindObjectsByType", "print", "Equals",
+            "ReferenceEquals", "op_Implicit", "op_Equality", "op_Inequality",
+        };
+
+        private sealed class TypeFacts
+        {
+            public readonly HashSet<string> Members = new(StringComparer.Ordinal);
+            public readonly List<string> Bases = new();
+        }
+
+        /// Members named on a project type that the type does not declare.
+        ///
+        /// This is the gap that let two real breaks through. RoadRageBootstrap assigned
+        /// RoadRageLandingDirector.ShowcaseRadiusScale, a field the class never had, and
+        /// the editor refused to enter play mode with CS0117 while CI stayed green. Later
+        /// a merge consolidated two names for one collection and left four call sites on
+        /// the dead one; that was found by grep, not by this checker.
+        ///
+        /// CollectUnresolvedCalls deliberately ignores anything with a receiver, because a
+        /// receiver is usually a Unity type and the noise would drown the signal. But when
+        /// the receiver is a bare identifier naming a type THIS project declares, the
+        /// members are all visible here and the check is exact.
+        ///
+        /// Only the first hop is checked. Foo.Bar.Baz verifies Bar on Foo and stops, since
+        /// Bar's type is not resolved without a full compilation. That covers both breaks
+        /// above and cannot invent a failure on a chain it does not understand.
+        private static List<(string Site, int Line, string File)> UnknownTypeMembers(
+            IEnumerable<SyntaxTree> trees)
+        {
+            var types = new Dictionary<string, TypeFacts>(StringComparer.Ordinal);
+
+            void Record(string name, IEnumerable<string> bases, IEnumerable<string> members)
+            {
+                if (!types.TryGetValue(name, out var facts))
+                    types[name] = facts = new TypeFacts();
+                facts.Bases.AddRange(bases);
+                foreach (var m in members) facts.Members.Add(m);
+            }
+
+            foreach (var tree in trees)
+            foreach (var node in tree.GetRoot().DescendantNodes())
+            {
+                switch (node)
+                {
+                    case EnumDeclarationSyntax e:
+                        Record(e.Identifier.ValueText, Array.Empty<string>(),
+                               e.Members.Select(m => m.Identifier.ValueText));
+                        break;
+                    case TypeDeclarationSyntax t:
+                    {
+                        var members = new List<string>();
+                        foreach (var m in t.Members)
+                        {
+                            switch (m)
+                            {
+                                case MethodDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case PropertyDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case EventDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case TypeDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case EnumDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case DelegateDeclarationSyntax x: members.Add(x.Identifier.ValueText); break;
+                                case FieldDeclarationSyntax x:
+                                    members.AddRange(x.Declaration.Variables.Select(v => v.Identifier.ValueText));
+                                    break;
+                                case EventFieldDeclarationSyntax x:
+                                    members.AddRange(x.Declaration.Variables.Select(v => v.Identifier.ValueText));
+                                    break;
+                            }
+                        }
+                        var bases = t.BaseList?.Types
+                            .Select(b => b.Type is IdentifierNameSyntax i ? i.Identifier.ValueText
+                                       : b.Type is GenericNameSyntax g ? g.Identifier.ValueText : null)
+                            .Where(n => n != null).ToList() ?? new List<string>();
+                        Record(t.Identifier.ValueText, bases, members);
+                        break;
+                    }
+                }
+            }
+
+            // Inherited members, walked through project base types only.
+            //
+            // The first version of this returned true for a base the project does not
+            // declare, reasoning that an unseen class might hold the member. Every type
+            // here derives from MonoBehaviour, so that answered "yes" for everything and
+            // the check silently passed both of the breaks it was written for. An unknown
+            // base now contributes nothing, and what a Unity base really offers on a
+            // static access is the short list above - instance members are unreachable
+            // through a type name anyway.
+            bool DeclaredInProject(string type, string member, HashSet<string> seen)
+            {
+                if (!seen.Add(type)) return false;
+                if (!types.TryGetValue(type, out var facts)) return false;
+                if (facts.Members.Contains(member)) return true;
+                foreach (var b in facts.Bases)
+                    if (DeclaredInProject(b, member, seen)) return true;
+                return false;
+            }
+
+            var found = new List<(string, int, string)>();
+            foreach (var tree in trees)
+            {
+                var text = tree.GetText();
+                foreach (var access in tree.GetRoot().DescendantNodes()
+                             .OfType<MemberAccessExpressionSyntax>())
+                {
+                    if (access.Expression is not IdentifierNameSyntax receiver) continue;
+                    var typeName = receiver.Identifier.ValueText;
+                    if (!types.ContainsKey(typeName)) continue;
+                    // a local or field of the same name shadows the type
+                    if (LocallyBound(access, typeName)) continue;
+
+                    var member = access.Name.Identifier.ValueText;
+                    if (DeclaredInProject(typeName, member,
+                            new HashSet<string>(StringComparer.Ordinal))) continue;
+                    if (UnityInheritedStatics.Contains(member)) continue;
+
+                    var line = text.Lines.GetLineFromPosition(access.SpanStart).LineNumber + 1;
+                    found.Add(($"{typeName}.{member}", line, tree.FilePath));
+                }
+            }
+            return found;
         }
 
         /// Is this name a local, parameter, or foreach/catch variable in scope? Those are

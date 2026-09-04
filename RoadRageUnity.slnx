@@ -1,21 +1,21 @@
 ﻿<Solution>
-  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="Utilities.Editor.csproj" />
   <Project Path="Assembly-CSharp.csproj" />
   <Project Path="Utilities.Inputs.csproj" />
-  <Project Path="Utilities.csproj" />
+  <Project Path="Assembly-CSharp-Editor.csproj" />
   <Project Path="PrimeTween.Demo.csproj" />
-  <Project Path="FMODUnityResonanceEditor.csproj" />
-  <Project Path="UnityVersionCompatibility.csproj" />
   <Project Path="FMODUnityEditor.csproj" />
   <Project Path="FMODUnity.csproj" />
-  <Project Path="Utilities.Test.Editor.csproj" />
+  <Project Path="UnityVersionCompatibility.csproj" />
   <Project Path="Utilities.Core.csproj" />
-  <Project Path="FMODUnityResonance.csproj" />
   <Project Path="Utilities.Test.csproj" />
-  <Project Path="Utilities.Inputs.Editor.csproj" />
-  <Project Path="Utilities.Extensions.csproj" />
+  <Project Path="FMODUnityResonance.csproj" />
   <Project Path="Utilities.Core.Editor.csproj" />
   <Project Path="PrimeTween.Debug.csproj" />
+  <Project Path="Utilities.Extensions.csproj" />
+  <Project Path="Utilities.Test.Editor.csproj" />
+  <Project Path="Utilities.csproj" />
   <Project Path="PrimeTween.Installer.csproj" />
+  <Project Path="FMODUnityResonanceEditor.csproj" />
+  <Project Path="Utilities.Inputs.Editor.csproj" />
 </Solution>

@@ -9,6 +9,13 @@ namespace RoadRage.UnityRemake
         public bool IsLandingActive { get; set; } = true;
         public bool IsTransitioningToRace { get; private set; }
 
+        /// Widens the showroom orbit for a large vehicle. The fixed 4.7 m radius was
+        /// framed around a hatchback, so a semi or a box truck put the camera inside its
+        /// own bodywork. RoadRageBootstrap measures the browsed vehicle's bounds and sets
+        /// this before the pose is next requested; static because the showroom only ever
+        /// frames one car and the director may not exist yet when the car is built.
+        public static float ShowcaseRadiusScale = 1f;
+
         private float showcaseOrbitAngle = 35f;
         private float transitionStartAngle = 35f;
         private float transitionProgress = 0f;
@@ -115,7 +122,7 @@ namespace RoadRage.UnityRemake
             {
                 var focusPoint = carPos + Vector3.up * 0.65f;
                 var rad = showcaseOrbitAngle * Mathf.Deg2Rad;
-                var radius = 4.7f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.35f);
+                var radius = (4.7f + 0.35f * Mathf.Sin(Time.unscaledTime * 0.35f)) * ShowcaseRadiusScale;
                 var height = 0.95f + 0.18f * Mathf.Sin(Time.unscaledTime * 0.5f);
 
                 var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);
@@ -137,7 +144,7 @@ namespace RoadRage.UnityRemake
                 var rad = currentAngle * Mathf.Deg2Rad;
 
                 // Expand radius and lift height smoothly from showcase pose to chase camera pose
-                var radius = Mathf.Lerp(4.7f, 8.2f, t);
+                var radius = Mathf.Lerp(4.7f * ShowcaseRadiusScale, 8.2f, t);
                 var height = Mathf.Lerp(0.95f, 4.7f, t);
 
                 var localOffset = new Vector3(Mathf.Sin(rad) * radius, height, Mathf.Cos(rad) * radius);

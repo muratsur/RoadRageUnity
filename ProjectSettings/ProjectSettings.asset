@@ -8,7 +8,7 @@ PlayerSettings:
   AndroidProfiler: 1
   AndroidFilterTouchesWhenObscured: 0
   AndroidEnableSustainedPerformanceMode: 0
-  defaultScreenOrientation: 4
+  defaultScreenOrientation: 3
   targetDevice: 2
   useOnDemandResources: 0
   accelerometerFrequency: 60
@@ -41,8 +41,8 @@ PlayerSettings:
     height: 1
   m_SplashScreenLogos: []
   m_VirtualRealitySplashScreen: {fileID: 0}
-  defaultScreenWidth: 1024
-  defaultScreenHeight: 768
+  defaultScreenWidth: 1600
+  defaultScreenHeight: 900
   defaultScreenWidthWeb: 960
   defaultScreenHeightWeb: 600
   m_StereoRenderingPath: 0
@@ -148,7 +148,7 @@ PlayerSettings:
   loadStoreDebugModeEnabled: 0
   visionOSBundleVersion: 1.0
   tvOSBundleVersion: 1.0
-  bundleVersion: 1.5.0
+  bundleVersion: 7.0.0
   preloadedAssets: []
   metroInputSource: 0
   wsaTransparentSwapchain: 0
@@ -169,15 +169,16 @@ PlayerSettings:
   androidMaxAspectRatio: 2.4
   androidMinAspectRatio: 1
   applicationIdentifier:
-    Android: com.PerfectGames.ArcadeCarControllerDrift
-    Standalone: com.PerfectGames.ACC_Lite
+    Android: com.ramline.roadrage
+    Standalone: com.ramline.roadrage
+    iPhone: com.ramline.roadrage
   buildNumber:
     Standalone: 0
     VisionOS: 0
-    iPhone: 0
+    iPhone: 3
     tvOS: 0
-  overrideDefaultApplicationIdentifier: 0
-  AndroidBundleVersionCode: 44
+  overrideDefaultApplicationIdentifier: 1
+  AndroidBundleVersionCode: 53
   AndroidMinSdkVersion: 26
   AndroidTargetSdkVersion: 0
   AndroidPreferredInstallLocation: 1
@@ -510,7 +511,10 @@ PlayerSettings:
       m_Height: 1024
       m_Kind: 4
       m_SubKind: App Store
-  m_BuildTargetBatching: []
+  m_BuildTargetBatching:
+  - m_BuildTarget: Standalone
+    m_StaticBatching: 1
+    m_DynamicBatching: 0
   m_BuildTargetShaderSettings: []
   m_BuildTargetGraphicsJobs:
   - m_BuildTarget: MacStandaloneSupport
@@ -865,7 +869,7 @@ PlayerSettings:
     PS4: UNITY_POST_PROCESSING_STACK_V2;PLUGIN_YG_2;TMP_YG2;NJSON_YG2
     PS5: UNITY_POST_PROCESSING_STACK_V2;PLUGIN_YG_2;TMP_YG2;NJSON_YG2
     QNX: UNITY_POST_PROCESSING_STACK_V2
-    Standalone: UNITY_POST_PROCESSING_STACK_V2;MVC_COMMUNITY;PLUGIN_YG_2;TMP_YG2;NJSON_YG2;UNITY_PIPELINE_URP
+    Standalone: UNITY_POST_PROCESSING_STACK_V2;MVC_COMMUNITY;PLUGIN_YG_2;TMP_YG2;NJSON_YG2;UNITY_PIPELINE_URP;SENTIS_ANALYTICS_ENABLED;APP_UI_EDITOR_ONLY
     VisionOS: UNITY_POST_PROCESSING_STACK_V2
     WebGL: UNITY_POST_PROCESSING_STACK_V2;PLUGIN_YG_2;TMP_YG2;NJSON_YG2
     Windows Store Apps: PLUGIN_YG_2;TMP_YG2;NJSON_YG2

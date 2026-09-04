@@ -247,6 +247,7 @@ namespace RoadRage.UnityRemake
             BuildLighting();
             UpdateStreaming(startDistance);
             BuildCar();
+            if (biomeName == Biomes[8]) DesaturateManhattanCar();
             BuildTraffic();
             BuildCamera();
             CrashEffects.Create(materials["White Paint"]);
@@ -265,7 +266,13 @@ namespace RoadRage.UnityRemake
 				OpenPicker();
 			var screenshotPath = CommandLineValue("-shot=");
 			if (!string.IsNullOrEmpty(screenshotPath))
+			{
 				gameObject.AddComponent<BiomeScreenshot>().Initialize(screenshotPath);
+				// Verification captures must show gameplay, not the landing showcase
+				// orbit, so a -shot= run skips the START RUN gate automatically.
+				if (RoadRageLandingDirector.Instance != null)
+					RoadRageLandingDirector.Instance.LaunchRun();
+			}
         }
 
 		internal static string CommandLineValue(string prefix)
@@ -297,7 +304,7 @@ namespace RoadRage.UnityRemake
 			}
 			else if (biomeName == Biomes[8] && preset == "manhattan-shot")
 			{
-				activeWeather = WeatherKind.Storm;
+				activeWeather = WeatherKind.Clear;
 				if (!hadStartOverride) startDistance = 0f;
 			}
 		}
@@ -308,13 +315,16 @@ namespace RoadRage.UnityRemake
             if (!string.IsNullOrEmpty(requestedBiome))
                 return requestedBiome;
 
-            var saved = PlayerPrefs.GetString("ROAD_RAGE_BIOME", "");
-            if (!string.IsNullOrEmpty(saved))
-                return saved;
-
+            // Explicit -biome= outranks a saved picker choice so a verification capture
+            // cannot be hijacked by whatever biome was last picked interactively.
             var requested = CommandLineValue("-biome=");
             if (string.IsNullOrEmpty(requested))
+            {
+                var saved = PlayerPrefs.GetString("ROAD_RAGE_BIOME", "");
+                if (!string.IsNullOrEmpty(saved))
+                    return saved;
                 return Biomes[0];
+            }
 
             pickerSeen = true;
             var value = requested.ToLowerInvariant();
@@ -447,15 +457,20 @@ namespace RoadRage.UnityRemake
             if (car != null)
             {
                 var controller = car.GetComponent<ArcadeCarController>();
+                // Same centred-vs-right-lane rule as the initial spawn: single-lane
+                // biomes (Greenwood, Red Canyon, Hollywood) start on the centreline.
+                var reloadLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
+                var reloadLateral = reloadLaneCount == 1 ? 0f : -2.25f;
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance + 5f;
+                    controller.LateralOffset = reloadLateral;
                     controller.SpeedKph = 0f;
                     controller.TouchThrottle = 0f;
                     controller.TouchSteer = 0f;
                     controller.CountdownTimer = 3.2f;
                 }
-                car.position = RoadPath.Point(startDistance + 5f, 0f, 0.4f);
+                car.position = RoadPath.Point(startDistance + 5f, reloadLateral, 0.4f);
                 car.rotation = RoadPath.Rotation(startDistance + 5f);
                 var rb = car.GetComponent<Rigidbody>();
                 if (rb != null)
@@ -468,6 +483,7 @@ namespace RoadRage.UnityRemake
             {
                 BuildCar();
             }
+            if (biomeName == Biomes[8]) DesaturateManhattanCar();
 
             // 9. Rebuild traffic & camera
             BuildTraffic();
@@ -501,6 +517,7 @@ namespace RoadRage.UnityRemake
 					UpdateStreaming(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
 					EscalateTraffic();
+					TryStageHitAndRun(controller.SpeedKph);
 					// Four per object is the renderer's limit; a dozen in play is already
 					// more than any one surface can use. Mobile gets a third of that.
 					LocalLights.Focus(car.position, RichDetailBudget ? 12 : 4);
@@ -778,13 +795,15 @@ namespace RoadRage.UnityRemake
             // instead of a flat colour. UVs run 0..1 across the width and distance*0.08
             // along the path, so the scales below work out to roughly 4 m asphalt tiles.
             var road = BiomeSurface(BiomeMaterial("Road", "Shared", "T_asphalt_D", "T_asphalt_N",
-                new Color(0.30f, 0.32f, 0.35f), 0.03f, 0.22f), "Shared", "T_asphalt_MSO", 0.55f);
+                new Color(0.42f, 0.44f, 0.47f), 0.03f, 0.22f), "Shared", "T_asphalt_MSO", 0.55f);
             road.mainTextureScale = new Vector2(4.5f, 3.2f);
             var shoulder = BiomeSurface(BiomeMaterial("Shoulder", "Shared", "T_asphalt_D", "T_asphalt_N",
-                new Color(0.22f, 0.24f, 0.24f), 0f, 0.1f), "Shared", "T_asphalt_MSO", 0.45f);
+                new Color(0.32f, 0.34f, 0.34f), 0f, 0.1f), "Shared", "T_asphalt_MSO", 0.45f);
             shoulder.mainTextureScale = new Vector2(1.4f, 3.2f);
             MakeMaterial("White Paint", new Color(0.92f, 0.94f, 0.9f), 0f, 0.3f);
             MakeMaterial("Yellow Paint", new Color(1f, 0.66f, 0.06f), 0f, 0.25f);
+            tireMaterial = MakeMaterial("Tire Rubber", new Color(0.055f, 0.055f, 0.06f), 0f, 0.4f);
+            rimMaterial = MakeMaterial("Wheel Rim", new Color(0.58f, 0.59f, 0.61f), 0.75f, 0.7f);
             MakeMaterial("Car Orange", new Color(0.95f, 0.22f, 0.035f), 0.55f, 0.78f);
             MakeMaterial("Car Dark", new Color(0.012f, 0.018f, 0.022f), 0.25f, 0.55f);
             MakeMaterial("Glass", new Color(0.025f, 0.12f, 0.16f), 0.7f, 0.92f);
@@ -794,7 +813,11 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Driver Hair", new Color(0.035f, 0.022f, 0.018f), 0f, 0.16f);
             MakeMaterial("Low Bark", new Color(0.18f, 0.12f, 0.075f), 0f, 0.12f);
             MakeMaterial("Low Leaf", new Color(0.09f, 0.31f, 0.12f), 0f, 0.08f);
-            MakeMaterial("Sidewalk", new Color(0.24f, 0.25f, 0.29f), 0.08f, 0.34f);
+            // Neon City + Tire District sidewalks: concrete floor albedo instead of a
+            // flat colour slab.
+            BiomeSurface(BiomeMaterial("Sidewalk", "CyberpunkCity",
+                "T_concrete_floor_D", "T_concrete_floor_N", new Color(1.35f, 1.35f, 1.35f), 0.05f, 0.32f),
+                "CyberpunkCity", "T_concrete_floor_MSO");
             // Everything the material pass calls a light source lands here: lamp heads
             // (any submesh named light/lamp/farola), signs, holograms, and the kerb glow
             // ribbons. It was a plain Lit material with no emission, so none of it glowed
@@ -877,9 +900,16 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("Garage Door", "TireRepair", "T_MetalDoor_B", "T_MetalDoor_N", Color.white, 0.62f, 0.42f), "TireRepair", "T_MetalDoor_MSO");
             BiomeSurface(BiomeMaterial("Garage Equipment", "TireRepair", "T_TireMachine01_BC", "T_TireMachine01_N", Color.white, 0.48f, 0.38f), "TireRepair", "T_TireMachine01_MSO");
             BiomeSurface(BiomeMaterial("Garage Shelf", "TireRepair", "T_TireShelf_B", "T_TireShelf_N", Color.white, 0.35f, 0.32f), "TireRepair", "T_TireShelf_MSO");
-            MakeMaterial("Industrial Ground", new Color(0.105f, 0.095f, 0.082f), 0.08f, 0.32f);
+            // The flat near-black slab read as a textureless void under Neon City's
+            // night mood - give it the Cyberpunk City ground and concrete albedo.
+            BiomeSurface(BiomeMaterial("Industrial Ground", "CyberpunkCity",
+                "T_ground_texture_01_D", "T_ground_texture_01_N", new Color(1.35f, 1.35f, 1.35f), 0.06f, 0.30f),
+                "CyberpunkCity", "T_ground_texture_01_MSO");
+            BiomeSurface(BiomeMaterial("Sidewalk", "CyberpunkCity",
+                "T_concrete_floor_D", "T_concrete_floor_N", new Color(1.35f, 1.35f, 1.35f), 0.05f, 0.32f),
+                "CyberpunkCity", "T_concrete_floor_MSO");
             BiomeMaterial("Demo Facades", "DemoCity", "building_facades", "building_facades_nm", Color.white, 0.15f, 0.42f);
-            BiomeMaterial("Demo Highrise", "DemoCity", "highrise_facades", "highrise_facades_nm", Color.white, 0.18f, 0.55f, "highrise_facades_em");
+            BiomeMaterial("Demo Highrise", "DemoCity", "highrise_facades", "highrise_facades_nm", Color.white, 0.18f, 0.55f);
             BiomeMaterial("Demo Bases", "DemoCity", "building_bases", "building_bases_nm", Color.white, 0.12f, 0.38f);
             BiomeMaterial("Demo Windows", "DemoCity", "building_windows_wet", "building_windows_wet_nm", new Color(0.85f, 0.92f, 1f), 0.35f, 0.85f);
             BiomeMaterial("Demo Interior", "DemoCity", "building_interior", "building_interior_nm", Color.white, 0.15f, 0.40f);
@@ -951,6 +981,7 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("City Palm", "Synthwave", "T_palm_tree_D", "T_palm_tree_N", Color.white, 0.1f, 0.35f), "Synthwave", "T_palm_tree_MSO");
             materials["Palm Frond"] = materials["City Palm"];
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
+            MakeMaterial("City Props", new Color(0.44f, 0.43f, 0.42f), 0.15f, 0.30f);
 
             var sand = BiomeSurface(BiomeMaterial("Canyon Sand", "RedCanyon", "T_sand_D", "T_sand_N", new Color(0.94f, 0.76f, 0.55f), 0f, 0.08f), "RedCanyon", "T_sand_MSO", 0.4f);
             sand.mainTextureScale = new Vector2(34f, 160f);
@@ -1268,15 +1299,26 @@ namespace RoadRage.UnityRemake
 
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
         /// probe's reflection reads, and darken the albedo the way real water does.
+        private readonly Dictionary<string, Color> dryRoadColors = new();
+
         private void ApplyRoadWetness(float wetness)
         {
             if (wetness <= 0.001f) return;
             foreach (var name in new[] { "Road", "Shoulder" })
             {
                 if (!materials.TryGetValue(name, out var material)) continue;
-                var dry = name == "Road" ? 0.25f : 0.15f;
-                material.SetFloat("_Smoothness", Mathf.Lerp(dry, 0.40f, wetness));
-                material.SetColor("_BaseColor", material.GetColor("_BaseColor") * Mathf.Lerp(1f, 0.82f, wetness));
+                // BlendZoneLighting calls this every frame: the wet tint MUST be
+                // computed from the stored dry colour, not from the current one, or
+                // the road darkens 18% per frame and converges to pure black within
+                // seconds of driving - the "why is everything pitch black" bug.
+                if (!dryRoadColors.TryGetValue(name, out var dryColor))
+                {
+                    dryColor = material.GetColor("_BaseColor");
+                    dryRoadColors[name] = dryColor;
+                }
+                var drySmoothness = name == "Road" ? 0.25f : 0.15f;
+                material.SetFloat("_Smoothness", Mathf.Lerp(drySmoothness, 0.40f, wetness));
+                material.SetColor("_BaseColor", dryColor * Mathf.Lerp(1f, 0.82f, wetness));
             }
         }
 
@@ -1296,6 +1338,10 @@ namespace RoadRage.UnityRemake
             var weather = WeatherSystem.EffectFor(activeWeather);
             RenderSettings.fogDensity = mood.FogDensity * weather.FogDensityScale;
             RenderSettings.fogColor = Color.Lerp(mood.Fog, weather.FogTint, weather.FogTintAmount);
+            // Trilight ambient is a large share of what the eye reads as "scene
+            // brightness", and the moods were authored before the post pipeline existed.
+            // The gain is applied to the colours rather than through
+            // RenderSettings.ambientIntensity, which Unity ignores outside Skybox mode.
             RenderSettings.ambientSkyColor = ScaleRgb(
                 Color.Lerp(mood.Sky, weather.FogTint, weather.FogTintAmount * 0.6f), mood.AmbientIntensity * AmbientTrim);
             RenderSettings.ambientEquatorColor = ScaleRgb(
@@ -1329,26 +1375,31 @@ namespace RoadRage.UnityRemake
 			// of the "plastic toy" read. ACES gives filmic rolloff on the bright end.
 			// ACES rolls the highlights off filmically but it also shifts hue and lifts
 			// saturation, which is a large part of the over-cooked look. Neutral does the
-			// range remap only and leaves the grading to ColorAdjustments below.
-			var tonemap = volume.profile.Add<Tonemapping>();
-			tonemap.mode.Override(TonemappingMode.Neutral);
+			// range remap only and leaves the grading to ColorAdjustments below, so it is
+			// what every mood asks for unless one sets TonemapAces to 1.
+			// Held as a field, not a local: without a handle the per-frame zone blend cannot
+			// move the grade, and a crossing kept the start biome's look.
+			zoneTonemap = volume.profile.Add<Tonemapping>();
+			zoneTonemap.mode.Override(mood.TonemapAces == 1 ? TonemappingMode.ACES : TonemappingMode.Neutral);
 
 			// Slight motion blur sells speed and hides the low-poly silhouettes.
 			var motionBlur = volume.profile.Add<MotionBlur>();
 			motionBlur.intensity.Override(0.18f);
 			motionBlur.clamp.Override(0.04f);
 
-			var color = volume.profile.Add<ColorAdjustments>();
-			color.postExposure.Override(mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim);
+			zoneGrading = volume.profile.Add<ColorAdjustments>();
+			zoneGrading.postExposure.Override(
+				mood.PostExposure + weather.ExposureAdd + NeutralToneCompensation + ExposureTrim);
 			// Contrast and saturation were stacked on top of an ACES curve that already
 			// pushes both, so every biome graded out as a poster. Neutral tonemapping
 			// leaves hue and saturation alone, and the grade now only takes colour away.
 			// Contrast is what separates a facade from the sky at night, and unlike the
 			// tonemapper it adds no saturation, so it can carry the punch ACES used to.
-			color.contrast.Override(14f);
-			color.saturation.Override(GradeSaturation);
+			// A mood that sets its own value wins; zero means "use the branch default".
+			zoneGrading.contrast.Override(mood.Contrast != 0f ? mood.Contrast : 14f);
+			zoneGrading.saturation.Override(mood.Saturation != 0f ? mood.Saturation : GradeSaturation);
 			var vignette = volume.profile.Add<Vignette>();
-			vignette.intensity.Override(0.20f);
+			vignette.intensity.Override(0.15f);
 			vignette.smoothness.Override(0.68f);
 
         }
@@ -1372,7 +1423,101 @@ namespace RoadRage.UnityRemake
             /// blend owns it too - it used to be set once by the city photoreal pass and
             /// then left to drift out of step with the ambient colours around it.
             public float AmbientIntensity;
+            /// URP ColorAdjustments saturation (-100 to 100). 0 means "use the branch
+            /// default", GradeSaturation, rather than a literal zero.
+            public float Saturation;
+            /// URP ColorAdjustments contrast (-100 to 100). 0 means "use the default".
+            public float Contrast;
+            /// Tonemapper for this biome: 0 leaves the branch default of Neutral, 1 asks
+            /// for ACES. Neutral is the default because ACES shifts hue and lifts
+            /// saturation, which was a large part of the over-cooked look; a biome that
+            /// wants the filmic shoulder back can opt in rather than everything getting it.
+            public int TonemapAces;
         }
+
+        /// Manhattan ships two moods and neither is wrong, so the biome carries both.
+        ///
+        /// The night relight fixed a real defect: an ambient sky of 0.12 luma over a 0.05
+        /// ground bounce meant every facade outside the sun's reach fell to black. The
+        /// daylight mood answers a different question - what the biome should look like -
+        /// and that is a call for whoever is looking at it, not for whoever last edited
+        /// the file. Keeping both is cheaper than relitigating it.
+        ///
+        /// Night is the default because the window emission, the street lamps, the neon
+        /// and the baked grime were all tuned against it. In daylight the lit-window
+        /// pattern and the neon will read as much weaker; that is expected, not a bug.
+        ///
+        /// -manhattan=day on the command line, or SetManhattanDaylight(true) from the
+        /// editor, which persists so it survives entering play mode.
+#if UNITY_EDITOR
+        private const string ManhattanDaylightPrefKey = "RoadRage.ManhattanDaylight";
+#endif
+        private static bool? manhattanDaylightOverride;
+
+        private static bool ManhattanDaylight
+        {
+            get
+            {
+                if (manhattanDaylightOverride.HasValue) return manhattanDaylightOverride.Value;
+#if UNITY_EDITOR
+                if (UnityEditor.EditorPrefs.HasKey(ManhattanDaylightPrefKey))
+                    return UnityEditor.EditorPrefs.GetBool(ManhattanDaylightPrefKey);
+#endif
+                return string.Equals(CommandLineValue("-manhattan="), "day",
+                                     System.StringComparison.OrdinalIgnoreCase);
+            }
+        }
+
+        /// Switches Manhattan between its two moods. The world has to rebuild for the
+        /// change to show, the same as the detail budget.
+        public static void SetManhattanDaylight(bool daylight)
+        {
+            manhattanDaylightOverride = daylight;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.SetBool(ManhattanDaylightPrefKey, daylight);
+#endif
+            Debug.Log($"RR_MOOD Manhattan is now {(daylight ? "daylight" : "night")} " +
+                      "(re-enter play mode for the world to rebuild)");
+        }
+
+        private static BiomeMood ManhattanNightMood() =>
+            new BiomeMood // MANHATTAN - wet night, but a lit one
+            {
+                // Was an ambient sky of 0.12 luma over a 0.05 ground bounce with a 0.9
+                // sun: outside the directional light's reach every facade fell to black,
+                // so the buildings read as silhouettes with no surface at all. A night
+                // city is not an unlit one - the light comes off windows, wet asphalt
+                // and sky glow, and that is ambient, not the key. Still blue, still
+                // night, but the geometry is now visible.
+                // Raising the ambient 4x also multiplied its blue tint, so the cast came
+                // back louder than before even though the mood is desaturated on the way
+                // out. At this brightness the hue has to be neutral at source - a cool
+                // hint, not a wash.
+                FogDensity = 0.0055f, Fog = new Color(0.19f, 0.20f, 0.22f),
+                Sky = new Color(0.40f, 0.42f, 0.46f), Equator = new Color(0.33f, 0.35f, 0.38f),
+                // Ground bounce was under half the sky, which is backwards for this street.
+                // A dry field at night bounces almost nothing, so a low ground term is
+                // right there; wet asphalt under a lit city throws a lot back up, and it
+                // lands on the bottom few storeys - the only part of a facade a driver
+                // ever looks at. Raising it lifts building bases without touching the sky,
+                // so the night stays a night. One number if it wants tuning.
+                Ground = new Color(0.30f, 0.31f, 0.33f), SunColor = new Color(0.94f, 0.96f, 1f),
+                SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
+                RoadWetness = 0.62f, AmbientIntensity = 1.35f
+            };
+
+        private static BiomeMood ManhattanDayMood() =>
+            new BiomeMood // MANHATTAN - overcast hazy NYC daylight, desaturated concrete tones
+            {
+                FogDensity = 0.0018f, Fog = new Color(0.64f, 0.65f, 0.68f),
+                Sky = new Color(0.52f, 0.56f, 0.62f), Equator = new Color(0.54f, 0.56f, 0.58f),
+                Ground = new Color(0.28f, 0.28f, 0.29f), SunColor = new Color(1f, 0.98f, 0.95f),
+                SunIntensity = 1.30f, PostExposure = 0.10f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.12f,
+                // Was -75 saturation plus Neutral tonemapping plus the old -20 global
+                // offset - effectively grayscale. Brought in line with the other muted
+                // biomes (-20 to -24) and back to ACES so it still reads as a colour city.
+                Saturation = -22f
+            };
 
         /// How far every biome palette is pulled towards its own luminance. The moods
         /// were authored as near-pure hues (a violet Neon City sky at 0.32/0.16/0.52, a
@@ -1461,42 +1606,53 @@ namespace RoadRage.UnityRemake
                 FogDensity = 0.0045f, Fog = new Color(0.62f, 0.75f, 0.86f),
                 Sky = new Color(0.68f, 0.82f, 0.96f), Equator = new Color(0.48f, 0.60f, 0.72f),
                 Ground = new Color(0.28f, 0.36f, 0.44f), SunColor = new Color(0.92f, 0.96f, 1f),
-                SunIntensity = 1.18f, PostExposure = -0.18f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
+                SunIntensity = 1.18f, PostExposure = -0.18f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f,
+                Saturation = -8f
             },
             2 => new BiomeMood // SEWER TUNNEL
             {
                 FogDensity = 0.014f, Fog = new Color(0.05f, 0.10f, 0.08f),
                 Sky = new Color(0.13f, 0.26f, 0.19f), Equator = new Color(0.10f, 0.20f, 0.14f),
                 Ground = new Color(0.04f, 0.08f, 0.06f), SunColor = new Color(0.85f, 0.92f, 0.88f),
-                SunIntensity = 0.62f, PostExposure = 0.34f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.55f
+                SunIntensity = 0.62f, PostExposure = 0.34f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.55f,
+                Saturation = -12f
             },
             3 => new BiomeMood // TIRE DISTRICT
             {
                 FogDensity = 0.0065f, Fog = new Color(0.38f, 0.38f, 0.40f),
                 Sky = new Color(0.52f, 0.56f, 0.62f), Equator = new Color(0.32f, 0.35f, 0.38f),
                 Ground = new Color(0.14f, 0.14f, 0.14f), SunColor = new Color(0.95f, 0.95f, 0.95f),
-                SunIntensity = 1.35f, PostExposure = 0.35f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.3f
+                SunIntensity = 1.35f, PostExposure = 0.35f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.3f,
+                Saturation = -14f
             },
             4 => new BiomeMood // ALIEN BIOMASS
             {
                 FogDensity = 0.015f, Fog = new Color(0.13f, 0.05f, 0.17f),
                 Sky = new Color(0.20f, 0.07f, 0.28f), Equator = new Color(0.09f, 0.20f, 0.14f),
                 Ground = new Color(0.04f, 0.07f, 0.05f), SunColor = new Color(0.72f, 0.55f, 1f),
-                SunIntensity = 0.95f, PostExposure = 0.30f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.22f
+                SunIntensity = 0.95f, PostExposure = 0.30f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.22f,
+                Saturation = -16f
             },
             5 => new BiomeMood // NEON CITY
             {
-                FogDensity = 0.0035f, Fog = new Color(0.12f, 0.08f, 0.24f),
-                Sky = new Color(0.32f, 0.16f, 0.52f), Equator = new Color(0.38f, 0.18f, 0.46f),
-                Ground = new Color(0.14f, 0.08f, 0.22f), SunColor = new Color(0.85f, 0.70f, 1f),
-                SunIntensity = 1.25f, PostExposure = 0.35f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.65f
+                // Neon night, not blackout: the first pass stacked a near-black fog
+                // colour, dim ambient and wet-road darkening into a pitch-black read.
+                FogDensity = 0.0035f, Fog = new Color(0.27f, 0.21f, 0.44f),
+                Sky = new Color(0.46f, 0.31f, 0.70f), Equator = new Color(0.48f, 0.31f, 0.58f),
+                Ground = new Color(0.23f, 0.15f, 0.35f), SunColor = new Color(0.88f, 0.74f, 1f),
+                SunIntensity = 1.35f, PostExposure = 0.55f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.65f,
+                Saturation = -12f
             },
             6 => new BiomeMood // RED CANYON
             {
                 FogDensity = 0.0038f, Fog = new Color(0.68f, 0.65f, 0.62f),
                 Sky = new Color(0.72f, 0.78f, 0.88f), Equator = new Color(0.55f, 0.48f, 0.42f),
                 Ground = new Color(0.24f, 0.18f, 0.14f), SunColor = new Color(1f, 0.98f, 0.92f),
-                SunIntensity = 1.50f, PostExposure = 0.16f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
+                // Was the single brightest biome (1.50 sun + 0.16 exposure, on top of the
+                // global lift) - blown out under the noon desert sun. Pulled back to a
+                // level closer to the rest of the roster.
+                SunIntensity = 1.18f, PostExposure = -0.08f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f,
+                Saturation = -24f
             },
             7 => new BiomeMood // BROOKLYN
             {
@@ -1504,45 +1660,26 @@ namespace RoadRage.UnityRemake
                 Sky = new Color(0.41f, 0.60f, 0.78f), Equator = new Color(0.23f, 0.34f, 0.43f),
                 Ground = new Color(0.20f, 0.22f, 0.20f), SunColor = new Color(0.98f, 0.98f, 0.95f),
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
-                RoadWetness = 0.08f, AmbientIntensity = 1.25f
+                RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
             9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
                 FogDensity = 0.0015f, Fog = new Color(0.75f, 0.85f, 0.95f),
                 Sky = new Color(0.60f, 0.78f, 0.98f), Equator = new Color(0.65f, 0.72f, 0.78f),
                 Ground = new Color(0.35f, 0.35f, 0.35f), SunColor = new Color(1f, 1f, 1f),
-                SunIntensity = 1.45f, PostExposure = 0.15f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f
+                // Was the 2nd brightest biome (1.45 sun + 0.15 exposure); with the pale sky/
+                // ground tones and the global lift on top it read as overexposed. Toned down.
+                SunIntensity = 1.18f, PostExposure = -0.08f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f,
+                Saturation = -20f
             },
-            8 => new BiomeMood // MANHATTAN - wet night, but a lit one
-            {
-                // Was an ambient sky of 0.12 luma over a 0.05 ground bounce with a 0.9
-                // sun: outside the directional light's reach every facade fell to black,
-                // so the buildings read as silhouettes with no surface at all. A night
-                // city is not an unlit one - the light comes off windows, wet asphalt
-                // and sky glow, and that is ambient, not the key. Still blue, still
-                // night, but the geometry is now visible.
-                // Raising the ambient 4x also multiplied its blue tint, so the cast came
-                // back louder than before even though the mood is desaturated on the way
-                // out. At this brightness the hue has to be neutral at source - a cool
-                // hint, not a wash.
-                FogDensity = 0.0055f, Fog = new Color(0.19f, 0.20f, 0.22f),
-                Sky = new Color(0.40f, 0.42f, 0.46f), Equator = new Color(0.33f, 0.35f, 0.38f),
-                // Ground bounce was under half the sky, which is backwards for this street.
-                // A dry field at night bounces almost nothing, so a low ground term is
-                // right there; wet asphalt under a lit city throws a lot back up, and it
-                // lands on the bottom few storeys - the only part of a facade a driver
-                // ever looks at. Raising it lifts building bases without touching the sky,
-                // so the night stays a night. One number if it wants tuning.
-                Ground = new Color(0.30f, 0.31f, 0.33f), SunColor = new Color(0.94f, 0.96f, 1f),
-                SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
-                RoadWetness = 0.62f, AmbientIntensity = 1.35f
-            },
+            8 => ManhattanDaylight ? ManhattanDayMood() : ManhattanNightMood(),
             _ => new BiomeMood // GREENWOOD
             {
                 FogDensity = 0.0065f, Fog = new Color(0.33f, 0.47f, 0.43f),
                 Sky = new Color(0.40f, 0.55f, 0.62f), Equator = new Color(0.20f, 0.34f, 0.28f),
                 Ground = new Color(0.075f, 0.11f, 0.075f), SunColor = new Color(0.98f, 0.98f, 0.95f),
-                SunIntensity = 1.40f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.1f
+                SunIntensity = 1.40f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.1f,
+                Saturation = -20f
             }
         };
 
@@ -2940,6 +3077,17 @@ namespace RoadRage.UnityRemake
                 EnsureOutsideRoad(model, dist, Mathf.Sign(proj));
         }
 
+        /// Hard-pins a model's world-space bounds base to the road surface at distance.
+        /// Call after NormalizeModelHeight when the FBX pivot may not be at the mesh base.
+        private static void SnapToGround(GameObject model, float distance)
+        {
+            if (!TryGetCombinedBounds(model, out var bounds)) return;
+            var roadY = RoadPath.Point(distance, 0f, 0f).y;
+            var gap = roadY - bounds.min.y;
+            if (Mathf.Abs(gap) > 0.02f)
+                model.transform.position += Vector3.up * gap;
+        }
+
         /// The garage was a grid of text buttons over the running world. This builds an
         /// actual showroom: the browsed vehicle on a lit turntable in front of its own
         /// camera, so you look at the truck you are buying rather than reading its name.
@@ -2992,22 +3140,38 @@ namespace RoadRage.UnityRemake
 
             if (showroomCar == carIndex) return;
             showroomCar = carIndex;
+            // Immediate destroy: the deferred variant let the previous browsed car
+            // linger in the turntable for a frame - and visibly clip through the new
+            // one whenever the GPU raced the end-of-frame teardown.
             for (var i = showroomStage.childCount - 1; i >= 0; i--)
-                Destroy(showroomStage.GetChild(i).gameObject);
+                DestroyImmediate(showroomStage.GetChild(i).gameObject);
 
             var spec = GameState.Cars[Mathf.Clamp(carIndex, 0, GameState.Cars.Length - 1)];
             var prefab = Resources.Load<GameObject>($"Vehicles/{spec.Mesh}");
             if (prefab == null) return;
 
-            var paint = new Material(materials["Street Racer Atlas"]) { name = "Showroom Paint" };
-            var livery = Resources.Load<Texture2D>($"Vehicles/{spec.Livery}");
-            if (livery != null)
+            // Showroom materials are built FRESH, and BOTH paint slots use the
+            // browsed car's own livery sheet - each livery is a full-car texture
+            // (body + trim + wheels), and most presets keep their visible body panels
+            // in the chassis slot, which is exactly why every browsed car used to
+            // render in the blue base atlas.
+            var browsedLivery = Resources.Load<Texture2D>($"Vehicles/{spec.Livery}")
+                             ?? Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_01_A");
+            var paint = MakeMaterial("Showroom Paint", Color.white, 0.42f, 0.82f);
+            if (browsedLivery != null)
             {
-                paint.mainTexture = livery;
-                if (paint.HasProperty("_BaseMap")) paint.SetTexture("_BaseMap", livery);
+                paint.mainTexture = browsedLivery;
+                if (paint.HasProperty("_BaseMap")) paint.SetTexture("_BaseMap", browsedLivery);
+            }
+            var showroomChassis = MakeMaterial("Showroom Chassis", Color.white, 0.30f, 0.55f);
+            if (browsedLivery != null)
+            {
+                showroomChassis.mainTexture = browsedLivery;
+                if (showroomChassis.HasProperty("_BaseMap")) showroomChassis.SetTexture("_BaseMap", browsedLivery);
             }
 
             var visual = Instantiate(prefab, showroomStage);
+            SmoothVehicleMeshes(visual);
             visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
             foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
@@ -3019,10 +3183,12 @@ namespace RoadRage.UnityRemake
                     var slot = src[i] != null ? src[i].name.ToLowerInvariant() : string.Empty;
                     assigned[i] = slot.Contains("glass") ? materials["Street Racer Glass"]
                         : slot.Contains("livery") ? paint
-                        : materials["Street Racer Chassis"];
+                        : showroomChassis;
                 }
                 r.sharedMaterials = assigned;
             }
+            // Wheels last: the slot pass above would overwrite their rubber/rim pair.
+            ReplaceWheelMeshes(visual);
             foreach (var c in visual.GetComponentsInChildren<Collider>()) Destroy(c);
             // Frame every vehicle the same: bikes and semis differ by 4x in length.
             if (TryGetCombinedBounds(visual, out var b) && b.size.magnitude > 0.01f)
@@ -3031,6 +3197,10 @@ namespace RoadRage.UnityRemake
                 visual.transform.localScale *= 6.0f / Mathf.Max(0.01f, longest);
                 if (TryGetCombinedBounds(visual, out b))
                     visual.transform.localPosition -= new Vector3(0f, b.min.y - showroomStage.position.y, 0f);
+                // Big vehicles need a wider showcase orbit - the fixed 4.7 m radius
+                // put the camera inside semis and box trucks.
+                RoadRageLandingDirector.ShowcaseRadiusScale =
+                    Mathf.Clamp(b.size.magnitude / 7f, 1f, 1.9f);
             }
         }
 
@@ -3068,7 +3238,7 @@ namespace RoadRage.UnityRemake
         {
             0 => 1,  // GREENWOOD  - country road
             6 => 1,  // RED CANYON - desert two-lane
-            9 => 2,  // HOLLYWOOD  - hillside road; one lane each way left no room to pass
+            9 => 1,  // HOLLYWOOD  - hillside road; one lane each way left no room to pass
             2 => 2,  // SEWER      - tunnel, narrower than a highway
             1 => 2,  // SNOW       - remote highway
             _ => 3,  // cities
@@ -3419,6 +3589,71 @@ namespace RoadRage.UnityRemake
         /// new rather than a cut.
         private const float ZoneBlend = 320f;
         private Light sunLight;
+        private ColorAdjustments zoneGrading;
+        private Tonemapping zoneTonemap;
+
+        /// Global brightness lift on every biome's post exposure. The post pipeline
+        /// (ACES tonemapping, vignette, SSAO) renders measurably darker than the
+        /// pre-post build ever did; this claws back an even amount across all biomes
+        /// without re-tuning each mood one by one. Trimmed down from 0.45 - stacked on
+        /// top of Hollywood/Red Canyon's already-high sun intensity it blew both out.
+        private const float GlobalExposureLift = 0.2f;
+        /// Was -20, stacked on top of every biome's own negative saturation (and
+        /// Manhattan's -75) it flattened the whole game toward grayscale. Removed so
+        /// biomes read with actual colour instead of looking washed out.
+        private const float GlobalSaturationOffset = 0f;
+
+        private float nextHitAndRunAt = -1f;
+
+        /// Stages a hit-and-run every so often: a violator ahead rams a civilian, spins
+        /// it into a wreck and bolts. The player sees the crash happen and gets a
+        /// marked, personal quarry - the original game's "there's the bad man, GET HIM"
+        /// moment, rather than ambient traffic noise.
+        private void TryStageHitAndRun(float speedKph)
+        {
+            if (nextHitAndRunAt < 0f) nextHitAndRunAt = Time.unscaledTime + 8f;
+            if (Time.unscaledTime < nextHitAndRunAt) return;
+            if (speedKph < 55f) return;
+            if (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive) return;
+
+            TrafficCarController offender = null;
+            TrafficCarController victim = null;
+            var offenderGap = float.MaxValue;
+            foreach (var traffic in TrafficCarController.All)
+            {
+                if (traffic == null || traffic.IsWreck || traffic.Direction < 0f) continue;
+                if (!traffic.IsViolator || traffic.IsFleeing) continue;
+                var gap = traffic.GapToPlayer;
+                if (gap < 90f || gap > 230f || gap >= offenderGap) continue;
+                // A civilian close beside the offender is the mark.
+                TrafficCarController mark = null;
+                foreach (var other in TrafficCarController.All)
+                {
+                    if (other == null || other == traffic || other.IsViolator || other.IsWreck) continue;
+                    if (other.Direction < 0f) continue;
+                    if (Mathf.Abs(other.GapToPlayer - gap) > 30f) continue;
+                    if (Mathf.Abs(other.LaneOffset - traffic.LaneOffset) > 3.2f) continue;
+                    mark = other;
+                    break;
+                }
+                if (mark == null) continue;
+                offender = traffic;
+                victim = mark;
+                offenderGap = gap;
+            }
+
+            nextHitAndRunAt = Time.unscaledTime + (offender == null ? 3f : Random.Range(13f, 21f));
+            if (offender == null) return;
+
+            victim.Crash(Mathf.Sign(victim.LaneOffset - offender.LaneOffset), 42f);
+            CrashEffects.Active?.PlayAt(victim.transform.position + Vector3.up * 0.8f);
+            if (RoadRageAudioBridge.Instance != null)
+                RoadRageAudioBridge.Instance.PlayCrash(0.9f);
+            var shove = offender.LaneOffset - victim.LaneOffset;
+            offender.BeginHitAndRun(shove >= 0f ? 1f : -1f);
+            GameState.Show("HIT & RUN AHEAD - GET HIM");
+            Debug.Log($"RR_EVENT hitandrun staged t={Time.unscaledTime:0} offenderGap={offenderGap:0}m speedKmh={speedKph:0}");
+        }
 
         private void BlendZoneLighting(float playerDistance)
         {
@@ -3446,6 +3681,17 @@ namespace RoadRage.UnityRemake
                 sunLight.intensity = here.SunIntensity * weather.SunScale;
             }
             ApplyRoadWetness(Mathf.Clamp01(here.RoadWetness + weather.WetnessAdd));
+            // The grade has to ride with the mood: without this a zone crossing keeps
+            // the start biome's saturation, contrast and exposure for the whole run.
+            if (zoneGrading != null)
+            {
+                zoneGrading.postExposure.Override(here.PostExposure + weather.ExposureAdd + GlobalExposureLift);
+                zoneGrading.contrast.Override(here.Contrast != 0f ? here.Contrast : 6f);
+                zoneGrading.saturation.Override(
+                    (here.Saturation != 0f ? here.Saturation : -2f) + GlobalSaturationOffset);
+            }
+            if (zoneTonemap != null)
+                zoneTonemap.mode.Override(here.TonemapAces == 1 ? TonemappingMode.ACES : TonemappingMode.Neutral);
         }
 
         private static BiomeMood LerpMood(BiomeMood a, BiomeMood b, float t) => new()
@@ -3462,6 +3708,9 @@ namespace RoadRage.UnityRemake
             BloomThreshold = Mathf.Lerp(a.BloomThreshold, b.BloomThreshold, t),
             RoadWetness = Mathf.Lerp(a.RoadWetness, b.RoadWetness, t),
             AmbientIntensity = Mathf.Lerp(a.AmbientIntensity, b.AmbientIntensity, t),
+            Saturation = Mathf.Lerp(a.Saturation, b.Saturation, t),
+            Contrast = Mathf.Lerp(a.Contrast, b.Contrast, t),
+            TonemapAces = t >= 0.5f ? b.TonemapAces : a.TonemapAces,
         };
 
         /// Landmark at a zone seam: an overpass you drive under, on concrete piers, with a
@@ -4077,11 +4326,167 @@ namespace RoadRage.UnityRemake
 			private void BuildManhattanPhotorealPass()
 			{
 				BuildCyberSprawl();
-				ApplyCityPhotorealMood(brooklyn: false);
-				ApplyCitySurfaceMaterialOverrides(brooklyn: false);
-				ApplyCityPhotorealSignature(brooklyn: false);
-				ApplyCityDepthPass(brooklyn: false);
-				ApplyCityRoadToneProfile(brooklyn: false);
+				ApplyManhattanDaylightMood();
+			}
+
+			private void ApplyManhattanDaylightMood()
+			{
+				// Desaturated overcast NYC — all RGB channels kept close together, no vivid blues
+				RenderSettings.ambientMode = AmbientMode.Trilight;
+				RenderSettings.ambientIntensity = 1.15f;
+				RenderSettings.ambientSkyColor    = new Color(0.50f, 0.52f, 0.56f);
+				RenderSettings.ambientEquatorColor = new Color(0.42f, 0.43f, 0.45f);
+				RenderSettings.ambientGroundColor  = new Color(0.22f, 0.22f, 0.23f);
+				RenderSettings.ambientLight        = new Color(0.16f, 0.16f, 0.17f);
+				RenderSettings.fog = true;
+				RenderSettings.fogMode    = FogMode.ExponentialSquared;
+				RenderSettings.fogColor   = new Color(0.62f, 0.63f, 0.65f);
+				RenderSettings.fogDensity = 0.0018f;
+
+				var sceneLights = Object.FindObjectsByType<Light>();
+				for (var i = 0; i < sceneLights.Length; i++)
+				{
+					var sceneLight = sceneLights[i];
+					if (sceneLight.type != LightType.Directional || !sceneLight.isActiveAndEnabled) continue;
+					sceneLight.color = new Color(1f, 0.98f, 0.95f);
+					sceneLight.intensity = 1.30f;
+					sceneLight.shadowStrength = 0.70f;
+					sceneLight.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
+				}
+
+				if (reflectionProbe != null)
+				{
+					reflectionProbe.intensity = 0.90f;
+					reflectionProbe.size = new Vector3(72f, 28f, 72f);
+					reflectionProbe.blendDistance = 4f;
+					reflectionProbe.resolution = 256;
+					reflectionProbe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
+				}
+
+				// Road — dark asphalt, almost no saturation
+				if (materials.TryGetValue("Road", out var road))
+				{
+					if (road.HasProperty("_BaseColor"))
+						road.SetColor("_BaseColor", new Color(0.32f, 0.32f, 0.34f));
+					if (road.HasProperty("_Smoothness")) road.SetFloat("_Smoothness", 0.18f);
+					if (road.HasProperty("_Metallic")) road.SetFloat("_Metallic", 0.02f);
+					if (road.HasProperty("_NormalScale")) road.SetFloat("_NormalScale", 0.85f);
+					if (road.HasProperty("_OcclusionStrength")) road.SetFloat("_OcclusionStrength", 1.05f);
+				}
+
+				// Sidewalk — NYC limestone/concrete grey
+				if (materials.TryGetValue("Sidewalk", out var sidewalk))
+				{
+					if (sidewalk.HasProperty("_BaseColor"))
+						sidewalk.SetColor("_BaseColor", new Color(0.58f, 0.58f, 0.60f));
+					if (sidewalk.HasProperty("_Smoothness")) sidewalk.SetFloat("_Smoothness", 0.14f);
+					if (sidewalk.HasProperty("_Metallic")) sidewalk.SetFloat("_Metallic", 0.03f);
+					if (sidewalk.HasProperty("_NormalScale")) sidewalk.SetFloat("_NormalScale", 0.75f);
+				}
+
+				// Building concrete — neutral warm-grey, no blue tint
+				if (materials.TryGetValue("City Concrete", out var concrete))
+				{
+					if (concrete.HasProperty("_BaseColor"))
+						concrete.SetColor("_BaseColor", new Color(0.55f, 0.54f, 0.53f));
+				}
+
+				// Windows — tinted glass but not neon-bright; keep channel spread tight
+				if (materials.TryGetValue("City Windows", out var windows))
+				{
+					if (windows.HasProperty("_BaseColor"))
+						windows.SetColor("_BaseColor", new Color(0.45f, 0.50f, 0.56f));
+					if (windows.HasProperty("_Smoothness")) windows.SetFloat("_Smoothness", 0.82f);
+					if (windows.HasProperty("_Metallic")) windows.SetFloat("_Metallic", 0.65f);
+					if (windows.HasProperty("_EmissionColor"))
+						windows.SetColor("_EmissionColor", new Color(0.12f, 0.14f, 0.18f, 1f));
+				}
+
+				// Skyline towers — concrete grey silhouettes
+				if (materials.TryGetValue("City Skyline", out var skyline))
+				{
+					if (skyline.HasProperty("_BaseColor"))
+						skyline.SetColor("_BaseColor", new Color(0.50f, 0.50f, 0.52f));
+				}
+
+				// Street hardware — matte iron/steel
+				if (materials.TryGetValue("City Neon", out var neon))
+				{
+					if (neon.HasProperty("_BaseColor"))
+						neon.SetColor("_BaseColor", new Color(0.58f, 0.56f, 0.54f));
+					if (neon.HasProperty("_Smoothness")) neon.SetFloat("_Smoothness", 0.45f);
+					if (neon.HasProperty("_EmissionColor"))
+						neon.SetColor("_EmissionColor", new Color(0.08f, 0.07f, 0.06f, 1f));
+				}
+
+				if (materials.TryGetValue("City Asphalt Trim", out var trim))
+				{
+					if (trim.HasProperty("_BaseColor"))
+						trim.SetColor("_BaseColor", new Color(0.40f, 0.40f, 0.42f));
+				}
+
+				// Billboard — slightly warm; still readable but not glowing purple
+				if (materials.TryGetValue("City Billboard", out var billboard))
+				{
+					if (billboard.HasProperty("_EmissionColor"))
+						billboard.SetColor("_EmissionColor", new Color(0.55f, 0.48f, 0.62f));
+				}
+
+				// DemoCity office tower facades — light grey aluminium cladding; kill the
+				// HDR cyan emission that was set at material creation, it fights desaturation.
+				if (materials.TryGetValue("Demo Highrise", out var highrise))
+				{
+					if (highrise.HasProperty("_BaseColor"))
+						highrise.SetColor("_BaseColor", new Color(0.68f, 0.68f, 0.70f));
+					if (highrise.HasProperty("_EmissionColor"))
+						highrise.SetColor("_EmissionColor", Color.black);
+					highrise.DisableKeyword("_EMISSION");
+				}
+
+				// DemoCity glass — reflective but unsaturated
+				if (materials.TryGetValue("Demo Windows", out var demoWin))
+				{
+					if (demoWin.HasProperty("_BaseColor"))
+						demoWin.SetColor("_BaseColor", new Color(0.44f, 0.48f, 0.52f));
+					if (demoWin.HasProperty("_Smoothness")) demoWin.SetFloat("_Smoothness", 0.85f);
+					if (demoWin.HasProperty("_Metallic")) demoWin.SetFloat("_Metallic", 0.70f);
+				}
+
+				if (materials.TryGetValue("Car Orange", out var paint))
+				{
+					if (paint.HasProperty("_Metallic")) paint.SetFloat("_Metallic", 0.50f);
+					if (paint.HasProperty("_Smoothness")) paint.SetFloat("_Smoothness", 0.78f);
+				}
+
+				if (materials.TryGetValue("Hideout Vehicle PBR", out var vehicle))
+				{
+					if (vehicle.HasProperty("_Smoothness")) vehicle.SetFloat("_Smoothness", 0.62f);
+					if (vehicle.HasProperty("_Metallic")) vehicle.SetFloat("_Metallic", 0.58f);
+				}
+
+				var quality = QualitySettings.GetQualityLevel();
+				if (quality < 3) QualitySettings.SetQualityLevel(3, true);
+			}
+
+			private void DesaturateManhattanCar()
+			{
+				// The Synty atlas texture is vivid teal — _BaseColor only multiplies it,
+				// so we must clear the texture entirely and set a solid neutral colour.
+				foreach (var key in new[] { "Street Racer Atlas", "Street Racer Chassis" })
+				{
+					if (!materials.TryGetValue(key, out var mat)) continue;
+					// Remove the coloured atlas so _BaseColor is the only colour source.
+					mat.mainTexture = null;
+					if (mat.HasProperty("_BaseMap")) mat.SetTexture("_BaseMap", null);
+					if (mat.HasProperty("_BaseColor"))
+						mat.SetColor("_BaseColor", new Color(0.38f, 0.38f, 0.40f));
+					if (mat.HasProperty("_Smoothness")) mat.SetFloat("_Smoothness", 0.45f);
+					if (mat.HasProperty("_Metallic")) mat.SetFloat("_Metallic", 0.35f);
+					// Kill emission so headlight bleed doesn't re-tint the body.
+					if (mat.HasProperty("_EmissionColor"))
+						mat.SetColor("_EmissionColor", Color.black);
+					mat.DisableKeyword("_EMISSION");
+				}
 			}
 
 			private void ApplyCitySurfaceMaterialOverrides(bool brooklyn)
@@ -4311,7 +4716,7 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(41903 ^ chunkSeed);
 
-            // Ground-level NYC sidewalk clutter & newspaper boxes
+            // Ground-level NYC sidewalk clutter: fire hydrants, newspaper boxes, parking meters, chairs
             ScatterBand(10f, 13.0f, 15.0f, (d, l, s) =>
             {
                 var pick = Random.value;
@@ -4330,6 +4735,18 @@ namespace RoadRage.UnityRemake
             // produced 93x-wide frontages and 167 m-deep towers; BuildingCatalogue
             // measures every candidate instead and PlaceBuildingOnPlot picks by fit.
 
+            // Street trees, in front of the frontage line rather than behind it. Manhattan
+            // reads as canyon walls without something breaking the vertical, and a tree is
+            // the cheapest thing that does it at eye level.
+            ScatterBand(18f, 13.5f, 14.5f, (d, l, s) =>
+            {
+                var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
+                    materials["City Palm"], d, l, 0.14f,
+                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one, "Street Tree");
+                if (tree != null) NormalizeModelHeight(tree, Random.Range(5f, 9f), 0.14f);
+                return tree;
+            });
+
             var nycRooftops = new[]
             {
                 "Buildings/NYCBlock6/roof00", "Buildings/NYCBlock6/roof01",
@@ -4339,9 +4756,9 @@ namespace RoadRage.UnityRemake
                 "Buildings/NYCBlock6/roof08"
             };
 
-            for (var z = SegBegin(0f, 24f); z < segEnd; z += 24f)
+            for (var z = SegBegin(0f, 22f); z < segEnd; z += 22f)
             {
-                var block = Mathf.FloorToInt(z / 24f);
+                var block = Mathf.FloorToInt(z / 22f);
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
@@ -4366,11 +4783,27 @@ namespace RoadRage.UnityRemake
                     // reads as silhouette texture at best. First thing to go on a budget.
                     if (block % 2 == 0 && RichDetailBudget)
                     {
+                        var farDistance = z + Random.Range(-14f, 14f);
+                        var farMesh = synthTowers[BlockHash(block, side * 17) % synthTowers.Length];
+                        var farTower = PlaceBiomeModelOnRoad("Synthwave", farMesh,
+                            materials["City Skyline"], farDistance, side * Random.Range(100f, 160f), 0f,
+                            new Vector3(-90f, facing, 0f), Vector3.one, "Manhattan Horizon Tower");
+                        if (farTower != null)
+                        {
+                            NormalizeModelHeight(farTower, Random.Range(120f, 260f));
+                            SnapToGround(farTower, farDistance);
+                            EnsureOutsideRoad(farTower, farDistance, side);
+                        }
+                    }
+
+                    // Rooftop water tanks on frontage buildings
+                    if (block % 3 == 0)
+                    {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 35f,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 28f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
-                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 35f);
+                        if (roofProp != null) NormalizeModelHeight(roofProp, Random.Range(3.5f, 6.5f), 28f);
                     }
 
                     // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
@@ -4405,29 +4838,39 @@ namespace RoadRage.UnityRemake
                     {
                         NormalizeModelHeight(lamp, 7.5f, 0.14f);
                         CreateLocalLight(RoadPath.Point(lampDistance, side * 13.0f, 6.8f),
-                            new Color(1f, 0.88f, 0.65f), 10f, 16f);
+                            new Color(1f, 0.95f, 0.85f), 8f, 14f);
                     }
 
-                    // 5. NYC Traffic Lights at intersections
-                    if (block % 5 == 1)
+                    // Traffic lights at intersections
+                    if (block % 4 == 1)
                     {
                         var trafficLight = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Trafficlight", materials["City Props"],
-                            z + 14f, side * 13.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
+                            z + 12f, side * 13.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
                         if (trafficLight != null) NormalizeModelHeight(trafficLight, 6.5f, 0.14f);
                     }
 
-                    // 6. NYC Bus Shelters & Advertising Billboards
-                    if (block % 4 == 2)
+                    // Bus shelters and advertising billboards
+                    if (block % 5 == 2)
                     {
                         var shelter = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Busstop", materials["City Props"],
-                            z + 18f, side * 13.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
+                            z + 16f, side * 13.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
                         if (shelter != null) NormalizeModelHeight(shelter, 3.4f, 0.14f);
                     }
-                    else if (block % 3 == 0)
+                    else if (block % 4 == 3)
                     {
-                        var panel = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Panel00", materials["City Billboard"],
-                            z + 18f, side * 14.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
+                        var panelName = Random.value > 0.5f ? "NYCBlock6/Panel00" : "NYCBlock6/Panel01";
+                        var panel = PlaceBiomeModelOnRoad("Buildings", panelName, materials["City Billboard"],
+                            z + 16f, side * 14.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
                         if (panel != null) NormalizeModelHeight(panel, 4.2f, 0.14f);
+                    }
+
+                    // Benches every few blocks
+                    if (block % 6 == 0)
+                    {
+                        var bench = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bench",
+                            materials["City Props"], z + 8f, side * 13.8f, 0.14f,
+                            new Vector3(0f, facing, 0f), Vector3.one, "City Bench");
+                        if (bench != null) NormalizeModelHeight(bench, 1.0f, 0.14f);
                     }
                 }
             }
@@ -5303,11 +5746,199 @@ namespace RoadRage.UnityRemake
             EnsureOutsideRoad(root, distance, Mathf.Sign(lateral));
         }
 
+        private static readonly System.Collections.Generic.HashSet<UnityEngine.EntityId> smoothedMeshes = new();
+
+        /// Weld vertex normals by position so the low-poly presets shade as smooth,
+        /// flat surfaces instead of faceted 3D props. Meshes are shared cached assets,
+        /// so each unique mesh is smoothed once per session; non-readable meshes are
+        /// left with their imported hard normals.
+        private static void SmoothVehicleMeshes(GameObject root)
+        {
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = filter.sharedMesh;
+                if (mesh == null || !smoothedMeshes.Add(mesh.GetEntityId())) continue;
+                try
+                {
+                    var verts = mesh.vertices;
+                    var tris = mesh.triangles;
+                    var sums = new System.Collections.Generic.Dictionary<Vector3Int, Vector3>(verts.Length);
+                    for (var t = 0; t < tris.Length; t += 3)
+                    {
+                        var a = verts[tris[t]];
+                        var b = verts[tris[t + 1]];
+                        var c = verts[tris[t + 2]];
+                        var face = Vector3.Cross(b - a, c - a);
+                        foreach (var idx in new[] { tris[t], tris[t + 1], tris[t + 2] })
+                        {
+                            var key = PackPosition(verts[idx]);
+                            sums.TryGetValue(key, out var n);
+                            sums[key] = n + face;
+                        }
+                    }
+
+                    var normals = new Vector3[verts.Length];
+                    for (var i = 0; i < verts.Length; i++)
+                    {
+                        sums.TryGetValue(PackPosition(verts[i]), out var n);
+                        normals[i] = n.sqrMagnitude > 1e-10f ? n.normalized : Vector3.up;
+                    }
+                    mesh.normals = normals;
+                }
+                catch (System.Exception)
+                {
+                    // Non-readable import: keep the factory hard normals.
+                }
+            }
+        }
+
+        private static Vector3Int PackPosition(Vector3 v) => new(
+            Mathf.RoundToInt(v.x * 512f), Mathf.RoundToInt(v.y * 512f), Mathf.RoundToInt(v.z * 512f));
+
+        private Material tireMaterial;
+        private Material rimMaterial;
+        private static readonly System.Collections.Generic.HashSet<UnityEngine.EntityId> roundedWheels = new();
+        private static int wheelDebugLogs;
+
+        /// The Synty wheel meshes are 8-10 sided polygons - visibly octagonal tires.
+        /// Wheels are separate meshes, so their geometry is swapped for a generated
+        /// 40-segment tire ring + rim, oriented along the original's smallest bounds
+        /// axis. Materials are dedicated rubber/rim pairs, not the livery atlas.
+        private void ReplaceWheelMeshes(GameObject root)
+        {
+            if (tireMaterial == null || rimMaterial == null) return;
+            // Reset per-vehicle: Instantiate copies the prefab hierarchy with MeshFilters
+            // that still reference the SAME imported mesh asset, so the EntityId would
+            // already be in the set from a previous vehicle's pass, causing every
+            // subsequent car's wheels to be skipped (keeping octagonal Synty geometry).
+            roundedWheels.Clear();
+            foreach (var filter in root.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = filter.sharedMesh;
+                var lower = filter.name.ToLowerInvariant();
+                if (mesh == null || !lower.Contains("wheel") || lower.Contains("steering")) continue;
+                if (!roundedWheels.Add(mesh.GetEntityId())) continue;
+
+                var size = mesh.bounds.size;
+                int axle = 0;
+                if (size.y <= size.x && size.y <= size.z) axle = 1;
+                else if (size.z <= size.x && size.z <= size.y) axle = 2;
+                var radius = 0.5f * (axle == 0 ? Mathf.Max(size.y, size.z)
+                                   : axle == 1 ? Mathf.Max(size.x, size.z)
+                                   : Mathf.Max(size.x, size.y));
+                if (radius < 0.05f) continue;
+                var width = Mathf.Max(0.12f, size[axle]);
+                filter.sharedMesh = BuildRoundWheelMesh(axle, radius, width);
+                var renderer = filter.GetComponent<MeshRenderer>();
+                if (renderer != null) renderer.sharedMaterials = new[] { tireMaterial, rimMaterial };
+                if (wheelDebugLogs < 8)
+                {
+                    wheelDebugLogs++;
+                    Debug.Log($"RR_WHEEL '{filter.name}' bounds={size} axle={axle} " +
+                              $"radius={radius:0.000} width={width:0.000} scale={filter.transform.lossyScale.x:0.000}");
+                }
+            }
+        }
+
+        /// 40-segment tire annulus (submesh 0) around a shorter rim cylinder
+        /// (submesh 1), revolved around the given axis in mesh-local space.
+        private static Mesh BuildRoundWheelMesh(int axle, float radius, float width)
+        {
+            const int segments = 40;
+            var profile = new[]
+            {
+                new Vector2(radius * 0.60f, -width * 0.5f),
+                new Vector2(radius, -width * 0.5f),
+                new Vector2(radius, width * 0.5f),
+                new Vector2(radius * 0.60f, width * 0.5f),
+            };
+            var verts = new System.Collections.Generic.List<Vector3>();
+            var tire = new System.Collections.Generic.List<int>();
+            var rim = new System.Collections.Generic.List<int>();
+
+            Vector3 Point(float alongAxis, float radialOut, int segment)
+            {
+                var angle = segment / (float)segments * Mathf.PI * 2f;
+                var cos = Mathf.Cos(angle) * radialOut;
+                var sin = Mathf.Sin(angle) * radialOut;
+                return axle switch
+                {
+                    0 => new Vector3(alongAxis, cos, sin),
+                    1 => new Vector3(cos, alongAxis, sin),
+                    _ => new Vector3(cos, sin, alongAxis),
+                };
+            }
+
+            // Tire: revolve the 4-corner profile, one quad strip per profile edge.
+            // profile[p] stores (radius, axialOffset), but Point() takes
+            // (alongAxis, radialOut) - the arguments must be swapped here, or the
+            // tread revolves at the tiny axial-offset "radius" and gets pushed out
+            // to the (much larger) profile radius along the axle, producing a
+            // small blob beside the rim instead of a tire ring around it.
+            for (var p = 0; p < 4; p++)
+            {
+                var a0 = verts.Count;
+                for (var s = 0; s < segments; s++)
+                {
+                    verts.Add(Point(profile[p].y, profile[p].x, s));
+                }
+                var a1 = verts.Count;
+                var b0 = verts.Count;
+                for (var s = 0; s < segments; s++)
+                {
+                    verts.Add(Point(profile[(p + 1) % 4].y, profile[(p + 1) % 4].x, s));
+                }
+                var b1 = verts.Count;
+                for (var s = 0; s < segments; s++)
+                {
+                    var s2 = (s + 1) % segments;
+                    tire.Add(a0 + s); tire.Add(b0 + s); tire.Add(b0 + s2);
+                    tire.Add(a0 + s); tire.Add(b0 + s2); tire.Add(a0 + s2);
+                }
+            }
+
+            // Rim: short cylinder with caps, sitting between the tire beads.
+            var rimRadius = radius * 0.58f;
+            var rimWidth = width * 0.35f;
+            var rim0 = verts.Count;
+            for (var s = 0; s < segments; s++) verts.Add(Point(-rimWidth, rimRadius, s));
+            var rim1 = verts.Count;
+            for (var s = 0; s < segments; s++) verts.Add(Point(rimWidth, rimRadius, s));
+            for (var s = 0; s < segments; s++)
+            {
+                var s2 = (s + 1) % segments;
+                rim.Add(rim0 + s); rim.Add(rim1 + s); rim.Add(rim1 + s2);
+                rim.Add(rim0 + s); rim.Add(rim1 + s2); rim.Add(rim0 + s2);
+            }
+            var capA = verts.Count; verts.Add(Point(-rimWidth * 1.01f, 0f, 0));
+            var capB = verts.Count; verts.Add(Point(rimWidth * 1.01f, 0f, 0));
+            for (var s = 0; s < segments; s++)
+            {
+                var s2 = (s + 1) % segments;
+                rim.Add(capA); rim.Add(rim0 + s2); rim.Add(rim0 + s);
+                rim.Add(capB); rim.Add(rim1 + s); rim.Add(rim1 + s2);
+            }
+
+            var mesh = new Mesh { name = "RoundWheel" };
+            mesh.SetVertices(verts);
+            mesh.subMeshCount = 2;
+            mesh.SetTriangles(tire, 0);
+            mesh.SetTriangles(rim, 1);
+            var uvs = new Vector2[verts.Count];
+            for (var i = 0; i < uvs.Length; i++) uvs[i] = new Vector2(0.5f, 0.5f);
+            mesh.uv = uvs;
+            mesh.RecalculateNormals();
+            return mesh;
+        }
+
         private void BuildCar()
         {
             var spawn = startDistance + 5f;
+            // Single-lane biomes (country road, desert two-lane) start centred; multi-lane cities keep the classic right-lane launch.
+            var startLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
+            var startLateral = startLaneCount == 1 ? 0f : -2.25f;
             car = new GameObject($"Player {GameState.CurrentCar.Name}").transform;
-            car.position = RoadPath.Point(spawn, -2.25f, 0.85f);
+            car.position = RoadPath.Point(spawn, startLateral, 0.85f);
             car.rotation = RoadPath.Rotation(spawn);
             var body = Primitive(PrimitiveType.Cube, "Body", Vector3.zero, new Vector3(2.15f, 0.62f, 4.4f), materials["Car Orange"], car);
             body.transform.localPosition = Vector3.zero;
@@ -5347,6 +5978,8 @@ namespace RoadRage.UnityRemake
 				// StreetRacerSHD_Livery (painted panels) and GlassSHD. Assigning one
 				// material to all three rendered the windows as opaque painted metal and
 				// gave paint, trim and glass an identical flat response.
+				// Livery decals are BACK (flat colour lost all detail); the details the
+				// player wanted gone stay gone: no emissive mask, smooth-shaded meshes.
 				var atlas = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_01_A");
 				var liveryTexture = Resources.Load<Texture2D>($"Vehicles/{selected.Livery}") ?? atlas;
 
@@ -5359,27 +5992,18 @@ namespace RoadRage.UnityRemake
 					if (livery.HasProperty("_BaseMap")) livery.SetTexture("_BaseMap", liveryTexture);
 				}
 
-				// Chassis/trim: same atlas, but duller than the painted panels.
+				// Chassis/trim: the car's OWN livery sheet, same as the showroom - the
+				// base atlas here is what made the world car and the garage disagree.
 				var chassis = MakeMaterial($"Chassis {selected.Name}", Color.white, 0.30f, 0.55f);
-				if (atlas != null)
+				if (liveryTexture != null)
 				{
-					chassis.mainTexture = atlas;
-					if (chassis.HasProperty("_BaseMap")) chassis.SetTexture("_BaseMap", atlas);
+					chassis.mainTexture = liveryTexture;
+					if (chassis.HasProperty("_BaseMap")) chassis.SetTexture("_BaseMap", liveryTexture);
 				}
 
-				// The Synty pack ships emissive masks for headlights, tail lights and
-				// indicators that nothing was using - which is a large part of why every
-				// vehicle read as a dark blob at night. This is real authored data, not
-				// a generated approximation.
-				var lights = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_Emissive_01");
-				if (lights != null)
-					foreach (var target in new[] { livery, chassis })
-					{
-						target.SetTexture("_EmissionMap", lights);
-						target.SetColor("_EmissionColor", new Color(2.6f, 2.5f, 2.4f));
-						target.EnableKeyword("_EMISSION");
-						target.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-					}
+				// The Synty emissive mask is GONE on purpose: on flat materials without
+				// the livery atlas the mask's UV islands painted mid-grey glow over the
+				// whole body and turned the wheels into bright yellow rings.
 
 				var glass = MakeMaterial($"Glass {selected.Name}", new Color(0.06f, 0.09f, 0.12f), 0.0f, 0.96f);
 				glass.SetFloat("_Smoothness", 0.96f);
@@ -5390,6 +6014,7 @@ namespace RoadRage.UnityRemake
 				foreach (var renderer in car.GetComponentsInChildren<Renderer>()) renderer.enabled = false;
 				var racerVisual = Instantiate(racerPrefab, car);
 				racerVisual.name = $"Synty {selected.Name} Visual";
+				SmoothVehicleMeshes(racerVisual);
 				racerVisual.transform.localPosition = new Vector3(0f, -0.48f, 0f);
 				// The source FBX uses Z-up; Unity otherwise imports the complete preset on its side.
 				racerVisual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
@@ -5413,6 +6038,8 @@ namespace RoadRage.UnityRemake
 					}
                     renderer.sharedMaterials = assigned;
                 }
+                // Wheels last: the slot pass above would overwrite their rubber/rim pair.
+                ReplaceWheelMeshes(racerVisual);
                 foreach (var l in racerVisual.GetComponentsInChildren<Light>(true)) DestroyImmediate(l.gameObject == racerVisual ? l : l.gameObject);
                 foreach (var b in racerVisual.GetComponentsInChildren<Behaviour>(true))
                 {
@@ -5427,8 +6054,12 @@ namespace RoadRage.UnityRemake
             var carCollider = car.gameObject.AddComponent<BoxCollider>();
             carCollider.size = new Vector3(2.15f, 1.2f, 4.4f);
             carCollider.center = new Vector3(0f, 0.25f, 0f);
-            var arcade = car.gameObject.AddComponent<ArcadeCarController>();
-            arcade.RoadDistance = startDistance + 5f;
+            var arcadeController = car.gameObject.AddComponent<ArcadeCarController>();
+            arcadeController.RoadDistance = spawn;
+            // LateralOffset defaults to -2.25 (the right-lane launch); without syncing it
+            // here, the countdown-phase Update() re-snaps the car to that default every
+            // frame, undoing the centred spawn just chosen above for single-lane biomes.
+            arcadeController.LateralOffset = startLateral;
             if (playerHull.sqrMagnitude > 0f)
             {
                 // Traffic is normalised to a known length before it is measured; the
@@ -5437,11 +6068,11 @@ namespace RoadRage.UnityRemake
                 // here inherits whatever scale the FBX imported at, so it is clamped to
                 // the range a road vehicle can actually occupy - a motorbike at the low
                 // end, a semi cab at the high end - rather than trusted outright.
-                arcade.HalfLength = Mathf.Clamp(playerHull.x, 0.9f, 8f);
-                arcade.HalfWidth = Mathf.Clamp(playerHull.y, 0.4f, 1.8f);
+                arcadeController.HalfLength = Mathf.Clamp(playerHull.x, 0.9f, 8f);
+                arcadeController.HalfWidth = Mathf.Clamp(playerHull.y, 0.4f, 1.8f);
                 // The trigger box follows the same measurement, so the collider the
                 // directors raycast against agrees with the hull the overlap test uses.
-                carCollider.size = new Vector3(arcade.HalfWidth * 2f, 1.2f, arcade.HalfLength * 2f);
+                carCollider.size = new Vector3(arcadeController.HalfWidth * 2f, 1.2f, arcadeController.HalfLength * 2f);
             }
             car.gameObject.AddComponent<RoadRageAudioAndVFX>();
         }
@@ -5501,6 +6132,7 @@ namespace RoadRage.UnityRemake
         {
             TrafficCarController.Offence.Weaving,
             TrafficCarController.Offence.Speeding,
+            TrafficCarController.Offence.WrongWay,
             TrafficCarController.Offence.Tailgating,
             TrafficCarController.Offence.Weaving,
         };
@@ -5582,9 +6214,10 @@ namespace RoadRage.UnityRemake
                 new Color(0.94f, 0.72f, 0.10f), new Color(0.12f, 0.68f, 0.43f),
                 new Color(0.72f, 0.18f, 0.78f), new Color(0.80f, 0.82f, 0.86f)
             };
-            // Clear 65-meter safety corridor in front of player (player spawns at startDistance + 5f)
-            // No traffic spawned within [startDistance - 35m .. startDistance + 65m] to prevent launch collisions
-            var forwardSpread = new[] { 72f, 105f, 145f, 185f, 225f, 265f, 305f, 350f, 395f, 440f, 485f, 530f };
+            // Clear 100-meter safety corridor in front of player (player spawns at startDistance + 5f).
+            // Wide spacing: the first kilometre used to be a junk pile of angled cars
+            // queuing around each other right at the start line.
+            var forwardSpread = new[] { 110f, 155f, 205f, 260f, 320f, 385f, 455f, 530f, 610f, 695f, 780f, 865f };
             var distances = new float[forwardSpread.Length];
             for (var i = 0; i < forwardSpread.Length; i++) distances[i] = startDistance + forwardSpread[i];
             // Fractions of half-width, so cars sit in lanes on any road profile.
@@ -5595,6 +6228,8 @@ namespace RoadRage.UnityRemake
             var trafficCount = laneCount >= 3 ? lanes.Length
                              : laneCount == 2 ? Mathf.RoundToInt(lanes.Length * 0.65f)
                              : Mathf.RoundToInt(lanes.Length * 0.45f);
+            var brutes = 0;
+            var enforcers = 0;
             for (var i = 0; i < Mathf.Min(distances.Length, trafficCount); i++)
             {
                 var direction = lanes[i] < 0f ? 1f : -1f;
@@ -5616,14 +6251,33 @@ namespace RoadRage.UnityRemake
                     role = TrafficCarController.VehicleRole.CarHauler;
                     model = haulers[i % haulers.Length];
                 }
+                else
+                {
+                    // The garage roster patrols the highway too - the buyable vehicles
+                    // are not garage-only decoration. Sedans/muscle cars weave, brute
+                    // pickups and trail utes speed, exotic/sports cars run the wrong
+                    // way, and the Enforcer hogs a lane. Motorbikes are OUT of the
+                    // game entirely by design decision.
+                    if (offence == TrafficCarController.Offence.Weaving)
+                        model = i % 4 == 1 ? "SK_Veh_Preset_Sedan_01" : "SK_Veh_Preset_Muscle_01";
+                    else if (offence == TrafficCarController.Offence.Speeding)
+                        model = i % 4 == 1 ? "SK_Veh_Preset_Ute_04" : "SK_Veh_Preset_Ute_03";
+                    else if (offence == TrafficCarController.Offence.WrongWay)
+                        model = i % 4 == 1 ? "SK_Veh_Preset_Sports_01" : "SK_Veh_Preset_Exotic_01";
+                    else if (i == 8 && offence == TrafficCarController.Offence.None)
+                        model = "SK_Veh_Preset_Truck_02";
+                }
+                if (model.Contains("Ute_04")) brutes++;
+                else if (model.Contains("Truck_02")) enforcers++;
 
                 CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", model,
                     palette[i % palette.Length], distances[i], lanes[i], speed, direction, false, 0f, offence, role);
             }
 
-            Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length}");
-            BuildAccidentScene(trafficRoot, startDistance + 210f, -1f, models[1], models[3]);
-            BuildAccidentScene(trafficRoot, startDistance + 470f, 1f, models[0], models[8]);
+            Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
+                      $"brutes={brutes} enforcers={enforcers}");
+            BuildAccidentScene(trafficRoot, startDistance + 420f, -1f, models[1], models[3]);
+            BuildAccidentScene(trafficRoot, startDistance + 820f, 1f, models[0], models[4]);
         }
 
         private TrafficCarController CreateTrafficVehicle(Transform parent, string name, string modelName,
@@ -5642,6 +6296,10 @@ namespace RoadRage.UnityRemake
             if (prefab == null) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
             if (prefab != null)
             {
+                // Liveries are BACK: full flat colour lost every detail and read as
+                // toy blobs. Cars keep their livery decals again, while the smooth
+                // normal weld and the removed emissive mask keep the flat-clean read
+                // the player actually asked for (no facets, no yellow wheels).
                 var liveries = new[]
                 {
                     "Vehicles/PolygonStreetRacer_Texture_01_A",
@@ -5663,17 +6321,8 @@ namespace RoadRage.UnityRemake
                 paint.color = Color.white;
                 if (paint.HasProperty("_BaseColor")) paint.SetColor("_BaseColor", Color.white);
 
-                // Traffic headlights & tail lights
-                var trafficLights = Resources.Load<Texture2D>("Vehicles/PolygonStreetRacer_Texture_Emissive_01");
-                if (trafficLights != null)
-                {
-                    paint.SetTexture("_EmissionMap", trafficLights);
-                    paint.SetColor("_EmissionColor", new Color(2.4f, 2.3f, 2.1f));
-                    paint.EnableKeyword("_EMISSION");
-                    paint.globalIlluminationFlags = MaterialGlobalIlluminationFlags.RealtimeEmissive;
-                }
-
                 var visual = Instantiate(prefab, root);
+                SmoothVehicleMeshes(visual);
                 visual.name = $"{name} Visual";
                 visual.transform.localPosition = Vector3.zero;
                 // Source FBX is Z-up, same as the player preset.
@@ -5701,6 +6350,8 @@ namespace RoadRage.UnityRemake
                     }
                     renderer.sharedMaterials = assigned;
                 }
+                // Wheels last: the slot pass above would overwrite their rubber/rim pair.
+                ReplaceWheelMeshes(visual);
                 foreach (var collider in visual.GetComponentsInChildren<Collider>()) Destroy(collider);
                 foreach (var l in visual.GetComponentsInChildren<Light>(true)) DestroyImmediate(l.gameObject == visual ? l : l.gameObject);
                 foreach (var b in visual.GetComponentsInChildren<Behaviour>(true))
@@ -5828,9 +6479,15 @@ namespace RoadRage.UnityRemake
             }
 
             var cameraObject = new GameObject("Cinematic Chase Camera");
+            // Camera.main is null for untagged cameras; the HUD quarry markers and the
+            // aftertouch director both resolve the chase camera through it.
+            cameraObject.tag = "MainCamera";
             var camera = cameraObject.AddComponent<Camera>();
             var flareLayer = cameraObject.GetComponent("FlareLayer");
             if (flareLayer != null) DestroyImmediate(flareLayer);
+            var urpCamData = cameraObject.GetComponent<UniversalAdditionalCameraData>()
+                          ?? cameraObject.AddComponent<UniversalAdditionalCameraData>();
+            urpCamData.renderPostProcessing = true;
             var mood = Mood();
             camera.fieldOfView = 64f;
             camera.nearClipPlane = 0.12f;
@@ -5896,11 +6553,11 @@ namespace RoadRage.UnityRemake
 			}
 			else if (biomeName == Biomes[8] && preset == "manhattan-shot")
 			{
-				camera.fieldOfView = 58f;
+				camera.fieldOfView = 60f;
 				camera.nearClipPlane = 0.10f;
-				camera.farClipPlane = 720f;
+				camera.farClipPlane = 900f;
 				camera.clearFlags = CameraClearFlags.SolidColor;
-				camera.backgroundColor = new Color(0.02f, 0.03f, 0.06f);
+				camera.backgroundColor = new Color(0.52f, 0.54f, 0.58f);
 			}
 		}
     }
@@ -6081,10 +6738,32 @@ namespace RoadRage.UnityRemake
                     Debug.Log($"RR_PERF frames={sampledFrames} avg={sampledTime / sampledFrames * 1000f:F2}ms " +
                               $"fps={sampledFrames / sampledTime:F1} score={GameState.Score} takedowns={GameState.Takedowns} " +
                               $"combo={GameState.Combo} dailyDist={GameState.Daily["distance"]:F2}");
+                LogQuarryState();
                 ScreenCapture.CaptureScreenshot(outputPath);
                 captured = true;
             }
             else if (captured && elapsed > CaptureAfterSeconds + 2f) Application.Quit();
+        }
+
+        /// Measurement hook for the chase loop: how many rule-breakers are alive at
+        /// capture time, how far the nearest one is, and whether it is fleeing.
+        private static void LogQuarryState()
+        {
+            var violators = 0;
+            var fleeing = 0;
+            var runners = 0;
+            var nearestGap = float.MaxValue;
+            foreach (var traffic in TrafficCarController.All)
+            {
+                if (traffic == null || !traffic.IsViolator) continue;
+                violators++;
+                if (traffic.IsFleeing) fleeing++;
+                if (traffic.IsHitAndRunner) runners++;
+                var gap = traffic.GapToPlayer;
+                if (gap >= 0f && gap < nearestGap) nearestGap = gap;
+            }
+            Debug.Log($"RR_QUARRY violators={violators} fleeing={fleeing} runners={runners} " +
+                      $"nearestGap={(nearestGap == float.MaxValue ? -1f : nearestGap):0}m");
         }
     }
 
@@ -6207,6 +6886,7 @@ namespace RoadRage.UnityRemake
         // Daily distance is written to PlayerPrefs, so it is batched rather than saved per frame.
         private float distanceSinceDailyBump;
         private static readonly bool autoSteer = RoadRageBootstrap.CommandLineValue("-autosteer") != null;
+        private static readonly bool autoThrottle = RoadRageBootstrap.CommandLineValue("-autodrive") != null;
 
         public void LaunchAirtime(float launchPower)
         {
@@ -6248,6 +6928,9 @@ namespace RoadRage.UnityRemake
             // -autosteer weaves across the lanes so the unattended verification run
             // actually collides with traffic; without input it just holds its own lane.
             if (autoSteer) TouchSteer = Mathf.Sin(Time.time * 0.8f) * 1.2f;
+            // -autodrive floors it without input. Unlike -cinematic it keeps the HUD
+            // up, so chase-loop captures can show the quarry markers being used.
+            if (autoThrottle) TouchThrottle = 1f;
             if (CinematicPilot) DriveCinematically();
 
             var steer = SteerInput;
@@ -6390,18 +7073,27 @@ namespace RoadRage.UnityRemake
             {
                 GameState.Takedowns++;
                 GameState.BumpDaily("takedowns", 1f);
-                var label = traffic.Violation switch
+                var label = traffic.IsHitAndRunner ? "HIT & RUN" : traffic.Violation switch
                 {
                     TrafficCarController.Offence.Weaving => "RECKLESS DRIVER",
                     TrafficCarController.Offence.Speeding => "SPEEDER",
                     TrafficCarController.Offence.WrongWay => "WRONG WAY",
                     _ => "TAILGATER",
                 };
-                GameState.Award(sideSwipe ? 150 : 250, label);
+                // Running down a target that fled pays double - the chase is the game.
+                var pursued = traffic.IsFleeing;
+                GameState.Award(pursued ? (sideSwipe ? 300 : 500) : (sideSwipe ? 150 : 250),
+                    pursued ? $"PURSUIT {label}" : label);
+                if (traffic.IsHitAndRunner)
+                {
+                    GameState.Award(400, "JUSTICE SERVED");
+                    traffic.ClearHitAndRun();
+                    Debug.Log($"RR_EVENT hitandrun captured speedKmh={SpeedKph:0}");
+                }
                 if (RoadRagePolicePursuitDirector.Instance != null)
                     RoadRagePolicePursuitDirector.Instance.AddHeat(0.35f);
                 if (RoadRageBoostDirector.Instance != null)
-                    RoadRageBoostDirector.Instance.AddBoost(50f, "TAKEDOWN BOOST");
+                    RoadRageBoostDirector.Instance.AddBoost(pursued ? 80f : 50f, "TAKEDOWN BOOST");
                 GameState.ApplyDamage((sideSwipe ? 1.5f : 3f) * absorb);
             }
             else
@@ -6594,6 +7286,10 @@ namespace RoadRage.UnityRemake
         private GUIStyle buttonStyle;
         private GUIStyle pickerTitleStyle;
         private GUIStyle lockedStyle;
+        private GUIStyle markerStyle;
+        private GUIStyle markerSubStyle;
+        private Texture2D arrowTex;
+        private readonly List<TrafficCarController> markedViolators = new();
         private Texture2D dimTexture;
         private bool garageOpen;
         private bool missionsOpen;
@@ -6765,10 +7461,21 @@ namespace RoadRage.UnityRemake
             lockedStyle = new GUIStyle(GUI.skin.button) { font = titleFont, fontSize = 17, fontStyle = FontStyle.Bold };
             lockedStyle.normal.textColor = new Color(0.55f, 0.55f, 0.60f);
             lockedStyle.hover.textColor = lockedStyle.normal.textColor;
+            markerStyle = new GUIStyle(GUI.skin.label)
+            {
+                font = titleFont, fontSize = 17, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
+            };
+            markerStyle.normal.textColor = Color.white;
+            markerSubStyle = new GUIStyle(GUI.skin.label)
+            {
+                font = arcadeFont, fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter
+            };
+            markerSubStyle.normal.textColor = Color.white;
 
             dimTexture = new Texture2D(1, 1);
             dimTexture.SetPixel(0, 0, new Color(0.02f, 0.025f, 0.045f, 0.93f));
             dimTexture.Apply();
+            arrowTex = CreateArrowTexture(64);
 
             // High-Resolution Premium Assets
             cardGlassTex = CreateAntiAliasedBox(256, 256, 18, new Color(0.04f, 0.06f, 0.11f, 0.94f), new Color(0.25f, 0.65f, 1f, 0.80f), 1.2f, 0.06f);
@@ -6800,6 +7507,150 @@ namespace RoadRage.UnityRemake
         /// development watermark - on a Steam page those read as "mobile port". Set by
         /// -cleanshot on the command line.
         public static bool HideForCapture;
+
+        /// Rule-breakers must be findable at chase speed. Project every live violator
+        /// to screen space and tag it with its offence; the nearest same-direction
+        /// runner ahead is the quarry and gets the loud marker. Innocents stay
+        /// unmarked - the contrast is what teaches "hit the tagged car, spare the rest".
+        private void DrawQuarryMarkers()
+        {
+            var cam = Camera.main;
+            if (cam == null) return;
+
+            markedViolators.Clear();
+            TrafficCarController quarry = null;
+            var quarryGap = float.MaxValue;
+            foreach (var traffic in TrafficCarController.All)
+            {
+                if (traffic == null || !traffic.IsViolator) continue;
+                var gap = traffic.GapToPlayer;
+                if (gap < -25f || gap > 240f) continue;
+                markedViolators.Add(traffic);
+                if (traffic.Direction > 0f && gap >= 0f && gap < quarryGap)
+                {
+                    quarryGap = gap;
+                    quarry = traffic;
+                }
+            }
+            if (markedViolators.Count == 0) return;
+
+            const float width = 46f, height = 52f, subHeight = 22f;
+            float lastY = -9999f, lastX = -9999f;
+            for (var i = 0; i < markedViolators.Count; i++)
+            {
+                var traffic = markedViolators[i];
+                var isQuarry = traffic == quarry;
+                if (!isQuarry && traffic.GapToPlayer > 160f) continue;
+
+                var vp = cam.WorldToViewportPoint(traffic.transform.position + Vector3.up * 2.6f);
+                var onScreen = vp.z > 0f && vp.x >= -0.06f && vp.x <= 1.06f && vp.y >= -0.02f && vp.y <= 1.04f;
+
+                // One red exclamation mark per rule-breaker - no offence text. The
+                // player reads red = hunt, and nothing else.
+                const string label = "!";
+                var tint = new Color(0.95f, 0.15f, 0.12f);
+
+                // Curves and takedown camera swings throw the quarry out of frame; the
+                // edge arrow keeps the chase target locatable at all times.
+                if (!onScreen)
+                {
+                    if (isQuarry) DrawQuarryEdgeArrow(vp, tint, quarryGap);
+                    continue;
+                }
+
+                var x = vp.x * Screen.width - width * 0.5f;
+                var y = (1f - vp.y) * Screen.height - height;
+                // Clustered traffic stacked their chips into one unreadable smudge;
+                // nudge later chips upward when they land on the previous one.
+                if (Mathf.Abs(y - lastY) < 30f && Mathf.Abs(x - lastX) < width + 24f)
+                    y = lastY - (height + subHeight + 8f);
+                lastY = y;
+                lastX = x;
+
+                var pulse = traffic.IsFleeing && isQuarry
+                    ? 0.7f + 0.3f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 8f))
+                    : 1f;
+
+                var prev = GUI.color;
+                GUI.color = new Color(0f, 0f, 0f, (isQuarry ? 0.66f : 0.42f) * pulse);
+                GUI.DrawTexture(new Rect(x, y, width, height + (isQuarry ? subHeight : 0f)), dimTexture);
+                GUI.color = new Color(tint.r, tint.g, tint.b, (isQuarry ? 1f : 0.85f) * pulse);
+                GUI.Label(new Rect(x, y, width, height), label, markerStyle);
+                if (isQuarry)
+                {
+                    GUI.color = new Color(1f, 1f, 1f, pulse);
+                    GUI.Label(new Rect(x - (132f - width) * 0.5f, y + height, 132f, subHeight),
+                        traffic.IsFleeing ? $"FLEEING \u00b7 {quarryGap:0} m" : $"{quarryGap:0} m",
+                        markerSubStyle);
+                }
+                GUI.color = prev;
+            }
+        }
+
+        /// Solid right-pointing chevron for the off-screen quarry arrow. Rasterised
+        /// once via an even-odd point-in-polygon test - IMGUI has no polygon primitive.
+        private static Texture2D CreateArrowTexture(int size)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var poly = new[]
+            {
+                new Vector2(0.14f, 0.08f), new Vector2(0.62f, 0.50f),
+                new Vector2(0.14f, 0.92f), new Vector2(0.30f, 0.50f),
+            };
+            var pixels = new Color[size * size];
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var p = new Vector2((x + 0.5f) / size, 1f - (y + 0.5f) / size);
+                    var inside = false;
+                    for (int a = 0, b = poly.Length - 1; a < poly.Length; b = a++)
+                    {
+                        if (((poly[a].y > p.y) != (poly[b].y > p.y)) &&
+                            p.x < (poly[b].x - poly[a].x) * (p.y - poly[a].y) / (poly[b].y - poly[a].y) + poly[a].x)
+                            inside = !inside;
+                    }
+                    pixels[y * size + x] = inside ? Color.white : Color.clear;
+                }
+            }
+            tex.SetPixels(pixels);
+            tex.Apply();
+            return tex;
+        }
+
+        /// The quarry can leave the frame on curves or mid-takedown camera swings;
+        /// clamp a rotated chevron to the screen edge so the chase never loses its
+        /// target, with the closing gap written under it.
+        private void DrawQuarryEdgeArrow(Vector3 vp, Color tint, float gap)
+        {
+            if (arrowTex == null) return;
+            var dir = new Vector2(vp.x - 0.5f, vp.y - 0.5f);
+            if (vp.z <= 0f) dir = -dir;
+            if (dir.sqrMagnitude < 0.0001f) dir = new Vector2(1f, 0f);
+            dir.Normalize();
+
+            var mx = Mathf.Min(96f, Screen.width * 0.12f);
+            var my = Mathf.Min(120f, Screen.height * 0.16f);
+            var tx = Mathf.Abs(dir.x) > 0.0001f ? (Screen.width * 0.5f - mx) / Mathf.Abs(dir.x) : float.MaxValue;
+            var ty = Mathf.Abs(dir.y) > 0.0001f ? (Screen.height * 0.5f - my) / Mathf.Abs(dir.y) : float.MaxValue;
+            var px = Screen.width * 0.5f + dir.x * Mathf.Min(tx, ty);
+            var py = Screen.height * 0.5f - dir.y * Mathf.Min(tx, ty);
+
+            const float size = 46f;
+            var angle = Mathf.Atan2(-dir.y, dir.x) * Mathf.Rad2Deg;
+            var old = GUI.matrix;
+            GUIUtility.RotateAroundPivot(angle, new Vector2(px, py));
+            GUI.color = new Color(tint.r, tint.g, tint.b, 0.95f);
+            GUI.DrawTexture(new Rect(px - size * 0.5f, py - size * 0.5f, size, size), arrowTex,
+                ScaleMode.ScaleToFit, true);
+            GUI.matrix = old;
+
+            var chipRect = new Rect(px - 60f, py + size * 0.45f, 120f, 22f);
+            GUI.color = new Color(0f, 0f, 0f, 0.55f);
+            GUI.DrawTexture(chipRect, dimTexture);
+            GUI.color = Color.white;
+            GUI.Label(chipRect, $"{gap:0} m", markerSubStyle);
+        }
 
         private void OnGUI()
         {
@@ -6834,6 +7685,8 @@ namespace RoadRage.UnityRemake
             }
             var c = Car;
             if (c == null) return;
+
+            DrawQuarryMarkers();
 
             var menuRect = new Rect(Screen.width - 240f, 20f, 100f, 44f);
             if (GUI.Button(menuRect, "🏠 MENU", buttonStyle))
@@ -6916,11 +7769,7 @@ namespace RoadRage.UnityRemake
             }
             else if (c.CountdownTimer > -0.9f)
             {
-                var prevC = pickerTitleStyle.normal.textColor;
-                pickerTitleStyle.normal.textColor = new Color(0.25f, 1f, 0.45f);
-                GUI.Label(new Rect(Screen.width * 0.5f - 200f, Screen.height * 0.26f, 400f, 90f),
-                    "GO! 🚀", pickerTitleStyle);
-                pickerTitleStyle.normal.textColor = prevC;
+                // Countdown reaches 0 and rolls straight into gameplay; no "GO!" banner.
             }
             else if (!string.IsNullOrEmpty(GameState.Message))
             {
