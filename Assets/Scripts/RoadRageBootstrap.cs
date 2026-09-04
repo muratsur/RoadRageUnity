@@ -2630,7 +2630,12 @@ namespace RoadRage.UnityRemake
             if (buildingCatalogue != null) return buildingCatalogue;
             buildingCatalogue = new List<BuildingEntry>();
 
-            var candidates = new List<string>(NycVariants) { "Buildings/USA/building" };
+            // Buildings/USA/building is out. It is a detached, furnished American house -
+            // its own folder ships a sofa, a table and a carpet next to it - and
+            // AssignClasses ranks by width, so being the narrowest thing in the set put
+            // it straight into the Frontage bucket and onto a Manhattan avenue. The
+            // catalogue only serves BuildCyberSprawl, so nothing else loses it.
+            var candidates = new List<string>(NycVariants);
             for (var i = 1; i <= 8; i++) candidates.Add($"Buildings/NYC/building_{i}");
             candidates.Add("Buildings/NYCBlock6/builds");
             candidates.Add("Buildings/NYCBlock6/shops");
@@ -2828,13 +2833,13 @@ namespace RoadRage.UnityRemake
         /// steel-blue, all of which a Manhattan block genuinely contains.
         private static readonly Color[] FacadeTints =
         {
-            new Color(1.00f, 1.00f, 1.00f),
-            new Color(0.88f, 0.68f, 0.60f),
-            new Color(0.95f, 0.94f, 0.88f),
-            new Color(1.00f, 0.92f, 0.78f),
-            new Color(0.78f, 0.78f, 0.80f),
-            new Color(0.78f, 0.86f, 0.80f),
-            new Color(0.74f, 0.81f, 0.92f),
+            new Color(1.00f, 1.00f, 1.00f),   // as the pack ships it
+            new Color(0.84f, 0.62f, 0.54f),   // red brick
+            new Color(0.86f, 0.83f, 0.75f),   // aged limestone
+            new Color(0.90f, 0.80f, 0.64f),   // sandstone
+            new Color(0.62f, 0.61f, 0.62f),   // soot
+            new Color(0.68f, 0.74f, 0.70f),   // verdigris
+            new Color(0.58f, 0.64f, 0.74f),   // cold steel
         };
 
         /// Tinted wall materials, keyed on the material they were tinted from. Built on
@@ -5026,9 +5031,9 @@ namespace RoadRage.UnityRemake
         /// point where the frontage buildings stop.
         private void BuildManhattanSkybridge(float z)
         {
-            const float deckHeight = 14f;
-            const float deckThickness = 0.9f;
-            const float deckLength = 5.5f;
+            const float deckHeight = 12.5f;
+            const float deckThickness = 1.4f;
+            const float deckLength = 9f;
             // Both facade lines plus enough to bury the ends in the buildings, so no gap
             // can open between the bridge and the wall it meets.
             const float span = FrontageSetback * 2f + 3f;
@@ -5044,11 +5049,18 @@ namespace RoadRage.UnityRemake
                 PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge Glazing",
                     z + edge * (deckLength * 0.5f - 0.13f), 0f,
                     deckHeight + deckThickness * 0.5f + 1.1f,
-                    new Vector3(span, 2.2f, 0.25f), glazing, Vector3.zero, false);
+                    new Vector3(span, 3.4f, 0.4f), glazing, Vector3.zero, false);
+
+            // Piers, outside the carriageway and inboard of the pavement furniture, so
+            // the bridge reads as carried rather than as a plank laid across the gap.
+            for (var pier = -1; pier <= 1; pier += 2)
+                PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge Pier", z,
+                    pier * (FrontageSetback - 1.6f), deckHeight * 0.5f,
+                    new Vector3(1.8f, deckHeight, 1.8f), trim, Vector3.zero, false);
 
             // Roof, so it reads as enclosed from below rather than as a floating floor.
             PrimitiveOnRoad(PrimitiveType.Cube, "Manhattan Skybridge Roof", z, 0f,
-                deckHeight + 2.3f, new Vector3(span, 0.3f, deckLength), trim, Vector3.zero, false);
+                deckHeight + 3.6f, new Vector3(span, 0.5f, deckLength), trim, Vector3.zero, false);
 
             CreateLocalLight(RoadPath.Point(z, 0f, deckHeight + 1.2f),
                 new Color(1f, 0.94f, 0.82f), 16f, 9f);
