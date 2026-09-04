@@ -7481,6 +7481,19 @@ namespace RoadRage.UnityRemake
         public float DistanceKm => totalDistance / 1000f;
         public float RoadDistance { get; internal set; } = 5f;
         public float LateralOffset { get; internal set; } = -2.25f;
+
+        /// What a collision leaves behind, ported from the shipped build's _hero_impact.
+        ///
+        /// A hit used to move LateralOffset by a fixed 0.25 m or 0.55 m and that was all:
+        /// an instant nudge, over before the frame ended, with nothing left to fight. The
+        /// store build knocks the truck sideways and twists it off line, and the impulse
+        /// bleeds off over about a second - you have to wrestle it back, which is the
+        /// whole reason a crash costs you something beyond the damage number.
+        ///
+        /// Velocity and angle, not position: an instant nine-metre shove would teleport
+        /// the player across the carriageway, and the shipped build integrates it too.
+        private float impactKnock;
+        private float impactVeer;
         /// Trailer autopilot. Hunts violators, avoids innocents and holds the throttle
         /// open so recorded footage shows the actual mechanic rather than someone
         /// fumbling arrow keys. Enabled with -cinematic.
@@ -7699,9 +7712,14 @@ namespace RoadRage.UnityRemake
 
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
             var edge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset + lateralVelocity * Time.deltaTime, -edge, edge);
+            LateralOffset = Mathf.Clamp(LateralOffset + (lateralVelocity + impactKnock) * Time.deltaTime, -edge, edge);
+            // Both decay towards zero over roughly a second, so an impact reads as a shove
+            // you drive out of rather than a step you never saw.
+            impactKnock = Mathf.MoveTowards(impactKnock, 0f, 11f * Time.deltaTime);
+            impactVeer = Mathf.MoveTowards(impactVeer, 0f, 26f * Time.deltaTime);
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.48f + verticalOffset);
-            var desiredRotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(-airPitch, steer * 9f, -steer * 4f);
+            var desiredRotation = RoadPath.Rotation(RoadDistance)
+                * Quaternion.Euler(-airPitch, steer * 9f + impactVeer, -steer * 4f);
             transform.rotation = Quaternion.Slerp(transform.rotation, desiredRotation, 1f - Mathf.Exp(-8f * Time.deltaTime));
             
             // Only test ground collision if not flying high over cars
@@ -7792,7 +7810,10 @@ namespace RoadRage.UnityRemake
 
             if (RoadRageImpactShakeDirector.Instance != null)
             {
-                RoadRageImpactShakeDirector.Instance.TriggerMediumShake(sideSwipe ? 0.45f : 0.75f);
+                // 0.3 + 0.35 x severity, the shipped curve, so a graze still registers and
+                // a square hit is not already saturated before the wreck lands.
+                RoadRageImpactShakeDirector.Instance.TriggerMediumShake(
+                    0.3f + 0.35f * (sideSwipe ? 0.45f : 0.9f));
             }
 
             if (GameState.Integrity <= 0f && !GameState.IsAftertouchActive)
@@ -7830,7 +7851,16 @@ namespace RoadRage.UnityRemake
             var pushDirection = Mathf.Abs(lateralGap) < 0.05f ? -1f : -Mathf.Sign(lateralGap);
             lateralVelocity += pushDirection * (sideSwipe ? 3.5f : 6.5f) * absorb;
             var pushEdge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset + pushDirection * (sideSwipe ? 0.25f : 0.55f) * absorb, -pushEdge, pushEdge);
+            // _hero_impact, from game.gd: shove towards the centre when you are already near
+            // an edge, otherwise pick a side; knock, twist and scrub speed, all scaled by
+            // how hard it was. A side-swipe is a graze, a square hit is not.
+            var severity = (sideSwipe ? 0.45f : 0.9f) * absorb;
+            var knockSide = Mathf.Abs(LateralOffset) > 4f ? -Mathf.Sign(LateralOffset) : pushDirection;
+            if (Mathf.Abs(knockSide) < 0.01f) knockSide = 1f;
+            impactKnock += knockSide * 9f * severity;
+            impactVeer += knockSide * 14f * severity;
+            SpeedKph *= 1f - 0.18f * severity;
+            LateralOffset = Mathf.Clamp(LateralOffset, -pushEdge, pushEdge);
             return true;
         }
     }
