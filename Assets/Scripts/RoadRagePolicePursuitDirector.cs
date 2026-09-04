@@ -382,8 +382,8 @@ namespace RoadRage.UnityRemake
                 GameState.ApplyDamage(12f);
                 GameState.Show("💥 SPIKED! TYRES SHREDDED");
                 if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.7f);
-                if (RoadRageHapticsDirector.Instance != null)
-                    RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.8f);
+                if (RoadRageImpactShakeDirector.Instance != null)
+                    RoadRageImpactShakeDirector.Instance.TriggerMediumShake(0.8f);
             }
         }
 

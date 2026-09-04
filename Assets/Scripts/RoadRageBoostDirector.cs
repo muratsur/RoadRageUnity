@@ -249,9 +249,9 @@ namespace RoadRage.UnityRemake
                 rightFlameFx.Play();
             }
 
-            if (RoadRageHapticsDirector.Instance != null)
+            if (RoadRageImpactShakeDirector.Instance != null)
             {
-                RoadRageHapticsDirector.Instance.TriggerLightHaptic(0.25f);
+                RoadRageImpactShakeDirector.Instance.TriggerLightShake(0.25f);
             }
 
             if (RoadRageAudioBridge.Instance != null)

@@ -7197,8 +7197,7 @@ namespace RoadRage.UnityRemake
             var skidDirector = cameraObject.AddComponent<RoadRageSkidmarkDirector>();
             skidDirector.BindPlayer(car);
 
-            var hapticsDirector = cameraObject.AddComponent<RoadRageHapticsDirector>();
-            hapticsDirector.BindPlayer(car);
+            cameraObject.AddComponent<RoadRageImpactShakeDirector>();
 
             var rampDirector = cameraObject.AddComponent<RoadRageRampDirector>();
             rampDirector.BindPlayer(car);
@@ -7574,9 +7573,9 @@ namespace RoadRage.UnityRemake
             verticalVelocity = launchPower;
             verticalOffset = 0.15f;
             AirtimeDuration = 0f;
-            if (RoadRageHapticsDirector.Instance != null)
+            if (RoadRageImpactShakeDirector.Instance != null)
             {
-                RoadRageHapticsDirector.Instance.TriggerLightHaptic(0.35f);
+                RoadRageImpactShakeDirector.Instance.TriggerLightShake(0.35f);
             }
         }
 
@@ -7678,8 +7677,8 @@ namespace RoadRage.UnityRemake
                         GameState.Award(bonus, $"🚀 AIRTIME STUNT ({AirtimeDuration:0.1}s)");
                         if (RoadRageBoostDirector.Instance != null)
                             RoadRageBoostDirector.Instance.AddBoost(40f, "AIRTIME STUNT");
-                        if (RoadRageHapticsDirector.Instance != null)
-                            RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.45f);
+                        if (RoadRageImpactShakeDirector.Instance != null)
+                            RoadRageImpactShakeDirector.Instance.TriggerMediumShake(0.45f);
                     }
                     AirtimeDuration = 0f;
                 }
@@ -7791,16 +7790,16 @@ namespace RoadRage.UnityRemake
             if (audioVfx != null)
                 audioVfx.PlayCrashImpact(contactPoint, traffic.IsViolator);
 
-            if (RoadRageHapticsDirector.Instance != null)
+            if (RoadRageImpactShakeDirector.Instance != null)
             {
-                RoadRageHapticsDirector.Instance.TriggerMediumHaptic(sideSwipe ? 0.45f : 0.75f);
+                RoadRageImpactShakeDirector.Instance.TriggerMediumShake(sideSwipe ? 0.45f : 0.75f);
             }
 
             if (GameState.Integrity <= 0f && !GameState.IsAftertouchActive)
             {
-                if (RoadRageHapticsDirector.Instance != null)
+                if (RoadRageImpactShakeDirector.Instance != null)
                 {
-                    RoadRageHapticsDirector.Instance.TriggerHeavyCrashHaptic(1.0f);
+                    RoadRageImpactShakeDirector.Instance.TriggerHeavyCrashShake(1.0f);
                 }
 
                 if (RoadRageAftertouchDirector.Instance != null)
@@ -7902,10 +7901,10 @@ namespace RoadRage.UnityRemake
             
             var shakeOffset = Vector3.zero;
             var shakeRot = Quaternion.identity;
-            if (RoadRageHapticsDirector.Instance != null)
+            if (RoadRageImpactShakeDirector.Instance != null)
             {
-                shakeOffset = RoadRageHapticsDirector.Instance.CurrentShakeOffset;
-                shakeRot = RoadRageHapticsDirector.Instance.CurrentShakeRotation;
+                shakeOffset = RoadRageImpactShakeDirector.Instance.CurrentShakeOffset;
+                shakeRot = RoadRageImpactShakeDirector.Instance.CurrentShakeRotation;
             }
 
             transform.position = ConstrainToCorridor(next) + shakeOffset;

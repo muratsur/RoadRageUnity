@@ -298,9 +298,9 @@ namespace RoadRage.UnityRemake
                         {
                             RoadRageAudioBridge.Instance.PlayTurboFlutter();
                         }
-                        if (RoadRageHapticsDirector.Instance != null)
+                        if (RoadRageImpactShakeDirector.Instance != null)
                         {
-                            RoadRageHapticsDirector.Instance.TriggerMediumHaptic(0.45f);
+                            RoadRageImpactShakeDirector.Instance.TriggerMediumShake(0.45f);
                         }
                         GameState.Show("🚀 STUNT JUMP TAKEOFF!");
                         break;

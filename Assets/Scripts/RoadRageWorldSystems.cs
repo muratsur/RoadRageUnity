@@ -165,9 +165,9 @@ namespace RoadRage.UnityRemake
             {
                 RoadRageAudioBridge.Instance.PlayCrash(1.0f);
             }
-            if (RoadRageHapticsDirector.Instance != null)
+            if (RoadRageImpactShakeDirector.Instance != null)
             {
-                RoadRageHapticsDirector.Instance.TriggerHeavyCrashHaptic(1.0f);
+                RoadRageImpactShakeDirector.Instance.TriggerHeavyCrashShake(1.0f);
             }
 
             GameState.Award(4000, "💥 TANKER MASSIVE EXPLOSION!");
