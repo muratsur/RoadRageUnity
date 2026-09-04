@@ -3590,6 +3590,14 @@ namespace RoadRage.UnityRemake
             // placement code gave the object, so a row names a call site.
             var renderersByPlacement = new Dictionary<string, int>();
             var trisByPlacement = new Dictionary<string, long>();
+            // Combined static batches already counted. StaticBatchingUtility.Combine puts
+            // every child of a prop onto one shared mesh and gives each renderer a range
+            // of it, so reading sharedMesh per renderer counts the whole batch once per
+            // child. The NYC roof props reported 709k triangles before they were combined
+            // and 61,344k after, from geometry that did not change by one triangle. Unity
+            // names these meshes "Combined Mesh (root: ...)", which is the only handle
+            // there is - a renderer's range within its batch is not public.
+            var countedBatches = new HashSet<Mesh>();
 
             foreach (var chunk in chunkRoots)
             {
@@ -3600,7 +3608,8 @@ namespace RoadRage.UnityRemake
                     var placement = PlacementName(r.transform);
                     renderersByPlacement.TryGetValue(placement, out var placed);
                     renderersByPlacement[placement] = placed + 1;
-                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null)
+                    if (r is MeshRenderer && r.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null
+                        && (!mf.sharedMesh.name.StartsWith("Combined Mesh") || countedBatches.Add(mf.sharedMesh)))
                     {
                         long meshTris = 0;
                         for (var sm = 0; sm < mf.sharedMesh.subMeshCount; sm++)
