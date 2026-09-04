@@ -50,6 +50,21 @@ namespace RoadRage.Tools
     {
         private static readonly string[] SourceRoots = { "Assets/Scripts", "Assets/Editor" };
 
+        /// Parsed the way the editor compiles, not the way csc does by default.
+        ///
+        /// Without this, every #if UNITY_EDITOR region is an inactive directive and Roslyn
+        /// drops the declarations inside it - so a member declared only for the editor is
+        /// invisible to the checker while every use of it is fully visible, and the check
+        /// reports it missing. That is a guaranteed false positive on correct code, which
+        /// is worse than a miss: it trains you to ignore the checker. UNITY_EDITOR is
+        /// defined in both the Editor assembly and the main one when Unity builds for the
+        /// editor, so defining it here is what the project actually compiles as.
+        ///
+        /// UNITY_ANDROID and UNITY_IOS are deliberately left undefined - that matches a
+        /// desktop editor, and the one block guarded by them contains no declarations.
+        private static readonly CSharpParseOptions EditorParseOptions =
+            CSharpParseOptions.Default.WithPreprocessorSymbols("UNITY_EDITOR");
+
         public static int Main(string[] args)
         {
             var repo = args.FirstOrDefault(a => !a.StartsWith("-")) ?? ".";
@@ -144,7 +159,7 @@ namespace RoadRage.Tools
             }
 
             trees = files
-                .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), path: f))
+                .Select(f => CSharpSyntaxTree.ParseText(File.ReadAllText(f), EditorParseOptions, path: f))
                 .ToList();
             var declared = CollectDeclaredNames(trees);
             declaredCount = declared.Count;

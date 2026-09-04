@@ -1236,6 +1236,14 @@ namespace RoadRage.UnityRemake
         /// identical GREENWOOD readings (5402 renderers, 4886 cutout, both times) were that
         /// bug, not a budget that does nothing. An editor pref outlives both.
         private const string LowDetailPrefKey = "RoadRage.ForceLowDetailBudget";
+
+        /// Lets the editor menu read the same pref the bootstrap writes. The key is a
+        /// private const here, so a menu item that hardcoded the string again would be a
+        /// second copy free to drift - and a drifted copy shows the wrong budget in the
+        /// menu while the world builds on the other one, which is the exact failure this
+        /// pref exists to prevent.
+        public static bool LowDetailBudgetForced =>
+            UnityEditor.EditorPrefs.GetBool(LowDetailPrefKey, false);
 #endif
 
         /// The budget path keyed purely off Application.isMobilePlatform, so the only way
