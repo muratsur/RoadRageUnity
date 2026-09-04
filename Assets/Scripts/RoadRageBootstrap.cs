@@ -5259,7 +5259,7 @@ namespace RoadRage.UnityRemake
             // size, which is the whole reason for using them rather than a prop.
             ScatterBand(15f, 14.6f, 15.2f, (d, l, s) =>
             {
-                var parked = ParkedCars[(BlockHash(Mathf.FloorToInt(d / 15f), s * 23) & 0x7fffffff) % ParkedCars.Length];
+                var parked = ParkedCars[(BlockHash(Mathf.FloorToInt(d / 15f), Mathf.RoundToInt(s) * 23) & 0x7fffffff) % ParkedCars.Length];
                 return PlaceBiomeModelOnRoad("Vehicles", parked, materials["City Props"],
                     d, l, 0.05f, new Vector3(0f, s > 0 ? 180f : 0f, 0f), Vector3.one,
                     "Parked Car", false);
@@ -5270,7 +5270,7 @@ namespace RoadRage.UnityRemake
             // the small stuff at ankle height that stops a pavement reading as a ramp.
             ScatterBand(13f, 17.8f, 21.2f, (d, l, s) =>
             {
-                var junk = PavementClutter[(BlockHash(Mathf.FloorToInt(d / 13f), s * 29) & 0x7fffffff) % PavementClutter.Length];
+                var junk = PavementClutter[(BlockHash(Mathf.FloorToInt(d / 13f), Mathf.RoundToInt(s) * 29) & 0x7fffffff) % PavementClutter.Length];
                 var piece = PlaceBiomeModelOnRoad("Buildings", junk, materials["City Props"],
                     d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one,
                     "NYC Pavement Clutter");
