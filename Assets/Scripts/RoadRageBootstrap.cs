@@ -2945,22 +2945,6 @@ namespace RoadRage.UnityRemake
         /// at more cost; raise it to save more and swap sooner. One number, one place.
         private const float SkylineImpostorHeight = 0.06f;
 
-        /// The same rule for street frontages, set to hold full detail far closer.
-        ///
-        /// A frontage is what the player drives past, so it earns its mesh at any distance
-        /// it can be read at - but not at every distance. These line a canyon: most of a
-        /// streamed world's frontages are a long way down the avenue, edge-on and half
-        /// occluded by the ones in front, and RR_PLACEMENT measures them at 1,561
-        /// renderers and 13,784k triangles, 49% of the biome, all of it drawn in full
-        /// however far away it is.
-        ///
-        /// 0.085 against the skyline's 0.06: a 25 m frontage stays its full self out to
-        /// roughly 235 m and is a box beyond that, where the same building on the skyline
-        /// rule would have held detail to 335 m. Play is at 64 degrees vertical FOV and
-        /// the manhattan-shot capture preset at 60, so both sets of distances are within
-        /// about 7% either way.
-        private const float FrontageImpostorHeight = 0.085f;
-
         /// Draws a distant skyline tower as a single box.
         ///
         /// Nothing in this biome had an LODGroup, so every tower cost the same at 200 m as
@@ -2968,24 +2952,17 @@ namespace RoadRage.UnityRemake
         /// 18-25k triangles, so one tower is around 100k, and BuildCyberSprawl places about
         /// 24 buildings per 150 m chunk - roughly 2.4M of the 3.16M triangles a chunk.
         ///
-        /// The stand-in is a cube, 12 triangles, wearing the same facade material.
-        ///
-        /// This used to be MidBlock towers only, on the grounds that the street frontages
-        /// the player drives past should keep their full mesh at every distance. That was
-        /// decided when Manhattan's problem was thought to be geometry; it was not. The
-        /// biome was CPU-bound on submission, and two fixes for that - window materials
-        /// and batching the roof props - took it from 35 to 101 FPS without touching a
-        /// triangle. Only now is the GPU the constraint (7.4 ms of a 9.9 ms frame), which
-        /// is the first point at which trading frontage detail for triangles buys
-        /// anything. Frontages therefore get the treatment too, on their own threshold so
-        /// they hold detail far closer than the skyline does.
+        /// The stand-in is a cube, 12 triangles, wearing the same facade material. That is
+        /// a real loss of detail, which is why this is applied only to MidBlock towers:
+        /// they sit behind the frontage line and read as skyline, while the street
+        /// frontages the player drives past keep their full mesh at every distance.
         ///
         /// The box is left unparented so Adopt puts it under the chunk root, whose
         /// transform is identity - world size and local scale are then the same number,
         /// and none of the rotated-parent arithmetic that PRODUCTION-GATES section 8 calls
         /// this project's recurring fault is needed. It is destroyed with the chunk like
         /// anything else under that root, and buildings never move after placement.
-        private void AddSkylineImpostor(GameObject model, Material facade, float impostorHeight)
+        private void AddSkylineImpostor(GameObject model, Material facade)
         {
             var detailed = model.GetComponentsInChildren<Renderer>(true);
             if (detailed.Length == 0 || !TryGetCombinedBounds(model, out var bounds)) return;
@@ -3002,7 +2979,7 @@ namespace RoadRage.UnityRemake
             var group = model.AddComponent<LODGroup>();
             group.SetLODs(new[]
             {
-                new LOD(impostorHeight, detailed),
+                new LOD(SkylineImpostorHeight, detailed),
                 // Zero, not a cull threshold: a tower that vanished at the edge of the
                 // streamed world would pop a hole in the skyline. It stays a box.
                 new LOD(0f, new[] { boxRenderer }),
@@ -3090,8 +3067,7 @@ namespace RoadRage.UnityRemake
             if (materials.TryGetValue("City Windows", out var cityWindows))
                 VaryWindowLighting(model, cityWindows, hash);
             WeatherWalls(model, hash);
-            if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material, SkylineImpostorHeight);
-            else if (wanted == BuildingClass.Frontage) AddSkylineImpostor(model, material, FrontageImpostorHeight);
+            if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material);
             return model;
         }
 
