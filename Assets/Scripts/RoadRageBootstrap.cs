@@ -1916,6 +1916,11 @@ namespace RoadRage.UnityRemake
 
             // Road Edge & Terrain Integration per Biome Type:
             var hasCityCurbs = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3;
+            // Traffic obeys signals only where signals exist. Set from the same test that
+            // decides whether the road gets kerbs, because those are the same biomes that
+            // place the lights - a stop line nobody can see a reason for reads as traffic
+            // randomly halting on an open road.
+            TrafficCarController.SignalsActive = hasCityCurbs;
             if (hasCityCurbs)
             {
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];

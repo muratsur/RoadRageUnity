@@ -422,6 +422,76 @@ namespace RoadRage.UnityRemake
         /// Set by the streamer each frame. On an open road traffic can no longer wrap,
         /// so cars that fall too far behind are recycled ahead of the player instead.
         public static float PlayerDistance;
+
+        /// Whether this biome has signals to obey. Only the city biomes place traffic
+        /// lights, and a car braking for an invisible junction on a country road is worse
+        /// than one that never stops - the shipped Godot build gates it the same way.
+        public static bool SignalsActive;
+
+        /// Distance between junctions. BuildCyberSprawl puts a traffic light on every
+        /// second 22 m block, so the signals a driver can see stand 44 m apart and the
+        /// stop line has to agree with them.
+        private const float SignalSpacing = 44f;
+        private const float StopLineSetback = 4.5f;
+        private const float SignalCycle = 13f;
+        private const float SignalRedFor = 5.5f;
+
+        /// One phase for the whole road rather than per junction, so a queue that stops
+        /// together starts together. Wall time, not game time: the signal keeps its rhythm
+        /// through a hitstop or a slow-motion takedown.
+        public static bool SignalRed => Time.time % SignalCycle < SignalRedFor;
+
+        /// Holds a car at the stop line for the whole red, and lets one already past it
+        /// clear the junction rather than stopping in the middle of it.
+        ///
+        /// Applied to the step AFTER car-following has chosen a speed, for the reason the
+        /// Godot build spells out: run it earlier and the follower logic drags a car
+        /// straight through the line while it is busy closing on the car in front.
+        private float ClampToStopLine(float from, float step)
+        {
+            if (!SignalsActive || IsWreck || IsFleeing || !SignalRed) return step;
+
+            var line = Direction > 0f
+                ? (Mathf.Floor(from / SignalSpacing) + 1f) * SignalSpacing - StopLineSetback
+                : Mathf.Floor(from / SignalSpacing) * SignalSpacing + StopLineSetback;
+            var ahead = (line - from) * Direction;
+            if (ahead < -0.5f) return step;          // through it; keep going and clear
+
+            var room = Mathf.Max(0f, ahead);
+            // sqrt(2as) is the distance-to-stop curve, so the approach eases in instead of
+            // slamming from cruise to nothing one metre short of the paint.
+            var brake = Mathf.Sqrt(2f * 9f * room) * Time.deltaTime;
+            var forward = step * Direction;
+            return Direction * Mathf.Clamp(forward, 0f, Mathf.Min(room, brake));
+        }
+
+        /// Two cars meeting head-on both wreck, with no player involved.
+        ///
+        /// Ported from the shipped build, where a wrong-way rule-breaker that ploughs into
+        /// oncoming traffic causes a genuine accident. Without it WrongWay is a cosmetic
+        /// label: the offender drives the wrong way down an oncoming lane and passes
+        /// through everything in it. At least one side has to be going the wrong way -
+        /// lawful traffic in opposing lanes is separated laterally and must never trigger
+        /// this, however close the lanes run.
+        private void TryHeadOn(TrafficCarController other)
+        {
+            if (IsWreck || other.IsWreck) return;
+            if (Violation != Offence.WrongWay && other.Violation != Offence.WrongWay) return;
+            if (Mathf.Abs(other.LaneOffset - LaneOffset) > LateralExtent + other.LateralExtent) return;
+            var gap = Mathf.Abs(other.RoadDistance - RoadDistance)
+                      - (LongitudinalExtent + other.LongitudinalExtent);
+            if (gap > 0f) return;
+
+            // Closing speed, not either car's own: a 60 into a 60 is a 120 impact, and
+            // splitting it between them is what makes both spin rather than one nudging
+            // the other aside.
+            var closing = currentSpeedKph + other.currentSpeedKph;
+            var side = Mathf.Sign(LaneOffset - other.LaneOffset);
+            if (Mathf.Abs(side) < 0.01f) side = 1f;
+            Crash(side, closing * 0.5f);
+            other.Crash(-side, closing * 0.5f);
+            Debug.Log($"RR_EVENT headon at {RoadDistance:0}m closing={closing:0}kph");
+        }
         private const float RecycleBehind = 140f;
         private const float WreckRecycleBehind = 70f;
         private const float RecycleAhead = 300f;
@@ -542,7 +612,14 @@ namespace RoadRage.UnityRemake
                         continue;
                     }
                     if (other == this) continue;
-                    if (!other.IsWreck && Mathf.Sign(other.Direction) != Mathf.Sign(Direction)) continue;
+                    if (!other.IsWreck && Mathf.Sign(other.Direction) != Mathf.Sign(Direction))
+                    {
+                        // Oncoming cars are not followed - they close on each other and a
+                        // follower would freeze face to face with one - but they can still
+                        // collide, which is what this checks before skipping.
+                        TryHeadOn(other);
+                        continue;
+                    }
 
                     // Tailgaters deliberately close the gap; speeders do not yield.
                     if (Violation == Offence.Tailgating && !other.IsWreck) continue;
@@ -615,7 +692,8 @@ namespace RoadRage.UnityRemake
                         : Mathf.Max(desiredSpeed, runSpeed);
                 }
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, desiredSpeed, acceleration * Time.deltaTime);
-                RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
+                var step = ClampToStopLine(RoadDistance, Direction * currentSpeedKph / 3.6f * Time.deltaTime);
+                RoadDistance = RoadPath.Wrap(RoadDistance + step);
             }
             else
             {
