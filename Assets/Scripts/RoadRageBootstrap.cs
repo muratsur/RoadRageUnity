@@ -3230,7 +3230,19 @@ namespace RoadRage.UnityRemake
         /// the thing it was modelled as, which is worse than an imperfect fit.
         /// Distance from the road centreline to the facade line. Road half-width plus
         /// the shoulder and the pavement - every frontage meets the pavement here.
-        private const float FrontageSetback = 17.5f;
+        /// Distance from the road centreline to the facade line.
+        ///
+        /// Was 17.5, and the city kerb sits at 1.20-1.24 x half width - 16.2 to 16.74 m
+        /// on Manhattan's 27 m road. So the buildings began 0.76 m behind the kerb and
+        /// stood on the whole of the 8 m sidewalk ribbon the road builder was drawing
+        /// underneath them. There was no pavement to walk on, and every piece of street
+        /// furniture had been placed at 13-14.5 m to stay clear of the buildings - which
+        /// is inside the kerb, so the hydrants, lamps, trees and benches were all standing
+        /// in the road.
+        ///
+        /// 23 m leaves 6.3 m of pavement between kerb and facade, which is a Manhattan
+        /// sidewalk, and gives the furniture somewhere to stand that is not the gutter.
+        private const float FrontageSetback = 23f;
         /// Whether a catalogued building of one class may be placed on another's plot.
         ///
         /// The class is a size hint, not a licence. AssignClasses ranks the whole set by
@@ -5149,7 +5161,7 @@ namespace RoadRage.UnityRemake
         private void BuildManhattanPlaza(float distance, float side, int block)
         {
             const float pavingHeight = 0.07f;
-            const float depth = 26f;
+            const float depth = 17f;
             const float width = 20f;
             // Centre of the plot, measured from the kerb back to behind the facade line.
             var centreLateral = side * (RoadPath.HalfWidth + RoadPath.ShoulderWidth + depth * 0.5f);
@@ -5195,7 +5207,7 @@ namespace RoadRage.UnityRemake
             for (var corner = -1; corner <= 1; corner += 2)
             {
                 var lampAlong = distance + corner * width * 0.4f;
-                var lampAcross = side * 13.0f;
+                var lampAcross = side * 17.5f;
                 var lamp = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/lampost2",
                     materials["City Asphalt Trim"], lampAlong, lampAcross, pavingHeight,
                     new Vector3(0f, side > 0f ? -90f : 90f, 0f), Vector3.one, "NYC Street Lamp");
@@ -5224,7 +5236,7 @@ namespace RoadRage.UnityRemake
             // submitting, then put back: RR_PLACEMENT measured this band at 139 renderers,
             // 1.2% of the biome, and the thinning bought 0.9% of the renderer count in
             // total. The submissions were never here.
-            ScatterBand(10f, 13.0f, 15.0f, (d, l, s) =>
+            ScatterBand(10f, 17.6f, 21.4f, (d, l, s) =>
             {
                 var pick = Random.value;
                 var propName = pick > 0.65f ? "Buildings/NYCBlock6/Fireplug"
@@ -5237,6 +5249,35 @@ namespace RoadRage.UnityRemake
                 return junk;
             });
 
+            // Parked cars along the kerb.
+            //
+            // An empty kerb is the strongest single tell that a street was generated. They
+            // sit at 14.9 m: outside the carriageway edge at 13.5 and inside the kerb at
+            // 16.2, which is the parking lane, and clear of the outermost traffic lane at
+            // 0.85 x half width. Facing along the road rather than across it, and not
+            // height-normalised - these are the game's own vehicles and already the right
+            // size, which is the whole reason for using them rather than a prop.
+            ScatterBand(15f, 14.6f, 15.2f, (d, l, s) =>
+            {
+                var parked = ParkedCars[(BlockHash(Mathf.FloorToInt(d / 15f), s * 23) & 0x7fffffff) % ParkedCars.Length];
+                return PlaceBiomeModelOnRoad("Vehicles", parked, materials["City Props"],
+                    d, l, 0.05f, new Vector3(0f, s > 0 ? 180f : 0f, 0f), Vector3.one,
+                    "Parked Car", false);
+            });
+
+            // Pavement clutter. All of this shipped with the NYCBlock6 pack and none of it
+            // was ever placed: bin bags, wire baskets, bollards and a sewer grate. It is
+            // the small stuff at ankle height that stops a pavement reading as a ramp.
+            ScatterBand(13f, 17.8f, 21.2f, (d, l, s) =>
+            {
+                var junk = PavementClutter[(BlockHash(Mathf.FloorToInt(d / 13f), s * 29) & 0x7fffffff) % PavementClutter.Length];
+                var piece = PlaceBiomeModelOnRoad("Buildings", junk, materials["City Props"],
+                    d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one,
+                    "NYC Pavement Clutter");
+                if (piece != null) NormalizeModelHeight(piece, Random.Range(0.6f, 1.15f), 0.14f);
+                return piece;
+            });
+
             // The skyscraper and frontage rosters that used to live here are gone.
             // Picking a mesh from a list and scaling it to a target height is what
             // produced 93x-wide frontages and 167 m-deep towers; BuildingCatalogue
@@ -5245,7 +5286,7 @@ namespace RoadRage.UnityRemake
             // Street trees, in front of the frontage line rather than behind it. Manhattan
             // reads as canyon walls without something breaking the vertical, and a tree is
             // the cheapest thing that does it at eye level.
-            ScatterBand(18f, 13.5f, 14.5f, (d, l, s) =>
+            ScatterBand(18f, 17.4f, 18.6f, (d, l, s) =>
             {
                 var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
                     materials["City Palm"], d, l, 0.14f,
@@ -5314,7 +5355,7 @@ namespace RoadRage.UnityRemake
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 35f,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(23.5f, 29.5f), 35f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
                         if (roofProp != null)
                         {
@@ -5328,7 +5369,7 @@ namespace RoadRage.UnityRemake
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(18.0f, 24.0f), 28f,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(23.5f, 29.5f), 28f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
                         if (roofProp != null)
                         {
@@ -5365,19 +5406,22 @@ namespace RoadRage.UnityRemake
                     // 4. NYC Street Lamposts with warm amber glow
                     var lampDistance = z + (side > 0 ? 10f : -7f);
                     var lamp = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/lampost2", materials["City Asphalt Trim"],
-                        lampDistance, side * 13.0f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Lamp");
+                        lampDistance, side * 17.5f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Lamp");
                     if (lamp != null)
                     {
                         NormalizeModelHeight(lamp, 7.5f, 0.14f);
-                        CreateLocalLight(RoadPath.Point(lampDistance, side * 13.0f, 6.8f),
+                        CreateLocalLight(RoadPath.Point(lampDistance, side * 17.5f, 6.8f),
                             new Color(1f, 0.95f, 0.85f), 8f, 14f);
                     }
 
-                    // Traffic lights at intersections
-                    if (block % 4 == 1)
+                    // Traffic lights at intersections. Every second block rather than
+                    // every fourth: at 22 m blocks that is a signal every 44 m, which is
+                    // roughly a Manhattan cross street, and a lit avenue with a signal
+                    // every 88 m read as a road with occasional furniture on it.
+                    if (block % 2 == 1)
                     {
                         var trafficLight = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Trafficlight", materials["City Props"],
-                            z + 12f, side * 13.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
+                            z + 12f, side * 17.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
                         if (trafficLight != null) NormalizeModelHeight(trafficLight, 6.5f, 0.14f);
                     }
 
@@ -5385,14 +5429,14 @@ namespace RoadRage.UnityRemake
                     if (block % 5 == 2)
                     {
                         var shelter = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Busstop", materials["City Props"],
-                            z + 16f, side * 13.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
+                            z + 16f, side * 18.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
                         if (shelter != null) NormalizeModelHeight(shelter, 3.4f, 0.14f);
                     }
                     else if (block % 4 == 3)
                     {
                         var panelName = Random.value > 0.5f ? "NYCBlock6/Panel00" : "NYCBlock6/Panel01";
                         var panel = PlaceBiomeModelOnRoad("Buildings", panelName, materials["City Billboard"],
-                            z + 16f, side * 14.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
+                            z + 16f, side * 19.8f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
                         if (panel != null) NormalizeModelHeight(panel, 4.2f, 0.14f);
                     }
 
@@ -5400,7 +5444,7 @@ namespace RoadRage.UnityRemake
                     if (block % 6 == 0)
                     {
                         var bench = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bench",
-                            materials["City Props"], z + 8f, side * 13.8f, 0.14f,
+                            materials["City Props"], z + 8f, side * 19.2f, 0.14f,
                             new Vector3(0f, facing, 0f), Vector3.one, "City Bench");
                         if (bench != null) NormalizeModelHeight(bench, 1.0f, 0.14f);
                     }
@@ -6664,6 +6708,25 @@ namespace RoadRage.UnityRemake
         /// compositions with more storeys and more silhouettes than the meshes alone.
         /// Shared by the Neon City frontage and the Manhattan blocks so both draw from
         /// the same catalogue rather than each keeping a partly-wrong list of its own.
+        /// Kerbside parking. Ordinary cars only - no exotics, no trucks, nothing that
+        /// reads as a set piece; a parked row is background, and anything eye-catching in
+        /// it looks placed.
+        private static readonly string[] ParkedCars =
+        {
+            "Vehicles/SK_Veh_Preset_Sedan_01", "Vehicles/SK_Veh_Preset_Hatch_01",
+            "Vehicles/SK_Veh_Preset_Ute_01", "Vehicles/SK_Veh_Preset_Ute_02",
+            "Vehicles/SK_Veh_Preset_Muscle_01",
+        };
+
+        /// Pavement clutter the NYCBlock6 pack shipped and nothing ever placed.
+        private static readonly string[] PavementClutter =
+        {
+            "Buildings/NYCBlock6/Rubbish00", "Buildings/NYCBlock6/Rubbish01",
+            "Buildings/NYCBlock6/Basket01", "Buildings/NYCBlock6/Basket03",
+            "Buildings/NYCBlock6/Basket04", "Buildings/NYCBlock6/Post",
+            "Buildings/NYCBlock6/Sewer",
+        };
+
         private static readonly string[] NycVariants =
         {
             "Buildings/NYCVariants/building_1_1", "Buildings/NYCVariants/building_1_2", "Buildings/NYCVariants/building_1_3",
@@ -6776,11 +6839,22 @@ namespace RoadRage.UnityRemake
             // Clear 100-meter safety corridor in front of player (player spawns at startDistance + 5f).
             // Wide spacing: the first kilometre used to be a junk pile of angled cars
             // queuing around each other right at the start line.
-            var forwardSpread = new[] { 110f, 155f, 205f, 260f, 320f, 385f, 455f, 530f, 610f, 695f, 780f, 865f };
+            var forwardSpread = new[]
+            {
+                110f, 155f, 205f, 260f, 320f, 385f, 455f, 530f, 610f, 695f, 780f, 865f,
+                // Six more, tightening rather than extending: a city avenue is busy near
+                // you, not busy a kilometre away, and the gaps above are what a highway
+                // wants rather than a street.
+                135f, 180f, 235f, 295f, 355f, 420f,
+            };
             var distances = new float[forwardSpread.Length];
             for (var i = 0; i < forwardSpread.Length; i++) distances[i] = startDistance + forwardSpread[i];
             // Fractions of half-width, so cars sit in lanes on any road profile.
-            var lanes = new[] { -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f, -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f };
+            var lanes = new[]
+            {
+                -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f, -0.85f, 0.2f, -0.5f, 0.5f, -0.2f, 0.85f,
+                0.5f, -0.85f, 0.2f, -0.5f, 0.85f, -0.2f,
+            };
             // Twelve cars on a six-lane highway is traffic; the same twelve on a two-lane
             // country road is a wall you cannot get through. Scale with the carriageway.
             var laneCount = LaneCountFor(BiomeIndexAt(startDistance));

@@ -9,6 +9,11 @@ namespace RoadRage.UnityRemake
         Rain,
         Storm,
         Snow,
+        /// No precipitation, just air you cannot see through. Cheap - it is fog density
+        /// and a tint, no particles at all - and it is the one condition that changes how
+        /// a city reads rather than how wet it is: a canyon of towers with the tops lost
+        /// is a different street from the same one in the rain.
+        Fog,
     }
 
     /// Weather layers on top of a biome's BiomeMood rather than replacing it: the biome
@@ -53,6 +58,14 @@ namespace RoadRage.UnityRemake
                 FogDensityScale = 2.4f, FogTint = new Color(0.72f, 0.78f, 0.86f), FogTintAmount = 0.55f,
                 SunScale = 0.62f, WetnessAdd = 0.25f, ExposureAdd = -0.05f
             },
+            // Denser than storm and much paler, because fog scatters light rather than
+            // blocking it. A little wetness so the road still catches the streetlamps -
+            // dry asphalt under heavy fog reads as dusty, not damp.
+            WeatherKind.Fog => new WeatherEffect
+            {
+                FogDensityScale = 3.4f, FogTint = new Color(0.58f, 0.61f, 0.66f), FogTintAmount = 0.70f,
+                SunScale = 0.42f, WetnessAdd = 0.35f, ExposureAdd = -0.02f
+            },
             _ => new WeatherEffect
             {
                 FogDensityScale = 1f, FogTint = Color.white, FogTintAmount = 0f,
@@ -69,10 +82,10 @@ namespace RoadRage.UnityRemake
             2 => new[] { WeatherKind.Clear },                                              // SEWER (enclosed)
             3 => new[] { WeatherKind.Clear, WeatherKind.Rain },                            // TIRE DISTRICT
             4 => new[] { WeatherKind.Clear, WeatherKind.Rain },                            // ALIEN BIOMASS
-            5 => new[] { WeatherKind.Rain, WeatherKind.Clear, WeatherKind.Storm },         // NEON CITY
+            5 => new[] { WeatherKind.Rain, WeatherKind.Clear, WeatherKind.Storm, WeatherKind.Fog }, // NEON CITY
             6 => new[] { WeatherKind.Clear },                                              // RED CANYON (desert)
-            7 => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain },          // HONG KONG
-            8 => new[] { WeatherKind.Rain, WeatherKind.Rain, WeatherKind.Storm, WeatherKind.Clear }, // MANHATTAN
+            7 => new[] { WeatherKind.Clear, WeatherKind.Rain, WeatherKind.Fog },            // HONG KONG
+            8 => new[] { WeatherKind.Rain, WeatherKind.Storm, WeatherKind.Clear, WeatherKind.Fog }, // MANHATTAN
             9 => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain },          // HOLLYWOOD HILLS
             _ => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain },         // GREENWOOD
         };
@@ -91,7 +104,10 @@ namespace RoadRage.UnityRemake
 
             if (precipitation != null) Destroy(precipitation.gameObject);
             if (spray != null) Destroy(spray.gameObject);
-            if (kind == WeatherKind.Clear) return;
+            // Fog has no particles. It is entirely fog density, tint and sun scale, which
+            // BuildLighting already applies from the effect - so there is nothing to emit
+            // and nothing to spray off the tyres beyond the wetness it adds.
+            if (kind == WeatherKind.Clear || kind == WeatherKind.Fog) return;
 
             precipitation = BuildPrecipitation(kind, particleMaterial);
             if (kind != WeatherKind.Snow) spray = BuildSpray(particleMaterial);
