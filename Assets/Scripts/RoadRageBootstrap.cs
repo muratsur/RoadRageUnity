@@ -992,6 +992,7 @@ namespace RoadRage.UnityRemake
             materials["Palm Frond"] = materials["City Palm"];
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
             MakeMaterial("City Props", new Color(0.44f, 0.43f, 0.42f), 0.15f, 0.30f);
+            MakeMaterial("Taxi Sign", new Color(0.97f, 0.79f, 0.13f), 0.05f, 0.28f);
 
             var sand = BiomeSurface(BiomeMaterial("Canyon Sand", "RedCanyon", "T_sand_D", "T_sand_N", new Color(0.94f, 0.76f, 0.55f), 0f, 0.08f), "RedCanyon", "T_sand_MSO", 0.4f);
             sand.mainTextureScale = new Vector2(34f, 160f);
@@ -3052,6 +3053,37 @@ namespace RoadRage.UnityRemake
             var baseHeight = bounds.min.y - roadCentre.y + aboveDoor;
 
             var depth = overhang + embed;
+
+            // The shop itself, which was missing. A Manhattan block is a continuous strip
+            // of glazed ground floor under blank masonry, and this biome had the masonry
+            // running all the way to the pavement - so the street read as warehouses with
+            // canopies stuck on. The awning was built first and hung on nothing.
+            //
+            // Glazing sits just proud of the measured facade rather than on it, because
+            // two coplanar surfaces z-fight, and it wears City Windows so a shop is lit
+            // from inside at night like the storeys above it.
+            var groundY = bounds.min.y - roadCentre.y;
+            var glassLateral = side * (facade - 0.12f);
+            var glass = materials.TryGetValue("City Windows", out var lit) ? lit : colour;
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Glazing", distance, glassLateral,
+                groundY + 1.6f, new Vector3(0.22f, 2.4f, 5.4f), glass, Vector3.zero, false);
+
+            // Mullions, so a 5.4 m pane reads as a shopfront rather than as one sheet.
+            for (var mullion = -1; mullion <= 1; mullion += 2)
+                PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Mullion",
+                    distance + mullion * 1.35f, side * (facade - 0.2f),
+                    groundY + 1.6f, new Vector3(0.18f, 2.5f, 0.16f),
+                    materials["City Asphalt Trim"], Vector3.zero, false);
+
+            // Fascia above the glass, in the shop's own colour, where a name would go.
+            PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Sign", distance,
+                side * (facade - 0.16f), groundY + 3.55f,
+                new Vector3(0.3f, 0.8f, 5.4f), colour, Vector3.zero, false);
+
+            // Not every storefront has an awning out front. One in five bare fronts keeps
+            // the rhythm from turning into wallpaper - the shop below it is always there.
+            if (hash % 5 == 0) return;
+
             var canopyLateral = side * (facade + (embed - overhang) * 0.5f);
             PrimitiveOnRoad(PrimitiveType.Cube, "Storefront Awning", distance, canopyLateral,
                 baseHeight, new Vector3(depth, 0.14f, 4.5f), colour, Vector3.zero, false);
@@ -5272,11 +5304,8 @@ namespace RoadRage.UnityRemake
                         frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
                     if (frontage != null) builtFrontages++;
 
-                    // Not every storefront has an awning out front. One in five bare walls
-                    // keeps the rhythm from turning into wallpaper.
-                    var awningHash = BlockHash(block, side * 17);
-                    if (awningHash % 5 != 0)
-                        BuildStorefrontAwning(frontage, frontDistance, side, awningHash);
+                    // Every frontage gets a shop; the awning over it is decided inside.
+                    BuildStorefrontAwning(frontage, frontDistance, side, BlockHash(block, side * 17));
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
                     // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
@@ -6760,6 +6789,7 @@ namespace RoadRage.UnityRemake
                              : Mathf.RoundToInt(lanes.Length * 0.45f);
             var brutes = 0;
             var enforcers = 0;
+            var cabs = 0;
             for (var i = 0; i < Mathf.Min(distances.Length, trafficCount); i++)
             {
                 var direction = lanes[i] < 0f ? 1f : -1f;
@@ -6800,14 +6830,56 @@ namespace RoadRage.UnityRemake
                 if (model.Contains("Ute_04")) brutes++;
                 else if (model.Contains("Truck_02")) enforcers++;
 
-                CreateTrafficVehicle(trafficRoot, $"Traffic Car {i + 1}", model,
-                    palette[i % palette.Length], distances[i], lanes[i], speed, direction, false, 0f, offence, role);
+                // Manhattan runs cabs. An avenue without them reads as a generic
+                // six-lane whatever the buildings look like, and a yellow sedan every
+                // third car is the single cheapest thing that says New York. Only the
+                // law-abiding standard cars become taxis: a cab that weaves, speeds or
+                // drives the wrong way is a different game.
+                var tint = palette[i % palette.Length];
+                var isCab = biomeName == "MANHATTAN"
+                            && role == TrafficCarController.VehicleRole.Standard
+                            && offence == TrafficCarController.Offence.None
+                            && i % 3 == 0;
+                if (isCab)
+                {
+                    model = "SK_Veh_Preset_Sedan_01";
+                    tint = TaxiYellow;
+                    cabs++;
+                }
+
+                var spawned = CreateTrafficVehicle(trafficRoot, $"{(isCab ? "Taxi" : "Traffic Car")} {i + 1}",
+                    model, tint, distances[i], lanes[i], speed, direction, false, 0f, offence, role);
+                if (isCab) AddTaxiRoofSign(spawned);
             }
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
-                      $"brutes={brutes} enforcers={enforcers}");
+                      $"brutes={brutes} enforcers={enforcers} cabs={cabs}");
             BuildAccidentScene(trafficRoot, startDistance + 420f, -1f, models[1], models[3]);
             BuildAccidentScene(trafficRoot, startDistance + 820f, 1f, models[0], models[4]);
+        }
+
+        /// Cab yellow. Warmer and less green than the palette's amber, which is a car
+        /// colour rather than a livery.
+        private static readonly Color TaxiYellow = new Color(0.98f, 0.74f, 0.06f);
+
+        /// The lit box on a cab's roof, which is most of what identifies one at a glance
+        /// from behind - the shape reads before the colour does at night.
+        ///
+        /// Parented to the car so it turns and leans with it. Primitive destroys the
+        /// collider it creates, which matters here more than anywhere else: an extra
+        /// collider on a traffic car would reach the shared contact registry and start
+        /// registering hits against a roof sign.
+        private void AddTaxiRoofSign(TrafficCarController car)
+        {
+            if (car == null || !TryGetCombinedBounds(car.gameObject, out var bounds)) return;
+            // Guarded rather than indexed. A missing palette entry throws, and a cab
+            // losing its sign is not worth taking the run down for - the same domain
+            // reload that empties this dictionary is already handled everywhere else by
+            // rebuilding rather than by trusting it.
+            if (!materials.TryGetValue("Taxi Sign", out var signMaterial)) return;
+            var top = new Vector3(bounds.center.x, bounds.max.y + 0.12f, bounds.center.z);
+            Primitive(PrimitiveType.Cube, "Taxi Roof Sign", top,
+                new Vector3(0.62f, 0.24f, 0.26f), signMaterial, car.transform);
         }
 
         private TrafficCarController CreateTrafficVehicle(Transform parent, string name, string modelName,
