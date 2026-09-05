@@ -485,6 +485,22 @@ namespace RoadRage.UnityRemake
         {
             if (IsWreck || other.IsWreck) return;
             if (Violation != Offence.WrongWay && other.Violation != Offence.WrongWay) return;
+
+            // At most one AI-vs-AI wreck standing at a time.
+            //
+            // A wreck is a wall: the follower loop treats it as a blocker across every
+            // lane its rotated footprint covers, and everything behind it queues. That is
+            // correct on its own, and it compounds - the queue is stationary traffic in an
+            // oncoming lane, so the next wrong-way runner hits that, and the road knots
+            // into the pileup the screenshots keep showing. Head-ons are a punctuation
+            // mark, not a demolition derby; the player's own takedowns are not counted
+            // here and are not capped.
+            var standing = 0;
+            for (var i = 0; i < ActiveCars.Count; i++)
+            {
+                var car = ActiveCars[i];
+                if (car != null && car.IsWreck && ++standing > 1) return;
+            }
             if (Mathf.Abs(other.LaneOffset - LaneOffset) > LateralExtent + other.LateralExtent) return;
             var gap = Mathf.Abs(other.RoadDistance - RoadDistance)
                       - (LongitudinalExtent + other.LongitudinalExtent);

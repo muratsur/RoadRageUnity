@@ -1696,7 +1696,12 @@ namespace RoadRage.UnityRemake
             8 => ManhattanDaylight ? ManhattanDayMood() : ManhattanNightMood(),
             _ => new BiomeMood // GREENWOOD
             {
-                FogDensity = 0.0065f, Fog = new Color(0.33f, 0.47f, 0.43f),
+                // 0.0028, down from 0.0065. Fog here is exponential-squared, so visibility
+                // falls off as exp(-(d*density)^2): at 0.0065 a 500 m ridge transmits
+                // 0.003% of its light and 250 m is already 93% haze. Greenwood was a
+                // 200 m bubble, which is why the horizon mountains could not be seen and
+                // why the forest reads as a corridor whatever is placed beyond it.
+                FogDensity = 0.0028f, Fog = new Color(0.33f, 0.47f, 0.43f),
                 Sky = new Color(0.40f, 0.55f, 0.62f), Equator = new Color(0.20f, 0.34f, 0.28f),
                 Ground = new Color(0.075f, 0.11f, 0.075f), SunColor = new Color(0.98f, 0.98f, 0.95f),
                 SunIntensity = 1.40f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.1f,
@@ -1965,25 +1970,13 @@ namespace RoadRage.UnityRemake
             }
 
             // Road Paint & Lane Striping
-            // A central reservation rather than a painted line. The two carriageways were
-            // separated by 12 cm of yellow paint at 3.8 cm high, which is a marking, not a
-            // division - at speed the road read as one wide strip with a stripe down it.
-            //
-            // 1.3 m either side of the centreline, raised to a kerb. The innermost traffic
-            // lane sits at 0.2 x half width, which is 2.7 m out, and a car is about 1.1 m
-            // to its flank - so the median stops 0.3 m short of anything that drives.
-            //
-            // It does NOT block crossing, and that is deliberate. Nothing in this world
-            // carries a collider; movement is on the rail. Driving the wrong way is a
-            // scoring mechanic - a wrong-way near miss pays double - so a solid divider
-            // would delete a feature that was ported from the shipped build two commits
-            // ago. Cars that cross will pass through it.
-            var medianMaterial = materials.TryGetValue("City Asphalt Trim", out var kerb)
-                ? kerb
-                : materials["White Paint"];
-            BuildRibbon("Median Reservation", -1.3f, 1.3f, 0.155f, medianMaterial);
-            BuildRibbon("Center Yellow L", -1.46f, -1.30f, 0.042f, materials["Yellow Paint"]);
-            BuildRibbon("Center Yellow R", 1.30f, 1.46f, 0.042f, materials["Yellow Paint"]);
+            // Double yellow, no raised median. A 2.6 m reservation in City Asphalt Trim
+            // was tried and read as a brown stripe down the middle of the road - dark
+            // near-black flanked by yellow paint blends into one muddy band at speed,
+            // which is not what a central reservation looks like from a car. A median
+            // that has to be explained is worse than paint that does not.
+            BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
+            BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
             BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
             BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
 
@@ -6143,12 +6136,15 @@ namespace RoadRage.UnityRemake
                 // Both flanks and a back rank, none of it across the road. Parented to the
                 // horizon follower, so the ridge holds its distance instead of sliding past
                 // - a mountain you drive level with is a rock.
+                // Pulled in from 480-560 m. Even with the fog thinned, a ridge out at 560 m
+                // transmits little; these sit where a mountain is still a silhouette
+                // rather than a rumour, and the back rank closes the view down the road.
                 var ridge = new[]
                 {
-                    new Vector3(-520f, -30f, -260f), new Vector3(-560f, -30f, 140f),
-                    new Vector3(-480f, -30f, 520f),  new Vector3(520f, -30f, -300f),
-                    new Vector3(560f, -30f, 120f),   new Vector3(490f, -30f, 480f),
-                    new Vector3(-240f, -30f, 900f),  new Vector3(260f, -30f, 960f),
+                    new Vector3(-330f, -30f, -180f), new Vector3(-380f, -30f, 120f),
+                    new Vector3(-310f, -30f, 400f),  new Vector3(340f, -30f, -210f),
+                    new Vector3(390f, -30f, 90f),    new Vector3(320f, -30f, 380f),
+                    new Vector3(-170f, -30f, 620f),  new Vector3(190f, -30f, 660f),
                 };
                 for (var i = 0; i < ridge.Length; i++)
                 {
@@ -6913,10 +6909,14 @@ namespace RoadRage.UnityRemake
             var forwardSpread = new[]
             {
                 110f, 155f, 205f, 260f, 320f, 385f, 455f, 530f, 610f, 695f, 780f, 865f,
-                // Six more, tightening rather than extending: a city avenue is busy near
-                // you, not busy a kilometre away, and the gaps above are what a highway
-                // wants rather than a street.
-                135f, 180f, 235f, 295f, 355f, 420f,
+                // Six more, extending the line rather than packing it. The first attempt
+                // interleaved them - 135, 180, 235 and so on - which cut the spacing in
+                // the first 420 m to 20-45 m. Cars at different speeds inside gaps that
+                // small spend their whole life in each other's following distance, so the
+                // road bunched into knots before anything had even crashed. Traffic
+                // recycles ahead of the player anyway, so a car placed at 1.4 km still
+                // arrives; it just arrives spread out.
+                955f, 1050f, 1150f, 1255f, 1365f, 1480f,
             };
             var distances = new float[forwardSpread.Length];
             for (var i = 0; i < forwardSpread.Length; i++) distances[i] = startDistance + forwardSpread[i];
