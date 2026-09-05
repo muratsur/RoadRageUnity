@@ -203,6 +203,7 @@ namespace RoadRage.UnityRemake
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder,
                 Mathf.Max(0, System.Array.IndexOf(Biomes, biomeName))));
             RoadPath.HalfWidthProvider = HalfWidthAtDistance;
+            RoadPath.CurveScaleProvider = CurveScaleAtDistance;
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
@@ -1701,7 +1702,11 @@ namespace RoadRage.UnityRemake
                 // 0.003% of its light and 250 m is already 93% haze. Greenwood was a
                 // 200 m bubble, which is why the horizon mountains could not be seen and
                 // why the forest reads as a corridor whatever is placed beyond it.
-                FogDensity = 0.0028f, Fog = new Color(0.33f, 0.47f, 0.43f),
+                // 0.0020. The far rank sits at 620 m, and exp(-(620*0.0028)^2) leaves it
+                // at 5% - a rumour rather than a mountain. At 0.0020 it holds 21%, which
+                // is haze on a real ridgeline rather than erasure, and the near rank at
+                // 300 m stays almost clear.
+                FogDensity = 0.0020f, Fog = new Color(0.33f, 0.47f, 0.43f),
                 Sky = new Color(0.40f, 0.55f, 0.62f), Equator = new Color(0.20f, 0.34f, 0.28f),
                 Ground = new Color(0.075f, 0.11f, 0.075f), SunColor = new Color(0.98f, 0.98f, 0.95f),
                 SunIntensity = 1.40f, PostExposure = 0.12f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.1f,
@@ -3519,6 +3524,25 @@ namespace RoadRage.UnityRemake
 
         /// Smoothly interpolated so the carriageway tapers across a zone seam. The taper
         /// straddles the boundary, which is also where the gateway stands.
+        /// How much each biome's road wanders. Greenwood is a mountain pass, so it gets
+        /// sweeping bends; everything else keeps the road it had. Blended across a zone
+        /// seam exactly like the half width, because a step change in curvature at a
+        /// boundary is a kink in the road, and the gateway stands right on it.
+        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 2.1f : 1f;
+
+        private float CurveScaleAtDistance(float distance)
+        {
+            const float taper = 260f;
+            var zone = ZoneIndexAt(distance);
+            var boundary = (zone + 1) * ZoneLength;
+            var here = CurveScaleFor(BiomeIndexAt(distance));
+            var toBoundary = boundary - distance;
+            if (toBoundary > taper * 0.5f) return here;
+            var next = CurveScaleFor(BiomeIndexAt(boundary + 10f));
+            var t = Mathf.InverseLerp(taper * 0.5f, -taper * 0.5f, toBoundary);
+            return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
+        }
+
         private float HalfWidthAtDistance(float distance)
         {
             const float taper = 260f;
@@ -5846,7 +5870,10 @@ namespace RoadRage.UnityRemake
 
         private GameObject ForestTree(float distance, float lateral, float minHeight, float maxHeight)
         {
-            var table = Random.value < 0.62f ? BroadleafTrees : PineTrees;
+            // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
+            // rounded English wood; an alpine pass is a wall of tall narrow conifers with
+            // the odd broadleaf in it. Flipped to 30% broadleaf.
+            var table = Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var tree = SpawnForestPiece(table[Random.Range(0, table.Length)], distance, lateral, 0f,
                 minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
@@ -6136,25 +6163,69 @@ namespace RoadRage.UnityRemake
                 // Both flanks and a back rank, none of it across the road. Parented to the
                 // horizon follower, so the ridge holds its distance instead of sliding past
                 // - a mountain you drive level with is a rock.
-                // Pulled in from 480-560 m. Even with the fog thinned, a ridge out at 560 m
-                // transmits little; these sit where a mountain is still a silhouette
-                // rather than a rumour, and the back rank closes the view down the road.
-                var ridge = new[]
+                // A range, not eight lumps.
+                //
+                // Eight isolated peaks at one distance read as scenery objects placed
+                // near a road. A mountain range reads as a range because ridgelines
+                // overlap: a near rank whose gaps are filled by a middle rank, and a far
+                // rank behind both that is mostly haze. Three depths, twenty-six peaks,
+                // and every one rotated differently so the same mesh does not repeat a
+                // recognisable profile along the skyline.
+                //
+                // The near rank is deliberately the shortest. Height falls with distance
+                // in a real range only because of perspective, and these are all drawn at
+                // a fixed offset from the camera - so making the far rank the tallest is
+                // what puts the big peaks behind the little ones instead of in front.
+                var ranks = new[]
                 {
-                    new Vector3(-330f, -30f, -180f), new Vector3(-380f, -30f, 120f),
-                    new Vector3(-310f, -30f, 400f),  new Vector3(340f, -30f, -210f),
-                    new Vector3(390f, -30f, 90f),    new Vector3(320f, -30f, 380f),
-                    new Vector3(-170f, -30f, 620f),  new Vector3(190f, -30f, 660f),
+                    // depth, count, height, spread
+                    new Vector4(300f, 10f, 130f, 520f),
+                    new Vector4(440f, 9f, 210f, 700f),
+                    new Vector4(620f, 7f, 310f, 900f),
                 };
-                for (var i = 0; i < ridge.Length; i++)
+                var peakIndex = 0;
+                for (var r = 0; r < ranks.Length; r++)
                 {
-                    var peak = BiomeModel("ForestVillage", "Mountains/SM_mountain", materials["Forest Mountain"]);
-                    if (peak == null) continue;
-                    peak.name = $"Forest Horizon Mountain {i}";
-                    peak.transform.SetParent(globalHorizonSky.transform, false);
-                    peak.transform.localPosition = ridge[i];
-                    peak.transform.localRotation = Quaternion.Euler(0f, i * 47f, 0f);
-                    NormalizeModelHeight(peak, 150f + i % 3 * 45f, 0f);
+                    var depth = ranks[r].x;
+                    var count = Mathf.RoundToInt(ranks[r].y);
+                    for (var i = 0; i < count; i++)
+                    {
+                        var peak = BiomeModel("ForestVillage", "Mountains/SM_mountain",
+                            materials["Forest Mountain"]);
+                        if (peak == null) continue;
+                        // Odd ranks are offset by half a step so the rank behind fills the
+                        // gaps in the rank in front rather than hiding directly behind it.
+                        var across = (i - (count - 1) * 0.5f + (r % 2 == 0 ? 0f : 0.5f))
+                                     / Mathf.Max(1f, count - 1f) * ranks[r].w * 2f;
+                        var along = depth + Mathf.Sin(i * 2.3f + r) * depth * 0.18f;
+                        peak.name = $"Forest Horizon Mountain {peakIndex}";
+                        peak.transform.SetParent(globalHorizonSky.transform, false);
+                        peak.transform.localPosition = new Vector3(across, -30f, along);
+                        peak.transform.localRotation = Quaternion.Euler(0f, peakIndex * 53f % 360f, 0f);
+                        NormalizeModelHeight(peak, ranks[r].z * (0.82f + i % 4 * 0.12f), 0f);
+                        peakIndex++;
+                    }
+                }
+
+                // Cumulus, which existed and was Hollywood-only. A blue sky with nothing
+                // in it reads as a backdrop; the clouds are what give the range something
+                // to sit under and the eye something to judge its scale against.
+                if (materials.TryGetValue("Hills Cloud", out var cloudMaterial))
+                {
+                    var clouds = new[]
+                    {
+                        new Vector3(-300f, 240f, 420f), new Vector3(280f, 275f, 480f),
+                        new Vector3(-140f, 300f, 620f), new Vector3(200f, 255f, 300f),
+                        new Vector3(-380f, 250f, 160f), new Vector3(360f, 290f, -120f),
+                        new Vector3(-220f, 280f, -260f), new Vector3(240f, 245f, 700f),
+                        new Vector3(40f, 320f, 820f),
+                    };
+                    for (var c = 0; c < clouds.Length; c++)
+                    {
+                        var cloud = BuildCumulusCloudCluster($"Forest Sky Cloud {c}",
+                            clouds[c], 50f + c % 3 * 14f, cloudMaterial);
+                        if (cloud != null) cloud.transform.SetParent(globalHorizonSky.transform, false);
+                    }
                 }
             }
             else if (biomeIndex == 9) // Hollywood Hills
@@ -6316,12 +6387,37 @@ namespace RoadRage.UnityRemake
             // of leaf cards over the same ground - which is precisely the cost, since
             // alpha test defeats early-Z and every overlapping card shades again. Three
             // bands cover the same span with the layering that was being paid for twice.
-            ScatterBand(10f, 26f, 40f, (d, l, s) => ForestTree(d, l, 12f, 18f));
-            ScatterBand(11f, 32f, 54f, (d, l, s) => ForestTree(d, l, 15f, 24f));
-            ScatterBand(11f, 38f, 66f, (d, l, s) => ForestTree(d, l, 12f, 20f));
+            // Taller, and one band closer. The reference is a road cut through timber that
+            // stands well above the car, not a treeline you look over - so the near band
+            // starts at the verge rather than 26 m out, and every band gained height.
+            ScatterBand(9f, 18f, 30f, (d, l, s) => ForestTree(d, l, 16f, 24f));
+            ScatterBand(10f, 26f, 42f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(11f, 34f, 56f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(11f, 44f, 72f, (d, l, s) => ForestTree(d, l, 16f, 26f));
             // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
             // over the camera - so it keeps the forest reading as deep.
-            ScatterBand(17f, 60f, 140f, (d, l, s) => ForestTree(d, l, 14f, 24f));
+            ScatterBand(15f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            // Guard rail along both shoulders. A mountain road has one, and it is the
+            // single strongest cue that the road is cut into a slope rather than laid on
+            // a field - it also gives the bends an edge to read against, which is most of
+            // why the curve is worth having.
+            //
+            // Placed off the measured clearance rather than a constant, so it follows the
+            // carriageway rather than needing a new number every time the road changes
+            // width. Posts every 6 m; the mesh is normalised to post height, so the rail
+            // reads at the right scale whatever the source model is.
+            var railMaterial = materials.TryGetValue("Hills Metal", out var galvanised)
+                ? galvanised
+                : materials["Forest Mountain"];
+            ScatterBand(6f, 16.7f, 17.1f, (d, l, s) =>
+            {
+                var rail = PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial,
+                    d, l, 0.05f, new Vector3(0f, s > 0f ? 0f : 180f, 0f), Vector3.one,
+                    "Forest Guard Rail", false);
+                if (rail != null) NormalizeModelHeight(rail, 0.95f, 0.05f);
+                return rail;
+            });
+
             // Bushes and deadfall break up the ground between trunks.
             ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
             {

@@ -19,6 +19,15 @@ namespace RoadRage.UnityRemake
         /// narrows as you drive into the trees rather than stepping.
         public static System.Func<float, float> HalfWidthProvider;
 
+        /// Per-biome multiplier on how much the road wanders. The curve is one shared
+        /// function, so without this every biome bends identically - a mountain pass and a
+        /// city avenue on the same sine. Supplied the same way the half width is, and
+        /// defaults to 1 so a biome that says nothing keeps the road it had.
+        public static System.Func<float, float> CurveScaleProvider;
+
+        public static float CurveScaleAt(float distance) =>
+            CurveScaleProvider?.Invoke(distance) ?? 1f;
+
         public static float HalfWidthAt(float distance) =>
             HalfWidthProvider?.Invoke(distance) ?? HalfWidth;
 
@@ -42,9 +51,13 @@ namespace RoadRage.UnityRemake
         /// repeat is far beyond any run length).
         public static float CenterX(float distance)
         {
-            return 13f * Mathf.Sin(distance / 143f)
+            // Scaled, not re-shaped. The three sines stay in the same proportion so a
+            // bend still has the same character - a long sweep with a shorter wander on
+            // top - and only its amplitude changes. Changing the wavelengths per biome
+            // would put the seam between two zones in the middle of a corner.
+            return (13f * Mathf.Sin(distance / 143f)
                 + 6f * Mathf.Sin(distance / 61.7f + 0.65f)
-                + 2.5f * Mathf.Sin(distance / 27.3f - 0.4f);
+                + 2.5f * Mathf.Sin(distance / 27.3f - 0.4f)) * CurveScaleAt(distance);
         }
 
         /// Road elevation. Long rolling hills with a shorter undulation on top; amplitudes
