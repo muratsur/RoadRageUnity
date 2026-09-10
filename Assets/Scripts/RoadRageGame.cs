@@ -899,6 +899,70 @@ namespace RoadRage.UnityRemake
             return flags;
         }
 
+        // ------------------------------------------------------ profile reset
+        /// Every key this class persists. Listed explicitly rather than derived, so a
+        /// reset deletes keys instead of overwriting them: a key that later stops being
+        /// written would otherwise linger and be picked back up by the next Load.
+        ///
+        /// The per-day counters (rr_daily_*) are handled separately because their names
+        /// come from the Daily dictionary. Three keys are deliberately absent -
+        /// ROAD_RAGE_BIOME, RR_PLAYER_NAME and RR_HIGHSCORE are preferences and a
+        /// record, not progression, and wiping the chosen track or the pilot tag is not
+        /// what anyone means by "reset my profile".
+        public static readonly string[] ProfileKeys =
+        {
+            "rr_cash",
+            "rr_up_engine", "rr_up_armor", "rr_up_boost",
+            "rr_tune_tires", "rr_tune_induct", "rr_tune_rambar",
+            "rr_owned_cars", "rr_selected_car",
+            "rr_mission_day", "rr_mission_ids", "rr_mission_claimed",
+            "rr_login_streak", "rr_login_reward",
+            "rr_wheel_spins", "rr_wheel_paid", "rr_wheel_day",
+            "rr_double_charges", "rr_wheel_seeded",
+            "rr_fury_season", "rr_fury_xp", "rr_fury_pro", "rr_revive_tokens",
+            "rr_fury_free", "rr_fury_pro_claimed",
+            "rr_gems", "rr_gems_daily_day",
+        };
+
+        /// Wipes the save back to a first-launch profile: no cash, the starter ute, no
+        /// upgrades, an empty wheel, a fresh pass season and zero gems.
+        ///
+        /// Destructive and not undoable - the caller is responsible for confirming.
+        /// Load and RollDailyMissions run afterwards so the profile comes back through
+        /// the same first-launch paths a new install takes (the seeded x2 charge, day
+        /// one's free spin, the first login bonus), and a game already running shows the
+        /// reset state without needing a domain reload.
+        public static void ResetProfile(bool keepHighScore = true)
+        {
+            var best = PlayerPrefs.GetInt("RR_HIGHSCORE", 125000);
+
+            foreach (var key in ProfileKeys) PlayerPrefs.DeleteKey(key);
+            foreach (var key in Daily.Keys.ToList()) PlayerPrefs.DeleteKey($"rr_daily_{key}");
+            if (keepHighScore) PlayerPrefs.SetInt("RR_HIGHSCORE", best);
+            else PlayerPrefs.DeleteKey("RR_HIGHSCORE");
+            PlayerPrefs.Save();
+
+            // In-memory state that Load does not itself clear.
+            OwnedCars = new List<int> { 0 };
+            SelectedCar = 0;
+            MissionDay = string.Empty;
+            MissionIds = new List<int>();
+            MissionClaimed = new List<bool>();
+            WheelDay = string.Empty;
+            GemsDailyDay = string.Empty;
+            FurySeason = -1;
+            FuryFreeClaimed = new List<bool>();
+            FuryProClaimed = new List<bool>();
+            RevivesUsed = 0;
+            LastRunCash = 0;
+            LastRunFury = 0;
+            DoubleUsedThisRun = false;
+
+            ResetRun();
+            Load();
+            RollDailyMissions();
+        }
+
         // ------------------------------------------------------- save snapshot
         /// A copy of everything that persists, so the self-test can hand the player's
         /// save back exactly as it found it.
