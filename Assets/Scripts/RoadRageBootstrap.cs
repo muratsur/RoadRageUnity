@@ -7568,6 +7568,17 @@ namespace RoadRage.UnityRemake
                       $"unclaimed={GameState.FuryUnclaimedCount()} pro={GameState.FuryPro} " +
                       $"daysLeft={GameState.FuryDaysLeft}");
 
+            // Gems: earned only, and every sink refuses when short. Set explicitly rather
+            // than read from PlayerPrefs so the check does not depend on the save file.
+            GameState.Gems = GameState.GemSpinPrice;
+            var spinsBeforeGem = GameState.WheelSpins;
+            var gemSpin = GameState.BuySpinWithGems();
+            var gemsOk = gemSpin && GameState.WheelSpins == spinsBeforeGem + 1 && GameState.Gems == 0
+                         && !GameState.BuySpinWithGems() && GameState.WheelPaidToday == 0;
+            Debug.Log($"RR_TEST gems spinBought={gemSpin} balance={GameState.Gems} " +
+                      $"spins={GameState.WheelSpins} cashLadder={GameState.WheelPaidToday} " +
+                      $"reviveDefault={GameState.ReviveDefaultPayment}");
+
             // Double earnings: pays the run's banked cash a second time, exactly once.
             GameState.DoubleCharges = 1;
             var runCash = GameState.LastRunCash;
@@ -7581,7 +7592,7 @@ namespace RoadRage.UnityRemake
                       $"paid={paid} expected={runCash} banked={GameState.LastRunCash} charges={GameState.DoubleCharges}");
 
             Debug.Log(GameState.RunOver && GameState.Cash > cashBefore
-                      && wheelOk && refusedWhenEmpty && reviveOk && furyOk && doubleOk
+                      && wheelOk && refusedWhenEmpty && reviveOk && furyOk && gemsOk && doubleOk
                 ? "RR_TEST RESULT PASS"
                 : "RR_TEST RESULT FAIL");
             Application.Quit();
@@ -8925,7 +8936,7 @@ namespace RoadRage.UnityRemake
 
             GUI.Label(new Rect(0f, h * 0.035f, w, 60f), "GARAGE", pickerTitleStyle);
             GUI.Label(new Rect(0f, h * 0.09f, w, 30f),
-                $"${GameState.Cash:N0}   -   {GameState.NextCarGoal()}", readoutStyle);
+                $"${GameState.Cash:N0}   💎 {GameState.Gems:N0}   -   {GameState.NextCarGoal()}", readoutStyle);
 
             // ---- Left panel: identity, price, stats, description ----
             var pad = 22f;
@@ -9074,7 +9085,8 @@ namespace RoadRage.UnityRemake
             GUI.DrawTexture(new Rect(0f, 0f, Screen.width, Screen.height), dimTexture);
             GUI.Label(new Rect(0f, Screen.height * 0.08f, Screen.width, 60f), "DAILY MISSIONS", pickerTitleStyle);
             GUI.Label(new Rect(0f, Screen.height * 0.16f, Screen.width, 32f),
-                $"DAY {GameState.LoginStreak} STREAK   •   TODAY'S BONUS +${GameState.LastLoginReward:N0}   •   ${GameState.Cash:N0}",
+                $"DAY {GameState.LoginStreak} STREAK   •   TODAY'S BONUS +${GameState.LastLoginReward:N0}   •   " +
+                $"${GameState.Cash:N0}   •   💎 {GameState.Gems:N0}   •   CLEAR ALL 3 FOR 💎{GameState.GemsAllDailies}",
                 readoutStyle);
 
             var rowY = Screen.height * 0.26f;
@@ -9189,7 +9201,8 @@ namespace RoadRage.UnityRemake
                 normal = { textColor = new Color(0.7f, 0.88f, 1f) }
             };
             GUI.Label(new Rect(modalX, modalY + 34f * s, modalW, 20f * s),
-                $"SPINS: {GameState.WheelSpins}   •   x2 CHARGES: {GameState.DoubleCharges}   •   ${GameState.Cash:N0}",
+                $"SPINS: {GameState.WheelSpins}   •   x2 CHARGES: {GameState.DoubleCharges}   •   " +
+                $"${GameState.Cash:N0}   •   💎 {GameState.Gems:N0}",
                 subStyle);
 
             // Advance the animation. Cubic ease-out, so it decelerates into the wedge.
@@ -9293,9 +9306,9 @@ namespace RoadRage.UnityRemake
             }
 
             // ---- action row ----
-            var btnSpacing = 10f * s;
-            var btnW = (modalW - 40f - btnSpacing * 2f) / 3f;
-            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s) };
+            var btnSpacing = 8f * s;
+            var btnW = (modalW - 40f - btnSpacing * 3f) / 4f;
+            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(13 * s) };
 
             var canSpin = !wheelSpinning && GameState.WheelSpins > 0;
             var spinLabel = wheelSpinning ? "SPINNING…" : canSpin ? $"🎡 SPIN  ({GameState.WheelSpins})" : "NO SPINS LEFT";
@@ -9311,7 +9324,13 @@ namespace RoadRage.UnityRemake
                     canBuy ? actionStyle : lockedStyle) && canBuy)
                 GameState.BuySpin();
 
-            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 2f, btnY, btnW, btnH), "BACK [ESC]", actionStyle) ||
+            // Gems buy a spin with no daily cap - the cap belongs to the cash ladder.
+            var canGemSpin = !wheelSpinning && GameState.Gems >= GameState.GemSpinPrice;
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 2f, btnY, btnW, btnH),
+                    $"💎 {GameState.GemSpinPrice} SPIN", canGemSpin ? actionStyle : lockedStyle) && canGemSpin)
+                GameState.BuySpinWithGems();
+
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 3f, btnY, btnW, btnH), "BACK [ESC]", actionStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
             {
                 wheelOpen = false;
@@ -9411,7 +9430,7 @@ namespace RoadRage.UnityRemake
             };
             GUI.Label(new Rect(modalX, modalY + 32f * s, modalW, 20f * s),
                 $"SEASON {GameState.FurySeason}   •   {GameState.FuryDaysLeft} DAYS LEFT   •   " +
-                $"{(GameState.FuryPro ? "PRO ACTIVE" : "FREE LANE")}   •   ${GameState.Cash:N0}", subStyle);
+                $"{(GameState.FuryPro ? "PRO ACTIVE" : "FREE LANE")}   •   ${GameState.Cash:N0}   •   💎 {GameState.Gems:N0}", subStyle);
 
             // Tier progress. Shows XP to the next tier, which is the number that decides
             // whether one more run is worth it.
@@ -9481,13 +9500,21 @@ namespace RoadRage.UnityRemake
             GUI.EndScrollView();
 
             // ---- footer ----
-            var footStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s) };
-            var footW = (modalW - 40f - 10f) / 2f;
+            // Four cells: the pro lane can be unlocked with cash or with gems, and gems
+            // can also buy out the current tier. When pro is already active its two
+            // cells merge into one status label.
+            var footStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(12 * s) };
+            var footGap = 8f * s;
+            var footW = (modalW - 40f - footGap * 3f) / 4f;
+            var footX0 = modalX + 20f;
+            var footX1 = footX0 + footW + footGap;
+            var footX2 = footX1 + footW + footGap;
+            var footX3 = footX2 + footW + footGap;
 
             if (GameState.FuryPro)
             {
-                if (statCardGlassTex != null)
-                    GUI.DrawTexture(new Rect(modalX + 20f, footerY, footW, footerH), statCardGlassTex);
+                var proRect = new Rect(footX0, footerY, footW * 2f + footGap, footerH);
+                if (statCardGlassTex != null) GUI.DrawTexture(proRect, statCardGlassTex);
                 var activeStyle = new GUIStyle(readoutStyle)
                 {
                     font = arcadeFont,
@@ -9495,22 +9522,38 @@ namespace RoadRage.UnityRemake
                     alignment = TextAnchor.MiddleCenter,
                     normal = { textColor = new Color(1f, 0.62f, 0.22f) }
                 };
-                GUI.Label(new Rect(modalX + 20f, footerY, footW, footerH), "🔥 PRO LANE ACTIVE THIS SEASON", activeStyle);
+                GUI.Label(proRect, "🔥 PRO LANE ACTIVE THIS SEASON", activeStyle);
             }
             else
             {
-                var afford = GameState.Cash >= GameState.FuryProPrice;
-                if (afford && orangeBtnTex != null)
-                    GUI.DrawTexture(new Rect(modalX + 20f, footerY, footW, footerH), orangeBtnTex);
-                if (GUI.Button(new Rect(modalX + 20f, footerY, footW, footerH),
-                        $"🔥 UNLOCK PRO  ${GameState.FuryProPrice:N0}", afford ? footStyle : lockedStyle)
-                    && afford)
+                var affordCash = GameState.Cash >= GameState.FuryProPrice;
+                if (affordCash && orangeBtnTex != null)
+                    GUI.DrawTexture(new Rect(footX0, footerY, footW, footerH), orangeBtnTex);
+                if (GUI.Button(new Rect(footX0, footerY, footW, footerH),
+                        $"🔥 PRO  ${GameState.FuryProPrice:N0}", affordCash ? footStyle : lockedStyle) && affordCash)
                 {
                     GameState.BuyFuryPro();
                 }
+
+                var affordGems = GameState.Gems >= GameState.GemProPrice;
+                if (GUI.Button(new Rect(footX1, footerY, footW, footerH),
+                        $"🔥 PRO  💎{GameState.GemProPrice}", affordGems ? footStyle : lockedStyle) && affordGems)
+                {
+                    GameState.BuyFuryProWithGems();
+                }
             }
 
-            if (GUI.Button(new Rect(modalX + 20f + footW + 10f, footerY, footW, footerH), "BACK [ESC]", footStyle) ||
+            var canSkip = GameState.FuryTier < GameState.FuryTiers && GameState.Gems >= GameState.GemTierSkipPrice;
+            var skipLabel = GameState.FuryTier >= GameState.FuryTiers
+                ? "TRACK DONE"
+                : $"⏩ SKIP TIER  💎{GameState.GemTierSkipPrice}";
+            if (GUI.Button(new Rect(footX2, footerY, footW, footerH), skipLabel,
+                    canSkip ? footStyle : lockedStyle) && canSkip)
+            {
+                GameState.SkipFuryTier();
+            }
+
+            if (GUI.Button(new Rect(footX3, footerY, footW, footerH), "BACK [ESC]", footStyle) ||
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
             {
                 furyOpen = false;
@@ -9599,32 +9642,53 @@ namespace RoadRage.UnityRemake
 
             var btnH = Mathf.Clamp(modalH * 0.20f, 44f, 62f);
             var btnY = modalY + modalH - btnH - 14f;
-            var btnW = (modalW - 40f - 10f) / 2f;
-            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(15 * s) };
+            var btnGap = 8f * s;
+            var btnW = (modalW - 40f - btnGap * 2f) / 3f;
+            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(13 * s) };
 
-            var priceLabel = GameState.ReviveUsesToken
+            // The default payment - a pro token if one is held, otherwise cash.
+            var defaultPay = GameState.ReviveDefaultPayment;
+            var canDefault = defaultPay != GameState.RevivePayment.Gems && GameState.CanPayRevive(defaultPay);
+            var priceLabel = defaultPay == GameState.RevivePayment.Token
                 ? $"⚡ REVIVE  (TOKEN x{GameState.ReviveTokens})"
                 : $"⚡ REVIVE  ${GameState.ReviveCost:N0}";
+
             var prevBg = GUI.backgroundColor;
             GUI.backgroundColor = new Color(0.25f * pulse, 1f * pulse, 0.5f * pulse, 1f);
-            if (greenBtnTex != null) GUI.DrawTexture(new Rect(modalX + 20f, btnY, btnW, btnH), greenBtnTex);
-            if (GUI.Button(new Rect(modalX + 20f, btnY, btnW, btnH), priceLabel, actionStyle) ||
-                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Space))
+            if (canDefault && greenBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f, btnY, btnW, btnH), greenBtnTex);
+            var tookDefault = GUI.Button(new Rect(modalX + 20f, btnY, btnW, btnH), priceLabel,
+                                  canDefault ? actionStyle : lockedStyle)
+                              || (Event.current != null && Event.current.type == EventType.KeyDown
+                                  && Event.current.keyCode == KeyCode.Space);
+            GUI.backgroundColor = prevBg;
+
+            if (tookDefault && canDefault)
             {
-                if (GameState.Revive())
+                if (GameState.Revive(defaultPay))
                 {
-                    // The run continues, so the score has not been set yet - let the
-                    // crash report submit it when the run really ends.
+                    // The run continues, so this is not the final score - let the crash
+                    // report submit it when the run really ends.
                     hasSubmittedRunScore = false;
                     ResetReviveOffer();
                 }
                 if (Event.current != null) Event.current.Use();
-                GUI.backgroundColor = prevBg;
                 return true;
             }
-            GUI.backgroundColor = prevBg;
 
-            if (GUI.Button(new Rect(modalX + 20f + btnW + 10f, btnY, btnW, btnH), "NO — END RUN", actionStyle))
+            var canGems = GameState.CanPayRevive(GameState.RevivePayment.Gems);
+            if (GUI.Button(new Rect(modalX + 20f + btnW + btnGap, btnY, btnW, btnH),
+                    $"💎 REVIVE  {GameState.GemRevivePrice}", canGems ? actionStyle : lockedStyle) && canGems)
+            {
+                if (GameState.Revive(GameState.RevivePayment.Gems))
+                {
+                    hasSubmittedRunScore = false;
+                    ResetReviveOffer();
+                }
+                return true;
+            }
+
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnGap) * 2f, btnY, btnW, btnH), "NO — END RUN", actionStyle))
                 reviveDeclined = true;
 
             return true;
@@ -9677,7 +9741,7 @@ namespace RoadRage.UnityRemake
 
             var centerStatStyle = new GUIStyle(titleStyle) { fontSize = Mathf.RoundToInt(15 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
             GUI.Label(new Rect(centerX, topBarY + 2f, centerW, (topBarH - 6f) * 0.52f),
-                $"💰 ${GameState.Cash:N0}    🏆 BEST: {GameState.HighScore:N0}", centerStatStyle);
+                $"💰 ${GameState.Cash:N0}   💎 {GameState.Gems:N0}   🏆 {GameState.HighScore:N0}", centerStatStyle);
 
             var activeBiome = World != null ? World.BiomeName : "Tire District";
             var trackInfoStyle = new GUIStyle(readoutStyle) { fontSize = Mathf.RoundToInt(10 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = new Color(0.45f, 0.95f, 0.65f) } };

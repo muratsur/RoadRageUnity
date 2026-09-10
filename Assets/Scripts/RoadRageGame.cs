@@ -284,6 +284,7 @@ namespace RoadRage.UnityRemake
             LoginStreak = MissionDay == DayStamp(DateTime.Now.AddDays(-1)) ? LoginStreak + 1 : 1;
             LastLoginReward = LoginBonus[Mathf.Min(LoginStreak - 1, LoginBonus.Length - 1)];
             Cash += LastLoginReward;
+            if (LoginStreak >= GemsStreakDays) AddGems(GemsStreakBonus);
 
             var pool = Enumerable.Range(0, MissionPool.Length).OrderBy(_ => UnityEngine.Random.value).ToList();
             MissionIds = pool.Take(3).ToList();
@@ -313,6 +314,9 @@ namespace RoadRage.UnityRemake
             // and the wheel feeds the garage - three spins a day on top of the free one.
             WheelSpins++;
             SaveWheel();
+
+            TryPayDailySetBonus();
+
             SaveMissions();
             Save();
             return true;
@@ -519,6 +523,91 @@ namespace RoadRage.UnityRemake
             PlayerPrefs.Save();
         }
 
+        // ---------------------------------------------------------------- gems
+        // Gems are earned only. There is no shop that sells them, because there is no
+        // IAP in this build - so to be worth existing at all they have to buy something
+        // cash cannot, or they are just a second scoreboard.
+        //
+        // What they buy is time and convenience, never power: a wheel spin past the
+        // daily cash cap, a revive that skips the escalating fee, a pass tier, the pro
+        // lane. Every one of those is still reachable with cash or by simply playing, so
+        // a player who ignores gems loses nothing but time. Cash stays the power
+        // currency - cars and upgrades cannot be bought with gems at all.
+        public const int GemsPerFuryTier = 1;
+        public const int GemsPerProTier = 2;
+        public const int GemsAllDailies = 5;
+        public const int GemsStreakBonus = 10;
+        public const int GemsStreakDays = 7;
+
+        public const int GemSpinPrice = 10;
+        public const int GemRevivePrice = 15;
+        public const int GemTierSkipPrice = 40;
+        public const int GemProPrice = 120;
+
+        public static int Gems;
+        public static string GemsDailyDay = string.Empty;
+
+        /// Clearing the whole daily set pays gems, once a day. Per-set rather than
+        /// per-mission so it rewards finishing, which is the harder half.
+        public static bool TryPayDailySetBonus()
+        {
+            var today = DayStamp(DateTime.Now);
+            if (GemsDailyDay == today || MissionClaimed.Count == 0 || !MissionClaimed.All(c => c)) return false;
+            GemsDailyDay = today;
+            AddGems(GemsAllDailies);
+            return true;
+        }
+
+        public static void AddGems(int amount)
+        {
+            if (amount <= 0) return;
+            Gems += amount;
+            SaveGems();
+        }
+
+        public static bool SpendGems(int amount)
+        {
+            if (amount <= 0 || Gems < amount) return false;
+            Gems -= amount;
+            SaveGems();
+            return true;
+        }
+
+        /// An extra spin for gems, with no daily cap - that cap is on the cash ladder,
+        /// which is the anti-farming measure. Gems are their own limit.
+        public static bool BuySpinWithGems()
+        {
+            if (!SpendGems(GemSpinPrice)) return false;
+            WheelSpins++;
+            SaveWheel();
+            return true;
+        }
+
+        public static bool BuyFuryProWithGems()
+        {
+            if (FuryPro || !SpendGems(GemProPrice)) return false;
+            FuryPro = true;
+            SaveFury();
+            return true;
+        }
+
+        /// Buys out the rest of the current tier. Refused on a finished track, so gems
+        /// cannot be poured into a pass that has nothing left to give.
+        public static bool SkipFuryTier()
+        {
+            if (FuryTier >= FuryTiers) return false;
+            if (!SpendGems(GemTierSkipPrice)) return false;
+            AddFury(FuryTierXp - FuryTierProgress);
+            return true;
+        }
+
+        public static void SaveGems()
+        {
+            PlayerPrefs.SetInt("rr_gems", Gems);
+            PlayerPrefs.SetString("rr_gems_daily_day", GemsDailyDay);
+            PlayerPrefs.Save();
+        }
+
         // ------------------------------------------------------------- fury pass
         public enum FuryRewardKind { Cash, Spins, DoubleCharge, ReviveToken, Upgrade, Car }
 
@@ -677,6 +766,7 @@ namespace RoadRage.UnityRemake
             var claimed = pro ? FuryProClaimed : FuryFreeClaimed;
             claimed[tier - 1] = true;
             GrantFuryReward(pro ? FuryProTrack[tier - 1] : FuryFreeTrack[tier - 1]);
+            AddGems(pro ? GemsPerProTier : GemsPerFuryTier);
             SaveFury();
             Save();
             return true;
@@ -727,12 +817,29 @@ namespace RoadRage.UnityRemake
         public static int RevivesUsed;      // this run
         public static int ReviveTokens;     // persisted, earned on the pro pass
 
+        public enum RevivePayment { Token, Cash, Gems }
+
         public static int ReviveCost => 1200 + RevivesUsed * 1800;
         public static bool ReviveUsesToken => ReviveTokens > 0;
 
+        public static bool CanPayRevive(RevivePayment payment) => payment switch
+        {
+            RevivePayment.Token => ReviveTokens > 0,
+            RevivePayment.Gems => Gems >= GemRevivePrice,
+            _ => Cash >= ReviveCost,
+        };
+
+        /// Tokens first: they are the pro pass's reward and are worth nothing unspent.
+        /// Then cash, then gems - gems are the scarcest, so they are the last resort.
+        public static RevivePayment ReviveDefaultPayment =>
+            ReviveTokens > 0 ? RevivePayment.Token
+            : Cash >= ReviveCost ? RevivePayment.Cash
+            : RevivePayment.Gems;
+
         public static bool CanRevive =>
             RunOver && !DoubleUsedThisRun && RevivesUsed < ReviveMaxPerRun
-            && (ReviveTokens > 0 || Cash >= ReviveCost);
+            && (CanPayRevive(RevivePayment.Token) || CanPayRevive(RevivePayment.Cash)
+                || CanPayRevive(RevivePayment.Gems));
 
         /// Puts the player back on the road mid-run.
         ///
@@ -741,12 +848,18 @@ namespace RoadRage.UnityRemake
         /// out again. The daily cash counter and the pass XP are unwound with it. The run
         /// is not restarted: RunStartScore is untouched, so when it really ends the payout
         /// covers the whole thing, revived length included.
-        public static bool Revive()
-        {
-            if (!CanRevive) return false;
+        public static bool Revive() => Revive(ReviveDefaultPayment);
 
-            if (ReviveTokens > 0) ReviveTokens--;
-            else Cash -= ReviveCost;
+        public static bool Revive(RevivePayment payment)
+        {
+            if (!CanRevive || !CanPayRevive(payment)) return false;
+
+            switch (payment)
+            {
+                case RevivePayment.Token: ReviveTokens--; break;
+                case RevivePayment.Gems: Gems -= GemRevivePrice; break;
+                default: Cash -= ReviveCost; break;
+            }
 
             Cash -= LastRunCash;
             BumpDaily("cash", -LastRunCash);
@@ -759,6 +872,7 @@ namespace RoadRage.UnityRemake
             Integrity = MaxIntegrity * ReviveIntegrityFraction;
 
             SaveFury();
+            SaveGems();
             SaveMissions();
             Save();
             return true;
@@ -837,6 +951,9 @@ namespace RoadRage.UnityRemake
             WheelPaidToday = PlayerPrefs.GetInt("rr_wheel_paid", 0);
             WheelDay = PlayerPrefs.GetString("rr_wheel_day", string.Empty);
             DoubleCharges = PlayerPrefs.GetInt("rr_double_charges", 0);
+
+            Gems = PlayerPrefs.GetInt("rr_gems", 0);
+            GemsDailyDay = PlayerPrefs.GetString("rr_gems_daily_day", string.Empty);
 
             FurySeason = PlayerPrefs.GetInt("rr_fury_season", -1);
             FuryXp = PlayerPrefs.GetInt("rr_fury_xp", 0);
