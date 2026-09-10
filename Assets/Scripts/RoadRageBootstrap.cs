@@ -7411,6 +7411,12 @@ namespace RoadRage.UnityRemake
         private System.Collections.IEnumerator Start()
         {
             yield return null;
+
+            // The test banks cash, spins the wheel, spends gems and rolls the pass, so
+            // it brackets itself: whatever it does, the player's save goes back exactly
+            // as it was found. Without this, running the test costs a real profile.
+            var savedProgress = GameState.Snapshot();
+
             var cashBefore = GameState.Cash;
             GameState.BeginRun();
             Debug.Log($"RR_TEST begin integrity={GameState.Integrity} runOver={GameState.RunOver} cash={cashBefore}");
@@ -7595,6 +7601,12 @@ namespace RoadRage.UnityRemake
                       && wheelOk && refusedWhenEmpty && reviveOk && furyOk && gemsOk && doubleOk
                 ? "RR_TEST RESULT PASS"
                 : "RR_TEST RESULT FAIL");
+
+            GameState.RestoreSnapshot(savedProgress);
+            Debug.Log($"RR_TEST save restored cash={GameState.Cash} gems={GameState.Gems} " +
+                      $"spins={GameState.WheelSpins} furyXp={GameState.FuryXp} " +
+                      $"tokens={GameState.ReviveTokens} charges={GameState.DoubleCharges}");
+
             Application.Quit();
         }
     }

@@ -899,6 +899,112 @@ namespace RoadRage.UnityRemake
             return flags;
         }
 
+        // ------------------------------------------------------- save snapshot
+        /// A copy of everything that persists, so the self-test can hand the player's
+        /// save back exactly as it found it.
+        ///
+        /// The test drives the economy directly - it ends runs, banks cash, spins the
+        /// wheel, spends gems and rolls the pass. While the only persisted thing was
+        /// cash that cost a few hundred dollars of progress. With the wheel, the pass,
+        /// gems and revive tokens in the save it would rewrite a real profile, so the
+        /// test now brackets itself with Snapshot/RestoreSnapshot.
+        public sealed class SaveSnapshot
+        {
+            public int Cash, UpgradeEngine, UpgradeArmour, UpgradeBoost;
+            public int TuningTires, TuningInduction, TuningRamBar, SelectedCar;
+            public List<int> OwnedCars = new();
+            public string MissionDay = string.Empty;
+            public List<int> MissionIds = new();
+            public List<bool> MissionClaimed = new();
+            public int LoginStreak, LastLoginReward;
+            public Dictionary<string, float> Daily = new();
+            public int WheelSpins, WheelPaidToday, DoubleCharges;
+            public string WheelDay = string.Empty;
+            public int FurySeason, FuryXp, ReviveTokens;
+            public bool FuryPro;
+            public List<bool> FuryFreeClaimed = new();
+            public List<bool> FuryProClaimed = new();
+            public int Gems;
+            public string GemsDailyDay = string.Empty;
+            public int HighScore;
+        }
+
+        public static SaveSnapshot Snapshot() => new()
+        {
+            Cash = Cash,
+            UpgradeEngine = UpgradeEngine,
+            UpgradeArmour = UpgradeArmour,
+            UpgradeBoost = UpgradeBoost,
+            TuningTires = TuningTires,
+            TuningInduction = TuningInduction,
+            TuningRamBar = TuningRamBar,
+            SelectedCar = SelectedCar,
+            OwnedCars = new List<int>(OwnedCars),
+            MissionDay = MissionDay,
+            MissionIds = new List<int>(MissionIds),
+            MissionClaimed = new List<bool>(MissionClaimed),
+            LoginStreak = LoginStreak,
+            LastLoginReward = LastLoginReward,
+            Daily = new Dictionary<string, float>(Daily),
+            WheelSpins = WheelSpins,
+            WheelPaidToday = WheelPaidToday,
+            WheelDay = WheelDay,
+            DoubleCharges = DoubleCharges,
+            FurySeason = FurySeason,
+            FuryXp = FuryXp,
+            FuryPro = FuryPro,
+            ReviveTokens = ReviveTokens,
+            FuryFreeClaimed = new List<bool>(FuryFreeClaimed),
+            FuryProClaimed = new List<bool>(FuryProClaimed),
+            Gems = Gems,
+            GemsDailyDay = GemsDailyDay,
+            HighScore = PlayerPrefs.GetInt("RR_HIGHSCORE", 125000),
+        };
+
+        public static void RestoreSnapshot(SaveSnapshot snap)
+        {
+            if (snap == null) return;
+
+            Cash = snap.Cash;
+            UpgradeEngine = snap.UpgradeEngine;
+            UpgradeArmour = snap.UpgradeArmour;
+            UpgradeBoost = snap.UpgradeBoost;
+            TuningTires = snap.TuningTires;
+            TuningInduction = snap.TuningInduction;
+            TuningRamBar = snap.TuningRamBar;
+            SelectedCar = snap.SelectedCar;
+            OwnedCars = new List<int>(snap.OwnedCars);
+            MissionDay = snap.MissionDay;
+            MissionIds = new List<int>(snap.MissionIds);
+            MissionClaimed = new List<bool>(snap.MissionClaimed);
+            LoginStreak = snap.LoginStreak;
+            LastLoginReward = snap.LastLoginReward;
+            foreach (var key in Daily.Keys.ToList())
+                Daily[key] = snap.Daily.TryGetValue(key, out var value) ? value : 0f;
+            WheelSpins = snap.WheelSpins;
+            WheelPaidToday = snap.WheelPaidToday;
+            WheelDay = snap.WheelDay;
+            DoubleCharges = snap.DoubleCharges;
+            FurySeason = snap.FurySeason;
+            FuryXp = snap.FuryXp;
+            FuryPro = snap.FuryPro;
+            ReviveTokens = snap.ReviveTokens;
+            FuryFreeClaimed = new List<bool>(snap.FuryFreeClaimed);
+            FuryProClaimed = new List<bool>(snap.FuryProClaimed);
+            Gems = snap.Gems;
+            GemsDailyDay = snap.GemsDailyDay;
+
+            // Written straight to the key: the HighScore setter only ever raises, so it
+            // cannot put back a value the test pushed up.
+            PlayerPrefs.SetInt("RR_HIGHSCORE", snap.HighScore);
+
+            Save();
+            SaveMissions();
+            SaveWheel();
+            SaveFury();
+            SaveGems();
+        }
+
         // ------------------------------------------------------------ persistence
         public static void Save()
         {
