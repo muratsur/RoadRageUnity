@@ -7544,6 +7544,30 @@ namespace RoadRage.UnityRemake
             var refusedWhenEmpty = GameState.SpinWheel() < 0;
             Debug.Log($"RR_TEST wheel refusedWhenEmpty={refusedWhenEmpty} spinsLeft={GameState.WheelSpins}");
 
+            // Adrenaline Revive: the payout, the daily cash counter and the pass XP must
+            // all be unwound, or every revive pays the same run out a second time.
+            GameState.Cash += 50000;
+            var cashAtCrash = GameState.Cash - GameState.LastRunCash;
+            var furyAtCrash = GameState.FuryXp - GameState.LastRunFury;
+            var reviveFee = GameState.ReviveCost;
+            var revived = GameState.Revive();
+            var reviveOk = revived && !GameState.RunOver && GameState.LastRunCash == 0
+                           && GameState.Cash == cashAtCrash - reviveFee
+                           && GameState.FuryXp == furyAtCrash;
+            Debug.Log($"RR_TEST revive applied={revived} runOver={GameState.RunOver} " +
+                      $"cash={GameState.Cash} expected={cashAtCrash - reviveFee} " +
+                      $"fury={GameState.FuryXp} expected={furyAtCrash} integrity={GameState.Integrity:0.0}");
+
+            // End it again, so the doubler below has a fresh payout to work on and the
+            // pass gets its XP for the whole run.
+            GameState.EndRun();
+            var furyOk = GameState.LastRunFury > 0 && GameState.FuryXp >= GameState.LastRunFury
+                         && GameState.FuryTier <= GameState.FuryTiers;
+            Debug.Log($"RR_TEST fury run={GameState.LastRunFury} total={GameState.FuryXp} " +
+                      $"tier={GameState.FuryTier}/{GameState.FuryTiers} " +
+                      $"unclaimed={GameState.FuryUnclaimedCount()} pro={GameState.FuryPro} " +
+                      $"daysLeft={GameState.FuryDaysLeft}");
+
             // Double earnings: pays the run's banked cash a second time, exactly once.
             GameState.DoubleCharges = 1;
             var runCash = GameState.LastRunCash;
@@ -7556,7 +7580,8 @@ namespace RoadRage.UnityRemake
             Debug.Log($"RR_TEST double applied={doubled} secondAttempt={doubledTwice} " +
                       $"paid={paid} expected={runCash} banked={GameState.LastRunCash} charges={GameState.DoubleCharges}");
 
-            Debug.Log(GameState.RunOver && GameState.Cash > cashBefore && wheelOk && refusedWhenEmpty && doubleOk
+            Debug.Log(GameState.RunOver && GameState.Cash > cashBefore
+                      && wheelOk && refusedWhenEmpty && reviveOk && furyOk && doubleOk
                 ? "RR_TEST RESULT PASS"
                 : "RR_TEST RESULT FAIL");
             Application.Quit();
@@ -8459,6 +8484,7 @@ namespace RoadRage.UnityRemake
             if (panel == "garage") garageOpen = true;
             else if (panel == "missions") missionsOpen = true;
             else if (panel == "wheel") wheelOpen = true;
+            else if (panel == "fury") furyOpen = true;
         }
 
         /// Store/press captures must not show the HUD, the mobile touch buttons or the
@@ -8639,6 +8665,11 @@ namespace RoadRage.UnityRemake
             if (wheelOpen)
             {
                 DrawWheelScreen();
+                return;
+            }
+            if (furyOpen)
+            {
+                DrawFuryPass();
                 return;
             }
             if (RoadRageLeaderboardDirector.Instance != null && RoadRageLeaderboardDirector.Instance.IsLeaderboardOpen)
@@ -8830,7 +8861,10 @@ namespace RoadRage.UnityRemake
 
             if (GameState.RunOver)
             {
-                DrawRunOverScreen();
+                // The revive offer stands ahead of the crash report; DrawRevivePrompt
+                // returns false the frame its clock expires, so the report takes over
+                // in that same frame rather than leaving a blank one.
+                if (!ShouldOfferRevive() || !DrawRevivePrompt()) DrawRunOverScreen();
                 return;
             }
 
@@ -9068,6 +9102,15 @@ namespace RoadRage.UnityRemake
                 wheelOpen = true;
             }
 
+            if (GUI.Button(new Rect(Screen.width * 0.5f + 110f, rowY + 300f, 200f, 52f),
+                    GameState.FuryUnclaimedCount() > 0
+                        ? $"🔥 FURY PASS ({GameState.FuryUnclaimedCount()})"
+                        : $"🔥 FURY PASS  T{GameState.FuryTier}", buttonStyle))
+            {
+                missionsOpen = false;
+                furyOpen = true;
+            }
+
             if (GUI.Button(new Rect(Screen.width * 0.5f - 90f, rowY + 300f, 180f, 52f), "BACK", buttonStyle))
                 missionsOpen = false;
         }
@@ -9276,6 +9319,317 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        // ---- fury pass presentation state ----
+        private bool furyOpen;
+        private Vector2 furyScroll;
+
+        /// One tier's reward cell on one lane.
+        private void FuryCell(Rect rect, int tier, bool pro, float s)
+        {
+            var reward = pro ? GameState.FuryProTrack[tier - 1] : GameState.FuryFreeTrack[tier - 1];
+            var claimable = GameState.FuryClaimable(tier, pro);
+            var claimedList = pro ? GameState.FuryProClaimed : GameState.FuryFreeClaimed;
+            var claimed = tier - 1 < claimedList.Count && claimedList[tier - 1];
+            var reached = GameState.FuryTier >= tier;
+
+            var backing = claimable ? rowHighlightTex : pro ? rowOddTex : rowEvenTex;
+            GUI.DrawTexture(rect, backing != null ? backing : dimTexture);
+
+            var laneColour = pro ? new Color(1f, 0.62f, 0.22f) : new Color(0.62f, 0.82f, 1f);
+            if (!reached) laneColour.a = 0.45f;
+            var laneStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(9 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = laneColour }
+            };
+            GUI.Label(new Rect(rect.x + 3f, rect.y + 2f, rect.width - 6f, rect.height * 0.30f),
+                pro ? "PRO" : "FREE", laneStyle);
+
+            var rewardStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(11 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = reached ? Color.white : new Color(0.62f, 0.66f, 0.74f) }
+            };
+            GUI.Label(new Rect(rect.x + 3f, rect.y + rect.height * 0.26f, rect.width - 6f, rect.height * 0.34f),
+                reward.Label, rewardStyle);
+
+            var label = claimed ? "✔ TAKEN"
+                : claimable ? "CLAIM"
+                : pro && !GameState.FuryPro ? "🔒 PRO"
+                : $"{GameState.FuryTierXp * tier - GameState.FuryXp:N0} XP";
+            var btnRect = new Rect(rect.x + 4f, rect.y + rect.height * 0.62f, rect.width - 8f, rect.height * 0.34f);
+            var btnStyle = new GUIStyle(claimable ? buttonStyle : lockedStyle) { fontSize = Mathf.RoundToInt(10 * s) };
+            if (GUI.Button(btnRect, label, btnStyle) && claimable) GameState.ClaimFury(tier, pro);
+        }
+
+        /// The Fury Pass: a 28-day track advanced by finished runs. The free lane always
+        /// pays; the pro lane is bought with in-game cash and is retroactive, so buying it
+        /// at tier 12 hands over all twelve tiers at once.
+        private void DrawFuryPass()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var safe = Screen.safeArea;
+
+            var leftPad = Mathf.Max(safe.x, 24f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 24f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 12f);
+            var botPad = Mathf.Max(safe.y, 12f);
+
+            var usableW = w - leftPad - rightPad;
+            var usableH = h - topPad - botPad;
+            var s = Mathf.Clamp(usableH / 600f, 0.55f, 1.35f);
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+
+            var modalW = Mathf.Clamp(usableW * 0.94f, 480f, 980f);
+            var modalH = Mathf.Clamp(usableH * 0.92f, 340f, 600f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH),
+                cardGlassTex != null ? cardGlassTex : dimTexture);
+
+            var headStyle = new GUIStyle(pickerTitleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(23 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.55f, 0.18f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, 30f * s), "🔥  F U R Y   P A S S  🔥", headStyle);
+
+            var subStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(12 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.75f, 0.88f, 1f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 32f * s, modalW, 20f * s),
+                $"SEASON {GameState.FurySeason}   •   {GameState.FuryDaysLeft} DAYS LEFT   •   " +
+                $"{(GameState.FuryPro ? "PRO ACTIVE" : "FREE LANE")}   •   ${GameState.Cash:N0}", subStyle);
+
+            // Tier progress. Shows XP to the next tier, which is the number that decides
+            // whether one more run is worth it.
+            var barY = modalY + 54f * s;
+            var barH = 16f * s;
+            var barX = modalX + 20f;
+            var barW = modalW - 40f;
+            GUI.DrawTexture(new Rect(barX, barY, barW, barH), dimTexture);
+            var frac = GameState.FuryTier >= GameState.FuryTiers
+                ? 1f
+                : Mathf.Clamp01((float)GameState.FuryTierProgress / GameState.FuryTierXp);
+            var prevColour = GUI.color;
+            GUI.color = new Color(1f, 0.55f, 0.18f);
+            GUI.DrawTexture(new Rect(barX, barY, barW * frac, barH), Texture2D.whiteTexture);
+            GUI.color = prevColour;
+
+            var barLabelStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(11 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
+            GUI.Label(new Rect(barX, barY, barW, barH),
+                GameState.FuryTier >= GameState.FuryTiers
+                    ? $"TIER {GameState.FuryTiers} / {GameState.FuryTiers}  —  TRACK COMPLETE"
+                    : $"TIER {GameState.FuryTier} / {GameState.FuryTiers}   —   {GameState.FuryTierProgress:N0} / {GameState.FuryTierXp:N0} XP",
+                barLabelStyle);
+
+            // ---- the tier track ----
+            var footerH = Mathf.Clamp(modalH * 0.12f, 40f, 52f);
+            var footerY = modalY + modalH - footerH - 12f;
+            var trackY = barY + barH + 10f * s;
+            var trackH = Mathf.Max(110f, footerY - 10f - trackY);
+            var trackRect = new Rect(modalX + 14f, trackY, modalW - 28f, trackH);
+
+            var colW = 104f * s;
+            var colGap = 8f * s;
+            var contentW = GameState.FuryTiers * (colW + colGap) + colGap;
+
+            // Cells are capped rather than stretched to fill: dividing the leftover
+            // height in two gave a 195 px cell in a 104 px column on a tall screen.
+            // The view is sized to the content, so only the horizontal bar appears.
+            var labelH = 17f * s;
+            var cellGap = 4f * s;
+            var cellH = Mathf.Clamp((Mathf.Max(80f, trackH - 20f) - labelH - cellGap) * 0.5f, 32f, 92f);
+            var viewRect = new Rect(0f, 0f, contentW, labelH + cellH * 2f + cellGap);
+
+            furyScroll = GUI.BeginScrollView(trackRect, furyScroll, viewRect);
+            var tierOn = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(10 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.82f, 0.25f) }
+            };
+            var tierOff = new GUIStyle(tierOn) { normal = { textColor = new Color(0.55f, 0.59f, 0.66f) } };
+
+            for (var tier = 1; tier <= GameState.FuryTiers; tier++)
+            {
+                var cx = colGap + (tier - 1) * (colW + colGap);
+                GUI.Label(new Rect(cx, 0f, colW, labelH), $"TIER {tier}",
+                    GameState.FuryTier >= tier ? tierOn : tierOff);
+                FuryCell(new Rect(cx, labelH, colW, cellH), tier, false, s);
+                FuryCell(new Rect(cx, labelH + cellH + cellGap, colW, cellH), tier, true, s);
+            }
+            GUI.EndScrollView();
+
+            // ---- footer ----
+            var footStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s) };
+            var footW = (modalW - 40f - 10f) / 2f;
+
+            if (GameState.FuryPro)
+            {
+                if (statCardGlassTex != null)
+                    GUI.DrawTexture(new Rect(modalX + 20f, footerY, footW, footerH), statCardGlassTex);
+                var activeStyle = new GUIStyle(readoutStyle)
+                {
+                    font = arcadeFont,
+                    fontSize = Mathf.RoundToInt(12 * s),
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(1f, 0.62f, 0.22f) }
+                };
+                GUI.Label(new Rect(modalX + 20f, footerY, footW, footerH), "🔥 PRO LANE ACTIVE THIS SEASON", activeStyle);
+            }
+            else
+            {
+                var afford = GameState.Cash >= GameState.FuryProPrice;
+                if (afford && orangeBtnTex != null)
+                    GUI.DrawTexture(new Rect(modalX + 20f, footerY, footW, footerH), orangeBtnTex);
+                if (GUI.Button(new Rect(modalX + 20f, footerY, footW, footerH),
+                        $"🔥 UNLOCK PRO  ${GameState.FuryProPrice:N0}", afford ? footStyle : lockedStyle)
+                    && afford)
+                {
+                    GameState.BuyFuryPro();
+                }
+            }
+
+            if (GUI.Button(new Rect(modalX + 20f + footW + 10f, footerY, footW, footerH), "BACK [ESC]", footStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
+            {
+                furyOpen = false;
+                if (Event.current != null) Event.current.Use();
+            }
+        }
+
+        // ---- adrenaline revive ----
+        private const float ReviveOfferSeconds = 6f;
+        private float reviveOfferStart = -1f;
+        private bool reviveDeclined;
+
+        private bool ShouldOfferRevive() => GameState.CanRevive && !reviveDeclined;
+
+        private void ResetReviveOffer()
+        {
+            reviveOfferStart = -1f;
+            reviveDeclined = false;
+        }
+
+        /// The offer stands on its own, ahead of the crash report, with a clock running.
+        /// Folded into the crash report it would be a fifth button on a screen the player
+        /// has already read as "run over" - the point is to catch them before that.
+        /// Returns false once the clock has run out, so the caller falls through to the
+        /// crash report in the same frame rather than drawing nothing.
+        private bool DrawRevivePrompt()
+        {
+            if (reviveOfferStart < 0f) reviveOfferStart = Time.unscaledTime;
+            var left = ReviveOfferSeconds - (Time.unscaledTime - reviveOfferStart);
+            if (left <= 0f)
+            {
+                reviveDeclined = true;
+                return false;
+            }
+
+            var w = Screen.width;
+            var h = Screen.height;
+            var safe = Screen.safeArea;
+            var usableH = h - Mathf.Max(h - (safe.y + safe.height), 12f) - Mathf.Max(safe.y, 12f);
+            var s = Mathf.Clamp(usableH / 600f, 0.55f, 1.35f);
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+
+            var modalW = Mathf.Clamp(w * 0.62f, 380f, 620f);
+            var modalH = Mathf.Clamp(usableH * 0.62f, 240f, 380f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH),
+                cardGlassTex != null ? cardGlassTex : dimTexture);
+
+            var pulse = 0.82f + 0.18f * Mathf.Sin(Time.unscaledTime * 9f);
+            var titleS = new GUIStyle(pickerTitleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(27 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.32f * pulse + 0.1f, 0.18f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 10f * s, modalW, 34f * s), "⚡ ADRENALINE ⚡", titleS);
+
+            var subS = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(13 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = Color.white }
+            };
+            GUI.Label(new Rect(modalX, modalY + 44f * s, modalW, 22f * s),
+                $"GET BACK ON THE ROAD AT {GameState.ReviveIntegrityFraction * 100f:0}% INTEGRITY", subS);
+            GUI.Label(new Rect(modalX, modalY + 64f * s, modalW, 22f * s),
+                $"RUN SO FAR:  {GameState.Score:N0} PTS  •  {GameState.Takedowns} TAKEDOWNS  •  {GameState.RunDistanceKm:0.00} KM", subS);
+
+            // The clock, as a draining bar. A number alone does not create the pressure.
+            var barY = modalY + modalH * 0.50f;
+            var barH = 15f * s;
+            var barX = modalX + 24f;
+            var barW = modalW - 48f;
+            GUI.DrawTexture(new Rect(barX, barY, barW, barH), dimTexture);
+            var timeFrac = Mathf.Clamp01(left / ReviveOfferSeconds);
+            var prevColour = GUI.color;
+            GUI.color = timeFrac > 0.4f ? new Color(1f, 0.75f, 0.2f) : new Color(1f, 0.3f, 0.22f);
+            GUI.DrawTexture(new Rect(barX, barY, barW * timeFrac, barH), Texture2D.whiteTexture);
+            GUI.color = prevColour;
+            GUI.Label(new Rect(barX, barY, barW, barH), $"{Mathf.CeilToInt(left)}",
+                new GUIStyle(subS) { fontSize = Mathf.RoundToInt(11 * s) });
+
+            var btnH = Mathf.Clamp(modalH * 0.20f, 44f, 62f);
+            var btnY = modalY + modalH - btnH - 14f;
+            var btnW = (modalW - 40f - 10f) / 2f;
+            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(15 * s) };
+
+            var priceLabel = GameState.ReviveUsesToken
+                ? $"⚡ REVIVE  (TOKEN x{GameState.ReviveTokens})"
+                : $"⚡ REVIVE  ${GameState.ReviveCost:N0}";
+            var prevBg = GUI.backgroundColor;
+            GUI.backgroundColor = new Color(0.25f * pulse, 1f * pulse, 0.5f * pulse, 1f);
+            if (greenBtnTex != null) GUI.DrawTexture(new Rect(modalX + 20f, btnY, btnW, btnH), greenBtnTex);
+            if (GUI.Button(new Rect(modalX + 20f, btnY, btnW, btnH), priceLabel, actionStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Space))
+            {
+                if (GameState.Revive())
+                {
+                    // The run continues, so the score has not been set yet - let the
+                    // crash report submit it when the run really ends.
+                    hasSubmittedRunScore = false;
+                    ResetReviveOffer();
+                }
+                if (Event.current != null) Event.current.Use();
+                GUI.backgroundColor = prevBg;
+                return true;
+            }
+            GUI.backgroundColor = prevBg;
+
+            if (GUI.Button(new Rect(modalX + 20f + btnW + 10f, btnY, btnW, btnH), "NO — END RUN", actionStyle))
+                reviveDeclined = true;
+
+            return true;
+        }
+
         private bool settingsOpen = false;
         private bool sfxEnabled = true;
         private bool showFps = true;
@@ -9399,11 +9753,11 @@ namespace RoadRage.UnityRemake
             var hintStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * s), normal = { textColor = new Color(0.8f, 0.95f, 1f, 0.85f) } };
             GUI.Label(new Rect(0f, ctaY + ctaH + 1f, w, 16f), "PRESS [SPACE] / [ENTER] OR TAP TO RACE", hintStyle);
 
-            // 4. Bottom Dock Navigation (Garage, Tracks, Missions, Wheel, Leaderboard)
-            var dockSpacing = Mathf.Clamp(usableW * 0.012f, 5f, 12f);
-            // Five across now, so the width is also capped by what actually fits.
-            var dockBtnW = Mathf.Min(Mathf.Clamp(usableW * 0.17f, 72f, 132f), (usableW - dockSpacing * 4f) / 5f);
-            var totalDockW = dockBtnW * 5 + dockSpacing * 4;
+            // 4. Bottom Dock Nav (Garage, Tracks, Missions, Wheel, Fury Pass, Board)
+            var dockSpacing = Mathf.Clamp(usableW * 0.010f, 4f, 10f);
+            // Six across now, so the width is also capped by what actually fits.
+            var dockBtnW = Mathf.Min(Mathf.Clamp(usableW * 0.15f, 64f, 128f), (usableW - dockSpacing * 5f) / 6f);
+            var totalDockW = dockBtnW * 6 + dockSpacing * 5;
             var dockStartX = w * 0.5f - totalDockW * 0.5f;
 
             var dockBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
@@ -9434,8 +9788,16 @@ namespace RoadRage.UnityRemake
                 wheelOpen = true;
             }
 
-            // Dock Button 5: LEADERBOARD
-            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 4, dockY, dockBtnW, dockBtnH), "🏆 BOARD [L]", dockBtnStyle))
+            // Dock Button 5: FURY PASS - badged with tiers waiting to be claimed.
+            var furyUnclaimed = GameState.FuryUnclaimedCount();
+            var furyDockLabel = furyUnclaimed > 0 ? $"🔥 PASS ({furyUnclaimed})" : $"🔥 PASS T{GameState.FuryTier}";
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 4, dockY, dockBtnW, dockBtnH), furyDockLabel, dockBtnStyle))
+            {
+                furyOpen = true;
+            }
+
+            // Dock Button 6: LEADERBOARD
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 5, dockY, dockBtnW, dockBtnH), "🏆 BOARD [L]", dockBtnStyle))
             {
                 if (RoadRageLeaderboardDirector.Instance != null)
                     RoadRageLeaderboardDirector.Instance.OpenLeaderboard();
@@ -9448,6 +9810,7 @@ namespace RoadRage.UnityRemake
                 else if (Event.current.keyCode == KeyCode.B && World != null) { World.OpenPicker(); Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.M) { missionsOpen = true; Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.W) { wheelOpen = true; Event.current.Use(); }
+                else if (Event.current.keyCode == KeyCode.F) { furyOpen = true; Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.L)
                 {
                     if (RoadRageLeaderboardDirector.Instance != null)
@@ -9523,7 +9886,9 @@ namespace RoadRage.UnityRemake
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = new Color(0.7f, 0.85f, 1f, 0.8f) }
             };
-            GUI.Label(new Rect(modalX, modalY + headerH * 0.65f + 4f, modalW, headerH * 0.35f), "ALL BOUNTIES & CASH PERSISTED TO GARAGE VAULT", subBannerStyle);
+            GUI.Label(new Rect(modalX, modalY + headerH * 0.65f + 4f, modalW, headerH * 0.35f),
+                $"🔥 +{GameState.LastRunFury:N0} FURY  •  PASS TIER {GameState.FuryTier}/{GameState.FuryTiers}  •  ALL CASH BANKED TO THE GARAGE VAULT",
+                subBannerStyle);
 
             var contentY = modalY + headerH + 8f;
             var colSpacing = 16f * s;
@@ -9678,6 +10043,7 @@ namespace RoadRage.UnityRemake
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Space))
             {
                 hasSubmittedRunScore = false;
+                ResetReviveOffer();
                 GameState.BeginRun();
                 if (World != null) World.ReloadBiome(World.BiomeName);
                 if (Event.current != null) Event.current.Use();
@@ -9705,6 +10071,7 @@ namespace RoadRage.UnityRemake
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.G))
             {
                 hasSubmittedRunScore = false;
+                ResetReviveOffer();
                 garageOpen = true;
                 if (Event.current != null) Event.current.Use();
             }
@@ -9722,6 +10089,7 @@ namespace RoadRage.UnityRemake
                 (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
             {
                 hasSubmittedRunScore = false;
+                ResetReviveOffer();
                 GameState.BeginRun();
                 if (RoadRageLandingDirector.Instance != null)
                     RoadRageLandingDirector.Instance.ReturnToLanding();

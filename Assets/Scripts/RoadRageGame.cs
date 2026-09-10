@@ -204,6 +204,8 @@ namespace RoadRage.UnityRemake
             // Cash scales with how far the run got, so a better truck paying for longer
             // survival is the progression: run -> cash -> garage -> longer run.
             LastRunCash = AwardCash(Mathf.Clamp01(RunDistanceKm / 8f), RunStartScore);
+            LastRunFury = FuryForRun();
+            AddFury(LastRunFury);
             SaveMissions();
             Save();
         }
@@ -223,6 +225,8 @@ namespace RoadRage.UnityRemake
             CrashbreakerReady = false;
             CrashbreakerUsed = false;
             DoubleUsedThisRun = false;
+            RevivesUsed = 0;
+            LastRunFury = 0;
         }
 
         public static int AwardCash(float completionFraction, int runStartScore)
@@ -273,6 +277,7 @@ namespace RoadRage.UnityRemake
         public static void RollDailyMissions()
         {
             RollWheelDay();
+            RollFurySeason();
             var today = DayStamp(DateTime.Now);
             if (MissionDay == today && MissionIds.Count == 3) return;
 
@@ -514,6 +519,272 @@ namespace RoadRage.UnityRemake
             PlayerPrefs.Save();
         }
 
+        // ------------------------------------------------------------- fury pass
+        public enum FuryRewardKind { Cash, Spins, DoubleCharge, ReviveToken, Upgrade, Car }
+
+        public struct FuryReward
+        {
+            public FuryRewardKind Kind;
+            public int Amount;
+            public string Label;
+        }
+
+        public const int FuryTiers = 20;
+        public const int FuryTierXp = 1000;
+        public const int FuryProPrice = 9000;
+        public const int FurySeasonDays = 28;
+
+        /// Fixed epoch so every install agrees on which season it is without a server.
+        private static readonly DateTime FurySeasonEpoch = new(2026, 1, 5);
+
+        /// The free lane pays in cash and the odd wheel spin - enough that playing
+        /// without buying anything still moves. Rewards climb with the tier so the
+        /// back half is worth grinding for.
+        public static readonly FuryReward[] FuryFreeTrack =
+        {
+            new() { Kind = FuryRewardKind.Cash,         Amount = 300,  Label = "$300"      },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 400,  Label = "$400"      },
+            new() { Kind = FuryRewardKind.Spins,        Amount = 1,    Label = "1 SPIN"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 500,  Label = "$500"      },
+            new() { Kind = FuryRewardKind.DoubleCharge, Amount = 1,    Label = "x2 CASH"   },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 600,  Label = "$600"      },
+            new() { Kind = FuryRewardKind.Spins,        Amount = 1,    Label = "1 SPIN"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 700,  Label = "$700"      },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 800,  Label = "$800"      },
+            new() { Kind = FuryRewardKind.DoubleCharge, Amount = 1,    Label = "x2 CASH"   },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 900,  Label = "$900"      },
+            new() { Kind = FuryRewardKind.Spins,        Amount = 1,    Label = "1 SPIN"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 1000, Label = "$1,000"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 1100, Label = "$1,100"    },
+            new() { Kind = FuryRewardKind.DoubleCharge, Amount = 1,    Label = "x2 CASH"   },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 1200, Label = "$1,200"    },
+            new() { Kind = FuryRewardKind.Spins,        Amount = 1,    Label = "1 SPIN"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 1300, Label = "$1,300"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 1500, Label = "$1,500"    },
+            new() { Kind = FuryRewardKind.Cash,         Amount = 2500, Label = "$2,500"    },
+        };
+
+        /// The pro lane is bought with cash, not money, and it is retroactive: buying it
+        /// makes every tier already earned claimable at once. Its distinctive rewards are
+        /// revive tokens and upgrade levels, with the RIG at tier 20 as the season prize.
+        public static readonly FuryReward[] FuryProTrack =
+        {
+            new() { Kind = FuryRewardKind.Cash,        Amount = 600,  Label = "$600"      },
+            new() { Kind = FuryRewardKind.Spins,       Amount = 2,    Label = "2 SPINS"   },
+            new() { Kind = FuryRewardKind.ReviveToken, Amount = 1,    Label = "REVIVE"    },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 900,  Label = "$900"      },
+            new() { Kind = FuryRewardKind.Upgrade,     Amount = 1,    Label = "UPGRADE"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 1200, Label = "$1,200"    },
+            new() { Kind = FuryRewardKind.ReviveToken, Amount = 1,    Label = "REVIVE"    },
+            new() { Kind = FuryRewardKind.Spins,       Amount = 2,    Label = "2 SPINS"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 1500, Label = "$1,500"    },
+            new() { Kind = FuryRewardKind.Upgrade,     Amount = 1,    Label = "UPGRADE"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 1800, Label = "$1,800"    },
+            new() { Kind = FuryRewardKind.ReviveToken, Amount = 1,    Label = "REVIVE"    },
+            new() { Kind = FuryRewardKind.Spins,       Amount = 2,    Label = "2 SPINS"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 2100, Label = "$2,100"    },
+            new() { Kind = FuryRewardKind.Upgrade,     Amount = 1,    Label = "UPGRADE"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 2400, Label = "$2,400"    },
+            new() { Kind = FuryRewardKind.ReviveToken, Amount = 1,    Label = "REVIVE"    },
+            new() { Kind = FuryRewardKind.Spins,       Amount = 3,    Label = "3 SPINS"   },
+            new() { Kind = FuryRewardKind.Cash,        Amount = 3000, Label = "$3,000"    },
+            new() { Kind = FuryRewardKind.Car,        Amount = 7,    Label = "RIG"        },
+        };
+
+        public static int FurySeason = -1;
+        public static int FuryXp;
+        public static bool FuryPro;
+        public static int LastRunFury;
+        public static List<bool> FuryFreeClaimed = new();
+        public static List<bool> FuryProClaimed = new();
+
+        public static int CurrentFurySeason =>
+            (int)((DateTime.Now.Date - FurySeasonEpoch).TotalDays / FurySeasonDays);
+
+        /// Completed tiers, 0..FuryTiers. Tier N's reward unlocks once this reaches N.
+        public static int FuryTier => Mathf.Clamp(FuryXp / FuryTierXp, 0, FuryTiers);
+        public static int FuryTierProgress => FuryTier >= FuryTiers ? FuryTierXp : FuryXp - FuryTier * FuryTierXp;
+
+        public static int FuryDaysLeft
+        {
+            get
+            {
+                var start = FurySeasonEpoch.AddDays((double)CurrentFurySeason * FurySeasonDays);
+                return Mathf.Max(0, FurySeasonDays - (int)(DateTime.Now.Date - start).TotalDays);
+            }
+        }
+
+        public static bool FuryClaimable(int tier, bool pro)
+        {
+            if (tier < 1 || tier > FuryTiers || FuryTier < tier) return false;
+            if (pro && !FuryPro) return false;
+            var claimed = pro ? FuryProClaimed : FuryFreeClaimed;
+            return tier - 1 < claimed.Count && !claimed[tier - 1];
+        }
+
+        public static int FuryUnclaimedCount()
+        {
+            var count = 0;
+            for (var tier = 1; tier <= FuryTiers; tier++)
+            {
+                if (FuryClaimable(tier, false)) count++;
+                if (FuryClaimable(tier, true)) count++;
+            }
+            return count;
+        }
+
+        /// Wipes the track when the calendar rolls into a new 28-day season. Also
+        /// repairs a short or missing claim list, which is what a first load looks like.
+        public static void RollFurySeason()
+        {
+            var season = CurrentFurySeason;
+            if (FurySeason == season && FuryFreeClaimed.Count == FuryTiers && FuryProClaimed.Count == FuryTiers) return;
+            FurySeason = season;
+            FuryXp = 0;
+            FuryPro = false;
+            FuryFreeClaimed = NewFuryFlags();
+            FuryProClaimed = NewFuryFlags();
+            SaveFury();
+        }
+
+        /// Fury for a run: takedowns and distance, the two things the game actually asks
+        /// for. Granted once when the run ends rather than per event, so a pass cannot be
+        /// advanced by hits that never became a finished run.
+        public static int FuryForRun() =>
+            Takedowns * 45
+            + Mathf.RoundToInt(RunDistanceKm * 70f)
+            + Mathf.Max(0, Score - RunStartScore) / 250;
+
+        public static void AddFury(int amount)
+        {
+            FuryXp = Mathf.Max(0, FuryXp + amount);
+            SaveFury();
+        }
+
+        public static bool BuyFuryPro()
+        {
+            if (FuryPro || Cash < FuryProPrice) return false;
+            Cash -= FuryProPrice;
+            FuryPro = true;
+            SaveFury();
+            Save();
+            return true;
+        }
+
+        public static bool ClaimFury(int tier, bool pro)
+        {
+            if (!FuryClaimable(tier, pro)) return false;
+            var claimed = pro ? FuryProClaimed : FuryFreeClaimed;
+            claimed[tier - 1] = true;
+            GrantFuryReward(pro ? FuryProTrack[tier - 1] : FuryFreeTrack[tier - 1]);
+            SaveFury();
+            Save();
+            return true;
+        }
+
+        private static void GrantFuryReward(FuryReward reward)
+        {
+            switch (reward.Kind)
+            {
+                case FuryRewardKind.Cash:
+                    Cash += reward.Amount;
+                    break;
+                case FuryRewardKind.Spins:
+                    WheelSpins += reward.Amount;
+                    SaveWheel();
+                    break;
+                case FuryRewardKind.DoubleCharge:
+                    DoubleCharges += reward.Amount;
+                    SaveWheel();
+                    break;
+                case FuryRewardKind.ReviveToken:
+                    ReviveTokens += reward.Amount;
+                    break;
+                case FuryRewardKind.Upgrade:
+                    for (var i = 0; i < reward.Amount; i++) GrantFreeUpgrade();
+                    break;
+                default:
+                    // Already own the season car (bought it meanwhile): pay its price
+                    // instead, so the headline reward is never a dead tier.
+                    var car = Mathf.Clamp(reward.Amount, 0, Cars.Length - 1);
+                    if (OwnedCars.Contains(car)) Cash += Cars[car].Price;
+                    else OwnedCars.Add(car);
+                    break;
+            }
+        }
+
+        private static List<bool> NewFuryFlags()
+        {
+            var flags = new List<bool>(FuryTiers);
+            for (var i = 0; i < FuryTiers; i++) flags.Add(false);
+            return flags;
+        }
+
+        // --------------------------------------------------- adrenaline revive
+        public const int ReviveMaxPerRun = 2;
+        public const float ReviveIntegrityFraction = 0.6f;
+
+        public static int RevivesUsed;      // this run
+        public static int ReviveTokens;     // persisted, earned on the pro pass
+
+        public static int ReviveCost => 1200 + RevivesUsed * 1800;
+        public static bool ReviveUsesToken => ReviveTokens > 0;
+
+        public static bool CanRevive =>
+            RunOver && !DoubleUsedThisRun && RevivesUsed < ReviveMaxPerRun
+            && (ReviveTokens > 0 || Cash >= ReviveCost);
+
+        /// Puts the player back on the road mid-run.
+        ///
+        /// EndRun banks the payout the moment integrity hits zero, so this has to unwind
+        /// that payout rather than defer it - otherwise every revive pays the same run
+        /// out again. The daily cash counter and the pass XP are unwound with it. The run
+        /// is not restarted: RunStartScore is untouched, so when it really ends the payout
+        /// covers the whole thing, revived length included.
+        public static bool Revive()
+        {
+            if (!CanRevive) return false;
+
+            if (ReviveTokens > 0) ReviveTokens--;
+            else Cash -= ReviveCost;
+
+            Cash -= LastRunCash;
+            BumpDaily("cash", -LastRunCash);
+            LastRunCash = 0;
+            AddFury(-LastRunFury);
+            LastRunFury = 0;
+
+            RevivesUsed++;
+            RunOver = false;
+            Integrity = MaxIntegrity * ReviveIntegrityFraction;
+
+            SaveFury();
+            SaveMissions();
+            Save();
+            return true;
+        }
+
+        public static void SaveFury()
+        {
+            PlayerPrefs.SetInt("rr_fury_season", FurySeason);
+            PlayerPrefs.SetInt("rr_fury_xp", FuryXp);
+            PlayerPrefs.SetInt("rr_fury_pro", FuryPro ? 1 : 0);
+            PlayerPrefs.SetInt("rr_revive_tokens", ReviveTokens);
+            PlayerPrefs.SetString("rr_fury_free", FlagsToString(FuryFreeClaimed));
+            PlayerPrefs.SetString("rr_fury_pro_claimed", FlagsToString(FuryProClaimed));
+            PlayerPrefs.Save();
+        }
+
+        private static string FlagsToString(List<bool> flags) =>
+            string.Join("", flags.Select(f => f ? "1" : "0"));
+
+        private static List<bool> ParseFuryFlags(string raw)
+        {
+            var flags = NewFuryFlags();
+            for (var i = 0; i < FuryTiers && i < raw.Length; i++) flags[i] = raw[i] == '1';
+            return flags;
+        }
+
         // ------------------------------------------------------------ persistence
         public static void Save()
         {
@@ -566,6 +837,13 @@ namespace RoadRage.UnityRemake
             WheelPaidToday = PlayerPrefs.GetInt("rr_wheel_paid", 0);
             WheelDay = PlayerPrefs.GetString("rr_wheel_day", string.Empty);
             DoubleCharges = PlayerPrefs.GetInt("rr_double_charges", 0);
+
+            FurySeason = PlayerPrefs.GetInt("rr_fury_season", -1);
+            FuryXp = PlayerPrefs.GetInt("rr_fury_xp", 0);
+            FuryPro = PlayerPrefs.GetInt("rr_fury_pro", 0) == 1;
+            ReviveTokens = PlayerPrefs.GetInt("rr_revive_tokens", 0);
+            FuryFreeClaimed = ParseFuryFlags(PlayerPrefs.GetString("rr_fury_free", string.Empty));
+            FuryProClaimed = ParseFuryFlags(PlayerPrefs.GetString("rr_fury_pro_claimed", string.Empty));
             if (PlayerPrefs.GetInt("rr_wheel_seeded", 0) == 0)
             {
                 // First launch seeds one x2 charge, so a new player meets the doubler on
