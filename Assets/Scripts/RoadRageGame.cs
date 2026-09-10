@@ -623,8 +623,56 @@ namespace RoadRage.UnityRemake
         public const int FuryProPrice = 9000;
         public const int FurySeasonDays = 28;
 
-        /// Fixed epoch so every install agrees on which season it is without a server.
-        private static readonly DateTime FurySeasonEpoch = new(2026, 1, 5);
+        /// The origin of the season clock. There is no server, so seasons are worked out
+        /// from a fixed date every install shares: same build, same schedule.
+        ///
+        /// It can be repointed per install (rr_fury_epoch) so a season can be started on
+        /// demand - without that, testing the pass means either waiting out whatever is
+        /// left of the current season or watching it wipe mid-test. The override is
+        /// config rather than progression, so ResetProfile leaves it alone.
+        private static readonly DateTime DefaultFurySeasonEpoch = new(2026, 1, 5);
+
+        // Read on every CurrentFurySeason and FuryDaysLeft, both of which the pass panel
+        // and the landing dock badge hit each frame, so the parse is cached.
+        private static DateTime? furyEpochCache;
+
+        public static DateTime FurySeasonEpoch
+        {
+            get
+            {
+                if (furyEpochCache.HasValue) return furyEpochCache.Value;
+                var raw = PlayerPrefs.GetString("rr_fury_epoch", string.Empty);
+                var epoch = DateTime.TryParseExact(raw, "yyyyMMdd", CultureInfo.InvariantCulture,
+                    DateTimeStyles.None, out var parsed) ? parsed.Date : DefaultFurySeasonEpoch;
+                furyEpochCache = epoch;
+                return epoch;
+            }
+        }
+
+        public static bool FurySeasonEpochOverridden =>
+            PlayerPrefs.GetString("rr_fury_epoch", string.Empty).Length > 0;
+
+        /// Repoints the season clock. The season index moves, so the next RollFurySeason
+        /// wipes the track - which is the point: it is a new season.
+        public static void SetFurySeasonEpoch(DateTime epoch)
+        {
+            PlayerPrefs.SetString("rr_fury_epoch", epoch.ToString("yyyyMMdd", CultureInfo.InvariantCulture));
+            PlayerPrefs.Save();
+            furyEpochCache = null;
+        }
+
+        public static void ClearFurySeasonEpoch()
+        {
+            PlayerPrefs.DeleteKey("rr_fury_epoch");
+            PlayerPrefs.Save();
+            furyEpochCache = null;
+        }
+
+        /// First and last day of the season the clock is currently in.
+        public static DateTime FurySeasonStart =>
+            FurySeasonEpoch.AddDays((double)CurrentFurySeason * FurySeasonDays);
+
+        public static DateTime FurySeasonEnd => FurySeasonStart.AddDays(FurySeasonDays);
 
         /// The free lane pays in cash and the odd wheel spin - enough that playing
         /// without buying anything still moves. Rewards climb with the tier so the
@@ -694,14 +742,8 @@ namespace RoadRage.UnityRemake
         public static int FuryTier => Mathf.Clamp(FuryXp / FuryTierXp, 0, FuryTiers);
         public static int FuryTierProgress => FuryTier >= FuryTiers ? FuryTierXp : FuryXp - FuryTier * FuryTierXp;
 
-        public static int FuryDaysLeft
-        {
-            get
-            {
-                var start = FurySeasonEpoch.AddDays((double)CurrentFurySeason * FurySeasonDays);
-                return Mathf.Max(0, FurySeasonDays - (int)(DateTime.Now.Date - start).TotalDays);
-            }
-        }
+        public static int FuryDaysLeft =>
+            Mathf.Max(0, FurySeasonDays - (int)(DateTime.Now.Date - FurySeasonStart).TotalDays);
 
         public static bool FuryClaimable(int tier, bool pro)
         {
@@ -1121,6 +1163,8 @@ namespace RoadRage.UnityRemake
             WheelPaidToday = PlayerPrefs.GetInt("rr_wheel_paid", 0);
             WheelDay = PlayerPrefs.GetString("rr_wheel_day", string.Empty);
             DoubleCharges = PlayerPrefs.GetInt("rr_double_charges", 0);
+
+            furyEpochCache = null;
 
             Gems = PlayerPrefs.GetInt("rr_gems", 0);
             GemsDailyDay = PlayerPrefs.GetString("rr_gems_daily_day", string.Empty);
