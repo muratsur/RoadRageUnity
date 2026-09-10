@@ -7529,7 +7529,34 @@ namespace RoadRage.UnityRemake
             for (var i = 0; i < 20 && !ended; i++) ended = GameState.ApplyDamage(26f);
             Debug.Log($"RR_TEST runOver={GameState.RunOver} endedOnDamage={ended} " +
                       $"banked={GameState.LastRunCash} cashNow={GameState.Cash} delta={GameState.Cash - cashBefore}");
-            Debug.Log(GameState.RunOver && GameState.Cash > cashBefore
+
+            // Lucky Wheel: a spin must consume exactly one spin and land on a real wedge.
+            // Cash is not asserted - the upgrade and respin wedges pay nothing in cash.
+            GameState.WheelSpins = 3;
+            var spinIndex = GameState.SpinWheel();
+            var wheelOk = spinIndex >= 0 && spinIndex < GameState.WheelPrizes.Length;
+            Debug.Log($"RR_TEST wheel spin={spinIndex} prize={GameState.WheelPrizeName(spinIndex)} " +
+                      $"spinsLeft={GameState.WheelSpins} charges={GameState.DoubleCharges}");
+
+            // Set to zero rather than spinning down to it: the SPIN AGAIN wedge refunds
+            // a spin, so a drain loop is not deterministic and would flake in CI.
+            GameState.WheelSpins = 0;
+            var refusedWhenEmpty = GameState.SpinWheel() < 0;
+            Debug.Log($"RR_TEST wheel refusedWhenEmpty={refusedWhenEmpty} spinsLeft={GameState.WheelSpins}");
+
+            // Double earnings: pays the run's banked cash a second time, exactly once.
+            GameState.DoubleCharges = 1;
+            var runCash = GameState.LastRunCash;
+            var beforeDouble = GameState.Cash;
+            var doubled = GameState.DoubleEarnings();
+            var doubledTwice = GameState.DoubleEarnings();
+            var paid = GameState.Cash - beforeDouble;
+            var doubleOk = doubled && !doubledTwice && runCash > 0 && paid == runCash
+                           && GameState.LastRunCash == runCash * 2 && GameState.DoubleCharges == 0;
+            Debug.Log($"RR_TEST double applied={doubled} secondAttempt={doubledTwice} " +
+                      $"paid={paid} expected={runCash} banked={GameState.LastRunCash} charges={GameState.DoubleCharges}");
+
+            Debug.Log(GameState.RunOver && GameState.Cash > cashBefore && wheelOk && refusedWhenEmpty && doubleOk
                 ? "RR_TEST RESULT PASS"
                 : "RR_TEST RESULT FAIL");
             Application.Quit();
@@ -8163,6 +8190,7 @@ namespace RoadRage.UnityRemake
         private Texture2D dimTexture;
         private bool garageOpen;
         private bool missionsOpen;
+        private bool wheelOpen;
         private int garageBrowse = -1;
 
         public static RoadRageHUD Instance { get; private set; }
@@ -8250,6 +8278,65 @@ namespace RoadRage.UnityRemake
                     tex.SetPixel(x, y, col);
                 }
             }
+            tex.Apply();
+            return tex;
+        }
+
+        /// Radial wheel face: N wedges in alternating colours with a gold rim, hub and
+        /// spokes. Baked once into a texture so the spin animation is a single rotated
+        /// blit per frame rather than per-frame geometry.
+        ///
+        /// Generated in texture space, where row 0 is the bottom - GUI.DrawTexture keeps
+        /// that orientation - so atan2(dx, dy) is the angle measured clockwise from
+        /// straight up on screen, which is where the pointer sits.
+        private static Texture2D CreateWheelFace(int size, int wedges)
+        {
+            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var pixels = new Color32[size * size];
+            var centre = (size - 1) * 0.5f;
+            var radius = centre - 1f;
+            var wedgeArc = Mathf.PI * 2f / Mathf.Max(1, wedges);
+            var faceA = new Color(0.10f, 0.13f, 0.22f);
+            var faceB = new Color(0.17f, 0.21f, 0.34f);
+            var accent = new Color(0.72f, 0.18f, 0.14f);
+            var rim = new Color(1f, 0.82f, 0.22f);
+            var clear = new Color32(0, 0, 0, 0);
+
+            for (var y = 0; y < size; y++)
+            {
+                for (var x = 0; x < size; x++)
+                {
+                    var index = y * size + x;
+                    var dx = x - centre;
+                    var dy = y - centre;
+                    var dist = Mathf.Sqrt(dx * dx + dy * dy);
+                    if (dist > radius)
+                    {
+                        pixels[index] = clear;
+                        continue;
+                    }
+
+                    var angle = Mathf.Atan2(dx, dy);
+                    if (angle < 0f) angle += Mathf.PI * 2f;
+                    var wedge = Mathf.Min(wedges - 1, (int)(angle / wedgeArc));
+                    var colour = wedge % 2 == 1 ? accent : wedge % 4 == 0 ? faceA : faceB;
+
+                    // Rim, hub and the dividing spokes, all in gold. The spoke test is in
+                    // arc length, not radians, so the lines stay a constant width.
+                    var edge = radius - dist;
+                    var offset = angle - wedge * wedgeArc;
+                    var spoke = Mathf.Min(offset, wedgeArc - offset) * dist;
+                    if (edge < radius * 0.055f || dist < radius * 0.11f || spoke < 1.3f) colour = rim;
+
+                    // One pixel of feathering at the outside so the disc is not jagged.
+                    colour.a = Mathf.Clamp01(edge);
+                    pixels[index] = colour;
+                }
+            }
+
+            tex.SetPixels32(pixels);
+            tex.filterMode = FilterMode.Bilinear;
+            tex.wrapMode = TextureWrapMode.Clamp;
             tex.Apply();
             return tex;
         }
@@ -8371,6 +8458,7 @@ namespace RoadRage.UnityRemake
             var panel = RoadRageBootstrap.CommandLineValue("-ui=");
             if (panel == "garage") garageOpen = true;
             else if (panel == "missions") missionsOpen = true;
+            else if (panel == "wheel") wheelOpen = true;
         }
 
         /// Store/press captures must not show the HUD, the mobile touch buttons or the
@@ -8546,6 +8634,11 @@ namespace RoadRage.UnityRemake
             if (missionsOpen)
             {
                 DrawMissions();
+                return;
+            }
+            if (wheelOpen)
+            {
+                DrawWheelScreen();
                 return;
             }
             if (RoadRageLeaderboardDirector.Instance != null && RoadRageLeaderboardDirector.Instance.IsLeaderboardOpen)
@@ -8968,8 +9061,219 @@ namespace RoadRage.UnityRemake
                     GameState.ClaimMission(slot);
             }
 
+            if (GUI.Button(new Rect(Screen.width * 0.5f - 300f, rowY + 300f, 200f, 52f),
+                    GameState.WheelSpins > 0 ? $"🎡 LUCKY WHEEL ({GameState.WheelSpins})" : "🎡 LUCKY WHEEL", buttonStyle))
+            {
+                missionsOpen = false;
+                wheelOpen = true;
+            }
+
             if (GUI.Button(new Rect(Screen.width * 0.5f - 90f, rowY + 300f, 180f, 52f), "BACK", buttonStyle))
                 missionsOpen = false;
+        }
+
+        // ---- lucky wheel presentation state ----
+        private float wheelAngle;
+        private float wheelSpinFrom;
+        private float wheelSpinTo;
+        private float wheelSpinStart;
+        private float wheelSpinDuration;
+        private int wheelResult = -1;
+        private bool wheelSpinning;
+        private string wheelMessage = string.Empty;
+        private static Texture2D wheelFaceTex;
+
+        /// Decides the outcome up front and then animates to it. GameState.SpinWheel has
+        /// already banked the prize by the time this returns, so a player who closes the
+        /// panel while the wheel is still turning keeps what they won.
+        private void BeginWheelSpin()
+        {
+            var index = GameState.SpinWheel();
+            if (index < 0) return;
+
+            wheelResult = index;
+            wheelMessage = string.Empty;
+            wheelSpinning = true;
+            wheelSpinStart = Time.unscaledTime;
+            wheelSpinDuration = 3.1f;
+            wheelSpinFrom = Mathf.Repeat(wheelAngle, 360f);
+            wheelAngle = wheelSpinFrom;
+
+            // Five full turns, then stop with this wedge's centre under the pointer.
+            var wedgeDeg = 360f / GameState.WheelPrizes.Length;
+            var landing = Mathf.Repeat(-(index + 0.5f) * wedgeDeg, 360f);
+            wheelSpinTo = wheelSpinFrom + 360f * 5f + Mathf.Repeat(landing - wheelSpinFrom, 360f);
+        }
+
+        private void DrawWheelScreen()
+        {
+            var w = Screen.width;
+            var h = Screen.height;
+            var safe = Screen.safeArea;
+
+            var leftPad = Mathf.Max(safe.x, 24f);
+            var rightPad = Mathf.Max(w - (safe.x + safe.width), 24f);
+            var topPad = Mathf.Max(h - (safe.y + safe.height), 12f);
+            var botPad = Mathf.Max(safe.y, 12f);
+
+            var usableW = w - leftPad - rightPad;
+            var usableH = h - topPad - botPad;
+            var s = Mathf.Clamp(usableH / 600f, 0.55f, 1.35f);
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+
+            var modalW = Mathf.Clamp(usableW * 0.88f, 480f, 880f);
+            var modalH = Mathf.Clamp(usableH * 0.92f, 340f, 580f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH),
+                cardGlassTex != null ? cardGlassTex : dimTexture);
+
+            var headStyle = new GUIStyle(pickerTitleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(24 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.82f, 0.2f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, 32f * s), "🎡  L U C K Y   W H E E L  🎡", headStyle);
+
+            var subStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(12 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(0.7f, 0.88f, 1f) }
+            };
+            GUI.Label(new Rect(modalX, modalY + 34f * s, modalW, 20f * s),
+                $"SPINS: {GameState.WheelSpins}   •   x2 CHARGES: {GameState.DoubleCharges}   •   ${GameState.Cash:N0}",
+                subStyle);
+
+            // Advance the animation. Cubic ease-out, so it decelerates into the wedge.
+            if (wheelSpinning)
+            {
+                var t = wheelSpinDuration <= 0f
+                    ? 1f
+                    : Mathf.Clamp01((Time.unscaledTime - wheelSpinStart) / wheelSpinDuration);
+                wheelAngle = Mathf.Lerp(wheelSpinFrom, wheelSpinTo, 1f - Mathf.Pow(1f - t, 3f));
+                if (t >= 1f)
+                {
+                    wheelSpinning = false;
+                    wheelAngle = wheelSpinTo;
+                    wheelMessage = GameState.WheelPrizeName(wheelResult);
+                }
+            }
+
+            var btnH = Mathf.Clamp(modalH * 0.13f, 40f, 54f);
+            var btnY = modalY + modalH - btnH - 14f;
+
+            // ---- the wheel itself, left of centre ----
+            var faceTop = modalY + 58f * s;
+            var faceBox = Mathf.Max(150f, Mathf.Min(modalW * 0.50f, btnY - 34f * s - faceTop));
+            var faceCentre = new Vector2(modalX + modalW * 0.29f, faceTop + faceBox * 0.5f);
+            var faceRect = new Rect(faceCentre.x - faceBox * 0.5f, faceCentre.y - faceBox * 0.5f, faceBox, faceBox);
+
+            if (wheelFaceTex == null) wheelFaceTex = CreateWheelFace(512, GameState.WheelPrizes.Length);
+
+            var matrix = GUI.matrix;
+            GUIUtility.RotateAroundPivot(wheelAngle, faceCentre);
+            GUI.DrawTexture(faceRect, wheelFaceTex);
+            GUI.matrix = matrix;
+
+            // Wedge labels ride the rotation but stay upright, which keeps them legible
+            // at the sizes this panel runs at on a phone.
+            var wedgeDeg = 360f / GameState.WheelPrizes.Length;
+            var wedgeStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(10 * s),
+                alignment = TextAnchor.MiddleCenter,
+                wordWrap = false,
+                normal = { textColor = Color.white }
+            };
+            for (var i = 0; i < GameState.WheelPrizes.Length; i++)
+            {
+                var theta = ((i + 0.5f) * wedgeDeg + wheelAngle) * Mathf.Deg2Rad;
+                var r = faceBox * 0.33f;
+                var px = faceCentre.x + Mathf.Sin(theta) * r;
+                var py = faceCentre.y - Mathf.Cos(theta) * r;
+                GUI.Label(new Rect(px - faceBox * 0.24f, py - 9f * s, faceBox * 0.48f, 18f * s),
+                    GameState.WheelPrizes[i].Label, wedgeStyle);
+            }
+
+            var pointerStyle = new GUIStyle(titleStyle)
+            {
+                font = titleFont,
+                fontSize = Mathf.RoundToInt(26 * s),
+                alignment = TextAnchor.MiddleCenter,
+                normal = { textColor = new Color(1f, 0.35f, 0.2f) }
+            };
+            GUI.Label(new Rect(faceCentre.x - 24f, faceRect.y - 15f * s, 48f, 28f * s), "▼", pointerStyle);
+
+            // ---- odds table, right of the wheel ----
+            var colX = modalX + modalW * 0.60f;
+            var colW = modalW * 0.36f;
+            var rowH = Mathf.Clamp(faceBox * 0.085f, 14f, 24f);
+            var listY = faceCentre.y - (GameState.WheelPrizes.Length * rowH) * 0.5f;
+            var oddsStyle = new GUIStyle(readoutStyle)
+            {
+                font = arcadeFont,
+                fontSize = Mathf.RoundToInt(11 * s),
+                alignment = TextAnchor.MiddleLeft,
+                normal = { textColor = new Color(0.84f, 0.90f, 1f) }
+            };
+            var wonStyle = new GUIStyle(oddsStyle) { normal = { textColor = new Color(0.4f, 1f, 0.6f) } };
+            var oddsHeadStyle = new GUIStyle(oddsStyle) { normal = { textColor = new Color(1f, 0.82f, 0.25f) } };
+
+            // Published odds. A wheel that hides them is the kind players stop trusting.
+            GUI.Label(new Rect(colX, listY - rowH - 2f, colW, rowH), "ON THE WHEEL", oddsHeadStyle);
+            var weightTotal = Mathf.Max(1, GameState.WheelWeightTotal);
+            for (var i = 0; i < GameState.WheelPrizes.Length; i++)
+            {
+                var prize = GameState.WheelPrizes[i];
+                var odds = prize.Weight * 100f / weightTotal;
+                GUI.Label(new Rect(colX, listY + i * rowH, colW, rowH),
+                    $"{prize.Label}  —  {odds:0.#}%",
+                    i == wheelResult && !wheelSpinning ? wonStyle : oddsStyle);
+            }
+
+            if (!wheelSpinning && wheelMessage.Length > 0)
+            {
+                var winStyle = new GUIStyle(titleStyle)
+                {
+                    font = titleFont,
+                    fontSize = Mathf.RoundToInt(18 * s),
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = new Color(0.4f, 1f, 0.6f) }
+                };
+                GUI.Label(new Rect(modalX, btnY - 30f * s, modalW, 28f * s), $"YOU WON:  {wheelMessage}", winStyle);
+            }
+
+            // ---- action row ----
+            var btnSpacing = 10f * s;
+            var btnW = (modalW - 40f - btnSpacing * 2f) / 3f;
+            var actionStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(14 * s) };
+
+            var canSpin = !wheelSpinning && GameState.WheelSpins > 0;
+            var spinLabel = wheelSpinning ? "SPINNING…" : canSpin ? $"🎡 SPIN  ({GameState.WheelSpins})" : "NO SPINS LEFT";
+            if (canSpin && greenBtnTex != null)
+                GUI.DrawTexture(new Rect(modalX + 20f, btnY, btnW, btnH), greenBtnTex);
+            if (GUI.Button(new Rect(modalX + 20f, btnY, btnW, btnH), spinLabel, canSpin ? actionStyle : lockedStyle) && canSpin)
+                BeginWheelSpin();
+
+            var soldOut = GameState.WheelPaidToday >= GameState.WheelPaidMaxPerDay;
+            var canBuy = !wheelSpinning && GameState.CanBuySpin;
+            var buyLabel = soldOut ? "SOLD OUT TODAY" : $"BUY SPIN  ${GameState.WheelSpinCost:N0}";
+            if (GUI.Button(new Rect(modalX + 20f + btnW + btnSpacing, btnY, btnW, btnH), buyLabel,
+                    canBuy ? actionStyle : lockedStyle) && canBuy)
+                GameState.BuySpin();
+
+            if (GUI.Button(new Rect(modalX + 20f + (btnW + btnSpacing) * 2f, btnY, btnW, btnH), "BACK [ESC]", actionStyle) ||
+                (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.Escape))
+            {
+                wheelOpen = false;
+                if (Event.current != null) Event.current.Use();
+            }
         }
 
         private bool settingsOpen = false;
@@ -9095,10 +9399,11 @@ namespace RoadRage.UnityRemake
             var hintStyle = new GUIStyle(readoutStyle) { alignment = TextAnchor.MiddleCenter, fontSize = Mathf.RoundToInt(10 * s), normal = { textColor = new Color(0.8f, 0.95f, 1f, 0.85f) } };
             GUI.Label(new Rect(0f, ctaY + ctaH + 1f, w, 16f), "PRESS [SPACE] / [ENTER] OR TAP TO RACE", hintStyle);
 
-            // 4. Bottom Dock Navigation Buttons (Garage, Tracks, Missions, Leaderboard)
-            var dockBtnW = Mathf.Clamp(usableW * 0.20f, 85f, 150f);
-            var dockSpacing = Mathf.Clamp(usableW * 0.015f, 6f, 14f);
-            var totalDockW = dockBtnW * 4 + dockSpacing * 3;
+            // 4. Bottom Dock Navigation (Garage, Tracks, Missions, Wheel, Leaderboard)
+            var dockSpacing = Mathf.Clamp(usableW * 0.012f, 5f, 12f);
+            // Five across now, so the width is also capped by what actually fits.
+            var dockBtnW = Mathf.Min(Mathf.Clamp(usableW * 0.17f, 72f, 132f), (usableW - dockSpacing * 4f) / 5f);
+            var totalDockW = dockBtnW * 5 + dockSpacing * 4;
             var dockStartX = w * 0.5f - totalDockW * 0.5f;
 
             var dockBtnStyle = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(12 * s) };
@@ -9121,8 +9426,16 @@ namespace RoadRage.UnityRemake
                 missionsOpen = true;
             }
 
-            // Dock Button 4: LEADERBOARD
-            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 3, dockY, dockBtnW, dockBtnH), "🏆 BOARD [L]", dockBtnStyle))
+            // Dock Button 4: LUCKY WHEEL - badged with the spin count, because an
+            // unspent free spin is the single best reason to come back tomorrow.
+            var wheelDockLabel = GameState.WheelSpins > 0 ? $"🎡 WHEEL ({GameState.WheelSpins})" : "🎡 WHEEL [W]";
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 3, dockY, dockBtnW, dockBtnH), wheelDockLabel, dockBtnStyle))
+            {
+                wheelOpen = true;
+            }
+
+            // Dock Button 5: LEADERBOARD
+            if (GUI.Button(new Rect(dockStartX + (dockBtnW + dockSpacing) * 4, dockY, dockBtnW, dockBtnH), "🏆 BOARD [L]", dockBtnStyle))
             {
                 if (RoadRageLeaderboardDirector.Instance != null)
                     RoadRageLeaderboardDirector.Instance.OpenLeaderboard();
@@ -9134,6 +9447,7 @@ namespace RoadRage.UnityRemake
                 if (Event.current.keyCode == KeyCode.G) { garageOpen = true; Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.B && World != null) { World.OpenPicker(); Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.M) { missionsOpen = true; Event.current.Use(); }
+                else if (Event.current.keyCode == KeyCode.W) { wheelOpen = true; Event.current.Use(); }
                 else if (Event.current.keyCode == KeyCode.L)
                 {
                     if (RoadRageLeaderboardDirector.Instance != null)
@@ -9262,9 +9576,26 @@ namespace RoadRage.UnityRemake
             GUI.Label(new Rect(rightCardX + 16f, combatRowY, colW - 32f, 22f * s), $"🏎️ PILOT CAR: {carSpec.Name.ToUpper()}", metricStyle);
             GUI.Label(new Rect(rightCardX + 16f, combatRowY + 22f * s, colW - 32f, 22f * s), $"🛣️ HIGHWAY DISTANCE: {GameState.RunDistanceKm:0.00} KM", metricStyle);
 
-            // --- DRIVER XP / VIP RANK PROGRESSION ---
+            // --- LOWER BLOCK: rank bar, the x2 offer, the action dock ---
+            // The rank bar and the button dock keep the sizes and positions they had
+            // before the x2 row existed. Only when the extra row would run past the
+            // bottom of a short modal is the overflow taken out of all three, so the
+            // buttons can never end up off-screen on a phone.
             var rankY = contentY + cardH + 10f;
             var rankH = Mathf.Clamp(modalH * 0.12f, 32f, 48f);
+            var doubleH = Mathf.Clamp(modalH * 0.11f, 30f, 44f);
+            var btnH = Mathf.Clamp(modalH * 0.15f, 42f, 56f);
+
+            var overflow = (rankY + rankH + 10f + doubleH + 12f + btnH) - (modalY + modalH - 12f);
+            if (overflow > 0f)
+            {
+                var shrink = overflow / 3f;
+                rankH = Mathf.Max(22f, rankH - shrink);
+                doubleH = Mathf.Max(24f, doubleH - shrink);
+                btnH = Mathf.Max(34f, btnH - shrink);
+            }
+
+            var doubleY = rankY + rankH + 10f;
             var rankCardW = modalW - 40f;
 
             if (statCardGlassTex != null)
@@ -9290,9 +9621,47 @@ namespace RoadRage.UnityRemake
             var xpLabelStyle = new GUIStyle(readoutStyle) { font = arcadeFont, fontSize = Mathf.RoundToInt(11 * s), alignment = TextAnchor.MiddleCenter, normal = { textColor = Color.white } };
             GUI.Label(new Rect(barX, barY, barW, barH), $"{Mathf.RoundToInt(xpFrac * 100)}% TO RANK {rank + 1}", xpLabelStyle);
 
+            // --- DOUBLE EARNINGS ---
+            // The run payout, paid a second time, for one charge. Charges come off the
+            // Lucky Wheel, so this row is also what makes the wheel worth opening.
+            var doubleRect = new Rect(modalX + 20f, doubleY, rankCardW, doubleH);
+            var doubleStyle = new GUIStyle(buttonStyle) { font = titleFont, fontSize = Mathf.RoundToInt(15f * s) };
+            var canDouble = GameState.CanDoubleEarnings;
+
+            if (canDouble)
+            {
+                var doublePulse = 0.86f + 0.14f * Mathf.Sin(Time.unscaledTime * 5f);
+                if (greenBtnTex != null)
+                {
+                    var prevDoubleCol = GUI.color;
+                    GUI.color = new Color(doublePulse, doublePulse, doublePulse, 1f);
+                    GUI.DrawTexture(doubleRect, greenBtnTex);
+                    GUI.color = prevDoubleCol;
+                }
+                if (GUI.Button(doubleRect,
+                        $"💰 DOUBLE EARNINGS  —  +${GameState.LastRunCash:N0}  (x2 CHARGES: {GameState.DoubleCharges})",
+                        doubleStyle))
+                {
+                    GameState.DoubleEarnings();
+                }
+            }
+            else
+            {
+                if (statCardGlassTex != null) GUI.DrawTexture(doubleRect, statCardGlassTex);
+                var spentStyle = new GUIStyle(readoutStyle)
+                {
+                    font = arcadeFont,
+                    fontSize = Mathf.RoundToInt(12f * s),
+                    alignment = TextAnchor.MiddleCenter,
+                    normal = { textColor = GameState.DoubleUsedThisRun ? new Color(0.4f, 1f, 0.6f) : new Color(0.72f, 0.78f, 0.88f) }
+                };
+                GUI.Label(doubleRect, GameState.DoubleUsedThisRun
+                    ? "✅ EARNINGS DOUBLED — BANKED AT x2"
+                    : "💰 DOUBLE EARNINGS — WIN AN x2 CHARGE ON THE LUCKY WHEEL [W]", spentStyle);
+            }
+
             // --- ACTION BUTTONS DOCK ---
-            var btnRowY = rankY + rankH + 12f;
-            var btnH = Mathf.Clamp(modalH * 0.15f, 42f, 56f);
+            var btnRowY = doubleY + doubleH + 12f;
             var btnSpacing = 10f * s;
             var btnW = (modalW - 40f - btnSpacing * 3) / 4f;
 
@@ -9338,6 +9707,14 @@ namespace RoadRage.UnityRemake
                 hasSubmittedRunScore = false;
                 garageOpen = true;
                 if (Event.current != null) Event.current.Use();
+            }
+
+            // [W] opens the wheel over the crash screen. Closing it comes straight back
+            // here, so a charge won on the wheel can be spent on this run's payout.
+            if (Event.current != null && Event.current.type == EventType.KeyDown && Event.current.keyCode == KeyCode.W)
+            {
+                wheelOpen = true;
+                Event.current.Use();
             }
 
             // Button 4: MAIN MENU
