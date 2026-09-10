@@ -222,6 +222,7 @@ namespace RoadRage.UnityRemake
             PileupDamage = 0;
             CrashbreakerReady = false;
             CrashbreakerUsed = false;
+            DoubleUsedThisRun = false;
         }
 
         public static int AwardCash(float completionFraction, int runStartScore)
@@ -271,6 +272,7 @@ namespace RoadRage.UnityRemake
         /// longer gap resets it, otherwise returning after months pays the same as daily play.
         public static void RollDailyMissions()
         {
+            RollWheelDay();
             var today = DayStamp(DateTime.Now);
             if (MissionDay == today && MissionIds.Count == 3) return;
 
@@ -302,6 +304,10 @@ namespace RoadRage.UnityRemake
             if (!MissionDone(slot) || MissionClaimed[slot]) return false;
             Cash += MissionPool[MissionIds[slot]].Reward;
             MissionClaimed[slot] = true;
+            // A claim also pays a wheel spin, so finishing dailies feeds the wheel
+            // and the wheel feeds the garage - three spins a day on top of the free one.
+            WheelSpins++;
+            SaveWheel();
             SaveMissions();
             Save();
             return true;
@@ -321,6 +327,191 @@ namespace RoadRage.UnityRemake
             return toGo <= 0
                 ? $"NEXT RIDE:  {Cars[best].Name}  —  affordable now! (Garage)"
                 : $"NEXT RIDE:  {Cars[best].Name}  —  ${toGo:N0} to go";
+        }
+
+        // ------------------------------------------------------------ lucky wheel
+        public enum WheelPrizeKind { Cash, DoubleCharge, FreeUpgrade, Respin }
+
+        public struct WheelPrize
+        {
+            public string Label;
+            public WheelPrizeKind Kind;
+            public int Amount;
+            public int Weight;
+        }
+
+        /// Eight wedges, weighted - big and small alternate around the rim so the
+        /// jackpot never sits next to the other large prize and a near-miss reads as
+        /// one. Cash wedges average ~600 per spin, which is deliberately under a
+        /// mission reward: the wheel tops the loop up, it does not replace driving.
+        public static readonly WheelPrize[] WheelPrizes =
+        {
+            new() { Label = "$250",     Kind = WheelPrizeKind.Cash,         Amount = 250,  Weight = 22 },
+            new() { Label = "x2 CASH",  Kind = WheelPrizeKind.DoubleCharge, Amount = 1,    Weight = 14 },
+            new() { Label = "$500",     Kind = WheelPrizeKind.Cash,         Amount = 500,  Weight = 18 },
+            new() { Label = "SPIN AGAIN", Kind = WheelPrizeKind.Respin,     Amount = 1,    Weight = 12 },
+            new() { Label = "$1,000",   Kind = WheelPrizeKind.Cash,         Amount = 1000, Weight = 12 },
+            new() { Label = "UPGRADE",  Kind = WheelPrizeKind.FreeUpgrade,  Amount = 1,    Weight = 8  },
+            new() { Label = "$2,500",   Kind = WheelPrizeKind.Cash,         Amount = 2500, Weight = 6  },
+            new() { Label = "JACKPOT $7,500", Kind = WheelPrizeKind.Cash,   Amount = 7500, Weight = 2  },
+        };
+
+        public const int WheelPaidBase = 750;
+        public const int WheelPaidStep = 600;
+        public const int WheelPaidMaxPerDay = 4;
+
+        public static int WheelSpins;
+        public static int WheelPaidToday;
+        public static string WheelDay = string.Empty;
+        public static int DoubleCharges;
+        public static bool DoubleUsedThisRun;
+
+        public static int WheelWeightTotal
+        {
+            get
+            {
+                var total = 0;
+                foreach (var prize in WheelPrizes) total += prize.Weight;
+                return total;
+            }
+        }
+
+        /// Paid spins get steadily dearer within a day and stop after four, so the
+        /// wheel is a cash sink with a floor rather than a way to farm the jackpot.
+        public static int WheelSpinCost => WheelPaidBase + WheelPaidToday * WheelPaidStep;
+        public static bool CanBuySpin => WheelPaidToday < WheelPaidMaxPerDay && Cash >= WheelSpinCost;
+
+        public static string WheelPrizeName(int index) =>
+            index >= 0 && index < WheelPrizes.Length ? WheelPrizes[index].Label : string.Empty;
+
+        /// One free spin per calendar day plus a reset of the paid-spin ladder. Called
+        /// from RollDailyMissions ahead of its own same-day early return, so a player
+        /// who never opens the missions panel still gets the spin.
+        public static void RollWheelDay()
+        {
+            var today = DayStamp(DateTime.Now);
+            if (WheelDay == today) return;
+            WheelDay = today;
+            WheelSpins += 1;
+            WheelPaidToday = 0;
+            SaveWheel();
+        }
+
+        /// Weighted pick. The prize is granted here, the instant the button is pressed -
+        /// the UI only animates to the index this returns - so closing the panel while
+        /// the wheel is still turning cannot lose it. Returns -1 with no spins left.
+        public static int SpinWheel()
+        {
+            if (WheelSpins <= 0) return -1;
+            WheelSpins--;
+
+            var roll = UnityEngine.Random.Range(0, WheelWeightTotal);
+            var index = WheelPrizes.Length - 1;
+            for (var i = 0; i < WheelPrizes.Length; i++)
+            {
+                roll -= WheelPrizes[i].Weight;
+                if (roll < 0) { index = i; break; }
+            }
+
+            GrantWheelPrize(index);
+            return index;
+        }
+
+        public static bool BuySpin()
+        {
+            if (WheelPaidToday >= WheelPaidMaxPerDay) return false;
+            var cost = WheelSpinCost;
+            if (Cash < cost) return false;
+            Cash -= cost;
+            WheelPaidToday++;
+            WheelSpins++;
+            SaveWheel();
+            Save();
+            return true;
+        }
+
+        /// Wheel cash deliberately does not feed the "bank $N today" daily. That mission
+        /// is meant to measure driving, and claiming a mission pays a spin - letting the
+        /// spin pay the mission back would close the loop on itself.
+        private static void GrantWheelPrize(int index)
+        {
+            if (index < 0 || index >= WheelPrizes.Length) return;
+            var prize = WheelPrizes[index];
+            switch (prize.Kind)
+            {
+                case WheelPrizeKind.Cash:
+                    Cash += prize.Amount;
+                    break;
+                case WheelPrizeKind.DoubleCharge:
+                    DoubleCharges += prize.Amount;
+                    break;
+                case WheelPrizeKind.FreeUpgrade:
+                    GrantFreeUpgrade();
+                    break;
+                default:
+                    WheelSpins += prize.Amount;
+                    break;
+            }
+            SaveWheel();
+            Save();
+        }
+
+        /// The cheapest track that is not maxed, so the wedge always lands on something
+        /// the player has not already bought. Everything maxed: pay out its cash value
+        /// rather than silently dropping the prize.
+        private static void GrantFreeUpgrade()
+        {
+            var best = string.Empty;
+            var bestLevel = int.MaxValue;
+            foreach (var key in new[] { "engine", "armor", "boost" })
+            {
+                var level = UpgradeLevel(key);
+                if (level >= UpgradeMax || level >= bestLevel) continue;
+                best = key;
+                bestLevel = level;
+            }
+            if (best.Length == 0)
+            {
+                Cash += UpgradeCost(UpgradeMax - 1);
+                return;
+            }
+            switch (best)
+            {
+                case "engine": UpgradeEngine++; break;
+                case "armor": UpgradeArmour++; break;
+                default: UpgradeBoost++; break;
+            }
+        }
+
+        // ------------------------------------------------------- double earnings
+        public static bool CanDoubleEarnings =>
+            RunOver && !DoubleUsedThisRun && DoubleCharges > 0 && LastRunCash > 0;
+
+        /// Spends one charge to pay the run's banked cash a second time. Only the run
+        /// payout doubles - the login bonus and mission rewards are not part of it -
+        /// and only once per run, or the crash screen becomes an infinite cash button.
+        public static bool DoubleEarnings()
+        {
+            if (!CanDoubleEarnings) return false;
+            DoubleCharges--;
+            DoubleUsedThisRun = true;
+            var bonus = LastRunCash;
+            Cash += bonus;
+            LastRunCash += bonus;
+            BumpDaily("cash", bonus);
+            SaveWheel();
+            SaveMissions();
+            Save();
+            return true;
+        }
+
+        public static void SaveWheel()
+        {
+            PlayerPrefs.SetInt("rr_wheel_spins", WheelSpins);
+            PlayerPrefs.SetInt("rr_wheel_paid", WheelPaidToday);
+            PlayerPrefs.SetString("rr_wheel_day", WheelDay);
+            PlayerPrefs.SetInt("rr_double_charges", DoubleCharges);
+            PlayerPrefs.Save();
         }
 
         // ------------------------------------------------------------ persistence
@@ -370,6 +561,20 @@ namespace RoadRage.UnityRemake
             LoginStreak = PlayerPrefs.GetInt("rr_login_streak", 0);
             LastLoginReward = PlayerPrefs.GetInt("rr_login_reward", 0);
             foreach (var key in Daily.Keys.ToList()) Daily[key] = PlayerPrefs.GetFloat($"rr_daily_{key}", 0f);
+
+            WheelSpins = PlayerPrefs.GetInt("rr_wheel_spins", 0);
+            WheelPaidToday = PlayerPrefs.GetInt("rr_wheel_paid", 0);
+            WheelDay = PlayerPrefs.GetString("rr_wheel_day", string.Empty);
+            DoubleCharges = PlayerPrefs.GetInt("rr_double_charges", 0);
+            if (PlayerPrefs.GetInt("rr_wheel_seeded", 0) == 0)
+            {
+                // First launch seeds one x2 charge, so a new player meets the doubler on
+                // the crash screen before the wheel has had a chance to pay one out.
+                // The spin itself is not seeded here - RollWheelDay grants day one's.
+                PlayerPrefs.SetInt("rr_wheel_seeded", 1);
+                DoubleCharges += 1;
+                SaveWheel();
+            }
         }
 
         private static List<int> ParseInts(string raw) => raw
