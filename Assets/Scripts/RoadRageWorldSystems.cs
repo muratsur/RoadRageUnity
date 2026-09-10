@@ -19,6 +19,15 @@ namespace RoadRage.UnityRemake
         /// narrows as you drive into the trees rather than stepping.
         public static System.Func<float, float> HalfWidthProvider;
 
+        /// Per-biome multiplier on how much the road wanders. The curve is one shared
+        /// function, so without this every biome bends identically - a mountain pass and a
+        /// city avenue on the same sine. Supplied the same way the half width is, and
+        /// defaults to 1 so a biome that says nothing keeps the road it had.
+        public static System.Func<float, float> CurveScaleProvider;
+
+        public static float CurveScaleAt(float distance) =>
+            CurveScaleProvider?.Invoke(distance) ?? 1f;
+
         public static float HalfWidthAt(float distance) =>
             HalfWidthProvider?.Invoke(distance) ?? HalfWidth;
 
@@ -42,9 +51,13 @@ namespace RoadRage.UnityRemake
         /// repeat is far beyond any run length).
         public static float CenterX(float distance)
         {
-            return 13f * Mathf.Sin(distance / 143f)
+            // Scaled, not re-shaped. The three sines stay in the same proportion so a
+            // bend still has the same character - a long sweep with a shorter wander on
+            // top - and only its amplitude changes. Changing the wavelengths per biome
+            // would put the seam between two zones in the middle of a corner.
+            return (13f * Mathf.Sin(distance / 143f)
                 + 6f * Mathf.Sin(distance / 61.7f + 0.65f)
-                + 2.5f * Mathf.Sin(distance / 27.3f - 0.4f);
+                + 2.5f * Mathf.Sin(distance / 27.3f - 0.4f)) * CurveScaleAt(distance);
         }
 
         /// Road elevation. Long rolling hills with a shorter undulation on top; amplitudes
@@ -485,6 +498,22 @@ namespace RoadRage.UnityRemake
         {
             if (IsWreck || other.IsWreck) return;
             if (Violation != Offence.WrongWay && other.Violation != Offence.WrongWay) return;
+
+            // At most one AI-vs-AI wreck standing at a time.
+            //
+            // A wreck is a wall: the follower loop treats it as a blocker across every
+            // lane its rotated footprint covers, and everything behind it queues. That is
+            // correct on its own, and it compounds - the queue is stationary traffic in an
+            // oncoming lane, so the next wrong-way runner hits that, and the road knots
+            // into the pileup the screenshots keep showing. Head-ons are a punctuation
+            // mark, not a demolition derby; the player's own takedowns are not counted
+            // here and are not capped.
+            var standing = 0;
+            for (var i = 0; i < ActiveCars.Count; i++)
+            {
+                var car = ActiveCars[i];
+                if (car != null && car.IsWreck && ++standing > 1) return;
+            }
             if (Mathf.Abs(other.LaneOffset - LaneOffset) > LateralExtent + other.LateralExtent) return;
             var gap = Mathf.Abs(other.RoadDistance - RoadDistance)
                       - (LongitudinalExtent + other.LongitudinalExtent);
