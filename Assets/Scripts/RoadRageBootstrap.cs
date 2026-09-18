@@ -152,35 +152,54 @@ namespace RoadRage.UnityRemake
         private static string Select(int tier)
         {
             var path = tier switch { Mobile => MobilePath, Balanced => BalancedPath, _ => FullPath };
-            var resource = Strip(path);
-            var asset = resource == null ? null : Resources.Load<UniversalRenderPipelineAsset>(resource);
+            var name = System.IO.Path.GetFileNameWithoutExtension(path);
+            var asset = LoadPipeline(name);
             if (asset != null)
             {
                 QualitySettings.renderPipeline = asset;
                 return path;
             }
 
-            // A missing asset must not throw: the fallback is the one pipeline the project has
-            // always rendered with, and the log line is the part that matters.
-            Debug.LogWarning($"RR_TIER {path} not found under Resources; " +
-                             "falling back to GraphicsSettings.defaultRenderPipeline");
+            // Falling back is not benign, and this line proved it on 2026-09-18: the editor
+            // logged it as a warning, it scrolled past in a console full of info lines, and
+            // every tier quietly rendered the same pipeline for the rest of the session -
+            // which is exactly the bug the per-tier split exists to fix, and on a phone it
+            // means MSAA 4x with SSAO. A silent fallback that disables the feature is the
+            // anti-pattern PRODUCTION-GATES section 8 keeps recording, so it is an error now
+            // and it names what it actually found.
+            Debug.LogError($"RR_TIER {path} not found under Resources. Every quality level will " +
+                           "render GraphicsSettings.defaultRenderPipeline instead: MSAA and SSAO " +
+                           "will NOT differ per tier. Pipelines found under Resources/Settings: " +
+                           $"{string.Join(", ", FoundPipelines())}");
             QualitySettings.renderPipeline = null;
             return null;
         }
 
-        /// "Assets/Resources/Settings/RoadRageURP_Mobile.asset" -> "Settings/RoadRageURP_Mobile"
+        /// Direct path first, then a name match over the folder.
         ///
-        /// Null when the path is not under a Resources folder. Returning the bare file name
-        /// instead would let Resources.Load resolve some unrelated asset that happens to share
-        /// it, and a silently wrong pipeline is worse than a logged failure.
-        private static string Strip(string assetPath)
+        /// The second lookup exists because a Resources path is a runtime string and cannot be
+        /// validated by the compiler or by SymbolCheck: get it wrong and the asset is simply
+        /// not there, which is a silent no-op rather than an error. Matching on the asset's own
+        /// name tolerates a path that resolves differently than expected.
+        private static UniversalRenderPipelineAsset LoadPipeline(string name)
         {
-            var name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
-            var folder = System.IO.Path.GetDirectoryName(assetPath) ?? string.Empty;
-            var marker = folder.IndexOf("Resources", System.StringComparison.Ordinal);
-            if (marker < 0) return null;
-            var relative = folder[(marker + "Resources".Length)..].TrimStart('/');
-            return relative.Length == 0 ? name : $"{relative}/{name}";
+            var direct = Resources.Load<UniversalRenderPipelineAsset>($"Settings/{name}");
+            if (direct != null) return direct;
+            foreach (var candidate in Resources.LoadAll<UniversalRenderPipelineAsset>("Settings"))
+                if (candidate != null && candidate.name == name) return candidate;
+            return null;
+        }
+
+        /// Names what is actually reachable, so a failed lookup reports the state of the
+        /// folder instead of only the path that missed.
+        private static string FoundPipelines()
+        {
+            var all = Resources.LoadAll<UniversalRenderPipelineAsset>("Settings");
+            if (all == null || all.Length == 0)
+                return "(none - is Assets/Resources/Settings imported?)";
+            var names = new List<string>();
+            foreach (var asset in all) if (asset != null) names.Add(asset.name);
+            return names.Count == 0 ? "(none)" : string.Join(", ", names);
         }
     }
 
