@@ -210,6 +210,12 @@ namespace RoadRage.UnityRemake
             if (HasCommandLineFlag("-lowdetail")) ForceLowDetailBudget(true);
             LogSky = HasCommandLineFlag("-skylog");
             if (LogSky) StartCoroutine(SkyAudit());
+            // Both of these are verification switches, in the same spirit as -nocanopy: the
+            // two effects added on 2026-09-18 are the only ones in the frame with a
+            // measurable whole-screen cost, so each has to be removable on its own to be
+            // measured at all.
+            BloomDisabled = HasCommandLineFlag("-nobloom");
+            ReflectionsEnabled = !HasCommandLineFlag("-noreflections");
             ChaseCamera.LogCamera = HasCommandLineFlag("-camlog");
             var cinematic = HasCommandLineFlag("-cinematic");
             ArcadeCarController.CinematicPilot = cinematic;
@@ -1338,8 +1344,72 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Creates the player's local reflection probe.
+        ///
+        /// This method had an empty body while six other sites configured a probe that was
+        /// never created: the field stayed null, ReflectionProbeDriver was handed that null,
+        /// and its LateUpdate returned on the first line. Meanwhile the road, both shoulders
+        /// and every city asphalt renderer ask for probe reflections through
+        /// EnableProbeReflections. Wet asphalt reflecting neon is the strongest cue that a
+        /// night street is a place rather than a texture, and none of it existed.
+        ///
+        /// refreshMode is ViaScripting so the capture schedule lives in
+        /// ReflectionProbeDriver and nowhere else. The per-biome blocks used to set
+        /// EveryFrame, which is six full cubemap captures every frame - on the tier with the
+        /// least headroom, and on top of the driver's own calls.
         private void BuildReflectionProbe()
         {
+            if (!ReflectionsEnabled)
+            {
+                Debug.Log("RR_REFLECT disabled by -noreflections");
+                return;
+            }
+
+            // BuildLighting runs again on every biome switch, so the previous probe has to
+            // go: Unity's real-null check makes a destroyed probe read as null, but a live
+            // one left behind would keep a stale capture and a second driver.
+            if (reflectionProbe != null) Destroy(reflectionProbe.gameObject);
+
+            var probeObject = new GameObject("Road Rage Reflection Probe");
+            var probe = probeObject.AddComponent<ReflectionProbe>();
+            // Quality level 0 is this project's Android default and it ships with
+            // realtimeReflectionProbes off, so without this the probe renders nothing on the
+            // one platform where it was least affordable to get wrong - and it fails
+            // silently, because RenderProbe() on a disabled tier is not an error.
+            if (!QualitySettings.realtimeReflectionProbes)
+            {
+                QualitySettings.realtimeReflectionProbes = true;
+                Debug.Log($"RR_REFLECT re-enabled realtime reflection probes " +
+                          $"(quality level {QualitySettings.GetQualityLevel()} had them off)");
+            }
+            probe.mode = ReflectionProbeMode.Realtime;
+            probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+            // Sized for the road corridor, not the skyline: the surfaces that need a
+            // reflection are asphalt, kerbs, glass and car paint within ~30 m of the player.
+            probe.resolution = RichDetailBudget ? 256 : 64;
+            probe.size = RichDetailBudget ? new Vector3(72f, 28f, 72f) : new Vector3(40f, 16f, 40f);
+            probe.blendDistance = RichDetailBudget ? 4f : 2f;
+            probe.intensity = DefaultProbeIntensity;
+            reflectionProbe = probe;
+
+            Debug.Log($"RR_REFLECT probe built: {probe.resolution}px size={probe.size} " +
+                      $"blend={probe.blendDistance} budget={(RichDetailBudget ? "rich" : "low")} " +
+                      $"schedule={(RichDetailBudget ? "interval" : "travel")}");
+        }
+
+        /// Per-biome probe tuning.
+        ///
+        /// Size and intensity are art choices and stay with the biome that made them.
+        /// Resolution and the capture schedule are the driver's, because those are the ones
+        /// with a frame cost and they have to differ per tier. A negative blendDistance
+        /// means "whatever the builder chose", which is what the sites that never set it
+        /// used to get by doing nothing.
+        private void TuneReflectionProbe(float intensity, Vector3 size, float blendDistance = -1f)
+        {
+            if (reflectionProbe == null) return;
+            reflectionProbe.intensity = intensity;
+            reflectionProbe.size = size;
+            if (blendDistance >= 0f) reflectionProbe.blendDistance = blendDistance;
         }
 
         private void BuildLighting()
@@ -1368,6 +1438,11 @@ namespace RoadRage.UnityRemake
 
             ApplyRoadWetness(Mathf.Clamp01(mood.RoadWetness + weather.WetnessAdd));
             ApplyPlatformQuality();
+            // After ApplyPlatformQuality: RichDetailBudget is what decides the probe's
+            // resolution and its capture schedule, and it is only settled once the tier has
+            // been applied. BuildCamera runs later and parents this probe to the chase
+            // camera, so the object has to exist by then.
+            BuildReflectionProbe();
 
             var sun = new GameObject("Sun").AddComponent<Light>();
             sunLight = sun;
@@ -1384,9 +1459,17 @@ namespace RoadRage.UnityRemake
 			volume.isGlobal = true;
 			volume.priority = 10f;
 			volume.profile = ScriptableObject.CreateInstance<VolumeProfile>();
-			var bloom = volume.profile.Add<Bloom>();
-			bloom.intensity.Override(0f);
-			bloom.active = false;
+			// Bloom was switched off and left off. The mood struct carried
+			// BloomIntensity/BloomThreshold the whole time and BlendZoneLighting was already
+			// lerping both, so the only things missing were a handle and a non-zero default.
+			// Without it an emissive sign reads as a bright texture; with it, as a light
+			// source - which is most of the difference between a night city that looks
+			// rendered and one that looks photographed.
+			// Held as a field for the same reason the grade and the tonemapper are: a zone
+			// crossing has to be able to move it, or the start biome's bloom follows the
+			// player for the whole run.
+			zoneBloom = volume.profile.Add<Bloom>();
+			ApplyBloom(mood);
 			// Without tonemapping every HDR highlight clips flat, which is a large part
 			// of the "plastic toy" read. ACES gives filmic rolloff on the bright end.
 			// ACES rolls the highlights off filmically but it also shifts hue and lifts
@@ -1418,6 +1501,29 @@ namespace RoadRage.UnityRemake
 			vignette.intensity.Override(0.15f);
 			vignette.smoothness.Override(0.68f);
 
+        }
+
+        /// Applies a mood's bloom. Called once at build and again every frame from
+        /// BlendZoneLighting, so the bloom follows a zone crossing like the grade does.
+        ///
+        /// A mood that sets BloomIntensity to 0 means "use the branch default", matching how
+        /// Saturation and Contrast already treat zero. The mobile default is roughly half:
+        /// the mip chain is a whole-screen cost, and the stylized-neon read survives at the
+        /// lower intensity. The threshold stays with the mood - 5.0 in every biome means
+        /// only genuinely emissive surfaces bloom, which is the conservative reading and the
+        /// one that does not turn wet asphalt into a light source.
+        private void ApplyBloom(BiomeMood mood)
+        {
+            if (zoneBloom == null) return;
+            var intensity = mood.BloomIntensity != 0f
+                ? mood.BloomIntensity
+                : RichDetailBudget ? DefaultBloomIntensity : MobileBloomIntensity;
+            zoneBloom.intensity.Override(intensity);
+            zoneBloom.threshold.Override(mood.BloomThreshold > 0f ? mood.BloomThreshold : DefaultBloomThreshold);
+            // High-quality filtering is a second upsample pass per mip; the low tier keeps
+            // the cheaper one.
+            zoneBloom.highQualityFiltering.Override(RichDetailBudget);
+            zoneBloom.active = !BloomDisabled;
         }
 
         private struct BiomeMood
@@ -1553,6 +1659,17 @@ namespace RoadRage.UnityRemake
         private const float GroundDesaturation = 0.55f;
         /// Final global trim in the colour grade, on top of the neutral tonemapper.
         private const float GradeSaturation = -10f;
+
+        /// Bloom defaults for a mood that sets 0, i.e. "use the branch default".
+        /// Emissive-only at this threshold, so it costs highlight pixels rather than the
+        /// whole frame. Bedrock value for the stylized-real target; the per-biome knob is
+        /// BiomeMood.BloomIntensity for anything that wants a heavier neon city.
+        private const float DefaultBloomIntensity = 0.55f;
+        /// Roughly half, for the tier that is not making its frame budget.
+        private const float MobileBloomIntensity = 0.28f;
+        private const float DefaultBloomThreshold = 1.1f;
+        /// Intensity the probe is built with before any biome tunes it.
+        private const float DefaultProbeIntensity = 1f;
 
         /// Neutral tonemapping is a plain range remap where ACES applied a filmic
         /// S-curve, so swapping to it removed the midtone lift and the shoulder punch
@@ -3572,6 +3689,12 @@ namespace RoadRage.UnityRemake
         private static bool ProfileChunks;
         private static bool NoCanopy;
         private static bool LogSky;
+        /// -nobloom. Bloom is off for the whole run when set, which is how its cost is
+        /// measured on a device that is not making frame rate.
+        private static bool BloomDisabled;
+        /// -noreflections. Suppresses the reflection probe build, its capture schedule and
+        /// the renderers' probe sampling, so the probe's cost can be measured on its own.
+        public static bool ReflectionsEnabled { get; private set; } = true;
 
         /// The measurement Gate A was decided on: renderers, triangles and how many of
         /// those renderers are alpha-tested. Greenwood measured 850 / 824 at the time.
@@ -4006,6 +4129,7 @@ namespace RoadRage.UnityRemake
         private Light sunLight;
         private ColorAdjustments zoneGrading;
         private Tonemapping zoneTonemap;
+        private Bloom zoneBloom;
 
         /// Global brightness lift on every biome's post exposure. The post pipeline
         /// (ACES tonemapping, vignette, SSAO) renders measurably darker than the
@@ -4107,6 +4231,10 @@ namespace RoadRage.UnityRemake
             }
             if (zoneTonemap != null)
                 zoneTonemap.mode.Override(here.TonemapAces == 1 ? TonemappingMode.ACES : TonemappingMode.Neutral);
+            // Same reasoning as the grade two blocks up: bloom is per-biome and has to move
+            // with the mood, or the border zone keeps the bloom of whichever biome the run
+            // started in.
+            ApplyBloom(here);
         }
 
         private static BiomeMood LerpMood(BiomeMood a, BiomeMood b, float t) => new()
@@ -4715,13 +4843,7 @@ namespace RoadRage.UnityRemake
 				// the Manhattan mood was restored on top of the photoreal pass. The mood
 				// is the single source of truth now; what is left here is the part
 				// nothing else owns.
-				if (reflectionProbe != null)
-				{
-					reflectionProbe.size = new Vector3(60f, 20f, 60f);
-					reflectionProbe.blendDistance = 3f;
-					reflectionProbe.resolution = 256;
-					reflectionProbe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
-				}
+				TuneReflectionProbe(DefaultProbeIntensity, new Vector3(60f, 20f, 60f), 3f);
 
 				var quality = QualitySettings.GetQualityLevel();
 				if (quality < 3)
@@ -4776,14 +4898,7 @@ namespace RoadRage.UnityRemake
 					sceneLight.transform.rotation = Quaternion.Euler(42f, -35f, 0f);
 				}
 
-				if (reflectionProbe != null)
-				{
-					reflectionProbe.intensity = 0.90f;
-					reflectionProbe.size = new Vector3(72f, 28f, 72f);
-					reflectionProbe.blendDistance = 4f;
-					reflectionProbe.resolution = 256;
-					reflectionProbe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
-				}
+				TuneReflectionProbe(0.90f, new Vector3(72f, 28f, 72f), 4f);
 
 				// Road — dark asphalt, almost no saturation
 				if (materials.TryGetValue("Road", out var road))
@@ -4965,14 +5080,9 @@ namespace RoadRage.UnityRemake
 							: new Color(0.14f, 0.16f, 0.22f, 1f));
 				}
 
-				if (reflectionProbe != null)
-				{
-					reflectionProbe.intensity = brooklyn ? 1.06f : 1.22f;
-					reflectionProbe.size = brooklyn
-						? new Vector3(58f, 18f, 58f)
-						: new Vector3(64f, 24f, 64f);
-					reflectionProbe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
-				}
+				TuneReflectionProbe(brooklyn ? 1.06f : 1.22f, brooklyn
+					? new Vector3(58f, 18f, 58f)
+					: new Vector3(64f, 24f, 64f));
 			}
 
 			private void ApplyCityRoadToneProfile(bool brooklyn)
@@ -5953,12 +6063,7 @@ namespace RoadRage.UnityRemake
 
         private void ApplyHillsPhotorealSignature()
         {
-            if (reflectionProbe != null)
-            {
-                reflectionProbe.intensity = 1.25f;
-                reflectionProbe.size = new Vector3(68f, 24f, 68f);
-                reflectionProbe.refreshMode = ReflectionProbeRefreshMode.EveryFrame;
-            }
+            TuneReflectionProbe(1.25f, new Vector3(68f, 24f, 68f));
         }
 
         private void ApplyHillsDepthPass()
@@ -8205,20 +8310,63 @@ namespace RoadRage.UnityRemake
         }
     }
 
-    /// Re-renders the street reflection probe on a timer. Every-frame capture means six
-    /// extra scene renders per frame; at 85 km/h a ~7 Hz refresh is indistinguishable.
+    /// Keeps the local reflection probe on the player and schedules its captures.
+    ///
+    /// A capture is six extra scene renders, so this was never EveryFrame: at 85 km/h a
+    /// ~4 Hz refresh is indistinguishable from a continuous one.
+    ///
+    /// Until 2026-09-18 nothing created the probe this was handed. The field was configured
+    /// in six places, BuildReflectionProbe() had an empty body and had no call site either,
+    /// and this driver was attached to the chase camera with a null - so its LateUpdate
+    /// returned on the first line and every ReflectionProbeUsage.Simple renderer in the world
+    /// sampled nothing.
+    ///
+    /// The schedule is tier-dependent because the cost is not: the rich tier captures four
+    /// times a second, the low tier waits until the player has travelled far enough for the
+    /// old capture to be visibly wrong and then captures once. Distance rather than time,
+    /// because a stationary player gains nothing from a fresh capture and still pays for six
+    /// renders. Both are logged, so the cost can be measured instead of argued about.
     public sealed class ReflectionProbeDriver : MonoBehaviour
     {
         public ReflectionProbe probe;
+        /// Seconds between captures on the rich tier.
         public float interval = 0.25f;
+        /// Metres the player must travel before the low tier recaptures. Distance, not time:
+        /// a stationary player gains nothing from a new capture but still pays for six renders.
+        public float lowTierTravelStep = 40f;
 
         private float nextRefresh;
+        private Vector3 lastCapturePosition;
+        private bool capturedOnce;
+        private int captures;
 
         private void LateUpdate()
         {
-            if (probe == null || Time.time < nextRefresh) return;
-            nextRefresh = Time.time + interval;
+            if (probe == null || !RoadRageBootstrap.ReflectionsEnabled) return;
+
+            var position = transform.position;
+            var rich = RoadRageBootstrap.RichDetailBudget;
+            if (rich)
+            {
+                if (Time.time < nextRefresh) return;
+                nextRefresh = Time.time + interval;
+            }
+            else
+            {
+                if (capturedOnce
+                    && (position - lastCapturePosition).sqrMagnitude < lowTierTravelStep * lowTierTravelStep)
+                    return;
+            }
+
+            lastCapturePosition = position;
+            capturedOnce = true;
             probe.RenderProbe();
+            captures++;
+            // First capture plus a periodic heartbeat: enough to prove the schedule is
+            // running from a player log without spamming it at four captures a second.
+            if (captures == 1 || captures % 60 == 0)
+                Debug.Log($"RR_REFLECT capture {captures} at {position.x:0},{position.z:0} " +
+                          $"tier={(rich ? "rich" : "low")} res={probe.resolution}");
         }
     }
 
