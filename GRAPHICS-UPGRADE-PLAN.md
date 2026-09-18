@@ -399,8 +399,16 @@ bootstrap's own `AfterSceneLoad` hook is what starts building the world. Precede
 ```text
 -quality=mobile|balanced|full      command line (device, or a desktop run)
 QualityPipeline.SetTier("mobile")  in-session / EditorPrefs "RoadRage.QualityTier"
+on a mobile platform               always the mobile tier, whatever the level says
 otherwise                          the current quality level decides
 ```
+
+That third line is load-bearing. Two of this project's own city passes call
+`QualitySettings.SetQualityLevel(3)` mid-run, so without a platform floor a phone that enters
+Brooklyn would silently switch to MSAA 4× and SSAO — the two costs Gate A is most likely to die
+on, enabled by a code path that has nothing to do with the graphics budget. `-quality=` still
+overrides the floor, including on a device, because measuring the phone at desktop settings is
+the entire point of the sweep.
 
 Then `Awake` forces the quality level to match the chosen tier, because the two can otherwise
 disagree (the editor keeps whatever level was last selected) and `SetQualityLevel` discards the
@@ -424,7 +432,8 @@ grep RR_QUALITY <player log>         shadows, distance, cascades, budget, level
 
 `RR_TIER` reports what was selected and `RR_QUALITY` what was actually applied, and they are
 separate lines on purpose: the previous version of this code logged a shadow configuration it
-never applied.
+never applied. On a mobile target `RR_TIER` should say `mobile` even when a city pass has moved
+the level — that is the floor working.
 
 **Shadows are now ON for the mobile tier** (45 m, one cascade, hard, low-res). That is an
 *addition* of cost on the tier that is failing, and it is deliberate: the tier claimed shadows
@@ -433,19 +442,19 @@ and had none, and a shadowless scene is a large part of why the phone build read
 
 ---
 
-## 11. Mobile-tier findings (2026-09-18) — three fixed, three open
+## 11. Mobile-tier findings (2026-09-18) — four fixed, two open
 
 Discovered while auditing `ProjectSettings/QualitySettings.asset` for the probe work. Each of
-these was checkable in the file before §10-bis; the first, second and third are now addressed
-there, and the remaining three need numbers before they can be decided.
+these were all true of the file before §10; the first four are now addressed there, and the
+last two need numbers before they can be decided.
 
 | Finding | Evidence | Consequence |
 |---|---|---|
-| **The mobile tier rendered no shadows at all.** Quality level 0 ("Very Low") had `shadows: 0` (Disable), and `ApplyPlatformQuality()` set only `shadowDistance` and `shadowCascades`, never `QualitySettings.shadows` | `QualitySettings.asset` level 0 | **FIXED in §10-bis.** Both branches now set all four values, the measurement has `-noshadows`, and the log reports what it applied |
+| **The mobile tier rendered no shadows at all.** Quality level 0 ("Very Low") had `shadows: 0` (Disable), and `ApplyPlatformQuality()` set only `shadowDistance` and `shadowCascades`, never `QualitySettings.shadows` | `QualitySettings.asset` level 0 | **FIXED in §10.** Both branches now set all four values, the measurement has `-noshadows`, and the log reports what it applied |
 | **Realtime reflection probes were off on the mobile tier** | level 0 `realtimeReflectionProbes: 0` | **FIXED in §9 #3** — this is why the probe work needed to touch QualitySettings |
-| **MSAA 4× applied to every tier** | all four quality levels pointed at the same URP asset | **FIXED in §10-bis** — the mobile tier is MSAA-off, balanced is 2×. 4× MSAA on a Mali-G52 at 2460×1080 in a fill-bound scene is the prime suspect for Gate A's < 1 FPS, and it is now an A/B instead of an opinion |
-| **SSAO was on for every tier** | single renderer asset, `m_Active: 1`, no per-level renderer override | **FIXED in §10-bis** — the mobile tier uses a renderer with the SSAO feature disabled |
-| **The Brooklyn pass force-raises the quality level to Ultra** | `QualitySettings.SetQualityLevel(3, true)` `:4850` and `:5005` — on every platform | On a phone, entering that biome switches to the Ultra tier. Harmony with the point above, not with the target device |
+| **MSAA 4× applied to every tier** | all four quality levels pointed at the same URP asset | **FIXED in §10** — the mobile tier is MSAA-off, balanced is 2×. 4× MSAA on a Mali-G52 at 2460×1080 in a fill-bound scene is the prime suspect for Gate A's < 1 FPS, and it is now an A/B instead of an opinion |
+| **SSAO was on for every tier** | single renderer asset, `m_Active: 1`, no per-level renderer override | **FIXED in §10** — the mobile tier uses a renderer with the SSAO feature disabled |
+| **The Brooklyn pass force-raises the quality level to Ultra** | `QualitySettings.SetQualityLevel(3, true)` — on every platform | Partly mitigated by the §10 platform floor: on a phone the *pipeline* no longer follows the level. The **detail budget still does** — `RichDetailBudget`, scatter density, traffic count, shadow distance and bloom intensity all go to their rich values mid-run on a phone. That is the remaining open item and it is a one-line decision once someone decides whether the Brooklyn pass is allowed to change the budget at all |
 | **Texture caps are global, not per-surface** | 464 of 465 `Resources/` textures pinned to 512 px on Android/iOS | Correct as a memory decision. §9 #8 makes exactly three exceptions where screen coverage justifies it. Further exceptions should be argued the same way |
 
 **Suggested measurement, cheapest first:** one Android build, four runs of the same 60-second

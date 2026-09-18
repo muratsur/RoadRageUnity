@@ -75,8 +75,21 @@ namespace RoadRage.UnityRemake
         /// GraphicsSettings defaults to - which is the bug this whole class exists to fix.
         public static void Rearm()
         {
-            Tier = tierOverride ?? TierForLevel(QualitySettings.GetQualityLevel());
+            Tier = ResolveTier();
             AppliedPath = Select(Tier);
+        }
+
+        /// The platform floors the tier. Two of this project's own city passes call
+        /// SetQualityLevel(3) mid-run, so without the floor a phone entering Brooklyn would
+        /// silently start rendering MSAA 4x with SSAO - the two costs Gate A is most likely to
+        /// die on, switched on by a code path that has nothing to do with graphics budget.
+        /// On desktop the level decides, which is what makes a plain level sweep a usable A/B.
+        /// -quality= still overrides both, including on a device, because measuring the phone
+        /// at desktop settings is the entire point of the sweep.
+        private static int ResolveTier()
+        {
+            if (tierOverride.HasValue) return tierOverride.Value;
+            return Application.isMobilePlatform ? Mobile : TierForLevel(QualitySettings.GetQualityLevel());
         }
 
         /// Inverse of LevelForTier for the levels that were chosen outside this class.
@@ -107,9 +120,7 @@ namespace RoadRage.UnityRemake
         private static void Apply()
         {
             tierOverride = ParseTier(ResolveTierName());
-            // Level to tier lives in TierForLevel, and ApplyPlatformQuality reads the same
-            // QualitySettings level for its detail budget, so the two cannot disagree.
-            Tier = tierOverride ?? TierForLevel(QualitySettings.GetQualityLevel());
+            Tier = ResolveTier();
             AppliedPath = Select(Tier);
 
             Debug.Log($"RR_TIER {TierName} -> {(AppliedPath ?? "GraphicsSettings default")} " +
