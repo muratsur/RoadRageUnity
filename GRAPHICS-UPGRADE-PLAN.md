@@ -463,6 +463,34 @@ tells you whether Gate A is reachable at all on this content before any asset wo
 
 ---
 
+## 12. Horizon ridge never survived a world build — fixed 2026-09-18
+
+The Greenwood ridge (three ranks, 26 peaks, `EnsureGlobalHorizonSky`) was in place and its
+fog was tuned for it — `FogDensity` down to `0.0020` so a 620 m rank keeps 21% instead of 5%
+— and the mountains were still not there. Two separate defects, both in the call path rather
+than the content:
+
+| Defect | Evidence | Effect |
+|---|---|---|
+| `EnsureGlobalHorizonSky` had exactly one caller, `ReloadBiome`. `Awake` builds materials, lighting, streaming, car, traffic and camera and never called it | one call site at `:656` before the fix | **A cold start had no ridge at all.** The forest ended at a wall of trees with sky above it, which is the corridor look §2.3 describes |
+| `ReloadBiome` did `Destroy(globalHorizonSky)` one line before calling the builder, and the builder opened with `if (globalHorizonSky != null) return;` | `:655`–`:656` before the fix | `Destroy` is deferred to end of frame, so the reference was still live and the guard swallowed the rebuild. The next call saw a destroyed object — which Unity's `==` reports as null — and built again, so the ridge was **missing on every other reload** and which reloads were hit depended on the session |
+
+**Fix.** The builder owns its teardown: `DestroyImmediate` plus a cleared reference, so it is
+safe on every world build, and `Awake` calls it after `BuildLighting`. Both call sites now
+produce a ridge for the biome that is actually active.
+
+This is the §6 Trap 2 failure mode in a different costume: content that exists in the project
+and is never placed, failing with no error. The mountain mesh
+(`Assets/Resources/Biomes/ForestVillage/Meshes/Mountains/SM_mountain.fbx`) and its three
+textures were all present throughout.
+
+**Not verified in-editor.** No Unity install and no .NET SDK in the environment that made this
+change, so `Tools/SymbolCheck` and a `-shot=` capture both still need to be run. The visual
+check is one Greenwood capture: the ridge should be present on the first frame *and* after
+`NextBiome()` returns to Greenwood.
+
+---
+
 ## Appendix — exact code sites referenced
 
 Line numbers are current as of the §9–§10 changes. References in §1–§2 that describe the *audit*

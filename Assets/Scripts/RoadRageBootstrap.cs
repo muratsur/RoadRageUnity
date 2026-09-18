@@ -454,6 +454,11 @@ namespace RoadRage.UnityRemake
 
             BuildMaterials();
             BuildLighting();
+            // The horizon ridge and sky dome are the only part of the world that is not
+            // chunk-streamed, and they used to be built solely from ReloadBiome - so a
+            // cold start into Greenwood had no ridge at all: the forest ended at a wall
+            // of trees with sky above it. It has to be built on the first frame too.
+            EnsureGlobalHorizonSky(biomeIndex);
             UpdateStreaming(startDistance);
             BuildCar();
             if (biomeName == Biomes[8]) DesaturateManhattanCar();
@@ -652,7 +657,13 @@ namespace RoadRage.UnityRemake
 
             // 7. Rebuild lighting for new biome
             BuildLighting();
-            if (globalHorizonSky != null) Destroy(globalHorizonSky);
+            // Teardown of the previous biome's ridge lives inside EnsureGlobalHorizonSky.
+            // It used to happen here with Destroy(), which Unity defers to the end of the
+            // frame: the reference was still a live object one line later, so the
+            // `if (globalHorizonSky != null) return;` guard swallowed that rebuild. The
+            // next call saw a destroyed object, which Unity's == reports as null, and built
+            // again - so the ridge was silently missing on every other reload, Greenwood
+            // included, and which reloads were affected depended on how the session went.
             EnsureGlobalHorizonSky(biomeIndex);
 
             // 8. Reset player car & pursuit
@@ -6474,7 +6485,16 @@ namespace RoadRage.UnityRemake
 
         private void EnsureGlobalHorizonSky(int biomeIndex)
         {
-            if (globalHorizonSky != null) return;
+            // Owns its own teardown. Destroy() is deferred to the end of the frame, so a
+            // null guard after it returns early and the horizon is never rebuilt - which
+            // is exactly how the ridge vanished on the first biome reload. DestroyImmediate
+            // plus a cleared reference makes this method safe to call on every world build,
+            // and the biome that is active now is always the biome the ridge belongs to.
+            if (globalHorizonSky != null)
+            {
+                DestroyImmediate(globalHorizonSky);
+                globalHorizonSky = null;
+            }
 
             globalHorizonSky = new GameObject("Global Horizon Sky & Mountains");
             globalHorizonSky.AddComponent<GlobalHorizonFollower>();
