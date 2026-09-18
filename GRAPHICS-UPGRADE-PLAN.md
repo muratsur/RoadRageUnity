@@ -301,11 +301,25 @@ product rather than a quality setting.
 
 ## 9. Stage 0 — IMPLEMENTED 2026-09-18
 
-Committed on `arena/01a0b63a-roadrageunity`. **Not yet compiled in Unity and not measured** —
-this environment has no Unity install and no .NET, so rung 1 of the test ladder (a real Unity
-compile) and `Tools/symbolcheck.sh` both have to run on Murat's machine. Treat everything below
-as "written, unverified" until that has happened; that is the standard this project holds itself
-to and this change does not get an exemption for being well-intentioned.
+Committed on `arena/01a0b63a-roadrageunity` as `45bd8c1`.
+
+```text
+Build:            not built - no Unity install in the authoring environment
+Test:             SymbolCheck (CI), the project's own floor
+Expected:         0 undeclared calls, 0 unknown members, 0 missing Resources references
+Actual:           PASS - "Verify the checker still detects a planted bug" and
+                  "Check the project for undefined methods" both succeeded
+                  (run 35393018001, https://github.com/muratsur/RoadRageUnity/actions/runs/35393018001)
+Measurement:      CI conclusion, not a frame time
+Pass/Fail:        PARTIAL - the static floor passes; rungs 1-3 of the ladder have not run
+Next action:      Unity compile, then the -nobloom / -noreflections A/B on device
+```
+
+**Still not compiled in Unity and not measured on any device.** SymbolCheck is names only: it
+does not check argument counts or types, and it is explicitly not a substitute for a real Unity
+compile (`PRODUCTION-GATES.md` §8). Treat the visual changes below as "written, unverified" until
+someone has opened the project and run it. This change does not get an exemption for being
+well-intentioned.
 
 ### What changed
 
