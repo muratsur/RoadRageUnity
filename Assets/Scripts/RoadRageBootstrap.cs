@@ -17,6 +17,162 @@ namespace RoadRage.UnityRemake
     /// So the pool sorts by distance a few times a second and enables a fixed number. The
     /// budget is small deliberately: with a per-object limit of 4, more than about a dozen
     /// in play buys nothing a driver can see.
+    /// Selects the render pipeline asset that matches the frame budget.
+    ///
+    /// GraphicsSettings holds exactly one default pipeline, so until now every quality level
+    /// rendered with the same URP asset: MSAA 4x and SSAO on the phone as well as on the
+    /// desktop. Gate A measured under 1 FPS on that phone in a scene already diagnosed as
+    /// alpha-test overdraw - that is a fill-rate budget problem, and MSAA 4x at 2460x1080 is
+    /// four samples per pixel of it. Nothing about the biomes, the moods or the materials
+    /// changes; only how many times each pixel is shaded.
+    ///
+    /// QualitySettings.renderPipeline is the supported per-level override and it takes the
+    /// level's asset over GraphicsSettings.defaultRenderPipeline. Because it resolves before
+    /// the first frame, the choice cannot live in Awake - the world would already have started
+    /// building under the desktop asset - so it is a RuntimeInitializeOnLoadMethod ordered
+    /// BeforeSceneLoad, which runs before the bootstrap's own AfterSceneLoad hook.
+    ///
+    /// The assets are found by path, not by a serialised reference. Nothing in this file holds
+    /// a serialised reference to anything: the whole world is built in code, which is the same
+    /// reason Resources.Load is used everywhere else here.
+    public static class QualityPipeline
+    {
+        /// Tiers, cheapest first. -quality= forces one, and is the A/B switch this is for.
+        private const int Mobile = 0;
+        private const int Balanced = 1;
+        private const int Full = 2;
+
+        private const string MobilePath = "Assets/Resources/Settings/RoadRageURP_Mobile.asset";
+        private const string BalancedPath = "Assets/Resources/Settings/RoadRageURP_MSAA2.asset";
+        private const string FullPath = "Assets/Resources/Settings/RoadRageURP.asset";
+
+        /// Set by -quality=mobile|balanced|full. Null means "resolve from the platform".
+        private static int? tierOverride;
+        /// Also settable from the editor, which cannot pass -quality= on the command line.
+        /// Same shape as the low-detail override: the pref persists so it survives entering
+        /// play mode, and it has to be cleared explicitly afterwards or every later reading is
+        /// off the shipping path.
+        private static string tierNameOverride;
+#if UNITY_EDITOR
+        private const string TierPrefKey = "RoadRage.QualityTier";
+#endif
+
+        public static int Tier { get; private set; } = Mobile;
+        public static string TierName => Tier switch { Mobile => "mobile", Balanced => "balanced", _ => "full" };
+        /// Path the selected asset was loaded from, or null when the default is in use.
+        public static string AppliedPath { get; private set; }
+
+        /// Level assignments. A sweep of the four levels visits three distinct configurations
+        /// - levels 0 and 1 are both the mobile tier, because the budget they share is the
+        /// same one and a fourth asset would only be a fourth thing to keep in sync. The full
+        /// tier takes level 3 because that is what the project already ran at
+        /// (m_CurrentQuality: 3) and what the city passes force on the fly.
+        public static int LevelForTier(int tier) => tier switch { Mobile => 0, Balanced => 2, _ => 3 };
+
+        /// Re-applies the pipeline after something set the quality level behind this class's
+        /// back. QualitySettings.SetQualityLevel discards the per-level renderPipeline
+        /// override, so the asset has to be reassigned or the level renders with whatever
+        /// GraphicsSettings defaults to - which is the bug this whole class exists to fix.
+        public static void Rearm()
+        {
+            Tier = tierOverride ?? TierForLevel(QualitySettings.GetQualityLevel());
+            AppliedPath = Select(Tier);
+        }
+
+        /// Inverse of LevelForTier for the levels that were chosen outside this class.
+        private static int TierForLevel(int level) => level switch
+        {
+            <= 1 => Mobile,
+            2 => Balanced,
+            _ => Full,
+        };
+
+        /// Forces a tier from the editor or from code. Re-enter play mode for the switch to
+        /// take effect: the pipeline is chosen before the scene loads, so a running world
+        /// cannot move to another one without rebuilding.
+        public static void SetTier(string name)
+        {
+            tierNameOverride = name;
+#if UNITY_EDITOR
+            if (name == null) UnityEditor.EditorPrefs.DeleteKey(TierPrefKey);
+            else UnityEditor.EditorPrefs.SetString(TierPrefKey, name);
+#endif
+            Debug.Log($"RR_TIER forced to {name ?? "platform default"} " +
+                      "(re-enter play mode for the pipeline to change)");
+        }
+
+        public static void ClearTierOverride() => SetTier(null);
+
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void Apply()
+        {
+            tierOverride = ParseTier(ResolveTierName());
+            // Level to tier lives in TierForLevel, and ApplyPlatformQuality reads the same
+            // QualitySettings level for its detail budget, so the two cannot disagree.
+            Tier = tierOverride ?? TierForLevel(QualitySettings.GetQualityLevel());
+            AppliedPath = Select(Tier);
+
+            Debug.Log($"RR_TIER {TierName} -> {(AppliedPath ?? "GraphicsSettings default")} " +
+                      $"(platform={(Application.isMobilePlatform ? "mobile" : "desktop")}" +
+                      $"{(tierOverride.HasValue ? ", forced" : "")})");
+        }
+
+        /// Precedence: an in-session override, then the editor pref, then -quality=. The pref
+        /// outranks the command line because the editor cannot set one - a pref the command
+        /// line outranked would be untestable from the editor, which is where it is set.
+        private static string ResolveTierName()
+        {
+#if UNITY_EDITOR
+            if (tierNameOverride == null
+                && UnityEditor.EditorPrefs.HasKey(TierPrefKey))
+                tierNameOverride = UnityEditor.EditorPrefs.GetString(TierPrefKey);
+#endif
+            return tierNameOverride ?? RoadRageBootstrap.CommandLineValue("-quality=");
+        }
+
+        private static int? ParseTier(string value) => value?.Trim().ToLowerInvariant() switch
+        {
+            "mobile" => Mobile,
+            "balanced" => Balanced,
+            "full" => Full,
+            _ => null,
+        };
+
+        private static string Select(int tier)
+        {
+            var path = tier switch { Mobile => MobilePath, Balanced => BalancedPath, _ => FullPath };
+            var resource = Strip(path);
+            var asset = resource == null ? null : Resources.Load<UniversalRenderPipelineAsset>(resource);
+            if (asset != null)
+            {
+                QualitySettings.renderPipeline = asset;
+                return path;
+            }
+
+            // A missing asset must not throw: the fallback is the one pipeline the project has
+            // always rendered with, and the log line is the part that matters.
+            Debug.LogWarning($"RR_TIER {path} not found under Resources; " +
+                             "falling back to GraphicsSettings.defaultRenderPipeline");
+            QualitySettings.renderPipeline = null;
+            return null;
+        }
+
+        /// "Assets/Resources/Settings/RoadRageURP_Mobile.asset" -> "Settings/RoadRageURP_Mobile"
+        ///
+        /// Null when the path is not under a Resources folder. Returning the bare file name
+        /// instead would let Resources.Load resolve some unrelated asset that happens to share
+        /// it, and a silently wrong pipeline is worse than a logged failure.
+        private static string Strip(string assetPath)
+        {
+            var name = System.IO.Path.GetFileNameWithoutExtension(assetPath);
+            var folder = System.IO.Path.GetDirectoryName(assetPath) ?? string.Empty;
+            var marker = folder.IndexOf("Resources", System.StringComparison.Ordinal);
+            if (marker < 0) return null;
+            var relative = folder[(marker + "Resources".Length)..].TrimStart('/');
+            return relative.Length == 0 ? name : $"{relative}/{name}";
+        }
+    }
+
     internal static class LocalLights
     {
         private const float SweepSeconds = 0.25f;
@@ -173,6 +329,21 @@ namespace RoadRage.UnityRemake
             }
             Instance = this;
 
+            // QualityPipeline.Apply chose a tier, not a quality level, and the two can
+            // disagree: in the editor the saved level is whatever was last selected, so Play
+            // could start on the full pipeline with the mobile shadow budget, or the reverse.
+            // SetQualityLevel also resets the per-level pipeline override, so the level has to
+            // be settled before anything reads the budget - hence here, at the top of Awake,
+            // before ApplyPlatformQuality is reached through BuildLighting.
+            var wantedLevel = QualityPipeline.LevelForTier(QualityPipeline.Tier);
+            if (QualitySettings.GetQualityLevel() != wantedLevel)
+            {
+                QualitySettings.SetQualityLevel(wantedLevel, true);
+                QualityPipeline.Rearm();
+                Debug.Log($"RR_TIER quality level {wantedLevel} ({QualityPipeline.TierName}) forced to " +
+                          $"match the chosen pipeline; pipeline={QualityPipeline.AppliedPath ?? "default"}");
+            }
+
             foreach (var oldHud in FindObjectsByType<RoadRageHUD>(FindObjectsInactive.Include))
             {
                 DestroyImmediate(oldHud);
@@ -216,6 +387,7 @@ namespace RoadRage.UnityRemake
             // measured at all.
             BloomDisabled = HasCommandLineFlag("-nobloom");
             ReflectionsEnabled = !HasCommandLineFlag("-noreflections");
+            ShadowsDisabled = HasCommandLineFlag("-noshadows");
             ChaseCamera.LogCamera = HasCommandLineFlag("-camlog");
             var cinematic = HasCommandLineFlag("-cinematic");
             ArcadeCarController.CinematicPilot = cinematic;
@@ -1297,26 +1469,43 @@ namespace RoadRage.UnityRemake
 
         private static void ApplyPlatformQuality()
         {
-            var lowDetail = lowDetailOverride ?? Application.isMobilePlatform;
+            var lowDetail = lowDetailOverride ?? (QualitySettings.GetQualityLevel() <= 1);
             RichDetailBudget = !lowDetail;
 
+            // Shadow distance and cascades were the only shadow settings the low branch set,
+            // and it never set QualitySettings.shadows at all - so the level it ran on decided,
+            // and the level it ran on is "Very Low", which ships with shadows Disable. The log
+            // said "70m 1-cascade" while the renderer drew no shadows whatsoever. Both
+            // branches now own every shadow value they depend on.
             if (!lowDetail)
             {
+                QualitySettings.shadows = UnityEngine.ShadowQuality.All;
                 QualitySettings.shadowDistance = 160f;
                 QualitySettings.shadowCascades = 4;
-                QualitySettings.shadows = UnityEngine.ShadowQuality.All;
-                return;
+                QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Medium;
+            }
+            else
+            {
+                QualitySettings.shadows = UnityEngine.ShadowQuality.HardOnly;
+                QualitySettings.shadowDistance = 45f;
+                QualitySettings.shadowCascades = 1;
+                QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Low;
             }
 
-            QualitySettings.shadowDistance = 70f;
-            QualitySettings.shadowCascades = 1;
-            QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Low;
             QualitySettings.globalTextureMipmapLimit = 0;
             // Only cap on a real handset. Capping a forced-low desktop run would clamp the
             // frame rate to 60 and hide exactly the headroom the run is measuring.
-            if (Application.isMobilePlatform) Application.targetFrameRate = 60;
-            Debug.Log("RR_QUALITY mobile tier: no reflection probe, 70m 1-cascade shadows, " +
-                      $"1024 textures (forced={lowDetailOverride == true && !Application.isMobilePlatform})");
+            if (lowDetail && Application.isMobilePlatform) Application.targetFrameRate = 60;
+
+            // Applied last so it holds on either tier: -noshadows exists to isolate the cost
+            // of the shadows this method just turned on for the low tier.
+            if (ShadowsDisabled) QualitySettings.shadows = UnityEngine.ShadowQuality.Disable;
+
+            Debug.Log($"RR_QUALITY {QualityPipeline.TierName} tier: {QualitySettings.shadows}, " +
+                      $"{QualitySettings.shadowDistance:0}m {QualitySettings.shadowCascades}-cascade shadows, " +
+                      $"budget={(RichDetailBudget ? "rich" : "low")} " +
+                      $"(forced={lowDetailOverride == true && !Application.isMobilePlatform}, " +
+                      $"level={QualitySettings.GetQualityLevel()}, noshadows={ShadowsDisabled})");
         }
 
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
@@ -3695,6 +3884,9 @@ namespace RoadRage.UnityRemake
         /// -noreflections. Suppresses the reflection probe build, its capture schedule and
         /// the renderers' probe sampling, so the probe's cost can be measured on its own.
         public static bool ReflectionsEnabled { get; private set; } = true;
+        /// -noshadows. Shadows are now enabled on the low tier, where the quality level used
+        /// to have them off, so the sweep needs to be able to isolate that as well.
+        private static bool ShadowsDisabled;
 
         /// The measurement Gate A was decided on: renderers, triangles and how many of
         /// those renderers are alpha-tested. Greenwood measured 850 / 824 at the time.

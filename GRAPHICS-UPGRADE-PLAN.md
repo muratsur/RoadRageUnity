@@ -361,22 +361,90 @@ number to watch, and reverting is a two-line edit per file.
 - **Forward+** — it lifts the 4-lights-per-object ceiling, which is a real limitation in Neon
   City, but it is a measured A/B on the target device, not something to flip blind on a platform
   that is not making frame rate yet.
-- **MSAA, SSAO-per-tier, shadow settings** — see §10. These are project-settings decisions with a
-  large frame cost and they need numbers, not opinions.
+- **MSAA, SSAO-per-tier, shadow settings** — left alone in §9, then done in §10 once it was
+  clear the sweep cannot be taken without them.
 
 ---
 
-## 10. New mobile-tier findings (2026-09-18) — these need decisions
+## 10. Per-tier pipeline split — IMPLEMENTED 2026-09-18
+
+The measurement from §11 needs the two big per-pixel costs to be switchable. They were not:
+`GraphicsSettings` holds one default pipeline, so **every quality level rendered with MSAA 4× and
+SSAO on**, and the only way to A/B either was to edit an asset and rebuild.
+
+`ProjectSettings/QualitySettings.asset` now assigns an explicit pipeline per level, and each
+level maps to a tier:
+
+| Level | Tier | Pipeline asset | MSAA | SSAO | Renderer |
+|---|---|---|---|---|---|
+| 0 Very Low | `mobile` | `RoadRageURP_Mobile.asset` | **Off** (`m_MSAA: 1`) | **Off** | `RoadRageRenderer_NoSsao.asset` |
+| 1 Medium | `mobile` | same | Off | Off | same |
+| 2 High | `balanced` | `RoadRageURP_MSAA2.asset` | 2× | On | `RoadRageRenderer.asset` |
+| 3 Ultra | `full` | `RoadRageURP.asset` | 4× | On | `RoadRageRenderer.asset` |
+
+Three of the five assets are new; the other two are the originals and keep their GUIDs, so
+`GraphicsSettings.defaultRenderPipeline` and the editor's scene view are untouched.
+
+**`MsaaQuality.Disabled` is 1, not 0.** Verified against the URP source enum
+(`Disabled = 1, _2x = 2, _4x = 4, _8x = 8`). An `m_MSAA: 0` asset would have been an
+out-of-range value in a serialised enum field — silently undefined behaviour rather than a
+build error. The files are named `_NoMSAA` rather than `_MSAA0` for the same reason.
+
+### How the tier is chosen
+
+`QualityPipeline` (in `RoadRageBootstrap.cs`) resolves it in a `BeforeSceneLoad` hook, because
+the asset has to be in place before the first frame — `Awake` would be too late, since the
+bootstrap's own `AfterSceneLoad` hook is what starts building the world. Precedence:
+
+```text
+-quality=mobile|balanced|full      command line (device, or a desktop run)
+QualityPipeline.SetTier("mobile")  in-session / EditorPrefs "RoadRage.QualityTier"
+otherwise                          the current quality level decides
+```
+
+Then `Awake` forces the quality level to match the chosen tier, because the two can otherwise
+disagree (the editor keeps whatever level was last selected) and `SetQualityLevel` discards the
+per-level pipeline override — so `Rearm()` reassigns the asset afterwards. The same
+`QualitySettings.GetQualityLevel()` check drives `ApplyPlatformQuality`'s detail budget, so the
+pipeline, the scatter density and the shadow budget can no longer drift apart.
+
+### The sweep
+
+```text
+# one Android build; each line is the same 60-second capture
+-quality=mobile                      MSAA off, SSAO off, 45m hard shadows, half bloom
+-quality=balanced                    MSAA 2x,  SSAO on
+-quality=full                        MSAA 4x,  SSAO on
+-quality=full -noshadows             isolate shadows
+-quality=full -nobloom               isolate bloom
+-quality=full -noreflections         isolate the reflection probe
+grep RR_TIER <player log>            tier, chosen pipeline, forced or resolved
+grep RR_QUALITY <player log>         shadows, distance, cascades, budget, level
+```
+
+`RR_TIER` reports what was selected and `RR_QUALITY` what was actually applied, and they are
+separate lines on purpose: the previous version of this code logged a shadow configuration it
+never applied.
+
+**Shadows are now ON for the mobile tier** (45 m, one cascade, hard, low-res). That is an
+*addition* of cost on the tier that is failing, and it is deliberate: the tier claimed shadows
+and had none, and a shadowless scene is a large part of why the phone build reads flat. The
+`-noshadows` switch exists so the change is measurable rather than assumed.
+
+---
+
+## 11. Mobile-tier findings (2026-09-18) — three fixed, three open
 
 Discovered while auditing `ProjectSettings/QualitySettings.asset` for the probe work. Each of
-these is checkable in the file today.
+these was checkable in the file before §10-bis; the first, second and third are now addressed
+there, and the remaining three need numbers before they can be decided.
 
 | Finding | Evidence | Consequence |
 |---|---|---|
-| **The mobile tier renders no shadows at all.** Quality level 0 ("Very Low") has `shadows: 0` (Disable). `ApplyPlatformQuality()` sets `shadowDistance` and `shadowCascades` on the low tier but never sets `QualitySettings.shadows` — only the rich branch does | `QualitySettings.asset` level 0; `ApplyPlatformQuality` `:1307` (rich branch) | The log line says *"70m 1-cascade shadows"*; the actual setting is **shadows off**. A shadowless scene is a large part of "flat and fake" on device, and the log is actively misleading about it |
-| **Realtime reflection probes were off on the mobile tier** | level 0 `realtimeReflectionProbes: 0` | Fixed in §9 #3 — this is why the probe work needed to touch QualitySettings |
-| **MSAA 4× applies to every tier** | `RoadRageURP.asset` `m_MSAA: 4`, and all four quality levels point at the same URP asset | 4× MSAA on a Mali-G52 at 2460×1080 is a very large per-pixel cost in a scene already diagnosed as fill-bound. This is a prime suspect for Gate A's < 1 FPS and it is a one-line A/B |
-| **SSAO is on for every tier** | single renderer asset, `m_Active: 1`, and no per-level renderer override exists on any quality level | 12 samples at 1.6 intensity on a fill-bound phone. Gates §4 already flags that the mobile tier has never been re-verified since SSAO became functional |
+| **The mobile tier rendered no shadows at all.** Quality level 0 ("Very Low") had `shadows: 0` (Disable), and `ApplyPlatformQuality()` set only `shadowDistance` and `shadowCascades`, never `QualitySettings.shadows` | `QualitySettings.asset` level 0 | **FIXED in §10-bis.** Both branches now set all four values, the measurement has `-noshadows`, and the log reports what it applied |
+| **Realtime reflection probes were off on the mobile tier** | level 0 `realtimeReflectionProbes: 0` | **FIXED in §9 #3** — this is why the probe work needed to touch QualitySettings |
+| **MSAA 4× applied to every tier** | all four quality levels pointed at the same URP asset | **FIXED in §10-bis** — the mobile tier is MSAA-off, balanced is 2×. 4× MSAA on a Mali-G52 at 2460×1080 in a fill-bound scene is the prime suspect for Gate A's < 1 FPS, and it is now an A/B instead of an opinion |
+| **SSAO was on for every tier** | single renderer asset, `m_Active: 1`, no per-level renderer override | **FIXED in §10-bis** — the mobile tier uses a renderer with the SSAO feature disabled |
 | **The Brooklyn pass force-raises the quality level to Ultra** | `QualitySettings.SetQualityLevel(3, true)` `:4850` and `:5005` — on every platform | On a phone, entering that biome switches to the Ultra tier. Harmony with the point above, not with the target device |
 | **Texture caps are global, not per-surface** | 464 of 465 `Resources/` textures pinned to 512 px on Android/iOS | Correct as a memory decision. §9 #8 makes exactly three exceptions where screen coverage justifies it. Further exceptions should be argued the same way |
 
@@ -388,7 +456,7 @@ tells you whether Gate A is reachable at all on this content before any asset wo
 
 ## Appendix — exact code sites referenced
 
-Line numbers are current as of the §9 change. References in §1–§2 that describe the *audit*
+Line numbers are current as of the §9–§10 changes. References in §1–§2 that describe the *audit*
 (i.e. the pre-change state) are labelled as commit `b8bdbe1` numbers and are deliberately not
 updated — they are the evidence for what was wrong.
 
@@ -417,7 +485,7 @@ updated — they are the evidence for what was wrong.
 | | 8328 | `ReflectionProbeDriver` — tier-aware capture schedule |
 | `Assets/Settings/RoadRageURP.asset` | `m_RenderingMode: 0`, `m_RequireDepthTexture: 0`, `m_RequireOpaqueTexture: 0`, `m_LightProbeSystem: 0`, `m_MSAA: 4`, `m_GPUResidentDrawerMode: 0` | Pipeline settings. MSAA 4 applies to every tier |
 | `Assets/Settings/RoadRageRenderer.asset` | SSAO `Radius: 2` (was 0.55), `Intensity: 1.6`, `SampleCount: 12`, `m_Active: 1` | SSAO applies to every tier — there is no per-level renderer |
-| `ProjectSettings/QualitySettings.asset` | level 0 "Very Low" `shadows: 0`, `realtimeReflectionProbes: 0`; `m_PerPlatformDefaultQuality: Android: 0` | The mobile tier's real settings — see §10 |
+| `ProjectSettings/QualitySettings.asset` | per-level `customRenderPipeline`; `m_PerPlatformDefaultQuality: Android: 0` | The tier map — see §10. Level 0's own `shadows: 0` and `realtimeReflectionProbes: 0` are what §9–§10 had to override at runtime |
 | `Assets/Shaders/TerrainSplat.shader` | 3-layer ground blend | Three layers is the shading ceiling |
 | `Packages/manifest.json` | `com.unity.render-pipelines.high-definition: 17.5.0` | HDRP is installed but cannot target Android/iOS |
 | `Tools/HdrpToUrp/convert.py` | — | Evidence of a prior HDRP→URP migration |
