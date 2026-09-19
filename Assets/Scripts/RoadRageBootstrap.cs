@@ -2310,10 +2310,12 @@ namespace RoadRage.UnityRemake
             else if (biomeIndex == 0) // Greenwood Forest
             {
                 // Forest Litter & Dirt Verge
-                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Grass"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Left Forest Verge", -1.30f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.30f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Left Forest Grass Stripe", -2.8f, -1.15f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Right Forest Grass Stripe", 1.15f, 2.8f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Left Forest Grass Outer", -4.0f, -2.5f, 0.04f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Right Forest Grass Outer", 2.5f, 4.0f, 0.04f, materials["Forest Grass"], relative: true);
             }
             else
             {
@@ -2347,6 +2349,10 @@ namespace RoadRage.UnityRemake
                 BuildDashedRibbon("Right Lane Dashes Inner", 1f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
                 BuildDashedRibbon("Right Lane Dashes Outer", 2f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
             }
+            // Natural road wear - tyre marks, grime, oil. Was defined but never called,
+            // so every biome read as flat plastic. Greenwood especially needs it to break
+            // up the single dark asphalt tile.
+            ScatterRoadDecals();
         }
 
         private static void EnableProbeReflections(GameObject item)
@@ -6693,103 +6699,69 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(40621 ^ chunkSeed);
 
-            // The kit's ground texture is bare dirt, so the forest floor has to be made
-            // of meshes: pack undergrowth densely enough that the ground barely shows.
-            ScatterBand(1.3f, 7.4f, 13f, (d, l, s) =>
-                ForestPlant(d, l, 0.9f, 1.7f, "Verge Undergrowth"));
-            ScatterBand(1.7f, 13f, 26f, (d, l, s) =>
+            // DENSE forest floor - hide bare dirt with overlapping undergrowth right to road edge
+            ScatterBand(0.7f, 5.2f, 7.8f, (d, l, s) =>
+                ForestPlant(d, l, 0.8f, 1.6f, "Verge Undergrowth"));
+            ScatterBand(0.9f, 7.0f, 11f, (d, l, s) =>
+                ForestPlant(d, l, 0.9f, 1.8f, "Verge Fern"));
+            ScatterBand(1.1f, 10f, 16f, (d, l, s) =>
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
-            ScatterBand(2.3f, 26f, 55f, (d, l, s) =>
-                ForestPlant(d, l, 1.2f, 2.4f, "Deep Undergrowth"));
-            ScatterBand(1.9f, 7.2f, 20f, (d, l, s) =>
-            {
-                return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
-            });
+            ScatterBand(1.4f, 15f, 26f, (d, l, s) =>
+                ForestPlant(d, l, 1.0f, 2.2f, "Mid Undergrowth"));
+            ScatterBand(1.8f, 24f, 42f, (d, l, s) =>
+                ForestPlant(d, l, 1.1f, 2.4f, "Deep Undergrowth"));
+            ScatterBand(1.0f, 5.5f, 14f, (d, l, s) =>
+                ForestPlant(d, l, 0.5f, 1.2f, "Forest Grass"));
 
-            // Guardrail and a cut bank, both hugging the shoulder
-            BuildRibbon("Left Shoulder Bank", -8.4f, -7.6f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Right Shoulder Bank", 7.6f, 8.4f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Left Leaf Litter", -8f, -7f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Right Leaf Litter", 7f, 8f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
+            // Natural cut bank and leaf litter hugging the shoulder - closer to road now
+            BuildRibbon("Left Shoulder Bank", -6.8f, -5.8f, 0.35f, materials["Forest Floor PBR"], sampleStep: 4f);
+            BuildRibbon("Right Shoulder Bank", 5.8f, 6.8f, 0.35f, materials["Forest Floor PBR"], sampleStep: 4f);
+            BuildRibbon("Left Leaf Litter", -7.2f, -5.5f, 0.055f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Right Leaf Litter", 5.5f, 7.2f, 0.055f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Left Forest Litter Deep", -9f, -6.5f, 0.04f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Right Forest Litter Deep", 6.5f, 9f, 0.04f, materials["Forest Grass"], sampleStep: 5f);
             for (var side = -1; side <= 1; side += 2)
             {
+                // Guardrail moved from 7.3m to 6.0m - forest road guardrail hugs shoulder, not a field
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
-                    side * 7.3f, side * 7.5f, 0.95f, materials["Sidewalk"], sampleStep: 4f);
-                ScatterBand(9f, 7.4f, 7.4f, (d, l, s) =>
-                    PrimitiveOnRoad(PrimitiveType.Cube, "Guardrail Post", d, side * 7.4f, 0.45f,
-                        new Vector3(0.16f, 0.9f, 0.16f), materials["Car Dark"], Vector3.zero, false), 0.05f);
+                    side * 6.0f, side * 6.25f, 0.85f, materials["Sidewalk"], sampleStep: 3f);
+                ScatterBand(4f, 6.12f, 6.12f, (d, l, s) =>
+                    PrimitiveOnRoad(PrimitiveType.Cube, "Guardrail Post", d, side * 6.12f, 0.4f,
+                        new Vector3(0.14f, 0.85f, 0.14f), materials["Car Dark"], Vector3.zero, false), 0.05f);
             }
 
-            // Trunks packed right against the shoulder. Canopies overhang the road.
             if (NoCanopy) return;
 
-            // Gate A measured Greenwood as alpha-test overdraw, not geometry or draw
-            // calls: 850 renderers a chunk of which 824 are cutout, 126 FPS with the
-            // canopy and 457 without, while Hollywood draws more triangles and runs four
-            // times faster. The only lever that moves it is less foliage covering the
-            // screen - instancing and LODs were measured and did nothing.
-            //
-            // Five near bands used to run here, all spanning 26-66 m. They overlapped
-            // almost entirely, so most of what they added was a second and third layer
-            // of leaf cards over the same ground - which is precisely the cost, since
-            // alpha test defeats early-Z and every overlapping card shades again. Three
-            // bands cover the same span with the layering that was being paid for twice.
-            // Taller, and one band closer. The reference is a road cut through timber that
-            // stands well above the car, not a treeline you look over - so the near band
-            // starts at the verge rather than 26 m out, and every band gained height.
-            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 14f, 22f));
-            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 16f, 24f));
-            ScatterBand(7f, 18f, 30f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(8f, 26f, 42f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(8f, 34f, 56f, (d, l, s) => ForestTree(d, l, 16f, 26f));
-            // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
-            // over the camera - so it keeps the forest reading as deep.
-            ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            // Guard rail along both shoulders. A mountain road has one, and it is the
-            // single strongest cue that the road is cut into a slope rather than laid on
-            // a field - it also gives the bends an edge to read against, which is most of
-            // why the curve is worth having.
-            //
-            // Placed off the measured clearance rather than a constant, so it follows the
-            // carriageway rather than needing a new number every time the road changes
-            // width. Posts every 6 m; the mesh is normalised to post height, so the rail
-            // reads at the right scale whatever the source model is.
-            var railMaterial = materials.TryGetValue("Hills Metal", out var galvanised)
-                ? galvanised
-                : materials["Forest Mountain"];
-            ScatterBand(6f, 16.7f, 17.1f, (d, l, s) =>
-            {
-                var rail = PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial,
-                    d, l, 0.05f, new Vector3(0f, s > 0f ? 0f : 180f, 0f), Vector3.one,
-                    "Forest Guard Rail", false);
-                if (rail != null) NormalizeModelHeight(rail, 0.95f, 0.05f);
-                return rail;
-            });
+            // REAL FOREST - dense wall behind guardrail plus depth layers behind it.
+            ScatterBand(2.6f, 8f, 13f, (d, l, s) => ForestTree(d, l, 14f, 24f));
+            ScatterBand(2.8f, 11f, 18f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+            ScatterBand(3.0f, 15f, 24f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(3.2f, 20f, 32f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(3.6f, 28f, 44f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(4.0f, 38f, 60f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(4.5f, 54f, 80f, (d, l, s) => ForestTree(d, l, 16f, 28f));
+            ScatterBand(5.5f, 72f, 110f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(6.5f, 100f, 160f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(8f, 150f, 230f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(10f, 210f, 320f, (d, l, s) => ForestTree(d, l, 16f, 28f));
+            ScatterBand(12f, 300f, 450f, (d, l, s) => ForestTree(d, l, 18f, 30f));
 
-            // Bushes and deadfall break up the ground between trunks.
-            ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
-            {
-                return SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
-            });
-
-            // Ground cover. Low to the camera rather than over it, but at 3.4 m spacing
-            // it was the single densest band in the biome and every card is cutout.
-            ScatterBand(4.6f, 20f, 55f, (d, l, s) =>
-            {
-                return ForestPlant(d, l, 0.7f, 1.5f, "Forest Ground Cover");
-            });
-
-            // The per-chunk ridge band used to sit here. It placed 90-170 m mountains at
-            // only 150-260 m lateral, so they filled the upper frame and read as objects
-            // floating in the sky - one measured 320 m wide, 69 m up and 2 m from the
-            // player. The Horizon Backdrop rig now carries the silhouette at 1.1 km+,
-            // where a mountain belongs.
+            // Fill between trunks with bushes, ferns, rocks
+            ScatterBand(2.2f, 8f, 28f, (d, l, s) =>
+                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
+                    d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
+            ScatterBand(2.8f, 24f, 50f, (d, l, s) =>
+                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
+                    d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
+            ScatterBand(3.5f, 14f, 60f, (d, l, s) =>
+                ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
+            ScatterBand(1.6f, 7f, 20f, (d, l, s) =>
+                ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
         }
 
         /// Nudges an object sideways only until its trunk (a narrow footprint at the
         /// base) is clear of the carriageway, leaving foliage free to reach over.
-        private static void KeepTrunkOffRoad(GameObject item, float distance, float lateral, float trunkRadius = 0.9f)
+        private static void KeepTrunkOffRoad(GameObject item, float distance, float lateral, float trunkRadius = 0.4f)
         {
             var side = Mathf.Sign(lateral);
             var minimum = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + trunkRadius;
@@ -6807,8 +6779,8 @@ namespace RoadRage.UnityRemake
         /// Rejection matters as much as the push: Gate A measured Greenwood as alpha-test
         /// overdraw (126 FPS canopy-on vs 457 off), and the only lever that helps is less
         /// foliage covering screen pixels.
-        private const float CanopyMargin = 3.5f;
-        private const float MaxCanopyPush = 20f;
+        private const float CanopyMargin = 0.8f;
+        private const float MaxCanopyPush = 8f;
 
         private static bool KeepCanopyOffRoad(GameObject tree, float distance, float side)
         {
