@@ -16,6 +16,9 @@ Assets/Gregor Quendel - Free General Ambience Sounds/
 Assets/Gregor Quendel - Free General Ambience Sounds.meta
 Assets/Versatile Studio Assets/Demo City By Versatile Studio/Scenes/demo_city_night/LightingData.asset
 Assets/Versatile Studio Assets/Demo City By Versatile Studio/Scenes/demo_city_night/LightingData.asset.meta
+# Baked lighting for the Traffic Lights System demo scene - regenerable, third-party demo.
+Assets/Traffic Lights System/Demo/Scenes/DemoSettings.lighting
+Assets/Traffic Lights System/Demo/Scenes/DemoSettings.lighting.meta
 
 # Visual Studio / VS Code / JetBrains Rider
 .vscode/
