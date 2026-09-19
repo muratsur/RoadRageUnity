@@ -6749,6 +6749,7 @@ namespace RoadRage.UnityRemake
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
             ScatterBand(1.6f, 18f, 30f, (d, l, s) =>
                 ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
+        }
 
         private static void KeepTrunkOffRoad(GameObject item, float distance, float lateral, float trunkRadius = 0.9f)
         {
