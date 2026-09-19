@@ -405,6 +405,7 @@ namespace RoadRage.UnityRemake
                 Mathf.Max(0, System.Array.IndexOf(Biomes, biomeName))));
             RoadPath.HalfWidthProvider = HalfWidthAtDistance;
             RoadPath.CurveScaleProvider = CurveScaleAtDistance;
+            RoadPath.ElevationScaleProvider = ElevationScaleAtDistance;
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
@@ -3876,7 +3877,7 @@ namespace RoadRage.UnityRemake
         /// sweeping bends; everything else keeps the road it had. Blended across a zone
         /// seam exactly like the half width, because a step change in curvature at a
         /// boundary is a kink in the road, and the gateway stands right on it.
-        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 2.1f : 1f;
+        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 3.0f : 1f;
 
         private float CurveScaleAtDistance(float distance)
         {
@@ -3887,6 +3888,21 @@ namespace RoadRage.UnityRemake
             var toBoundary = boundary - distance;
             if (toBoundary > taper * 0.5f) return here;
             var next = CurveScaleFor(BiomeIndexAt(boundary + 10f));
+            var t = Mathf.InverseLerp(taper * 0.5f, -taper * 0.5f, toBoundary);
+            return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
+        }
+
+        private static float ElevationScaleFor(int biomeIndex) => biomeIndex == 0 ? 1.8f : 1f;
+
+        private float ElevationScaleAtDistance(float distance)
+        {
+            const float taper = 260f;
+            var zone = ZoneIndexAt(distance);
+            var boundary = (zone + 1) * ZoneLength;
+            var here = ElevationScaleFor(BiomeIndexAt(distance));
+            var toBoundary = boundary - distance;
+            if (toBoundary > taper * 0.5f) return here;
+            var next = ElevationScaleFor(BiomeIndexAt(boundary + 10f));
             var t = Mathf.InverseLerp(taper * 0.5f, -taper * 0.5f, toBoundary);
             return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
         }
