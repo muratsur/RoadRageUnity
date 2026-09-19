@@ -42,7 +42,10 @@ namespace RoadRage.UnityRemake
                 showcaseOrbitAngle += Time.unscaledDeltaTime * 11.0f;
                 if (showcaseOrbitAngle >= 360f) showcaseOrbitAngle -= 360f;
 
-                if (Input.GetKeyDown(KeyCode.Space) || Input.GetKeyDown(KeyCode.Return))
+                // Routed through GameInput (keyboard Space/Enter + gamepad Start/South)
+                // rather than raw UnityEngine.Input, so launch works under any Active Input
+                // Handling mode - the rest of the game already goes through GameInput.
+                if (GameInput.GetStartPressed())
                 {
                     LaunchRun();
                 }

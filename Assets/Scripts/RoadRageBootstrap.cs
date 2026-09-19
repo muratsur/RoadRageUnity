@@ -1181,9 +1181,9 @@ namespace RoadRage.UnityRemake
             BiomeSurface(BiomeMaterial("Industrial Ground", "CyberpunkCity",
                 "T_ground_texture_01_D", "T_ground_texture_01_N", new Color(1.35f, 1.35f, 1.35f), 0.06f, 0.30f),
                 "CyberpunkCity", "T_ground_texture_01_MSO");
-            BiomeSurface(BiomeMaterial("Sidewalk", "CyberpunkCity",
-                "T_concrete_floor_D", "T_concrete_floor_N", new Color(1.35f, 1.35f, 1.35f), 0.05f, 0.32f),
-                "CyberpunkCity", "T_concrete_floor_MSO");
+            // "Sidewalk" is already built above (with the Neon City / Tire District sidewalk
+            // comment). The byte-for-byte identical duplicate that was here has been removed -
+            // it only rebuilt the same material and leaked the first instance.
             BiomeMaterial("Demo Facades", "DemoCity", "building_facades", "building_facades_nm", Color.white, 0.15f, 0.42f);
             BiomeMaterial("Demo Highrise", "DemoCity", "highrise_facades", "highrise_facades_nm", Color.white, 0.18f, 0.55f);
             BiomeMaterial("Demo Bases", "DemoCity", "building_bases", "building_bases_nm", Color.white, 0.12f, 0.38f);
@@ -1265,7 +1265,9 @@ namespace RoadRage.UnityRemake
             // being read as "no overdraw, good" rather than as "no foliage, broken".
             BiomeSurface(BiomeCutoutMaterial("City Palm", "Synthwave", "T_palm_tree_D",
                 "T_palm_tree_N", Color.white), "Synthwave", "T_palm_tree_MSO");
-            materials["Palm Frond"] = materials["City Palm"];
+            // "Palm Frond" is the RedCanyon frond cutout, built explicitly below. The alias
+            // to "City Palm" that was here was dead (overwritten before any use) and made the
+            // city vs canyon palm assignment look conflated - the two are distinct materials.
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
             MakeMaterial("City Props", new Color(0.44f, 0.43f, 0.42f), 0.15f, 0.30f);
             MakeMaterial("Taxi Sign", new Color(0.97f, 0.79f, 0.13f), 0.05f, 0.28f);
@@ -11076,6 +11078,32 @@ namespace RoadRage.UnityRemake
             try
             {
                 if (Input.GetKeyDown(KeyCode.Escape)) return true;
+            }
+            catch {}
+            return false;
+        }
+
+        /// Launch/confirm ("START RUN"): Space or Enter on the keyboard, Start or the south
+        /// face button on a gamepad. Same dual new-Input-System / legacy fallback pattern as
+        /// the rest of GameInput, so it works whatever Active Input Handling is set to.
+        public static bool GetStartPressed()
+        {
+            try
+            {
+                var kb = UnityEngine.InputSystem.Keyboard.current;
+                if (kb != null && (kb.spaceKey.wasPressedThisFrame
+                    || kb.enterKey.wasPressedThisFrame
+                    || kb.numpadEnterKey.wasPressedThisFrame)) return true;
+                var pad = UnityEngine.InputSystem.Gamepad.current;
+                if (pad != null && (pad.startButton.wasPressedThisFrame
+                    || pad.buttonSouth.wasPressedThisFrame)) return true;
+            }
+            catch {}
+            try
+            {
+                if (Input.GetKeyDown(KeyCode.Space)
+                    || Input.GetKeyDown(KeyCode.Return)
+                    || Input.GetKeyDown(KeyCode.KeypadEnter)) return true;
             }
             catch {}
             return false;
