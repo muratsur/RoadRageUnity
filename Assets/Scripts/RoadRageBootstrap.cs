@@ -2309,11 +2309,13 @@ namespace RoadRage.UnityRemake
             }
             else if (biomeIndex == 0) // Greenwood Forest
             {
-                // Forest Litter & Dirt Verge
-                BuildRibbon("Left Forest Verge", -1.55f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.55f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.35f, -1.0f, 0.045f, materials["Forest Grass"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.0f, 1.35f, 0.045f, materials["Forest Grass"], relative: true);
+                // All grass, no brown PBR - height 0.25 solid, sampleStep 1 no gaps
+                BuildRibbon("Left Forest Verge", -1.30f, -1.0f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.30f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                BuildRibbon("Left Forest Grass Stripe", -2.8f, -1.15f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                BuildRibbon("Right Forest Grass Stripe", 1.15f, 2.8f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                BuildRibbon("Left Forest Grass Outer", -4.0f, -2.5f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                BuildRibbon("Right Forest Grass Outer", 2.5f, 4.0f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
             }
             else
             {
