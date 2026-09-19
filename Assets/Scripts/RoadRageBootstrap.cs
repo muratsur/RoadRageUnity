@@ -2310,10 +2310,10 @@ namespace RoadRage.UnityRemake
             else if (biomeIndex == 0) // Greenwood Forest
             {
                 // Forest Litter & Dirt Verge
-                BuildRibbon("Left Forest Verge", -1.55f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.55f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.35f, -1.0f, 0.045f, materials["Forest Grass"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.0f, 1.35f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Grass"], relative: true);
             }
             else
             {
@@ -3864,7 +3864,7 @@ namespace RoadRage.UnityRemake
         /// does not - they would have been standing on the tarmac. And the sewer tunnel
         /// was widened, because its walls stood at 13.4 m and the road they enclose is now
         /// 13.5 m to the kerb: the carriageway would have been wider than the tunnel.
-        private static int LaneCountFor(int biomeIndex) => 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -6695,13 +6695,13 @@ namespace RoadRage.UnityRemake
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
-            ScatterBand(1.8f, 7.4f, 13f, (d, l, s) =>
+            ScatterBand(1.3f, 7.4f, 13f, (d, l, s) =>
                 ForestPlant(d, l, 0.9f, 1.7f, "Verge Undergrowth"));
-            ScatterBand(2.4f, 13f, 26f, (d, l, s) =>
+            ScatterBand(1.7f, 13f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
-            ScatterBand(3.2f, 26f, 55f, (d, l, s) =>
+            ScatterBand(2.3f, 26f, 55f, (d, l, s) =>
                 ForestPlant(d, l, 1.2f, 2.4f, "Deep Undergrowth"));
-            ScatterBand(2.6f, 7.2f, 20f, (d, l, s) =>
+            ScatterBand(1.9f, 7.2f, 20f, (d, l, s) =>
             {
                 return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
             });
@@ -6737,13 +6737,14 @@ namespace RoadRage.UnityRemake
             // Taller, and one band closer. The reference is a road cut through timber that
             // stands well above the car, not a treeline you look over - so the near band
             // starts at the verge rather than 26 m out, and every band gained height.
-            ScatterBand(9f, 18f, 30f, (d, l, s) => ForestTree(d, l, 16f, 24f));
-            ScatterBand(10f, 26f, 42f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(11f, 34f, 56f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(11f, 44f, 72f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 14f, 22f));
+            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 16f, 24f));
+            ScatterBand(7f, 18f, 30f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(8f, 26f, 42f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(8f, 34f, 56f, (d, l, s) => ForestTree(d, l, 16f, 26f));
             // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
             // over the camera - so it keeps the forest reading as deep.
-            ScatterBand(15f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
             // Guard rail along both shoulders. A mountain road has one, and it is the
             // single strongest cue that the road is cut into a slope rather than laid on
             // a field - it also gives the bends an edge to read against, which is most of
