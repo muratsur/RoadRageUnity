@@ -2401,13 +2401,11 @@ namespace RoadRage.UnityRemake
             }
             else if (biomeIndex == 0) // Greenwood Forest
             {
-                // All grass, no brown PBR - height 0.25 solid, sampleStep 1 no gaps
-                BuildRibbon("Left Forest Verge", -1.30f, -1.0f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.30f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
-                BuildRibbon("Left Forest Grass Stripe", -2.8f, -1.15f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
-                BuildRibbon("Right Forest Grass Stripe", 1.15f, 2.8f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
-                BuildRibbon("Left Forest Grass Outer", -4.0f, -2.5f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
-                BuildRibbon("Right Forest Grass Outer", 2.5f, 4.0f, 0.25f, materials["Forest Grass"], relative: true, sampleStep: 1f);
+                // Forest Litter & Dirt Verge
+                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Grass"], relative: true);
             }
             else
             {
@@ -3958,7 +3956,7 @@ namespace RoadRage.UnityRemake
         /// does not - they would have been standing on the tarmac. And the sewer tunnel
         /// was widened, because its walls stood at 13.4 m and the road they enclose is now
         /// 13.5 m to the kerb: the carriageway would have been wider than the tunnel.
-        private static int LaneCountFor(int biomeIndex) => 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -6804,19 +6802,18 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(40621 ^ chunkSeed);
 
-            // WIDE road 13.5m half, clearance 18.25m - forest outside only
-            ScatterBand(0.7f, 18.5f, 21f, (d, l, s) =>
-                ForestPlant(d, l, 0.8f, 1.6f, "Verge Undergrowth"));
-            ScatterBand(0.9f, 20f, 24f, (d, l, s) =>
-                ForestPlant(d, l, 0.9f, 1.8f, "Verge Fern"));
-            ScatterBand(1.1f, 22f, 28f, (d, l, s) =>
+            // The kit's ground texture is bare dirt, so the forest floor has to be made
+            // of meshes: pack undergrowth densely enough that the ground barely shows.
+            ScatterBand(1.3f, 7.4f, 13f, (d, l, s) =>
+                ForestPlant(d, l, 0.9f, 1.7f, "Verge Undergrowth"));
+            ScatterBand(1.7f, 13f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
-            ScatterBand(1.4f, 26f, 36f, (d, l, s) =>
-                ForestPlant(d, l, 1.0f, 2.2f, "Mid Undergrowth"));
-            ScatterBand(1.8f, 34f, 50f, (d, l, s) =>
-                ForestPlant(d, l, 1.1f, 2.4f, "Deep Undergrowth"));
-            ScatterBand(1.0f, 18f, 26f, (d, l, s) =>
-                ForestPlant(d, l, 0.5f, 1.2f, "Forest Grass"));
+            ScatterBand(2.3f, 26f, 55f, (d, l, s) =>
+                ForestPlant(d, l, 1.2f, 2.4f, "Deep Undergrowth"));
+            ScatterBand(1.9f, 7.2f, 20f, (d, l, s) =>
+            {
+                return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
+            });
 
             BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
             BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
@@ -6837,18 +6834,48 @@ namespace RoadRage.UnityRemake
 
             if (NoCanopy) return;
 
-            ScatterBand(6f, 18f, 28f, (d, l, s) => ForestTree(d, l, 14f, 24f));
-            ScatterBand(8f, 26f, 40f, (d, l, s) => ForestTree(d, l, 16f, 26f));
-            ScatterBand(10f, 38f, 60f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(12f, 58f, 100f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(15f, 95f, 200f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(8.5f, 84f, 124f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(10f, 120f, 200f, (d, l, s) => ForestTree(d, l, 16f, 28f));
-            ScatterBand(12f, 190f, 320f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(14f, 280f, 450f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(8f, 160f, 240f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(10f, 220f, 330f, (d, l, s) => ForestTree(d, l, 16f, 28f));
-            ScatterBand(12f, 310f, 460f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            // Gate A measured Greenwood as alpha-test overdraw, not geometry or draw
+            // calls: 850 renderers a chunk of which 824 are cutout, 126 FPS with the
+            // canopy and 457 without, while Hollywood draws more triangles and runs four
+            // times faster. The only lever that moves it is less foliage covering the
+            // screen - instancing and LODs were measured and did nothing.
+            //
+            // Five near bands used to run here, all spanning 26-66 m. They overlapped
+            // almost entirely, so most of what they added was a second and third layer
+            // of leaf cards over the same ground - which is precisely the cost, since
+            // alpha test defeats early-Z and every overlapping card shades again. Three
+            // bands cover the same span with the layering that was being paid for twice.
+            // Taller, and one band closer. The reference is a road cut through timber that
+            // stands well above the car, not a treeline you look over - so the near band
+            // starts at the verge rather than 26 m out, and every band gained height.
+            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 14f, 22f));
+            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 16f, 24f));
+            ScatterBand(7f, 18f, 30f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(8f, 26f, 42f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(8f, 34f, 56f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+            // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
+            // over the camera - so it keeps the forest reading as deep.
+            ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            // Guard rail along both shoulders. A mountain road has one, and it is the
+            // single strongest cue that the road is cut into a slope rather than laid on
+            // a field - it also gives the bends an edge to read against, which is most of
+            // why the curve is worth having.
+            //
+            // Placed off the measured clearance rather than a constant, so it follows the
+            // carriageway rather than needing a new number every time the road changes
+            // width. Posts every 6 m; the mesh is normalised to post height, so the rail
+            // reads at the right scale whatever the source model is.
+            var railMaterial = materials.TryGetValue("Hills Metal", out var galvanised)
+                ? galvanised
+                : materials["Forest Mountain"];
+            ScatterBand(6f, 16.7f, 17.1f, (d, l, s) =>
+            {
+                var rail = PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial,
+                    d, l, 0.05f, new Vector3(0f, s > 0f ? 0f : 180f, 0f), Vector3.one,
+                    "Forest Guard Rail", false);
+                if (rail != null) NormalizeModelHeight(rail, 0.95f, 0.05f);
+                return rail;
+            });
 
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
                 SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
