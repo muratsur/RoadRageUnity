@@ -676,7 +676,7 @@ namespace RoadRage.UnityRemake
                 // Same centred-vs-right-lane rule as the initial spawn: single-lane
                 // biomes (Greenwood, Red Canyon, Hollywood) start on the centreline.
                 var reloadLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-                var reloadLateral = reloadLaneCount == 1 ? 0f : -2.25f;
+                var reloadLateral = reloadLaneCount == 1 ? -1.2f : -2.25f;
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance + 5f;
@@ -6091,7 +6091,7 @@ namespace RoadRage.UnityRemake
             // carriageway, which is how props ended up in the traffic lanes.
             var shift = (float)v.NextDouble() * (farLateral - nearLateral) * 0.35f;
             var widen = 0.8f + (float)v.NextDouble() * 0.55f;
-            if (v.NextDouble() < 0.12) return;   // occasional gap: a clearing, a vacant lot
+            if (v.NextDouble() < 0.02) return;   // occasional gap: a clearing, a vacant lot
 
             // Never inside the carriageway. Every band here is written as an absolute
             // distance from the centreline, chosen against whatever the road was when it
@@ -6117,7 +6117,7 @@ namespace RoadRage.UnityRemake
             for (var side = -1; side <= 1; side += 2)
             {
                 // Independent per-side dropout breaks the mirrored look as well.
-                if (v.NextDouble() < 0.10) continue;
+                if (v.NextDouble() < 0.02) continue;
                 var distance = z + Random.Range(-spacing * jitter, spacing * jitter);
                 var lateral = side * Random.Range(near, far);
                 spawn(distance, lateral, side);
@@ -6707,8 +6707,8 @@ namespace RoadRage.UnityRemake
             });
 
             // Guardrail and a cut bank, both hugging the shoulder
-            BuildRibbon("Left Shoulder Bank", -8.4f, -7.6f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Right Shoulder Bank", 7.6f, 8.4f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
+            BuildRibbon("Left Shoulder Bank", -6.8f, -5.8f, 0.08f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Right Shoulder Bank", 5.8f, 6.8f, 0.08f, materials["Forest Grass"], sampleStep: 5f);
             BuildRibbon("Left Leaf Litter", -8f, -7f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
             BuildRibbon("Right Leaf Litter", 7f, 8f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
             for (var side = -1; side <= 1; side += 2)
@@ -7049,7 +7049,7 @@ namespace RoadRage.UnityRemake
             var spawn = startDistance + 5f;
             // Single-lane biomes (country road, desert two-lane) start centred; multi-lane cities keep the classic right-lane launch.
             var startLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var startLateral = startLaneCount == 1 ? 0f : -2.25f;
+            var startLateral = startLaneCount == 1 ? -1.2f : -2.25f;
             car = new GameObject($"Player {GameState.CurrentCar.Name}").transform;
             car.position = RoadPath.Point(spawn, startLateral, 0.85f);
             car.rotation = RoadPath.Rotation(spawn);
