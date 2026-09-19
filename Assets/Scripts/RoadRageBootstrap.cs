@@ -6726,15 +6726,15 @@ namespace RoadRage.UnityRemake
 
             if (NoCanopy) return;
 
-            ScatterBand(2.6f, 18f, 23f, (d, l, s) => ForestTree(d, l, 14f, 24f));
-            ScatterBand(2.8f, 21f, 28f, (d, l, s) => ForestTree(d, l, 16f, 26f));
-            ScatterBand(3.0f, 25f, 34f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(3.2f, 30f, 42f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(3.6f, 38f, 54f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(4.0f, 48f, 70f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(4.5f, 64f, 90f, (d, l, s) => ForestTree(d, l, 16f, 28f));
-            ScatterBand(5.5f, 82f, 120f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(6.5f, 110f, 170f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(4.5f, 18f, 26f, (d, l, s) => ForestTree(d, l, 14f, 24f));
+            ScatterBand(5.0f, 24f, 34f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+            ScatterBand(5.5f, 32f, 46f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(6.0f, 44f, 62f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(7.0f, 60f, 86f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(8.5f, 84f, 124f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(10f, 120f, 200f, (d, l, s) => ForestTree(d, l, 16f, 28f));
+            ScatterBand(12f, 190f, 320f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(14f, 280f, 450f, (d, l, s) => ForestTree(d, l, 20f, 32f));
             ScatterBand(8f, 160f, 240f, (d, l, s) => ForestTree(d, l, 18f, 30f));
             ScatterBand(10f, 220f, 330f, (d, l, s) => ForestTree(d, l, 16f, 28f));
             ScatterBand(12f, 310f, 460f, (d, l, s) => ForestTree(d, l, 18f, 30f));
