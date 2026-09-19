@@ -318,6 +318,7 @@ namespace RoadRage.UnityRemake
 				"storm" => WeatherKind.Storm,
 				"snow" => WeatherKind.Snow,
 				"clear" => WeatherKind.Clear,
+				"fog" => WeatherKind.Fog,
 				_ => null,
 			};
 	}
@@ -387,12 +388,13 @@ namespace RoadRage.UnityRemake
             GameState.RollDailyMissions();
             GameState.ResetRun();
             GameState.BeginRun();
-            // -car=N forces a vehicle for verification captures without owning it.
+            // -car=N forces a vehicle for verification captures without owning it. Routed
+            // through the ephemeral ForcedCar override so the driven car changes for the
+            // capture while the real save's SelectedCar/OwnedCars are never touched or
+            // persisted (the old code added the car to OwnedCars, which a later Save baked in).
             if (int.TryParse(CommandLineValue("-car="), out var forcedCar))
             {
-                GameState.SelectedCar = Mathf.Clamp(forcedCar, 0, GameState.Cars.Length - 1);
-                if (!GameState.OwnedCars.Contains(GameState.SelectedCar))
-                    GameState.OwnedCars.Add(GameState.SelectedCar);
+                GameState.ForcedCar = Mathf.Clamp(forcedCar, 0, GameState.Cars.Length - 1);
             }
             // -weather=rain|storm|snow|clear forces the roll for verification captures.
             var biomeIndex = System.Array.IndexOf(Biomes, biomeName);
@@ -405,6 +407,7 @@ namespace RoadRage.UnityRemake
                 Mathf.Max(0, System.Array.IndexOf(Biomes, biomeName))));
             RoadPath.HalfWidthProvider = HalfWidthAtDistance;
             RoadPath.CurveScaleProvider = CurveScaleAtDistance;
+            RoadPath.ElevationScaleProvider = ElevationScaleAtDistance;
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
@@ -562,29 +565,25 @@ namespace RoadRage.UnityRemake
         }
 
         public void NextBiome()
-		{
-			var current = System.Array.IndexOf(Biomes, biomeName);
-			ReloadBiome(Biomes[(current + 1) % Biomes.Length]);
-		}
+        {
+            if (ActiveBiomes.Length == 0)
+                return;
 
-		public void OpenPicker()
-		{
-			PickerOpen = true;
-			Time.timeScale = 0f;
-			lastToggleTime = Time.unscaledTime;
-		}
+            var currentBiomeIndex = System.Array.IndexOf(Biomes, biomeName);
+            var currentPlayableIndex =
+                System.Array.IndexOf(ActiveBiomes, currentBiomeIndex);
 
-		public void ClosePicker()
-		{
-			pickerSeen = true;
-			PickerOpen = false;
-			Time.timeScale = 1f;
-			lastToggleTime = Time.unscaledTime;
-		}
+            var nextPlayableIndex =
+                (currentPlayableIndex + 1) % ActiveBiomes.Length;
 
-		public void SelectBiome(string nextBiome)
+            SelectBiome(Biomes[ActiveBiomes[nextPlayableIndex]]);
+        }
+
+
+        public void SelectBiome(string nextBiome)
 		{
-			ClosePicker();
+			// ReloadBiome closes the picker after rebuilding, so gameplay stays paused
+			// (time scale 0) through the rebuild instead of resuming mid-teardown.
 			ReloadBiome(nextBiome);
 		}
 
@@ -676,7 +675,7 @@ namespace RoadRage.UnityRemake
                 // Same centred-vs-right-lane rule as the initial spawn: single-lane
                 // biomes (Greenwood, Red Canyon, Hollywood) start on the centreline.
                 var reloadLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-                var reloadLateral = reloadLaneCount == 1 ? 0f : -2.25f;
+                var reloadLateral = reloadLaneCount == 1 ? -1.2f : -2.25f;
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance + 5f;
@@ -720,6 +719,50 @@ namespace RoadRage.UnityRemake
             ClosePicker();
         }
 
+		private float timeScaleBeforePicker = 1f;
+
+		/// Opening the picker pauses gameplay and remembers the time scale to restore. Guarded
+		/// so a second open (e.g. HUD button plus hotkey in one frame) cannot capture the
+		/// already-zeroed scale as the value to restore later.
+		public void OpenPicker()
+		{
+			if (PickerOpen) return;
+
+			timeScaleBeforePicker = Time.timeScale;
+			PickerOpen = true;
+			Time.timeScale = 0f;
+			lastToggleTime = Time.unscaledTime;
+		}
+
+		public void ClosePicker()
+		{
+			if (!PickerOpen) return;
+
+			pickerSeen = true;
+			PickerOpen = false;
+			Time.timeScale = timeScaleBeforePicker;
+			lastToggleTime = Time.unscaledTime;
+		}
+
+		private static readonly WeatherKind[] WeatherCycle =
+			(WeatherKind[])System.Enum.GetValues(typeof(WeatherKind));
+
+		/// Advance to the next weather and actually reconfigure the particle system, so K
+		/// changes what is falling rather than only the label. Mirrors the Configure call
+		/// used at boot and on biome reload.
+		private void CycleWeather()
+		{
+			var index = System.Array.IndexOf(WeatherCycle, activeWeather);
+			activeWeather = WeatherCycle[(index + 1) % WeatherCycle.Length];
+
+			if (weatherSystem != null)
+			{
+				weatherSystem.Configure(activeWeather, car, Resources.Load<Material>("WeatherParticle"));
+			}
+
+			Debug.Log($"[WEATHER] {WeatherSystem.Label(activeWeather)}");
+		}
+
 		private float lastToggleTime;
 
 		private void Update()
@@ -757,8 +800,7 @@ namespace RoadRage.UnityRemake
 			// lighting change. Pin it to CLEAR to compare like with like.
 			if (GameInput.GetKKeyPressed())
 			{
-				activeWeather = (WeatherKind)(((int)activeWeather + 1) % System.Enum.GetValues(typeof(WeatherKind)).Length);
-				Debug.Log($"[WEATHER] {activeWeather}");
+				CycleWeather();
 			}
 
 			// N key cycles to next biome
@@ -778,6 +820,19 @@ namespace RoadRage.UnityRemake
 				}
 			}
 		}
+
+        // Daily progress lives only in memory during a run (per-hit saves were dropped for
+        // performance). Persist it when the app leaves the foreground so a mid-run background
+        // kill on mobile, or a desktop quit, does not lose it.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused) GameState.FlushDailyProgress();
+        }
+
+        private void OnApplicationQuit()
+        {
+            GameState.FlushDailyProgress();
+        }
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 
@@ -965,6 +1020,12 @@ namespace RoadRage.UnityRemake
 
         private void BuildMaterials()
         {
+            // Dry-road caches are keyed by material name and rebuilt here. If they carried
+            // over from the previous biome's materials, ApplyRoadWetness would restore stale
+            // colours/smoothness to the fresh materials.
+            dryRoadColors.Clear();
+            dryRoadSmoothness.Clear();
+
             var bark = MakeMaterial("Hideout Bark PBR", new Color(0.72f, 0.66f, 0.56f), 0f, 0.2f);
             bark.mainTexture = Texture("bark_albedo");
             bark.SetTexture("_BumpMap", Texture("bark_normal"));
@@ -985,8 +1046,7 @@ namespace RoadRage.UnityRemake
 			// normal map for surface break-up.
 			// The Hideout kit's ground is bare dirt and read as a flat lawn once the
 			// canopy went in. Runic Forest ships a real forest floor with leaf litter.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RunicForest",
-				"T_ground_02_D", "T_ground_02_N", new Color(0.62f, 0.60f, 0.48f), 0f, 0.06f),
+			var ground = BiomeSurface(BiomeMaterial("Forest Grass", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.35f, 0.55f, 0.25f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
             // Tighter tiling: at the old scale the ground read as one flat wash across the
             // whole 240m plane instead of ground the player is moving over.
@@ -1552,27 +1612,59 @@ namespace RoadRage.UnityRemake
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
         /// probe's reflection reads, and darken the albedo the way real water does.
         private readonly Dictionary<string, Color> dryRoadColors = new();
+        private readonly Dictionary<string, float> dryRoadSmoothness = new();
+
+        private static readonly string[] WetRoadMaterialNames =
+        {
+                      "Road",
+                      "Shoulder"
+        };
 
         private void ApplyRoadWetness(float wetness)
         {
-            if (wetness <= 0.001f) return;
-            foreach (var name in new[] { "Road", "Shoulder" })
+            wetness = Mathf.Clamp01(wetness);
+
+            foreach (var name in WetRoadMaterialNames)
             {
-                if (!materials.TryGetValue(name, out var material)) continue;
-                // BlendZoneLighting calls this every frame: the wet tint MUST be
-                // computed from the stored dry colour, not from the current one, or
-                // the road darkens 18% per frame and converges to pure black within
-                // seconds of driving - the "why is everything pitch black" bug.
+                if (!materials.TryGetValue(name, out var material)
+                    || material == null
+                    || !material.HasProperty("_BaseColor")
+                    || !material.HasProperty("_Smoothness"))
+                {
+                    continue;
+                }
+
                 if (!dryRoadColors.TryGetValue(name, out var dryColor))
                 {
                     dryColor = material.GetColor("_BaseColor");
                     dryRoadColors[name] = dryColor;
                 }
-                var drySmoothness = name == "Road" ? 0.25f : 0.15f;
-                material.SetFloat("_Smoothness", Mathf.Lerp(drySmoothness, 0.40f, wetness));
-                material.SetColor("_BaseColor", dryColor * Mathf.Lerp(1f, 0.82f, wetness));
+
+                if (!dryRoadSmoothness.TryGetValue(name, out var drySmoothness))
+                {
+                    drySmoothness = material.GetFloat("_Smoothness");
+                    dryRoadSmoothness[name] = drySmoothness;
+                }
+
+                var wetColor = new Color(
+                    dryColor.r * 0.82f,
+                    dryColor.g * 0.82f,
+                    dryColor.b * 0.82f,
+                    dryColor.a);
+
+                material.SetColor(
+                    "_BaseColor",
+                    Color.Lerp(dryColor, wetColor, wetness));
+
+                material.SetFloat(
+                    "_Smoothness",
+                    Mathf.Lerp(
+                        drySmoothness,
+                        Mathf.Max(drySmoothness, 0.40f),
+                        wetness));
             }
         }
+
 
         /// Creates the player's local reflection probe.
         ///
@@ -3875,7 +3967,7 @@ namespace RoadRage.UnityRemake
         /// sweeping bends; everything else keeps the road it had. Blended across a zone
         /// seam exactly like the half width, because a step change in curvature at a
         /// boundary is a kink in the road, and the gateway stands right on it.
-        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 2.1f : 1f;
+        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 3.0f : 1f;
 
         private float CurveScaleAtDistance(float distance)
         {
@@ -3886,6 +3978,21 @@ namespace RoadRage.UnityRemake
             var toBoundary = boundary - distance;
             if (toBoundary > taper * 0.5f) return here;
             var next = CurveScaleFor(BiomeIndexAt(boundary + 10f));
+            var t = Mathf.InverseLerp(taper * 0.5f, -taper * 0.5f, toBoundary);
+            return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
+        }
+
+        private static float ElevationScaleFor(int biomeIndex) => biomeIndex == 0 ? 1.8f : 1f;
+
+        private float ElevationScaleAtDistance(float distance)
+        {
+            const float taper = 260f;
+            var zone = ZoneIndexAt(distance);
+            var boundary = (zone + 1) * ZoneLength;
+            var here = ElevationScaleFor(BiomeIndexAt(distance));
+            var toBoundary = boundary - distance;
+            if (toBoundary > taper * 0.5f) return here;
+            var next = ElevationScaleFor(BiomeIndexAt(boundary + 10f));
             var t = Mathf.InverseLerp(taper * 0.5f, -taper * 0.5f, toBoundary);
             return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
         }
@@ -4297,6 +4404,8 @@ namespace RoadRage.UnityRemake
             Debug.LogWarning("RR_MATERIALS palette was empty at stream time - rebuilding. A " +
                              "domain reload (a recompile during play) clears it while the world " +
                              "it built stays in the scene.");
+            dryRoadColors.Clear();
+            dryRoadSmoothness.Clear();
             BuildMaterials();
         }
 
@@ -6091,7 +6200,7 @@ namespace RoadRage.UnityRemake
             // carriageway, which is how props ended up in the traffic lanes.
             var shift = (float)v.NextDouble() * (farLateral - nearLateral) * 0.35f;
             var widen = 0.8f + (float)v.NextDouble() * 0.55f;
-            if (v.NextDouble() < 0.12) return;   // occasional gap: a clearing, a vacant lot
+            if (v.NextDouble() < 0.02) return;   // occasional gap: a clearing, a vacant lot
 
             // Never inside the carriageway. Every band here is written as an absolute
             // distance from the centreline, chosen against whatever the road was when it
@@ -6117,7 +6226,7 @@ namespace RoadRage.UnityRemake
             for (var side = -1; side <= 1; side += 2)
             {
                 // Independent per-side dropout breaks the mirrored look as well.
-                if (v.NextDouble() < 0.10) continue;
+                if (v.NextDouble() < 0.02) continue;
                 var distance = z + Random.Range(-spacing * jitter, spacing * jitter);
                 var lateral = side * Random.Range(near, far);
                 spawn(distance, lateral, side);
@@ -6689,7 +6798,7 @@ namespace RoadRage.UnityRemake
             return Adopt(root);
         }
 
-        private void BuildForest()
+                private void BuildForest()
         {
             Random.InitState(40621 ^ chunkSeed);
 
@@ -6706,21 +6815,23 @@ namespace RoadRage.UnityRemake
                 return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
             });
 
-            // Guardrail and a cut bank, both hugging the shoulder
-            BuildRibbon("Left Shoulder Bank", -8.4f, -7.6f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Right Shoulder Bank", 7.6f, 8.4f, 0.5f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Left Leaf Litter", -8f, -7f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Right Leaf Litter", 7f, 8f, 0.055f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
             for (var side = -1; side <= 1; side += 2)
             {
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
-                    side * 7.3f, side * 7.5f, 0.95f, materials["Sidewalk"], sampleStep: 4f);
-                ScatterBand(9f, 7.4f, 7.4f, (d, l, s) =>
-                    PrimitiveOnRoad(PrimitiveType.Cube, "Guardrail Post", d, side * 7.4f, 0.45f,
-                        new Vector3(0.16f, 0.9f, 0.16f), materials["Car Dark"], Vector3.zero, false), 0.05f);
+                    side * 16.0f, side * 16.4f, 0.85f, materials["Sidewalk"], sampleStep: 3f);
+                ScatterBand(4f, 16.12f, 16.12f, (d, l, s) =>
+                    PrimitiveOnRoad(PrimitiveType.Cube, "Guardrail Post", d, side * 16.12f, 0.4f,
+                        new Vector3(0.14f, 0.85f, 0.14f), materials["Car Dark"], Vector3.zero, false), 0.05f);
             }
 
-            // Trunks packed right against the shoulder. Canopies overhang the road.
             if (NoCanopy) return;
 
             // Gate A measured Greenwood as alpha-test overdraw, not geometry or draw
@@ -6766,29 +6877,18 @@ namespace RoadRage.UnityRemake
                 return rail;
             });
 
-            // Bushes and deadfall break up the ground between trunks.
-            ScatterBand(5.5f, 8f, 34f, (d, l, s) =>
-            {
-                return SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.6f, 3.2f, "Forest Bush");
-            });
-
-            // Ground cover. Low to the camera rather than over it, but at 3.4 m spacing
-            // it was the single densest band in the biome and every card is cutout.
-            ScatterBand(4.6f, 20f, 55f, (d, l, s) =>
-            {
-                return ForestPlant(d, l, 0.7f, 1.5f, "Forest Ground Cover");
-            });
-
-            // The per-chunk ridge band used to sit here. It placed 90-170 m mountains at
-            // only 150-260 m lateral, so they filled the upper frame and read as objects
-            // floating in the sky - one measured 320 m wide, 69 m up and 2 m from the
-            // player. The Horizon Backdrop rig now carries the silhouette at 1.1 km+,
-            // where a mountain belongs.
+            ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
+                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
+                    d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
+            ScatterBand(2.8f, 34f, 60f, (d, l, s) =>
+                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
+                    d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
+            ScatterBand(3.5f, 24f, 70f, (d, l, s) =>
+                ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
+            ScatterBand(1.6f, 18f, 30f, (d, l, s) =>
+                ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
         }
 
-        /// Nudges an object sideways only until its trunk (a narrow footprint at the
-        /// base) is clear of the carriageway, leaving foliage free to reach over.
         private static void KeepTrunkOffRoad(GameObject item, float distance, float lateral, float trunkRadius = 0.9f)
         {
             var side = Mathf.Sign(lateral);
@@ -7050,7 +7150,7 @@ namespace RoadRage.UnityRemake
             var spawn = startDistance + 5f;
             // Single-lane biomes (country road, desert two-lane) start centred; multi-lane cities keep the classic right-lane launch.
             var startLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var startLateral = startLaneCount == 1 ? 0f : -2.25f;
+            var startLateral = startLaneCount == 1 ? -1.2f : -2.25f;
             car = new GameObject($"Player {GameState.CurrentCar.Name}").transform;
             car.position = RoadPath.Point(spawn, startLateral, 0.85f);
             car.rotation = RoadPath.Rotation(spawn);
@@ -7278,7 +7378,7 @@ namespace RoadRage.UnityRemake
         private const int BaseTrafficCount = 12;
         /// Twenty-two cars is a desktop figure. On mobile the escalation still happens,
         /// it just tops out where the frame budget does.
-        private static int PeakTrafficCount => RichDetailBudget ? 22 : 14;
+        private static int PeakTrafficCount => RichDetailBudget ? 12 : 8;
 
         /// Adds traffic as a run escalates.
         ///

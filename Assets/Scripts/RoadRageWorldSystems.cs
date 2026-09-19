@@ -24,9 +24,13 @@ namespace RoadRage.UnityRemake
         /// city avenue on the same sine. Supplied the same way the half width is, and
         /// defaults to 1 so a biome that says nothing keeps the road it had.
         public static System.Func<float, float> CurveScaleProvider;
+        public static System.Func<float, float> ElevationScaleProvider;
 
         public static float CurveScaleAt(float distance) =>
             CurveScaleProvider?.Invoke(distance) ?? 1f;
+
+        public static float ElevationScaleAt(float distance) =>
+            ElevationScaleProvider?.Invoke(distance) ?? 1f;
 
         public static float HalfWidthAt(float distance) =>
             HalfWidthProvider?.Invoke(distance) ?? HalfWidth;
@@ -64,8 +68,9 @@ namespace RoadRage.UnityRemake
         /// stay modest because the chase camera sits low and steep grades hide the road.
         public static float CenterY(float distance)
         {
-            return 9f * Mathf.Sin(distance / 197f + 0.9f)
-                + 3.5f * Mathf.Sin(distance / 83f - 0.3f);
+            var scale = ElevationScaleAt(distance);
+            return (9f * Mathf.Sin(distance / 197f + 0.9f)
+                + 3.5f * Mathf.Sin(distance / 83f - 0.3f)) * scale;
         }
 
         public static Vector3 Center(float distance, float height = 0f) =>
