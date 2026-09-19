@@ -6707,14 +6707,14 @@ namespace RoadRage.UnityRemake
             ScatterBand(1.0f, 18f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 0.5f, 1.2f, "Forest Grass"));
 
-            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.12f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.12f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
             BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
             BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
             BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
             BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.12f, materials["Forest Grass"], sampleStep: 4f);
-            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.12f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
             for (var side = -1; side <= 1; side += 2)
             {
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
