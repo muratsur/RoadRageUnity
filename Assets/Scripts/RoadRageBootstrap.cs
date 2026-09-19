@@ -6707,14 +6707,14 @@ namespace RoadRage.UnityRemake
             ScatterBand(1.0f, 18f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 0.5f, 1.2f, "Forest Grass"));
 
-            BuildRibbon("Left Shoulder Bank", -17.5f, -15.5f, 0.25f, materials["Forest Grass"], sampleStep: 4f);
-            BuildRibbon("Right Shoulder Bank", 15.5f, 17.5f, 0.25f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.12f, materials["Forest Grass"], sampleStep: 5f);
+            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.12f, materials["Forest Grass"], sampleStep: 5f);
             BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
             BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
             BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
             BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Left Edge Grass", -16.5f, -13.8f, 0.06f, materials["Forest Grass"], sampleStep: 4f);
-            BuildRibbon("Right Edge Grass", 13.8f, 16.5f, 0.06f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.12f, materials["Forest Grass"], sampleStep: 4f);
+            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.12f, materials["Forest Grass"], sampleStep: 4f);
             for (var side = -1; side <= 1; side += 2)
             {
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
@@ -6726,11 +6726,11 @@ namespace RoadRage.UnityRemake
 
             if (NoCanopy) return;
 
-            ScatterBand(4.5f, 18f, 26f, (d, l, s) => ForestTree(d, l, 14f, 24f));
-            ScatterBand(5.0f, 24f, 34f, (d, l, s) => ForestTree(d, l, 16f, 26f));
-            ScatterBand(5.5f, 32f, 46f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(6.0f, 44f, 62f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            ScatterBand(7.0f, 60f, 86f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            ScatterBand(6f, 18f, 28f, (d, l, s) => ForestTree(d, l, 14f, 24f));
+            ScatterBand(8f, 26f, 40f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+            ScatterBand(10f, 38f, 60f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+            ScatterBand(12f, 58f, 100f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            ScatterBand(15f, 95f, 200f, (d, l, s) => ForestTree(d, l, 20f, 32f));
             ScatterBand(8.5f, 84f, 124f, (d, l, s) => ForestTree(d, l, 18f, 30f));
             ScatterBand(10f, 120f, 200f, (d, l, s) => ForestTree(d, l, 16f, 28f));
             ScatterBand(12f, 190f, 320f, (d, l, s) => ForestTree(d, l, 18f, 30f));
