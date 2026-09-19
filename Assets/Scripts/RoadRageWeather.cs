@@ -102,15 +102,65 @@ namespace RoadRage.UnityRemake
             Kind = kind;
             followTarget = follow;
 
-            if (precipitation != null) Destroy(precipitation.gameObject);
-            if (spray != null) Destroy(spray.gameObject);
+            ClearEmitter(ref precipitation);
+            ClearEmitter(ref spray);
+
             // Fog has no particles. It is entirely fog density, tint and sun scale, which
             // BuildLighting already applies from the effect - so there is nothing to emit
             // and nothing to spray off the tyres beyond the wetness it adds.
             if (kind == WeatherKind.Clear || kind == WeatherKind.Fog) return;
 
+            if (particleMaterial == null)
+            {
+                Debug.LogWarning($"[RoadRage] No weather particle material for {kind}.", this);
+                return;
+            }
+
             precipitation = BuildPrecipitation(kind, particleMaterial);
-            if (kind != WeatherKind.Snow) spray = BuildSpray(particleMaterial);
+
+            if (followTarget != null)
+                precipitation.transform.position = followTarget.position;
+
+            // BuildPrecipitation starts internally. Clear any particles emitted at the
+            // initial position, then restart at the car.
+            precipitation.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            precipitation.Play();
+
+            if (kind != WeatherKind.Snow)
+            {
+                spray = BuildSpray(particleMaterial);
+
+                if (followTarget != null)
+                {
+                    spray.transform.position =
+                        followTarget.position - followTarget.forward * 2.6f + Vector3.up * 0.15f;
+                }
+
+                spray.Play();
+            }
+        }
+
+        /// Stop, hide and destroy an emitter before letting go of the reference. Destroy is
+        /// deferred to end of frame, so stopping and deactivating first prevents the old
+        /// emitter from spitting a last burst at a stale position during the switch.
+        private void ClearEmitter(ref ParticleSystem emitter)
+        {
+            if (emitter == null)
+            {
+                emitter = null;
+                return;
+            }
+
+            emitter.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            emitter.gameObject.SetActive(false);
+            Destroy(emitter.gameObject);
+            emitter = null;
+        }
+
+        private void OnDestroy()
+        {
+            if (Active == this)
+                Active = null;
         }
 
         /// Precipitation is transparent overdraw, which is the single most expensive thing
@@ -228,6 +278,7 @@ namespace RoadRage.UnityRemake
             WeatherKind.Rain => "RAIN",
             WeatherKind.Storm => "STORM",
             WeatherKind.Snow => "SNOW",
+            WeatherKind.Fog => "FOG",
             _ => "CLEAR",
         };
     }

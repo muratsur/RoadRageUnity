@@ -318,6 +318,7 @@ namespace RoadRage.UnityRemake
 				"storm" => WeatherKind.Storm,
 				"snow" => WeatherKind.Snow,
 				"clear" => WeatherKind.Clear,
+				"fog" => WeatherKind.Fog,
 				_ => null,
 			};
 	}
@@ -387,12 +388,13 @@ namespace RoadRage.UnityRemake
             GameState.RollDailyMissions();
             GameState.ResetRun();
             GameState.BeginRun();
-            // -car=N forces a vehicle for verification captures without owning it.
+            // -car=N forces a vehicle for verification captures without owning it. Routed
+            // through the ephemeral ForcedCar override so the driven car changes for the
+            // capture while the real save's SelectedCar/OwnedCars are never touched or
+            // persisted (the old code added the car to OwnedCars, which a later Save baked in).
             if (int.TryParse(CommandLineValue("-car="), out var forcedCar))
             {
-                GameState.SelectedCar = Mathf.Clamp(forcedCar, 0, GameState.Cars.Length - 1);
-                if (!GameState.OwnedCars.Contains(GameState.SelectedCar))
-                    GameState.OwnedCars.Add(GameState.SelectedCar);
+                GameState.ForcedCar = Mathf.Clamp(forcedCar, 0, GameState.Cars.Length - 1);
             }
             // -weather=rain|storm|snow|clear forces the roll for verification captures.
             var biomeIndex = System.Array.IndexOf(Biomes, biomeName);
@@ -563,29 +565,25 @@ namespace RoadRage.UnityRemake
         }
 
         public void NextBiome()
-		{
-			var current = System.Array.IndexOf(Biomes, biomeName);
-			ReloadBiome(Biomes[(current + 1) % Biomes.Length]);
-		}
+        {
+            if (ActiveBiomes.Length == 0)
+                return;
 
-		public void OpenPicker()
-		{
-			PickerOpen = true;
-			Time.timeScale = 0f;
-			lastToggleTime = Time.unscaledTime;
-		}
+            var currentBiomeIndex = System.Array.IndexOf(Biomes, biomeName);
+            var currentPlayableIndex =
+                System.Array.IndexOf(ActiveBiomes, currentBiomeIndex);
 
-		public void ClosePicker()
-		{
-			pickerSeen = true;
-			PickerOpen = false;
-			Time.timeScale = 1f;
-			lastToggleTime = Time.unscaledTime;
-		}
+            var nextPlayableIndex =
+                (currentPlayableIndex + 1) % ActiveBiomes.Length;
 
-		public void SelectBiome(string nextBiome)
+            SelectBiome(Biomes[ActiveBiomes[nextPlayableIndex]]);
+        }
+
+
+        public void SelectBiome(string nextBiome)
 		{
-			ClosePicker();
+			// ReloadBiome closes the picker after rebuilding, so gameplay stays paused
+			// (time scale 0) through the rebuild instead of resuming mid-teardown.
 			ReloadBiome(nextBiome);
 		}
 
@@ -721,6 +719,50 @@ namespace RoadRage.UnityRemake
             ClosePicker();
         }
 
+		private float timeScaleBeforePicker = 1f;
+
+		/// Opening the picker pauses gameplay and remembers the time scale to restore. Guarded
+		/// so a second open (e.g. HUD button plus hotkey in one frame) cannot capture the
+		/// already-zeroed scale as the value to restore later.
+		public void OpenPicker()
+		{
+			if (PickerOpen) return;
+
+			timeScaleBeforePicker = Time.timeScale;
+			PickerOpen = true;
+			Time.timeScale = 0f;
+			lastToggleTime = Time.unscaledTime;
+		}
+
+		public void ClosePicker()
+		{
+			if (!PickerOpen) return;
+
+			pickerSeen = true;
+			PickerOpen = false;
+			Time.timeScale = timeScaleBeforePicker;
+			lastToggleTime = Time.unscaledTime;
+		}
+
+		private static readonly WeatherKind[] WeatherCycle =
+			(WeatherKind[])System.Enum.GetValues(typeof(WeatherKind));
+
+		/// Advance to the next weather and actually reconfigure the particle system, so K
+		/// changes what is falling rather than only the label. Mirrors the Configure call
+		/// used at boot and on biome reload.
+		private void CycleWeather()
+		{
+			var index = System.Array.IndexOf(WeatherCycle, activeWeather);
+			activeWeather = WeatherCycle[(index + 1) % WeatherCycle.Length];
+
+			if (weatherSystem != null)
+			{
+				weatherSystem.Configure(activeWeather, car, Resources.Load<Material>("WeatherParticle"));
+			}
+
+			Debug.Log($"[WEATHER] {WeatherSystem.Label(activeWeather)}");
+		}
+
 		private float lastToggleTime;
 
 		private void Update()
@@ -758,8 +800,7 @@ namespace RoadRage.UnityRemake
 			// lighting change. Pin it to CLEAR to compare like with like.
 			if (GameInput.GetKKeyPressed())
 			{
-				activeWeather = (WeatherKind)(((int)activeWeather + 1) % System.Enum.GetValues(typeof(WeatherKind)).Length);
-				Debug.Log($"[WEATHER] {activeWeather}");
+				CycleWeather();
 			}
 
 			// N key cycles to next biome
@@ -779,6 +820,19 @@ namespace RoadRage.UnityRemake
 				}
 			}
 		}
+
+        // Daily progress lives only in memory during a run (per-hit saves were dropped for
+        // performance). Persist it when the app leaves the foreground so a mid-run background
+        // kill on mobile, or a desktop quit, does not lose it.
+        private void OnApplicationPause(bool paused)
+        {
+            if (paused) GameState.FlushDailyProgress();
+        }
+
+        private void OnApplicationQuit()
+        {
+            GameState.FlushDailyProgress();
+        }
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
 
@@ -966,6 +1020,12 @@ namespace RoadRage.UnityRemake
 
         private void BuildMaterials()
         {
+            // Dry-road caches are keyed by material name and rebuilt here. If they carried
+            // over from the previous biome's materials, ApplyRoadWetness would restore stale
+            // colours/smoothness to the fresh materials.
+            dryRoadColors.Clear();
+            dryRoadSmoothness.Clear();
+
             var bark = MakeMaterial("Hideout Bark PBR", new Color(0.72f, 0.66f, 0.56f), 0f, 0.2f);
             bark.mainTexture = Texture("bark_albedo");
             bark.SetTexture("_BumpMap", Texture("bark_normal"));
@@ -1552,27 +1612,59 @@ namespace RoadRage.UnityRemake
         /// Wet asphalt is mostly a smoothness trick: raise road/shoulder gloss so the
         /// probe's reflection reads, and darken the albedo the way real water does.
         private readonly Dictionary<string, Color> dryRoadColors = new();
+        private readonly Dictionary<string, float> dryRoadSmoothness = new();
+
+        private static readonly string[] WetRoadMaterialNames =
+        {
+                      "Road",
+                      "Shoulder"
+        };
 
         private void ApplyRoadWetness(float wetness)
         {
-            if (wetness <= 0.001f) return;
-            foreach (var name in new[] { "Road", "Shoulder" })
+            wetness = Mathf.Clamp01(wetness);
+
+            foreach (var name in WetRoadMaterialNames)
             {
-                if (!materials.TryGetValue(name, out var material)) continue;
-                // BlendZoneLighting calls this every frame: the wet tint MUST be
-                // computed from the stored dry colour, not from the current one, or
-                // the road darkens 18% per frame and converges to pure black within
-                // seconds of driving - the "why is everything pitch black" bug.
+                if (!materials.TryGetValue(name, out var material)
+                    || material == null
+                    || !material.HasProperty("_BaseColor")
+                    || !material.HasProperty("_Smoothness"))
+                {
+                    continue;
+                }
+
                 if (!dryRoadColors.TryGetValue(name, out var dryColor))
                 {
                     dryColor = material.GetColor("_BaseColor");
                     dryRoadColors[name] = dryColor;
                 }
-                var drySmoothness = name == "Road" ? 0.25f : 0.15f;
-                material.SetFloat("_Smoothness", Mathf.Lerp(drySmoothness, 0.40f, wetness));
-                material.SetColor("_BaseColor", dryColor * Mathf.Lerp(1f, 0.82f, wetness));
+
+                if (!dryRoadSmoothness.TryGetValue(name, out var drySmoothness))
+                {
+                    drySmoothness = material.GetFloat("_Smoothness");
+                    dryRoadSmoothness[name] = drySmoothness;
+                }
+
+                var wetColor = new Color(
+                    dryColor.r * 0.82f,
+                    dryColor.g * 0.82f,
+                    dryColor.b * 0.82f,
+                    dryColor.a);
+
+                material.SetColor(
+                    "_BaseColor",
+                    Color.Lerp(dryColor, wetColor, wetness));
+
+                material.SetFloat(
+                    "_Smoothness",
+                    Mathf.Lerp(
+                        drySmoothness,
+                        Mathf.Max(drySmoothness, 0.40f),
+                        wetness));
             }
         }
+
 
         /// Creates the player's local reflection probe.
         ///
@@ -4314,6 +4406,8 @@ namespace RoadRage.UnityRemake
             Debug.LogWarning("RR_MATERIALS palette was empty at stream time - rebuilding. A " +
                              "domain reload (a recompile during play) clears it while the world " +
                              "it built stays in the scene.");
+            dryRoadColors.Clear();
+            dryRoadSmoothness.Clear();
             BuildMaterials();
         }
 

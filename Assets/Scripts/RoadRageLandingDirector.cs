@@ -60,7 +60,16 @@ namespace RoadRage.UnityRemake
 
         public void LaunchRun()
         {
-            if (!IsLandingActive && !IsTransitioningToRace) return;
+            // Only launch from the landing state, and never while already transitioning -
+            // a repeated Start press during the camera sweep would reset the score and
+            // restart the countdown.
+            if (!IsLandingActive || IsTransitioningToRace) return;
+
+            // Do not start a run behind the biome picker.
+            if (RoadRageBootstrap.Instance != null && RoadRageBootstrap.Instance.PickerOpen)
+            {
+                return;
+            }
 
             IsLandingActive = false;
             IsTransitioningToRace = true;

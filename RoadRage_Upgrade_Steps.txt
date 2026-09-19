@@ -1,0 +1,574 @@
+ROAD RAGE UNITY — UPGRADE AND FIX CHECKLIST
+=========================================
+
+Project:
+C:\Users\Murat\Projects\RoadRageUnity
+
+Unity version:
+6000.5.4f1
+
+STATUS
+------
+These changes were prepared by reviewing the supplied source code.
+They have NOT been compiled or tested in Unity.
+
+The supplied RoadRageBootstrap.cs was truncated, so some methods and
+references could not be checked.
+
+Apply the changes in small steps and check the Unity Console after
+each step. Do not replace entire files with these snippets.
+
+
+STEP 0 — BACK UP YOUR PROJECT
+============================
+
+1. Exit Play Mode.
+
+2. Commit your current work to source control or back up:
+   - Assets
+   - Packages
+   - ProjectSettings
+
+3. Back up your player save before testing economy changes.
+   A project-folder backup does not necessarily include PlayerPrefs.
+
+4. Record any existing Console errors before editing.
+
+
+STEP 1 — RESTORE AND IMPROVE THE BIOME PICKER
+============================================
+
+File:
+RoadRageBootstrap.cs
+
+The latest visible version calls OpenPicker() and ClosePicker(), but
+their previous definitions were missing.
+
+Search the ENTIRE file before adding them. Do not create duplicate
+methods or fields.
+
+If the methods are absent, add the following inside the
+RoadRageBootstrap class:
+
+    private float timeScaleBeforePicker = 1f;
+
+    public void OpenPicker()
+    {
+        if (PickerOpen) return;
+
+        timeScaleBeforePicker = Time.timeScale;
+        PickerOpen = true;
+        Time.timeScale = 0f;
+        lastToggleTime = Time.unscaledTime;
+    }
+
+    public void ClosePicker()
+    {
+        if (!PickerOpen) return;
+
+        pickerSeen = true;
+        PickerOpen = false;
+        Time.timeScale = timeScaleBeforePicker;
+        lastToggleTime = Time.unscaledTime;
+    }
+
+Keep the existing lastToggleTime field. Do not add it again.
+
+Replace SelectBiome() with:
+
+    public void SelectBiome(string nextBiome)
+    {
+        // ReloadBiome closes the picker after rebuilding.
+        ReloadBiome(nextBiome);
+    }
+
+WHY:
+- Opening the picker pauses gameplay.
+- Closing it restores the previous time scale.
+- Selecting a biome no longer closes the picker before rebuilding.
+
+LIMITATION:
+This is an interim fix. Multiple systems changing Time.timeScale still
+need a shared pause/state manager.
+
+
+STEP 2 — COMPLETE THE WET-ROAD FIX
+=================================
+
+File:
+RoadRageBootstrap.cs
+
+The updated ApplyRoadWetness() method is already present.
+
+Add these as the FIRST TWO LINES inside BuildMaterials():
+
+    dryRoadColors.Clear();
+    dryRoadSmoothness.Clear();
+
+Example:
+
+    private void BuildMaterials()
+    {
+        dryRoadColors.Clear();
+        dryRoadSmoothness.Clear();
+
+        // Keep the rest of the existing method here.
+    }
+
+WHY:
+When materials are rebuilt for another biome, cached dry values must
+not carry over from the previous materials.
+
+IMPORTANT:
+The lighting code must still call ApplyRoadWetness(0f) when the
+effective wetness becomes zero.
+
+Clear weather does not necessarily mean zero wetness if the biome
+itself specifies a wet surface.
+
+BlendZoneLighting() still needs inspection to verify this.
+
+
+STEP 3 — SYNCHRONIZE WEATHER SWITCHING
+=====================================
+
+File:
+RoadRageBootstrap.cs
+
+Add this field and method inside RoadRageBootstrap:
+
+    private static readonly WeatherKind[] WeatherCycle =
+        (WeatherKind[])System.Enum.GetValues(typeof(WeatherKind));
+
+    private void CycleWeather()
+    {
+        var index = System.Array.IndexOf(
+            WeatherCycle, activeWeather);
+
+        activeWeather =
+            WeatherCycle[(index + 1) % WeatherCycle.Length];
+
+        if (weatherSystem != null)
+        {
+            weatherSystem.Configure(
+                activeWeather,
+                car,
+                Resources.Load<Material>("WeatherParticle"));
+        }
+
+        Debug.Log(
+            $"[WEATHER] {WeatherSystem.Label(activeWeather)}");
+    }
+
+Replace the existing K-key block in Update() with:
+
+    if (GameInput.GetKKeyPressed())
+    {
+        CycleWeather();
+    }
+
+In ParseWeather(), add this case to the existing switch:
+
+    "fog" => WeatherKind.Fog,
+
+WHY:
+Previously, K changed activeWeather but did not reconfigure the
+weather particles.
+
+This patch updates both the weather value and the particle system.
+
+
+STEP 4 — FIX WEATHER PARTICLE CLEANUP AND SPRAY STARTUP
+======================================================
+
+File:
+RoadRageWeather.cs
+
+Inside WeatherSystem, replace Configure() with:
+
+    public void Configure(
+        WeatherKind kind,
+        Transform follow,
+        Material particleMaterial)
+    {
+        Active = this;
+        Kind = kind;
+        followTarget = follow;
+
+        ClearEmitter(ref precipitation);
+        ClearEmitter(ref spray);
+
+        if (kind == WeatherKind.Clear ||
+            kind == WeatherKind.Fog)
+        {
+            return;
+        }
+
+        if (particleMaterial == null)
+        {
+            Debug.LogWarning(
+                $"[RoadRage] No weather particle material for {kind}.",
+                this);
+            return;
+        }
+
+        precipitation =
+            BuildPrecipitation(kind, particleMaterial);
+
+        if (followTarget != null)
+        {
+            precipitation.transform.position =
+                followTarget.position;
+        }
+
+        // BuildPrecipitation starts internally. Clear any particles
+        // emitted at the initial position, then restart at the car.
+        precipitation.Stop(
+            true,
+            ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        precipitation.Play();
+
+        if (kind != WeatherKind.Snow)
+        {
+            spray = BuildSpray(particleMaterial);
+
+            if (followTarget != null)
+            {
+                spray.transform.position =
+                    followTarget.position
+                    - followTarget.forward * 2.6f
+                    + Vector3.up * 0.15f;
+            }
+
+            spray.Play();
+        }
+    }
+
+Add this helper inside WeatherSystem:
+
+    private void ClearEmitter(ref ParticleSystem emitter)
+    {
+        if (emitter == null)
+        {
+            emitter = null;
+            return;
+        }
+
+        emitter.Stop(
+            true,
+            ParticleSystemStopBehavior.StopEmittingAndClear);
+
+        emitter.gameObject.SetActive(false);
+        Destroy(emitter.gameObject);
+        emitter = null;
+    }
+
+Add this lifecycle method:
+
+    private void OnDestroy()
+    {
+        if (Active == this)
+            Active = null;
+    }
+
+Replace Label() with:
+
+    public static string Label(WeatherKind kind) => kind switch
+    {
+        WeatherKind.Rain => "RAIN",
+        WeatherKind.Storm => "STORM",
+        WeatherKind.Snow => "SNOW",
+        WeatherKind.Fog => "FOG",
+        _ => "CLEAR",
+    };
+
+WHY:
+- Old emitters are stopped and hidden before deferred destruction.
+- Missing particle materials are handled explicitly.
+- Spray is explicitly started after configuration.
+- Fog receives the correct UI label.
+- The active instance reference is cleared on destruction.
+
+NOTE:
+This does not yet make spray dependent on vehicle speed. That should
+be added as a separate gameplay/visual refinement.
+
+
+STEP 5 — PREVENT REPEATED RUN LAUNCHES
+=====================================
+
+File:
+RoadRageLandingDirector.cs
+
+At the beginning of LaunchRun(), replace:
+
+    if (!IsLandingActive && !IsTransitioningToRace) return;
+
+With:
+
+    if (!IsLandingActive || IsTransitioningToRace) return;
+
+    if (RoadRageBootstrap.Instance != null
+        && RoadRageBootstrap.Instance.PickerOpen)
+    {
+        return;
+    }
+
+Keep the rest of LaunchRun() unchanged.
+
+WHY:
+- Prevent repeated launch calls during the camera transition.
+- Prevent starting a run behind the biome picker.
+- Avoid repeated score resets and countdown restarts.
+
+
+STEP 6 — CHECK INPUT SYSTEM CONFIGURATION
+=========================================
+
+RoadRageLandingDirector currently uses:
+
+    Input.GetKeyDown(KeyCode.Space)
+    Input.GetKeyDown(KeyCode.Return)
+
+The project also includes the new Input System package.
+
+Check:
+Edit > Project Settings > Player > Other Settings >
+Active Input Handling
+
+If the project uses "Input System Package (New)" only, legacy Input
+calls need replacement.
+
+Preferred long-term change:
+Route landing controls through the existing GameInput wrapper.
+
+Do not change the project's input configuration blindly, because
+other scripts may depend on its current setting.
+
+GameInput.cs is needed to prepare a consistent replacement.
+
+
+STEP 7 — REDESIGN CRASH / REVIVE / REWARD SETTLEMENT
+===================================================
+
+File containing GameState:
+RoadRageGame.cs
+
+CONFIRMED PROBLEM:
+EndRun() immediately banks the run payout.
+
+Revive affordability is then checked using that increased balance.
+
+Revive() subtracts:
+1. The revive price.
+2. The previously banked payout.
+
+This can produce negative cash.
+
+Example:
+Cash before crash:       $500
+Run payout:            +$1,000
+Displayed balance:      $1,500
+Revive price:           -$1,200
+Payout rollback:        -$1,000
+Final balance:            -$700
+
+RELATED RISK:
+Mission or Fury rewards may become claimable from the provisional
+payout. Rolling back cash and XP does not undo claimed rewards.
+
+RECOMMENDED FLOW:
+
+    Crash
+      |
+      +-- Revive
+      |     - Check payment.
+      |     - Charge revive cost.
+      |     - Continue the same run.
+      |     - Do not bank final rewards yet.
+      |
+      +-- Finish
+            - Commit run cash once.
+            - Commit relevant progression once.
+            - Award Fury once.
+            - Save.
+            - Open Results.
+
+Do NOT replace EndRun() by itself.
+
+This change must be coordinated with:
+- ArcadeCarController
+- RoadRageHUD
+- Landing / restart flow
+- Daily progress tracking
+- Save handling
+
+Also address:
+- BeginRun() leaves LastRunCash and some timers unchanged.
+- Invalid upgrade keys silently select the boost upgrade.
+- Loaded mission IDs are not validated against MissionPool.Length.
+- Daily progress can be lost if the app exits before a run ends.
+- The -car= verification option modifies live ownership and may
+  persist that change through a later save.
+
+
+STEP 8 — FIX MATERIAL-KEY COLLISIONS
+===================================
+
+File:
+RoadRageBootstrap.cs
+
+Known collisions:
+1. "Forest Grass" is created as ground, then overwritten as cutout
+   foliage.
+2. "Sidewalk" is created twice.
+3. "Palm Frond" is aliased to City Palm, then overwritten later.
+
+Recommended changes:
+- Give ground and foliage separate, descriptive material keys.
+- Update the renderer assignments for each intended use.
+- Remove genuinely redundant material construction.
+- Make city and canyon palm assignments explicit.
+
+IMPORTANT:
+Do not blindly rename every "Forest Grass" occurrence.
+Ground renderers and vegetation renderers require different materials.
+
+Do not destroy every material in MaterialDict.Clear().
+Existing car/effect renderers may still reference those materials.
+
+A safe material-lifetime change requires checking all consumers.
+
+
+STEP 9 — REVIEW RENDERING PACKAGES
+==================================
+
+The manifest includes:
+- URP 17.6.0
+- Several rendering packages at 17.5.0
+- HDRP as well as URP
+
+This warrants checking resolved dependencies, but it does not prove
+that the project has a package conflict.
+
+Inspect:
+- Packages/packages-lock.json
+- Unity Package Manager
+- Console package-resolution errors
+
+Do not remove HDRP or force package versions without checking asset
+and code dependencies.
+
+Also verify shadow settings in the URP assets. QualitySettings logs
+alone do not establish the actual URP shadow configuration.
+
+
+STEP 10 — VALIDATE THE FIRST PATCHES
+====================================
+
+After Unity recompiles:
+
+[ ] No new compiler errors.
+
+[ ] Escape/B opens and closes the biome picker.
+
+[ ] Closing the picker restores the previous time scale.
+
+[ ] Selecting a biome closes the picker after rebuilding.
+
+[ ] N cycles only through the ten playable biomes.
+
+[ ] Hollywood Hills wraps back to Greenwood.
+
+[ ] K changes precipitation as well as the weather label.
+
+[ ] Fog is labelled FOG, not CLEAR.
+
+[ ] Clear/Fog removes old rain or snow emitters.
+
+[ ] Rain and storm have active spray emitters.
+
+[ ] Wet roads return to dry values when effective wetness reaches 0.
+
+[ ] Repeated biome switches do not reuse stale dry-road values.
+
+[ ] Repeated Start presses do not reset the launch transition.
+
+[ ] Start does nothing while the biome picker is open.
+
+[ ] Repeat key checks in a player build, not only the Editor.
+
+
+STEP 11 — ASSET AND BIOME UPGRADE PLAN
+======================================
+
+PHASE A: STABILITY
+- Fix picker, weather and launch handling.
+- Fix reward settlement.
+- Resolve material collisions.
+- Replace broad name-based cleanup with explicit object ownership.
+
+PHASE B: ONE BENCHMARK BIOME
+Start with Greenwood:
+- Coherent ground and foliage materials.
+- Suitable foliage LODs.
+- Better roadside composition.
+- Lighting and weather consistency.
+- Environmental audio.
+- Performance measurement on the target device.
+
+PHASE C: DATA-DRIVEN BIOMES
+Introduce BiomeDefinition ScriptableObjects for:
+- Display name and availability.
+- Asset / prop sets.
+- Materials.
+- Lighting settings.
+- Allowed weather and probabilities.
+- Road parameters.
+- Traffic and encounter settings.
+
+PHASE D: GAMEPLAY VARIETY
+- Distinct biome hazards.
+- Biome-specific traffic behaviour.
+- Readable encounter pacing.
+- Difficulty progression based on run distance.
+
+PHASE E: OVERALL GAME FLOW
+
+    Landing
+      -> Selection
+      -> Loading
+      -> Countdown
+      -> Driving
+      -> Crash / Revive
+      -> Results
+
+Pause and picker screens should return to the previous state rather
+than unconditionally resuming gameplay.
+
+PERFORMANCE RULE:
+Measure before increasing scenery density, particle counts or
+realtime reflection costs.
+
+Enabling material instancing alone does not guarantee fewer draw
+calls.
+
+
+FILES NEEDED FOR THE NEXT COORDINATED PATCH
+==========================================
+
+1. ArcadeCarController.cs
+2. RoadRageHUD.cs
+3. GameInput.cs
+4. Packages/packages-lock.json
+5. Bootstrap method: BlendZoneLighting()
+6. Code assigning "Forest Grass" to renderers
+7. One gameplay screenshot
+8. Primary target platform: PC, Android or iOS
+
+The next coordinated patch should focus on:
+- Safe crash / revive / results flow.
+- The first biome's material upgrade.
+
+END OF CHECKLIST

@@ -125,6 +125,12 @@ namespace RoadRage.UnityRemake
         public static List<int> OwnedCars = new() { 0 };
         public static int SelectedCar;
 
+        /// Verification-only override for -car=N. It is deliberately NOT persisted, NOT in
+        /// Snapshot, and NOT in ProfileKeys: a capture forces a vehicle without owning or
+        /// selecting it, so the driven car (CurrentCar) reflects the override while the
+        /// real save's SelectedCar/OwnedCars stay untouched. Null means "use SelectedCar".
+        public static int? ForcedCar;
+
         public static string MissionDay = string.Empty;
         public static List<int> MissionIds = new();
         public static List<bool> MissionClaimed = new();
@@ -138,14 +144,24 @@ namespace RoadRage.UnityRemake
 
         public static int ComboMultiplier => Mathf.Clamp(1 + Combo / 3, 1, 10);
         public static int UpgradeCost(int level) => 800 + level * 700;
-        public static CarSpec CurrentCar => Cars[Mathf.Clamp(SelectedCar, 0, Cars.Length - 1)];
+        public static CarSpec CurrentCar => Cars[Mathf.Clamp(ForcedCar ?? SelectedCar, 0, Cars.Length - 1)];
 
         public static int UpgradeLevel(string key) => key switch
         {
             "engine" => UpgradeEngine,
             "armor" => UpgradeArmour,
-            _ => UpgradeBoost,
+            "boost" => UpgradeBoost,
+            _ => UnknownUpgradeKey(key),
         };
+
+        /// Unknown keys used to alias to boost, so a typo silently read - and BuyUpgrade
+        /// silently bought - the boost track. Now an unknown key reports UpgradeMax, which
+        /// makes BuyUpgrade's "already maxed" guard refuse it before any charge.
+        private static int UnknownUpgradeKey(string key)
+        {
+            Debug.LogWarning($"[RoadRage] Unknown upgrade key '{key}'.");
+            return UpgradeMax;
+        }
 
         /// Arcade scoring event: scales by the current combo multiplier and extends the combo.
         public static void Award(int points, string message)
@@ -227,6 +243,10 @@ namespace RoadRage.UnityRemake
             DoubleUsedThisRun = false;
             RevivesUsed = 0;
             LastRunFury = 0;
+            // Cleared with the run so a fresh run never carries the previous payout: it is
+            // only read while RunOver, but leaving it set made ReviveSpendableCash wrong for
+            // the first frames of a new run if anything queried it early.
+            LastRunCash = 0;
         }
 
         public static int AwardCash(float completionFraction, int runStartScore)
@@ -243,16 +263,21 @@ namespace RoadRage.UnityRemake
         public static bool BuyUpgrade(string key)
         {
             var level = UpgradeLevel(key);
-            if (level >= UpgradeMax) return false;
+            if (level >= UpgradeMax) return false;   // also refuses unknown keys (they report UpgradeMax)
             var cost = UpgradeCost(level);
             if (Cash < cost) return false;
-            Cash -= cost;
             switch (key)
             {
                 case "engine": UpgradeEngine++; break;
                 case "armor": UpgradeArmour++; break;
-                default: UpgradeBoost++; break;
+                case "boost": UpgradeBoost++; break;
+                default:
+                    // Unreachable given the guard above, but explicit so a future change to
+                    // UpgradeLevel cannot resurrect the silent-boost behaviour: charge nothing.
+                    Debug.LogWarning($"[RoadRage] Refused upgrade for unknown key '{key}'.");
+                    return false;
             }
+            Cash -= cost;   // deducted only after a valid track was actually levelled
             Save();
             return true;
         }
@@ -864,18 +889,26 @@ namespace RoadRage.UnityRemake
         public static int ReviveCost => 1200 + RevivesUsed * 1800;
         public static bool ReviveUsesToken => ReviveTokens > 0;
 
+        /// The spendable balance for a revive excludes this run's provisional payout.
+        /// EndRun banks LastRunCash into Cash the instant integrity hits zero, but Revive
+        /// unwinds that payout (the run is continuing, so it is not earned yet). Checking
+        /// affordability against the raw Cash therefore let a player revive on money that
+        /// was about to be taken back, driving the balance negative. The real, keepable
+        /// balance is Cash minus the payout that is about to be unwound.
+        public static int ReviveSpendableCash => Cash - LastRunCash;
+
         public static bool CanPayRevive(RevivePayment payment) => payment switch
         {
             RevivePayment.Token => ReviveTokens > 0,
             RevivePayment.Gems => Gems >= GemRevivePrice,
-            _ => Cash >= ReviveCost,
+            _ => ReviveSpendableCash >= ReviveCost,
         };
 
         /// Tokens first: they are the pro pass's reward and are worth nothing unspent.
         /// Then cash, then gems - gems are the scarcest, so they are the last resort.
         public static RevivePayment ReviveDefaultPayment =>
             ReviveTokens > 0 ? RevivePayment.Token
-            : Cash >= ReviveCost ? RevivePayment.Cash
+            : ReviveSpendableCash >= ReviveCost ? RevivePayment.Cash
             : RevivePayment.Gems;
 
         public static bool CanRevive =>
@@ -1137,6 +1170,12 @@ namespace RoadRage.UnityRemake
             PlayerPrefs.Save();
         }
 
+        /// Persist mid-run daily progress. BumpDaily only updates memory (per-hit disk
+        /// writes caused lag spikes) and SaveMissions otherwise runs only when a run ends,
+        /// so a quit or a background-kill mid-run would drop every takedown, near miss and
+        /// kilometre since the last run ended. The bootstrap calls this on pause/quit.
+        public static void FlushDailyProgress() => SaveMissions();
+
         public static void Load()
         {
             Cash = PlayerPrefs.GetInt("rr_cash", 0);
@@ -1151,10 +1190,22 @@ namespace RoadRage.UnityRemake
             SelectedCar = PlayerPrefs.GetInt("rr_selected_car", 0);
 
             MissionDay = PlayerPrefs.GetString("rr_mission_day", string.Empty);
-            MissionIds = ParseInts(PlayerPrefs.GetString("rr_mission_ids", string.Empty));
-            MissionClaimed = PlayerPrefs.GetString("rr_mission_claimed", string.Empty)
+            var savedMissionIds = ParseInts(PlayerPrefs.GetString("rr_mission_ids", string.Empty));
+            var savedMissionClaimed = PlayerPrefs.GetString("rr_mission_claimed", string.Empty)
                 .Split(',', StringSplitOptions.RemoveEmptyEntries).Select(c => c == "1").ToList();
-            while (MissionClaimed.Count < MissionIds.Count) MissionClaimed.Add(false);
+            // Drop any saved mission whose id no longer indexes into MissionPool: the pool
+            // can shrink between builds, and MissionProgress/MissionDone/ClaimMission index
+            // MissionPool[MissionIds[slot]] directly, so a stale id would throw. Filtered in
+            // parallel with the claimed flags so surviving missions keep their claim state; a
+            // resulting count != 3 makes RollDailyMissions re-roll a fresh set for the day.
+            MissionIds = new List<int>();
+            MissionClaimed = new List<bool>();
+            for (var i = 0; i < savedMissionIds.Count; i++)
+            {
+                if (savedMissionIds[i] >= MissionPool.Length) continue;
+                MissionIds.Add(savedMissionIds[i]);
+                MissionClaimed.Add(i < savedMissionClaimed.Count && savedMissionClaimed[i]);
+            }
             LoginStreak = PlayerPrefs.GetInt("rr_login_streak", 0);
             LastLoginReward = PlayerPrefs.GetInt("rr_login_reward", 0);
             foreach (var key in Daily.Keys.ToList()) Daily[key] = PlayerPrefs.GetFloat($"rr_daily_{key}", 0f);
