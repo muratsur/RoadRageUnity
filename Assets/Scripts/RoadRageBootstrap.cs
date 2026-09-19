@@ -985,8 +985,7 @@ namespace RoadRage.UnityRemake
 			// normal map for surface break-up.
 			// The Hideout kit's ground is bare dirt and read as a flat lawn once the
 			// canopy went in. Runic Forest ships a real forest floor with leaf litter.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RunicForest",
-				"T_ground_02_D", "T_ground_02_N", new Color(0.62f, 0.60f, 0.48f), 0f, 0.06f),
+			var ground = BiomeSurface(BiomeMaterial("Forest Grass", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.35f, 0.55f, 0.25f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
             // Tighter tiling: at the old scale the ground read as one flat wash across the
             // whole 240m plane instead of ground the player is moving over.
@@ -7242,7 +7241,7 @@ namespace RoadRage.UnityRemake
         private const int BaseTrafficCount = 12;
         /// Twenty-two cars is a desktop figure. On mobile the escalation still happens,
         /// it just tops out where the frame budget does.
-        private static int PeakTrafficCount => RichDetailBudget ? 22 : 14;
+        private static int PeakTrafficCount => RichDetailBudget ? 12 : 8;
 
         /// Adds traffic as a run escalates.
         ///
