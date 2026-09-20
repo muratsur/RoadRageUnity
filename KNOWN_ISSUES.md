@@ -40,10 +40,12 @@ followed by `NormalizeModelHeight(...)`. Check the `railMaterial` fallback
 (`materials.TryGetValue("Hills Metal", …) ? … : materials["Forest Mountain"]`) and the
 `SM_fence` model/scale.
 
-## Deferred larger work (not a bug — scoped, coordinated change)
+## Resolved
 
-**Crash / revive / results settlement flow (checklist Step 7, HUD restructure).** The
-confirmed negative-cash revive bug and its "also address" items are fixed (PR #6). The
-larger "defer banking until the run truly finishes" restructure is intentionally left as
-a coordinated change requiring `RoadRageHUD`, `ArcadeCarController`, the landing/restart
-flow, and playtesting.
+**Crash / revive / results settlement flow (checklist Step 7).** The confirmed negative-cash
+revive bug and its "also address" items were fixed in PR #6, and the larger "defer banking
+until the run truly finishes" restructure landed in PR #17 (`EndRun` computes a pending
+payout; a new `CommitRun` banks it once at finish; revive no longer unwinds anything).
+Verified by the `-selftest` (`RR_TEST RESULT PASS`). Remaining confidence step: a hands-on
+play-through of the results-screen buttons (garage/wheel/menu), which the self-test does not
+click through.
