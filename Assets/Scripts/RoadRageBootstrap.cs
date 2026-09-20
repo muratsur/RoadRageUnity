@@ -2412,8 +2412,8 @@ namespace RoadRage.UnityRemake
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
                 BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Grass"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Grass"], relative: true);
+                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Floor PBR"], relative: true);
             }
             else
             {
@@ -6823,14 +6823,14 @@ namespace RoadRage.UnityRemake
                 return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
             });
 
-            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
-            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
-            BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
-            BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Grass"], sampleStep: 4f);
-            BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Grass"], sampleStep: 5f);
-            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
-            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.25f, materials["Forest Grass"], sampleStep: 1f);;
+            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
+            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
+            BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Floor PBR"], sampleStep: 4f);
+            BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Floor PBR"], sampleStep: 4f);
+            BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Floor PBR"], sampleStep: 5f);
+            BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Floor PBR"], sampleStep: 5f);
+            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
+            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
             for (var side = -1; side <= 1; side += 2)
             {
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
