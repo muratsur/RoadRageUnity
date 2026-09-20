@@ -3,20 +3,15 @@
 Tracked issues that are understood but deliberately not yet fixed. Each entry notes the
 symptom, the cause, where the relevant code lives, and the levers to try.
 
-## Greenwood — guardrails render as white boxes (cosmetic)
-
-**Symptom:** The roadside guardrails render as white box/crate shapes instead of a fence.
-
-**Cause:** Likely a wrong material assignment or a model/normalization mismatch on the
-guardrail mesh. Introduced with the Greenwood rework (PR #5).
-
-**Where:** `Assets/Scripts/RoadRageBootstrap.cs`, `BuildForest()` — the guard-rail
-`ScatterBand` that calls `PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial, …)`
-followed by `NormalizeModelHeight(...)`. Check the `railMaterial` fallback
-(`materials.TryGetValue("Hills Metal", …) ? … : materials["Forest Mountain"]`) and the
-`SM_fence` model/scale.
+_No open issues at this time._
 
 ## Resolved
+
+**Greenwood — guardrails read as white boxes (PR #21).** The guardrail (`SM_fence` model)
+loads and is shaped fine, but it was textured with the shared `Hills Metal` material — a
+bright, reflective light-grey — so the low-poly rail read as white crates against the sky.
+Fixed by adding a dedicated matte `Forest Rail Metal` material and pointing the guardrail at
+it. Verified by a rendered capture.
 
 **Greenwood — "flying green" grass cards at the road edge (PR #19).** The flat ground ribbons
 at the road edge (Forest Grass Stripe, Shoulder Bank, Leaf Litter, Forest Litter Deep, Edge
