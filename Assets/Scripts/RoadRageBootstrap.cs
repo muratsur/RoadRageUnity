@@ -1088,6 +1088,11 @@ namespace RoadRage.UnityRemake
             rimMaterial = MakeMaterial("Wheel Rim", new Color(0.58f, 0.59f, 0.61f), 0.75f, 0.7f);
             MakeMaterial("Car Orange", new Color(0.95f, 0.22f, 0.035f), 0.55f, 0.78f);
             MakeMaterial("Car Dark", new Color(0.012f, 0.018f, 0.022f), 0.25f, 0.55f);
+            // Guardrail metal: a muted, matte galvanised grey. The shared "Hills Metal" is a
+            // bright, fairly reflective light-grey (0.70) that made the low-poly forest
+            // guardrail read as blinding white crates against the sky; this darker, less
+            // reflective grey reads as a weathered steel rail instead.
+            MakeMaterial("Forest Rail Metal", new Color(0.40f, 0.42f, 0.44f), 0.45f, 0.28f);
             MakeMaterial("Glass", new Color(0.025f, 0.12f, 0.16f), 0.7f, 0.92f);
             MakeMaterial("Tire", new Color(0.012f, 0.012f, 0.014f), 0f, 0.08f);
             MakeMaterial("Driver Skin", new Color(0.72f, 0.43f, 0.28f), 0f, 0.32f);
@@ -6873,9 +6878,7 @@ namespace RoadRage.UnityRemake
             // carriageway rather than needing a new number every time the road changes
             // width. Posts every 6 m; the mesh is normalised to post height, so the rail
             // reads at the right scale whatever the source model is.
-            var railMaterial = materials.TryGetValue("Hills Metal", out var galvanised)
-                ? galvanised
-                : materials["Forest Mountain"];
+            var railMaterial = materials["Forest Rail Metal"];
             ScatterBand(6f, 16.7f, 17.1f, (d, l, s) =>
             {
                 var rail = PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial,
