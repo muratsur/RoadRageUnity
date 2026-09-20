@@ -98,12 +98,21 @@ namespace RoadRage.UnityRemake
         /// to survive, only something to continue.
         public static float RunIntensity => Mathf.Clamp01(RunDistanceKm / 6f);
 
-        /// Run state. Without these the run never ended, AwardCash was never called, and
+        /// Run state. Without these the run never ended, the run payout was never banked, and
         /// the garage economy was unreachable by playing - only the login bonus fed it.
         public const float MaxIntegrity = 100f;
         public static float Integrity = MaxIntegrity;
         public static bool RunOver;
         public static int LastRunCash;
+        // Deferred banking. EndRun computes the run's payout into PendingRunCash/PendingRunFury
+        // but does NOT apply it; CommitRun applies it exactly once, when the run truly finishes
+        // (the results screen shows because revive was not taken). A revive continues the same
+        // run, so nothing is banked until then and there is never a provisional payout in Cash
+        // that a revive would have to unwind. LastRunCash/LastRunFury hold the committed amounts
+        // (set by CommitRun) that the results screen and Double Earnings read.
+        public static int PendingRunCash;
+        public static int PendingRunFury;
+        public static bool RunCommitted;
         public static int InnocentsHit;
         public static int RunStartScore;
 
@@ -217,11 +226,34 @@ namespace RoadRage.UnityRemake
         {
             if (RunOver) return;
             RunOver = true;
-            // Cash scales with how far the run got, so a better truck paying for longer
+            // Compute the payout for the run so far, but do NOT bank it. Banking happens once,
+            // in CommitRun, when the run truly finishes (revive declined/expired). Deferring
+            // means a revive - which continues the same run - never has a provisional payout to
+            // unwind. Cash scales with how far the run got, so a better truck paying for longer
             // survival is the progression: run -> cash -> garage -> longer run.
-            LastRunCash = AwardCash(Mathf.Clamp01(RunDistanceKm / 8f), RunStartScore);
-            LastRunFury = FuryForRun();
-            AddFury(LastRunFury);
+            PendingRunCash = ComputeRunCash(Mathf.Clamp01(RunDistanceKm / 8f), RunStartScore);
+            PendingRunFury = FuryForRun();
+            RunCommitted = false;
+        }
+
+        /// Banks the run's payout exactly once, when the run truly finishes (the results screen
+        /// shows because revive was not taken). Idempotent - the HUD calls it every frame the
+        /// results screen is up, and it no-ops after the first commit. Sets LastRunCash and
+        /// LastRunFury to the committed amounts so the results screen and Double Earnings read
+        /// them. If the player quits during the revive window instead of finishing, the run is
+        /// never committed and the payout is forfeit - which matches "commit on finish".
+        public static void CommitRun()
+        {
+            if (RunCommitted || !RunOver) return;
+            RunCommitted = true;
+
+            LastRunCash = PendingRunCash;
+            Cash += LastRunCash;
+            BumpDaily("cash", LastRunCash);
+
+            LastRunFury = PendingRunFury;
+            AddFury(LastRunFury);   // persists fury
+
             SaveMissions();
             Save();
         }
@@ -247,17 +279,18 @@ namespace RoadRage.UnityRemake
             // only read while RunOver, but leaving it set made ReviveSpendableCash wrong for
             // the first frames of a new run if anything queried it early.
             LastRunCash = 0;
+            PendingRunCash = 0;
+            PendingRunFury = 0;
+            RunCommitted = false;
         }
 
-        public static int AwardCash(float completionFraction, int runStartScore)
+        /// Pure computation of a run's cash payout - no side effects. CommitRun applies it
+        /// (adds to Cash, bumps the daily counter, saves) once, when the run is banked.
+        public static int ComputeRunCash(float completionFraction, int runStartScore)
         {
             var points = Mathf.Max(0, Score - runStartScore);
             var pileupBonus = Mathf.RoundToInt(PileupDamage * 0.05f) + (AftertouchTakedowns * 400);
-            var earned = (int)(points * 0.1f) + (int)(completionFraction * 1200f) + 150 + pileupBonus;
-            Cash += earned;
-            BumpDaily("cash", earned);
-            Save();
-            return earned;
+            return (int)(points * 0.1f) + (int)(completionFraction * 1200f) + 150 + pileupBonus;
         }
 
         public static bool BuyUpgrade(string key)
@@ -889,12 +922,10 @@ namespace RoadRage.UnityRemake
         public static int ReviveCost => 1200 + RevivesUsed * 1800;
         public static bool ReviveUsesToken => ReviveTokens > 0;
 
-        /// The spendable balance for a revive excludes this run's provisional payout.
-        /// EndRun banks LastRunCash into Cash the instant integrity hits zero, but Revive
-        /// unwinds that payout (the run is continuing, so it is not earned yet). Checking
-        /// affordability against the raw Cash therefore let a player revive on money that
-        /// was about to be taken back, driving the balance negative. The real, keepable
-        /// balance is Cash minus the payout that is about to be unwound.
+        /// The spendable balance for a revive. Under deferred banking the run's payout is not
+        /// added to Cash until CommitRun, which only runs once revive is off the table - so
+        /// during the revive window Cash is already the real balance and LastRunCash is 0. The
+        /// subtraction is kept as a guard so this can never count an un-earned payout.
         public static int ReviveSpendableCash => Cash - LastRunCash;
 
         public static bool CanPayRevive(RevivePayment payment) => payment switch
@@ -918,11 +949,12 @@ namespace RoadRage.UnityRemake
 
         /// Puts the player back on the road mid-run.
         ///
-        /// EndRun banks the payout the moment integrity hits zero, so this has to unwind
-        /// that payout rather than defer it - otherwise every revive pays the same run
-        /// out again. The daily cash counter and the pass XP are unwound with it. The run
-        /// is not restarted: RunStartScore is untouched, so when it really ends the payout
-        /// covers the whole thing, revived length included.
+        /// Under deferred banking nothing is committed when integrity hits zero (EndRun only
+        /// computes the pending payout), so a revive has nothing to unwind - it just charges
+        /// the revive cost and continues the same run. The run is not restarted: RunStartScore
+        /// is untouched, so when it really ends the payout covers the whole thing, revived
+        /// length included. The pending figures are cleared here and recomputed by the next
+        /// EndRun.
         public static bool Revive() => Revive(ReviveDefaultPayment);
 
         public static bool Revive(RevivePayment payment)
@@ -936,19 +968,16 @@ namespace RoadRage.UnityRemake
                 default: Cash -= ReviveCost; break;
             }
 
-            Cash -= LastRunCash;
-            BumpDaily("cash", -LastRunCash);
-            LastRunCash = 0;
-            AddFury(-LastRunFury);
-            LastRunFury = 0;
+            // No payout was banked (CommitRun has not run), so there is nothing to unwind.
+            PendingRunCash = 0;
+            PendingRunFury = 0;
 
             RevivesUsed++;
             RunOver = false;
             Integrity = MaxIntegrity * ReviveIntegrityFraction;
 
-            SaveFury();
+            SaveFury();   // persists ReviveTokens on the token path
             SaveGems();
-            SaveMissions();
             Save();
             return true;
         }

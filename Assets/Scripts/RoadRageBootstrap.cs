@@ -8006,8 +8006,10 @@ namespace RoadRage.UnityRemake
             var refusedWhenEmpty = GameState.SpinWheel() < 0;
             Debug.Log($"RR_TEST wheel refusedWhenEmpty={refusedWhenEmpty} spinsLeft={GameState.WheelSpins}");
 
-            // Adrenaline Revive: the payout, the daily cash counter and the pass XP must
-            // all be unwound, or every revive pays the same run out a second time.
+            // Adrenaline Revive: under deferred banking nothing is committed on a crash, so a
+            // revive only charges the fee - cash, the daily counter and pass XP are untouched.
+            // cashAtCrash/furyAtCrash equal Cash/FuryXp here because LastRunCash/Fury are 0
+            // until CommitRun (which does not run on the revived crash).
             GameState.Cash += 50000;
             var cashAtCrash = GameState.Cash - GameState.LastRunCash;
             var furyAtCrash = GameState.FuryXp - GameState.LastRunFury;
@@ -8020,9 +8022,12 @@ namespace RoadRage.UnityRemake
                       $"cash={GameState.Cash} expected={cashAtCrash - reviveFee} " +
                       $"fury={GameState.FuryXp} expected={furyAtCrash} integrity={GameState.Integrity:0.0}");
 
-            // End it again, so the doubler below has a fresh payout to work on and the
-            // pass gets its XP for the whole run.
+            // End it again and commit, so the doubler below has a fresh banked payout and the
+            // pass gets its XP for the whole run. Under deferred banking EndRun only computes
+            // the pending payout; CommitRun banks it - exactly as the HUD does the frame the
+            // results screen takes over from the revive prompt.
             GameState.EndRun();
+            GameState.CommitRun();
             var furyOk = GameState.LastRunFury > 0 && GameState.FuryXp >= GameState.LastRunFury
                          && GameState.FuryTier <= GameState.FuryTiers;
             Debug.Log($"RR_TEST fury run={GameState.LastRunFury} total={GameState.FuryXp} " +
@@ -9386,7 +9391,14 @@ namespace RoadRage.UnityRemake
                 // The revive offer stands ahead of the crash report; DrawRevivePrompt
                 // returns false the frame its clock expires, so the report takes over
                 // in that same frame rather than leaving a blank one.
-                if (!ShouldOfferRevive() || !DrawRevivePrompt()) DrawRunOverScreen();
+                if (!ShouldOfferRevive() || !DrawRevivePrompt())
+                {
+                    // Revive is off the table now, so the run is truly finished: bank the
+                    // payout once (CommitRun is idempotent) before the results screen reads
+                    // LastRunCash / LastRunFury.
+                    GameState.CommitRun();
+                    DrawRunOverScreen();
+                }
                 return;
             }
 
