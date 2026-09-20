@@ -1046,7 +1046,13 @@ namespace RoadRage.UnityRemake
 			// normal map for surface break-up.
 			// The Hideout kit's ground is bare dirt and read as a flat lawn once the
 			// canopy went in. Runic Forest ships a real forest floor with leaf litter.
-			var ground = BiomeSurface(BiomeMaterial("Forest Grass", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.35f, 0.55f, 0.25f), 0f, 0.06f),
+			// This is "Forest Floor PBR" - the key GroundNameFor(Greenwood) and the forest
+			// verge look up for the main ground plane. It was previously created under the
+			// "Forest Grass" key, which BuildMaterials then overwrote with a cutout foliage
+			// material, so "Forest Floor PBR" was never in the dictionary and the ground fell
+			// back to a flat brown material. Naming it correctly fixes the brown ground and
+			// leaves "Forest Grass" to be solely the cutout foliage created later.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.30f, 0.31f, 0.19f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
             // Tighter tiling: at the old scale the ground read as one flat wash across the
             // whole 240m plane instead of ground the player is moving over.
