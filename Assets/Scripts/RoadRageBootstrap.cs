@@ -6828,14 +6828,9 @@ namespace RoadRage.UnityRemake
                 return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
             });
 
-            BuildRibbon("Left Shoulder Bank", -24f, -14f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
-            BuildRibbon("Right Shoulder Bank", 14f, 24f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
-            BuildRibbon("Left Leaf Litter", -19f, -16f, 0.08f, materials["Forest Floor PBR"], sampleStep: 4f);
-            BuildRibbon("Right Leaf Litter", 16f, 19f, 0.08f, materials["Forest Floor PBR"], sampleStep: 4f);
-            BuildRibbon("Left Forest Litter Deep", -22f, -18f, 0.06f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Right Forest Litter Deep", 18f, 22f, 0.06f, materials["Forest Floor PBR"], sampleStep: 5f);
-            BuildRibbon("Left Edge Grass", -18f, -13.5f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
-            BuildRibbon("Right Edge Grass", 13.5f, 18f, 0.25f, materials["Forest Floor PBR"], sampleStep: 1f);;
+            // Raised roadside grass-bank ribbons removed - they stacked into flat green
+            // terraces/"layers" beside the road. The Forest Floor PBR ground plane already
+            // covers this area, and the vertical grass tufts (above) supply the greenery.
             for (var side = -1; side <= 1; side += 2)
             {
                 BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
@@ -7554,8 +7549,15 @@ namespace RoadRage.UnityRemake
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
                       $"brutes={brutes} enforcers={enforcers} cabs={cabs}");
-            BuildAccidentScene(trafficRoot, startDistance + 420f, -1f, models[1], models[3]);
-            BuildAccidentScene(trafficRoot, startDistance + 820f, 1f, models[0], models[4]);
+            // Accident scenes are a road-blocking pile of wrecks. On a single-lane road
+            // (Greenwood) there is no room to pass one, so it walls the player in at ~420 m
+            // and ends the run almost immediately. Only place them where there is room to
+            // steer around the wreck.
+            if (laneCount >= 2)
+            {
+                BuildAccidentScene(trafficRoot, startDistance + 420f, -1f, models[1], models[3]);
+                BuildAccidentScene(trafficRoot, startDistance + 820f, 1f, models[0], models[4]);
+            }
         }
 
         /// Cab yellow. Warmer and less green than the palette's amber, which is a car
