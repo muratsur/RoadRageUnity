@@ -266,6 +266,12 @@ namespace RoadRage.UnityRemake
             Takedowns = 0;
             RunDistanceKm = 0f;
             Combo = 0;
+            // Combo, message and their timers persist independently of the run, so a BeginRun
+            // that is not preceded by ResetRun would otherwise carry the previous run's combo
+            // countdown and on-screen message into the new run.
+            ComboTimer = 0f;
+            Message = string.Empty;
+            MessageTimer = 0f;
             RunStartScore = Score;
             IsAftertouchActive = false;
             AftertouchTakedowns = 0;
@@ -551,8 +557,10 @@ namespace RoadRage.UnityRemake
         }
 
         // ------------------------------------------------------- double earnings
+        // RunCommitted is required so doubling can only follow a banked payout: revive (needs
+        // !RunCommitted) and double (needs RunCommitted) are mutually exclusive per run.
         public static bool CanDoubleEarnings =>
-            RunOver && !DoubleUsedThisRun && DoubleCharges > 0 && LastRunCash > 0;
+            RunOver && RunCommitted && !DoubleUsedThisRun && DoubleCharges > 0 && LastRunCash > 0;
 
         /// Spends one charge to pay the run's banked cash a second time. Only the run
         /// payout doubles - the login bonus and mission rewards are not part of it -
@@ -922,17 +930,17 @@ namespace RoadRage.UnityRemake
         public static int ReviveCost => 1200 + RevivesUsed * 1800;
         public static bool ReviveUsesToken => ReviveTokens > 0;
 
-        /// The spendable balance for a revive. Under deferred banking the run's payout is not
-        /// added to Cash until CommitRun, which only runs once revive is off the table - so
-        /// during the revive window Cash is already the real balance and LastRunCash is 0. The
-        /// subtraction is kept as a guard so this can never count an un-earned payout.
-        public static int ReviveSpendableCash => Cash - LastRunCash;
+        /// The spendable balance for a revive. Pending rewards are never in Cash (they are
+        /// banked only by CommitRun), and a committed run can no longer revive, so Cash is
+        /// always the true spendable balance during the revive window - no subtraction needed.
+        public static int ReviveSpendableCash => Cash;
 
         public static bool CanPayRevive(RevivePayment payment) => payment switch
         {
             RevivePayment.Token => ReviveTokens > 0,
+            RevivePayment.Cash => ReviveSpendableCash >= ReviveCost,
             RevivePayment.Gems => Gems >= GemRevivePrice,
-            _ => ReviveSpendableCash >= ReviveCost,
+            _ => false,
         };
 
         /// Tokens first: they are the pro pass's reward and are worth nothing unspent.
@@ -942,8 +950,11 @@ namespace RoadRage.UnityRemake
             : ReviveSpendableCash >= ReviveCost ? RevivePayment.Cash
             : RevivePayment.Gems;
 
+        // !RunCommitted is the critical guard: once CommitRun has banked the payout the run is
+        // finished for good. Without this, EndRun -> CommitRun -> Revive -> EndRun -> CommitRun
+        // pays the run out twice. Revive and final reward collection are mutually exclusive.
         public static bool CanRevive =>
-            RunOver && !DoubleUsedThisRun && RevivesUsed < ReviveMaxPerRun
+            RunOver && !RunCommitted && !DoubleUsedThisRun && RevivesUsed < ReviveMaxPerRun
             && (CanPayRevive(RevivePayment.Token) || CanPayRevive(RevivePayment.Cash)
                 || CanPayRevive(RevivePayment.Gems));
 
@@ -964,8 +975,9 @@ namespace RoadRage.UnityRemake
             switch (payment)
             {
                 case RevivePayment.Token: ReviveTokens--; break;
+                case RevivePayment.Cash: Cash -= ReviveCost; break;
                 case RevivePayment.Gems: Gems -= GemRevivePrice; break;
-                default: Cash -= ReviveCost; break;
+                default: return false;
             }
 
             // No payout was banked (CommitRun has not run), so there is nothing to unwind.
@@ -1061,6 +1073,22 @@ namespace RoadRage.UnityRemake
             LastRunCash = 0;
             LastRunFury = 0;
             DoubleUsedThisRun = false;
+
+            // ResetRun clears only the live score/combo/message fields, so the deferred payout
+            // and crash state would survive a profile wipe with the old pending amounts intact.
+            PendingRunCash = 0;
+            PendingRunFury = 0;
+            RunCommitted = false;
+            RunOver = false;
+
+            Integrity = MaxIntegrity;
+            RunStartScore = 0;
+
+            IsAftertouchActive = false;
+            AftertouchTakedowns = 0;
+            PileupDamage = 0;
+            CrashbreakerReady = false;
+            CrashbreakerUsed = false;
 
             ResetRun();
             Load();
