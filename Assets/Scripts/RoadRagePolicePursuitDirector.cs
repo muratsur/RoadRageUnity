@@ -283,8 +283,9 @@ namespace RoadRage.UnityRemake
         private void SpawnPoliceUnit()
         {
             var slot = activePolice.Count;
-            var spawnBehind = Random.value > 0.35f;
-            var distOffset = spawnBehind ? -45f - slot * 8f : 65f + slot * 12f;
+            // Always from behind, out of the chase camera's view: a cruiser spawned 65 m
+            // ahead appeared out of thin air in the middle of the road.
+            var distOffset = -45f - slot * 8f;
             var spawnDist = RoadPath.Wrap(playerController.RoadDistance + distOffset);
             var laneSign = (slot % 2 == 0) ? -1f : 1f;
             var halfW = RoadPath.HalfWidthAt(spawnDist);
@@ -479,7 +480,9 @@ namespace RoadRage.UnityRemake
         /// A little heavier than civilian traffic: an interceptor shoulders a hatchback
         /// out of the way rather than being deflected off the player's tail by it.
         public float ContactMass => hullHalfLength * hullHalfWidth * 1.35f;
-        public bool ContactActive => isActiveAndEnabled && !isWrecked;
+        /// Wrecks stay solid: a crashed cruiser switched out of the contact pass was a
+        /// car-shaped hole the player and traffic drove straight through.
+        public bool ContactActive => isActiveAndEnabled;
 
         public void ApplyContactPush(float alongRoad, float acrossRoad)
         {
@@ -498,13 +501,17 @@ namespace RoadRage.UnityRemake
         private void OnEnable() => VehicleContacts.Register(this);
         private void OnDisable() => VehicleContacts.Unregister(this);
 
+        /// Nothing may move the cruiser between the contact pass and placing it. This
+        /// used to re-clamp the lateral offset here, after the pass had pushed the
+        /// cruiser clear; on a narrow road the clamp put it straight back inside the car
+        /// it had just been separated from, so it was drawn clipping every frame. Update
+        /// already clamps before the pass runs.
         private void LateUpdate()
         {
             VehicleContacts.ResolveOncePerFrame();
-            if (isWrecked) return;
-            CheckTrafficImpact();
-            var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
+            if (!isWrecked) CheckTrafficImpact();
+            // The contact pass can shove a cruiser sideways; the road edge still holds.
+            LateralOffset = ClampToRoadEdge(LateralOffset);
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
         }
         // ------------------------------------------------------------------------
@@ -606,6 +613,23 @@ namespace RoadRage.UnityRemake
                 }
                 foreach (var col in vehicleInstance.GetComponentsInChildren<Collider>()) Destroy(col);
                 NormalizeVehicleVisual(vehicleInstance, 4.8f);
+                // Centre the model on the cruiser. The pack's pivots are not at the middle
+                // of the car, and unlike traffic (whose NormalizeVehicleVisual recentres)
+                // this was only scaled - so the visible cruiser sat a metre or two ahead of
+                // or behind the hull the contact pass separates, and was drawn inside the
+                // car in front however correctly the hulls were kept apart.
+                var modelBounds = default(Bounds);
+                var found = false;
+                foreach (var r in vehicleInstance.GetComponentsInChildren<Renderer>())
+                {
+                    if (!found) { modelBounds = r.bounds; found = true; }
+                    else modelBounds.Encapsulate(r.bounds);
+                }
+                if (found)
+                {
+                    var centre = transform.InverseTransformPoint(modelBounds.center);
+                    vehicleInstance.transform.localPosition -= new Vector3(centre.x, 0f, centre.z);
+                }
                 // Hull follows the mesh that was just normalised, so the cruiser
                 // collides as the car you can see rather than as a fixed guess.
                 hullHalfLength = 4.8f * 0.5f;
@@ -707,6 +731,18 @@ namespace RoadRage.UnityRemake
             return light;
         }
 
+        /// Keeps the hull on the road and shoulder, whatever pushes it. A wreck slid
+        /// sideways at 6.5 m/s with nothing stopping it, straight through the guard
+        /// rail and into the trees. Measured across the road with the wreck's spin, so
+        /// a cruiser slewed side-on stops with its nose at the rail, not its centre.
+        private float ClampToRoadEdge(float lateral)
+        {
+            var yaw = wreckYaw * Mathf.Deg2Rad;
+            var across = Mathf.Abs(hullHalfLength * Mathf.Sin(yaw)) + Mathf.Abs(hullHalfWidth * Mathf.Cos(yaw));
+            var edge = Mathf.Max(0.5f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - across);
+            return Mathf.Clamp(lateral, -edge, edge);
+        }
+
         private float wreckSlideDir;
         private float wreckYaw;
         private float targetWreckYaw;
@@ -719,6 +755,7 @@ namespace RoadRage.UnityRemake
                 SpeedKph = Mathf.MoveTowards(SpeedKph, 0f, 45f * Time.deltaTime);
                 LateralOffset += wreckSlideDir * 6.5f * Time.deltaTime;
                 wreckYaw = Mathf.MoveTowards(wreckYaw, targetWreckYaw, 180f * Time.deltaTime);
+                LateralOffset = ClampToRoadEdge(LateralOffset);
                 var forwardMove = SpeedKph / 3.6f * Time.deltaTime;
                 RoadDistance = RoadPath.Wrap(RoadDistance + forwardMove);
                 transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
@@ -744,19 +781,31 @@ namespace RoadRage.UnityRemake
             if (targetPlayer == null) return;
 
             // 2. Tactical Pursuit AI Navigation based on Formation Slot
-            var maxSpeed = 138f + unitHeatLevel * 14f;
             float targetLane;
             float targetDistDelta;
 
+            // A flanker sits alongside with real clearance: both half-widths plus a gap.
+            // The old fixed 3.4 m offset was often off the edge of a narrow road, so the
+            // lane clamp pinned the flanker about a metre from the player's centre -
+            // inside the player's car. Where its own side has no room it takes the other
+            // side, and only where neither does (a narrow road with the player in the
+            // middle) does it drop in close behind - still in the chase camera's view.
+            var laneLimit = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
+            var flankOffset = targetPlayer.HalfWidth + hullHalfWidth + 0.7f;
             switch (SlotIndex % 3)
             {
                 case 0: // Left Flank Interceptor
-                    targetLane = targetPlayer.LateralOffset - 3.4f;
-                    targetDistDelta = 0.5f;
-                    break;
                 case 1: // Right Flank Interceptor
-                    targetLane = targetPlayer.LateralOffset + 3.4f;
+                    var flankSide = SlotIndex % 3 == 0 ? -1f : 1f;
+                    targetLane = targetPlayer.LateralOffset + flankSide * flankOffset;
                     targetDistDelta = 0.5f;
+                    if (Mathf.Abs(targetLane) > laneLimit)
+                        targetLane = targetPlayer.LateralOffset - flankSide * flankOffset;
+                    if (Mathf.Abs(targetLane) > laneLimit)
+                    {
+                        targetLane = targetPlayer.LateralOffset;
+                        targetDistDelta = SlotIndex % 3 == 0 ? -9f : -15f;
+                    }
                     break;
                 default: // Rear Pursuer / Rammer
                     targetLane = targetPlayer.LateralOffset;
@@ -765,9 +814,15 @@ namespace RoadRage.UnityRemake
             }
 
             var distToTarget = (targetPlayer.RoadDistance + targetDistDelta) - RoadDistance;
+            // Units spawn behind, out of view, so they have to be able to catch up: a
+            // fixed 152 km/h top speed at one star was slower than the player's car, the
+            // cruiser never arrived and the pursuit timed out as "lost them" unseen.
+            // While well behind they run at the player's speed plus a closing margin.
+            var maxSpeed = 138f + unitHeatLevel * 14f;
+            if (distToTarget > 20f) maxSpeed = Mathf.Max(maxSpeed, targetPlayer.SpeedKph + 45f);
             if (distToTarget > 5f) // Behind target position: accelerate
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * 36f);
+                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * (distToTarget > 20f ? 60f : 36f));
             }
             else if (distToTarget < -7f) // Ahead of target position: slow down
             {
