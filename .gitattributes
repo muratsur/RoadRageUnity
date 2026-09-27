@@ -36,3 +36,7 @@ Assets/Resources/Biomes/ForestFloor/**/*.png -filter binary
 # *.png / *.fbx LFS rules above for this folder only.
 Assets/Resources/Biomes/Guardrail/**/*.png -filter binary
 Assets/Resources/Biomes/Guardrail/**/*.fbx -filter binary
+# Same for the rocks (Tools/Blender/build_rocks.py).
+Assets/Resources/Biomes/Rocks/**/*.png -filter binary
+Assets/Resources/Biomes/Rocks/**/*.jpg -filter binary
+Assets/Resources/Biomes/Rocks/**/*.fbx -filter binary

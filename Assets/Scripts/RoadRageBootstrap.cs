@@ -1351,6 +1351,10 @@ namespace RoadRage.UnityRemake
             // metallic/smoothness floats are only the fallback if the MSO variant is lost.
             BiomeSurface(BiomeMaterial("Forest Guard Rail", "Guardrail", "T_guardrail_D", "T_guardrail_N",
                 Color.white, 0.6f, 0.4f), "Guardrail", "T_guardrail_MSO");
+            // Greenwood rocks built in Blender (Tools/Blender/build_rocks.py): one baked
+            // atlas shared by the boulders and the rock-cutting sections.
+            BiomeSurface(BiomeMaterial("Forest Rock", "Rocks", "T_rocks_D", "T_rocks_N", Color.white, 0f, 1f),
+                "Rocks", "T_rocks_MSO", 1f);
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
                 new Color(0.60f, 0.60f, 0.56f), 0f, 0.2f), "ForestVillage", "T_rock_01_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
@@ -4724,7 +4728,7 @@ namespace RoadRage.UnityRemake
                 // The guard rail is placed from the measured road width and belongs on the
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
-                if (n == "Forest Guard Rail") continue;
+                if (n == "Forest Guard Rail" || n == "Forest Rock Cutting") continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6928,6 +6932,8 @@ namespace RoadRage.UnityRemake
             // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
             // borrowed Synthwave fence half a metre behind it.
             BuildGuardRail(materials["Forest Guard Rail"]);
+            BuildRockCuttings(materials["Forest Rock"]);
+            BuildBoulders(materials["Forest Rock"]);
 
             if (NoCanopy) return;
 
@@ -7033,25 +7039,33 @@ namespace RoadRage.UnityRemake
         private static Vector3 GuardRailPoint(float distance, int side) =>
             RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + GuardRailOffset));
 
-        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material)
+        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material) =>
+            PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,
+                "Forest Guard Rail") != null;
+
+        /// Places a long roadside piece (guard rail section, rock cutting) so it spans
+        /// from -> to, stretched to fit exactly, with its "front" towards the road.
+        ///
+        /// The FBX axis conversion decides which local axis a mesh runs along and which
+        /// way it faces, so this measures instead of assuming: the long axis goes onto
+        /// the span, and the side the mesh's bulk sits on (a rail's posts, a cutting's
+        /// slope) goes away from the road.
+        private GameObject PlaceAlongSpan(string pack, string mesh, Material material, Vector3 from, Vector3 to,
+            int side, float midDistance, string name)
         {
             var span = to - from;
-            if (span.sqrMagnitude < 0.25f) return false;
-            var rail = BiomeModel("Guardrail", "SM_guardrail_section_4m", material);
-            if (rail == null) return false;
-            rail.name = "Forest Guard Rail";
+            if (span.sqrMagnitude < 0.25f) return null;
+            var piece = BiomeModel(pack, mesh, material);
+            if (piece == null) return null;
+            piece.name = name;
             var along = span.normalized;
             var middle = (from + to) * 0.5f;
-            if (!TryGetMeshBounds(rail, out var bounds))
+            if (!TryGetMeshBounds(piece, out var bounds))
             {
-                rail.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
-                return true;
+                piece.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
+                return piece;
             }
 
-            // The FBX axis conversion decides which local axis the beam runs along and
-            // which way it faces, so measure instead of assuming. Turn the long axis
-            // onto the span, then face the beam (not the posts) towards traffic: the
-            // posts sit behind the beam, so the mesh centre lies on the post side.
             var alongX = bounds.size.x > bounds.size.z;
             var rotation = Quaternion.LookRotation(along, Vector3.up) *
                            (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
@@ -7062,9 +7076,93 @@ namespace RoadRage.UnityRemake
             var stretch = span.magnitude / Mathf.Max(0.01f, alongX ? bounds.size.x : bounds.size.z);
             var scale = alongX ? new Vector3(stretch, 1f, 1f) : new Vector3(1f, 1f, stretch);
             var centreOffset = rotation * Vector3.Scale(scale, bounds.center);
-            rail.transform.localScale = scale;
-            rail.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
-            return true;
+            piece.transform.localScale = scale;
+            piece.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
+            return piece;
+        }
+
+        // ---------------------------------------------------------------- rocks
+
+        /// Distance from the outer edge of the shoulder to the line a rock cutting's
+        /// front is kept behind: 0.9 m past the guard rail's posts.
+        private const float RockCuttingOffset = GuardRailOffset + 1.6f;
+        private const float RockSectionLength = 7f;
+
+        /// Rock cuttings (Tools/Blender/build_rocks.py): exposed, layered rock where the
+        /// road was cut into the slope. In stretches of two to four sections rather than a
+        /// continuous wall, on about half the chunk sides, each section overlapping the
+        /// next by a metre so their tapered ends read as one face.
+        private void BuildRockCuttings(Material material)
+        {
+            for (var side = -1; side <= 1; side += 2)
+            {
+                if (Random.value < 0.5f) continue;
+                var sections = Random.Range(2, 5);
+                var runLength = sections * RockSectionLength;
+                if (segEnd - segStart < runLength + 20f) continue;
+                var distance = Random.Range(segStart + 8f, segEnd - runLength - 8f);
+                for (var k = 0; k < sections; k++)
+                {
+                    var from = RockLinePoint(distance, side);
+                    // Advance by the section length measured along the rock line itself, so
+                    // sections stay 7 m long on bends (road distance is world Z).
+                    var next = distance + RockSectionLength;
+                    for (var iter = 0; iter < 3; iter++)
+                    {
+                        var got = Vector3.Distance(from, RockLinePoint(next, side));
+                        next = distance + (next - distance) * RockSectionLength / Mathf.Max(0.1f, got);
+                    }
+                    // One metre of overlap: the ends taper into the ground.
+                    var to = RockLinePoint(next, side) + (RockLinePoint(next, side) - from).normalized * 1f;
+                    var mid = (distance + next) * 0.5f;
+                    var face = PlaceAlongSpan("Rocks", $"SM_rock_face_{Random.Range(1, 4):00}", material,
+                        from, to, side, mid, "Forest Rock Cutting");
+                    if (face != null) KeepFrontBehindLine(face, from, to, side, mid);
+                    // Talus: a fallen block or two at the foot of the cutting.
+                    if (Random.value < 0.6f)
+                        PlaceBoulder(mid + Random.Range(-2.5f, 2.5f),
+                            side * (RoadPath.HalfWidthAt(mid) + RoadPath.ShoulderWidth + RockCuttingOffset - 0.4f),
+                            Random.Range(0.3f, 0.65f), material);
+                    distance = next;
+                }
+            }
+        }
+
+        private static Vector3 RockLinePoint(float distance, int side) =>
+            RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + RockCuttingOffset));
+
+        /// A cutting's ledges can stand up to ~1.5 m proud of its base line, so after
+        /// placing, push the section away from the road until nothing is in front of the
+        /// line - otherwise a ledge could reach back over the guard rail.
+        private static void KeepFrontBehindLine(GameObject piece, Vector3 from, Vector3 to, int side, float midDistance)
+        {
+            if (!TryGetMeshBounds(piece, out var bounds)) return;
+            var outward = RoadPath.Right(midDistance) * side;
+            var origin = (from + to) * 0.5f;
+            var nearest = float.PositiveInfinity;
+            var toWorld = piece.transform.localToWorldMatrix;
+            for (var corner = 0; corner < 8; corner++)
+            {
+                var local = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f));
+                nearest = Mathf.Min(nearest, Vector3.Dot(toWorld.MultiplyPoint3x4(local) - origin, outward));
+            }
+            if (nearest < 0f) piece.transform.position += outward * -nearest;
+        }
+
+        /// Boulders in the verge and the forest edge, sunk a little into the ground.
+        private void BuildBoulders(Material material)
+        {
+            ScatterBand(13f, 9.5f, 26f, (d, l, s) => PlaceBoulder(d, l, Random.Range(0.45f, 1.5f), material));
+        }
+
+        private GameObject PlaceBoulder(float distance, float lateral, float height, Material material)
+        {
+            var boulder = PlaceBiomeModelOnRoad("Rocks", $"SM_rock_boulder_{Random.Range(1, 7):00}", material,
+                distance, lateral, 0f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one,
+                "Forest Boulder Rock", false);
+            if (boulder != null) NormalizeModelHeight(boulder, height, -0.12f * height);
+            return boulder;
         }
 
         /// Mesh bounds in the object's own space. Renderer bounds are world-axis
