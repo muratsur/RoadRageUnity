@@ -1094,11 +1094,6 @@ namespace RoadRage.UnityRemake
             rimMaterial = MakeMaterial("Wheel Rim", new Color(0.58f, 0.59f, 0.61f), 0.75f, 0.7f);
             MakeMaterial("Car Orange", new Color(0.95f, 0.22f, 0.035f), 0.55f, 0.78f);
             MakeMaterial("Car Dark", new Color(0.012f, 0.018f, 0.022f), 0.25f, 0.55f);
-            // Guardrail metal: a muted, matte galvanised grey. The shared "Hills Metal" is a
-            // bright, fairly reflective light-grey (0.70) that made the low-poly forest
-            // guardrail read as blinding white crates against the sky; this darker, less
-            // reflective grey reads as a weathered steel rail instead.
-            MakeMaterial("Forest Rail Metal", new Color(0.40f, 0.42f, 0.44f), 0.45f, 0.28f);
             MakeMaterial("Glass", new Color(0.025f, 0.12f, 0.16f), 0.7f, 0.92f);
             MakeMaterial("Tire", new Color(0.012f, 0.012f, 0.014f), 0f, 0.08f);
             MakeMaterial("Driver Skin", new Color(0.72f, 0.43f, 0.28f), 0f, 0.32f);
@@ -1325,6 +1320,11 @@ namespace RoadRage.UnityRemake
                 new Color(0.62f, 0.80f, 0.50f), 0.34f);
             BiomeSurface(BiomeMaterial("Forest Roots", "ForestVillage", "T_roots_D", "T_roots_N",
                 new Color(0.56f, 0.48f, 0.40f), 0f, 0.18f), "ForestVillage", "T_roots_MSO", 0.5f);
+            // W-beam guard rail built in Blender (Tools/Blender/build_guardrail.py). Its
+            // look is baked into the textures, so the tint stays white and the
+            // metallic/smoothness floats are only the fallback if the MSO variant is lost.
+            BiomeSurface(BiomeMaterial("Forest Guard Rail", "Guardrail", "T_guardrail_D", "T_guardrail_N",
+                Color.white, 0.6f, 0.4f), "Guardrail", "T_guardrail_MSO");
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
                 new Color(0.60f, 0.60f, 0.56f), 0f, 0.2f), "ForestVillage", "T_rock_01_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
@@ -4651,6 +4651,10 @@ namespace RoadRage.UnityRemake
                     n.Contains("Tunnel") || n.Contains("Ceiling") || n.Contains("Overpass") ||
                     n.Contains("Bridge") || n.Contains("Wire") || n.Contains("Floor") || n.Contains("Terrain"))
                     continue;
+                // The guard rail is placed from the measured road width and belongs on the
+                // shoulder line. World-axis bounds on a bend would push each section by a
+                // different amount and leave the rail jagged.
+                if (n == "Forest Guard Rail") continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6837,14 +6841,13 @@ namespace RoadRage.UnityRemake
             // Raised roadside grass-bank ribbons removed - they stacked into flat green
             // terraces/"layers" beside the road. The Forest Floor PBR ground plane already
             // covers this area, and the vertical grass tufts (above) supply the greenery.
-            for (var side = -1; side <= 1; side += 2)
-            {
-                BuildRibbon($"{(side < 0 ? "Left" : "Right")} Guardrail",
-                    side * 16.0f, side * 16.4f, 0.85f, materials["Sidewalk"], sampleStep: 3f);
-                ScatterBand(4f, 16.12f, 16.12f, (d, l, s) =>
-                    PrimitiveOnRoad(PrimitiveType.Cube, "Guardrail Post", d, side * 16.12f, 0.4f,
-                        new Vector3(0.14f, 0.85f, 0.14f), materials["Car Dark"], Vector3.zero, false), 0.05f);
-            }
+            //
+            // Guard rail along both shoulders. A mountain road has one, and it is the
+            // single strongest cue that the road is cut into a slope rather than laid on
+            // a field - it also gives the bends an edge to read against. One real-scale
+            // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
+            // borrowed Synthwave fence half a metre behind it.
+            BuildGuardRail(materials["Forest Guard Rail"]);
 
             if (NoCanopy) return;
 
@@ -6870,25 +6873,6 @@ namespace RoadRage.UnityRemake
             // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
             // over the camera - so it keeps the forest reading as deep.
             ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
-            // Guard rail along both shoulders. A mountain road has one, and it is the
-            // single strongest cue that the road is cut into a slope rather than laid on
-            // a field - it also gives the bends an edge to read against, which is most of
-            // why the curve is worth having.
-            //
-            // Placed off the measured clearance rather than a constant, so it follows the
-            // carriageway rather than needing a new number every time the road changes
-            // width. Posts every 6 m; the mesh is normalised to post height, so the rail
-            // reads at the right scale whatever the source model is.
-            var railMaterial = materials["Forest Rail Metal"];
-            ScatterBand(6f, 16.7f, 17.1f, (d, l, s) =>
-            {
-                var rail = PlaceBiomeModelOnRoad("Synthwave", "Fence/SM_fence", railMaterial,
-                    d, l, 0.05f, new Vector3(0f, s > 0f ? 0f : 180f, 0f), Vector3.one,
-                    "Forest Guard Rail", false);
-                if (rail != null) NormalizeModelHeight(rail, 0.95f, 0.05f);
-                return rail;
-            });
-
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
                 SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
                     d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
@@ -6899,6 +6883,141 @@ namespace RoadRage.UnityRemake
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
             ScatterBand(1.6f, 18f, 30f, (d, l, s) =>
                 ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
+        }
+
+        private const float GuardRailSection = 4f;
+
+        /// Gap between the outer edge of the shoulder and the back of the beam. The beam
+        /// face sits ~0.09 m nearer the road than that, the posts ~0.35 m further out.
+        private const float GuardRailOffset = 0.35f;
+
+        private static bool guardRailReported;
+
+        /// Lays the guard rail section by section, end to end. Deliberately not a
+        /// ScatterBand: its jitter, per-chunk spacing and occasional dropouts are what
+        /// make vegetation look varied, and on a rail they read as broken barrier.
+        ///
+        /// Placed off the measured road width, not a constant. A fixed 16 m put it
+        /// nine metres into Greenwood's single-lane verge, behind undergrowth taller
+        /// than the rail, where nobody could see it.
+        ///
+        /// Road "distance" is world Z, not length along the road, so stepping it by the
+        /// section length opens gaps on every bend - widest on the outside of the curve.
+        /// Instead each side's rail line is measured along its true length and cut into
+        /// equal pieces, each stretched a few percent to fit exactly. The chunk's end
+        /// points are shared with its neighbours, so the rail also meets across chunks.
+        private void BuildGuardRail(Material material)
+        {
+            const float sampleStep = 0.5f;
+            var placed = 0;
+            var count = Mathf.CeilToInt((segEnd - segStart) / sampleStep) + 1;
+            var distances = new float[count];
+            var arc = new float[count];
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var previous = Vector3.zero;
+                for (var i = 0; i < count; i++)
+                {
+                    distances[i] = Mathf.Min(segEnd, segStart + i * sampleStep);
+                    var point = GuardRailPoint(distances[i], side);
+                    arc[i] = i == 0 ? 0f : arc[i - 1] + Vector3.Distance(previous, point);
+                    previous = point;
+                }
+
+                var sections = Mathf.Max(1, Mathf.RoundToInt(arc[count - 1] / GuardRailSection));
+                var length = arc[count - 1] / sections;
+                var j = 0;
+                var fromDistance = segStart;
+                var from = GuardRailPoint(fromDistance, side);
+                for (var k = 1; k <= sections; k++)
+                {
+                    var target = k * length;
+                    while (j < count - 2 && arc[j + 1] < target) j++;
+                    var toDistance = k == sections
+                        ? segEnd
+                        : Mathf.Lerp(distances[j], distances[j + 1], Mathf.InverseLerp(arc[j], arc[j + 1], target));
+                    var to = GuardRailPoint(toDistance, side);
+                    if (PlaceGuardRailSection(from, to, side, (fromDistance + toDistance) * 0.5f, material)) placed++;
+                    from = to;
+                    fromDistance = toDistance;
+                }
+            }
+            if (!guardRailReported)
+            {
+                guardRailReported = true;
+                var lateral = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+                Debug.Log($"RR_EVENT guardrail sections={placed} lateral={lateral:0.0}m");
+            }
+        }
+
+        private static Vector3 GuardRailPoint(float distance, int side) =>
+            RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + GuardRailOffset));
+
+        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material)
+        {
+            var span = to - from;
+            if (span.sqrMagnitude < 0.25f) return false;
+            var rail = BiomeModel("Guardrail", "SM_guardrail_section_4m", material);
+            if (rail == null) return false;
+            rail.name = "Forest Guard Rail";
+            var along = span.normalized;
+            var middle = (from + to) * 0.5f;
+            if (!TryGetMeshBounds(rail, out var bounds))
+            {
+                rail.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
+                return true;
+            }
+
+            // The FBX axis conversion decides which local axis the beam runs along and
+            // which way it faces, so measure instead of assuming. Turn the long axis
+            // onto the span, then face the beam (not the posts) towards traffic: the
+            // posts sit behind the beam, so the mesh centre lies on the post side.
+            var alongX = bounds.size.x > bounds.size.z;
+            var rotation = Quaternion.LookRotation(along, Vector3.up) *
+                           (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
+            if (Vector3.Dot(rotation * bounds.center, RoadPath.Right(midDistance)) * side < 0f)
+                rotation *= Quaternion.Euler(0f, 180f, 0f);
+
+            // Stretch to the exact span so neighbours meet, then centre it on the span.
+            var stretch = span.magnitude / Mathf.Max(0.01f, alongX ? bounds.size.x : bounds.size.z);
+            var scale = alongX ? new Vector3(stretch, 1f, 1f) : new Vector3(1f, 1f, stretch);
+            var centreOffset = rotation * Vector3.Scale(scale, bounds.center);
+            rail.transform.localScale = scale;
+            rail.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
+            return true;
+        }
+
+        /// Mesh bounds in the object's own space. Renderer bounds are world-axis
+        /// aligned, so on a curved road they would be inflated and could not tell which
+        /// axis is the long one.
+        private static bool TryGetMeshBounds(GameObject item, out Bounds bounds)
+        {
+            bounds = default;
+            var found = false;
+            var toLocal = item.transform.worldToLocalMatrix;
+            foreach (var filter in item.GetComponentsInChildren<MeshFilter>(true))
+            {
+                if (filter.sharedMesh == null) continue;
+                var mesh = filter.sharedMesh.bounds;
+                var toItem = toLocal * filter.transform.localToWorldMatrix;
+                for (var corner = 0; corner < 8; corner++)
+                {
+                    var point = toItem.MultiplyPoint3x4(mesh.center + Vector3.Scale(mesh.extents, new Vector3(
+                        (corner & 1) == 0 ? -1f : 1f,
+                        (corner & 2) == 0 ? -1f : 1f,
+                        (corner & 4) == 0 ? -1f : 1f)));
+                    if (!found)
+                    {
+                        bounds = new Bounds(point, Vector3.zero);
+                        found = true;
+                    }
+                    else
+                    {
+                        bounds.Encapsulate(point);
+                    }
+                }
+            }
+            return found;
         }
 
         private static void KeepTrunkOffRoad(GameObject item, float distance, float lateral, float trunkRadius = 0.9f)
