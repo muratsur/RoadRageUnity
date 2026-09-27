@@ -1055,14 +1055,15 @@ namespace RoadRage.UnityRemake
 			// material, so "Forest Floor PBR" was never in the dictionary and the ground fell
 			// back to a flat brown material. Naming it correctly fixes the brown ground and
 			// leaves "Forest Grass" to be solely the cutout foliage created later.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.30f, 0.31f, 0.19f), 0f, 0.06f),
+			//
+			// The albedo is ForestVillage's organic forest floor rather than a grass diffuse:
+			// the grass texture has a strong grain in one direction, and at any tiling it
+			// repeated into stripes that made the roadside read as an artificial lot.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestVillage", "T_ground_01_D", "T_ground_01_N", new Color(0.38f, 0.44f, 0.28f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
-            // Ground tiling. The previous 90x420 was so dense - and so stretched along the
-            // road (1:4.7) - that the grass texture read as a green corduroy of stripes/
-            // "layers" beside the road rather than ground. Dialled down and made less
-            // stretched (20x40) so it reads as a tiled forest floor, not stripes, while still
-            // avoiding the "one flat wash" the tight tiling was reacting to.
-            ground.mainTextureScale = new Vector2(20f, 40f);
+            // Ground tiling. Kept only mildly stretched along the road so the floor reads
+            // as mottled ground rather than a repeat pattern.
+            ground.mainTextureScale = new Vector2(7f, 15f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
@@ -1313,16 +1314,16 @@ namespace RoadRage.UnityRemake
             BiomeCutoutMaterial("Forest Branch", "RunicForest", "T_branch_D", "T_branch_N",
                 new Color(0.70f, 0.80f, 0.58f), 0.36f);
             BiomeCutoutMaterial("Forest Undergrowth", "RunicForest", "T_vetegation_atlas_basecolor",
-                "T_vetegation_atlas_normal", new Color(0.68f, 0.82f, 0.54f), 0.34f);
+                "T_vetegation_atlas_normal", new Color(0.58f, 0.66f, 0.48f), 0.34f);
             BiomeCutoutMaterial("Forest Flowers", "RunicForest", "T_flowers_D", "T_flowers_N",
                 new Color(0.86f, 0.86f, 0.70f), 0.36f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
             BiomeCutoutMaterial("Forest Bush", "ForestVillage", "T_bush_D", "T_bush_N",
-                new Color(0.60f, 0.74f, 0.48f), 0.36f);
+                new Color(0.54f, 0.62f, 0.44f), 0.36f);
             BiomeCutoutMaterial("Forest Fern", "ForestVillage", "T_plant_D", "T_plant_N",
-                new Color(0.62f, 0.80f, 0.50f), 0.34f);
+                new Color(0.56f, 0.66f, 0.46f), 0.34f);
             BiomeSurface(BiomeMaterial("Forest Roots", "ForestVillage", "T_roots_D", "T_roots_N",
                 new Color(0.56f, 0.48f, 0.40f), 0f, 0.18f), "ForestVillage", "T_roots_MSO", 0.5f);
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
@@ -2385,6 +2386,9 @@ namespace RoadRage.UnityRemake
             // place the lights - a stop line nobody can see a reason for reads as traffic
             // randomly halting on an open road.
             TrafficCarController.SignalsActive = hasCityCurbs;
+            // A head-on wreck on a one-lane road has nowhere to be passed, so traffic
+            // behind it stacks into a wall across the whole carriageway.
+            TrafficCarController.HeadOnWrecksAllowed = LaneCountFor(biomeIndex) >= 2;
             if (hasCityCurbs)
             {
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];
@@ -6823,7 +6827,7 @@ namespace RoadRage.UnityRemake
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
-            ScatterBand(1.3f, 7.4f, 13f, (d, l, s) =>
+            ScatterBand(1.8f, 7.4f, 13f, (d, l, s) =>
                 ForestPlant(d, l, 0.9f, 1.7f, "Verge Undergrowth"));
             ScatterBand(1.7f, 13f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
@@ -6897,7 +6901,7 @@ namespace RoadRage.UnityRemake
                     d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
             ScatterBand(3.5f, 24f, 70f, (d, l, s) =>
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
-            ScatterBand(1.6f, 18f, 30f, (d, l, s) =>
+            ScatterBand(2.2f, 18f, 30f, (d, l, s) =>
                 ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
         }
 

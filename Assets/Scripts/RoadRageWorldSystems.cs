@@ -446,6 +446,11 @@ namespace RoadRage.UnityRemake
         /// than one that never stops - the shipped Godot build gates it the same way.
         public static bool SignalsActive;
 
+        /// Whether AI-vs-AI head-on wrecks may happen in this biome. On a single-lane
+        /// road a wreck blocks the whole carriageway and everything behind it piles up
+        /// into a wall, so the streamer turns them off where there is only one lane.
+        public static bool HeadOnWrecksAllowed = true;
+
         /// Whether this car can still score the player a near miss.
         ///
         /// Per car, re-armed once it is well clear, rather than one cooldown across the
@@ -501,6 +506,7 @@ namespace RoadRage.UnityRemake
         /// this, however close the lanes run.
         private void TryHeadOn(TrafficCarController other)
         {
+            if (!HeadOnWrecksAllowed) return;
             if (IsWreck || other.IsWreck) return;
             if (Violation != Offence.WrongWay && other.Violation != Offence.WrongWay) return;
 
