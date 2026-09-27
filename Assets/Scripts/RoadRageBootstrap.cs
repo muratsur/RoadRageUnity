@@ -1341,6 +1341,14 @@ namespace RoadRage.UnityRemake
                 "T_vetegation_atlas_normal", new Color(0.58f, 0.66f, 0.48f), 0.34f);
             BiomeCutoutMaterial("Forest Flowers", "RunicForest", "T_flowers_D", "T_flowers_N",
                 new Color(0.86f, 0.86f, 0.70f), 0.36f);
+            // Black Forest vegetation (Tools/Blender/build_black_forest.py): Norway spruce,
+            // silver fir and the ground cover under them, all on one atlas - bark and
+            // needles in one material. Three tints so a stand is not one flat colour.
+            BiomeCutoutMaterial("Black Forest", "BlackForest", "T_blackforest_D", "T_blackforest_N", Color.white, 0.45f);
+            BiomeCutoutMaterial("Black Forest Dark", "BlackForest", "T_blackforest_D", "T_blackforest_N",
+                new Color(0.80f, 0.84f, 0.80f), 0.45f);
+            BiomeCutoutMaterial("Black Forest Fresh", "BlackForest", "T_blackforest_D", "T_blackforest_N",
+                new Color(1.05f, 1.10f, 1.0f), 0.45f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
@@ -6441,12 +6449,16 @@ namespace RoadRage.UnityRemake
             if (InCliffZone(distance, lateral)) return null;
             if (!RouteAllows(label, distance, lateral)) return null;
             var split = entry.Split('|');
-            var model = BiomeModel(split[0], split[1], materials["Forest Undergrowth"]);
+            var blackForest = split[0] == "BlackForest";
+            var model = BiomeModel(split[0], split[1], blackForest ? BlackForestTint() : materials["Forest Undergrowth"]);
             if (model == null) return null;
             model.name = label;
             model.transform.position = RoadPath.Point(distance, lateral, height);
-            model.transform.rotation = RoadPath.Rotation(distance) *
-                                       Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
+            // The kit meshes lie on their backs (Z up); the Black Forest ones are
+            // exported Y up and stand straight whatever the road's grade.
+            model.transform.rotation = blackForest
+                ? Quaternion.Euler(0f, Random.Range(0f, 360f), 0f)
+                : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
             return model;
@@ -6480,12 +6492,8 @@ namespace RoadRage.UnityRemake
 
         private static readonly string[] HeathPlants =
         {
-            "RunicForest|Flowers/SM_dead_grass",
-            "RunicForest|Flowers/SM_dead_grass",
-            "RunicForest|Flowers/SM_grass_01",
-            "RunicForest|Vegetation/SM_plant_ground",
-            "RunicForest|Vegetation/SM_plant_ground_02",
-            "RunicForest|Flowers/SM_flower_02",
+            "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass",
+            "BlackForest|SM_bilberry", "BlackForest|SM_bilberry", "BlackForest|SM_fern",
         };
 
         private static readonly string[] HeathRocks =
@@ -6508,7 +6516,8 @@ namespace RoadRage.UnityRemake
             ScatterBand(15f, 10f, 100f, (d, l, s) =>
                 SpawnForestPiece(HeathRocks[Random.Range(0, HeathRocks.Length)], d, l, -0.15f, 0.4f, 1.8f, "Heath Rock"));
             ScatterBand(24f, 18f, 170f, (d, l, s) =>
-                SpawnForestPiece(PineTrees[Random.Range(0, PineTrees.Length)], d, l, 0f, 5f, 13f, "Heath Spruce"));
+                SpawnForestPiece(Random.value < 0.5f ? "BlackForest|SM_spruce_young" : BlackForestTrees[Random.Range(0, BlackForestTrees.Length)],
+                    d, l, 0f, 4f, 13f, "Heath Spruce"));
         }
 
         /// Water beside the road (the Mummelsee): a still, dark lake surface from
@@ -6632,8 +6641,10 @@ namespace RoadRage.UnityRemake
             // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
             // rounded English wood; an alpine pass is a wall of tall narrow conifers with
             // the odd broadleaf in it. Flipped to 30% broadleaf.
-            // On the B500 it is the Black Forest: spruce and fir, very little else.
-            var table = Random.value < (RoadPath.Route != null ? 0.08f : 0.30f) ? BroadleafTrees : PineTrees;
+            // On the B500 it is the Black Forest: spruce and fir, the odd dead snag.
+            var table = RoadPath.Route != null
+                ? (Random.value < 0.03f ? BlackForestSnags : BlackForestTrees)
+                : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var tree = SpawnForestPiece(table[Random.Range(0, table.Length)], distance, lateral, 0f,
                 minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
@@ -6648,9 +6659,41 @@ namespace RoadRage.UnityRemake
             return tree;
         }
 
-        private GameObject ForestPlant(float distance, float lateral, float minHeight, float maxHeight, string label) =>
-            SpawnForestPiece(ForestPlants[Random.Range(0, ForestPlants.Length)], distance, lateral, 0.06f,
-                minHeight, maxHeight, label);
+        private GameObject ForestPlant(float distance, float lateral, float minHeight, float maxHeight, string label)
+        {
+            if (RoadPath.Route == null)
+                return SpawnForestPiece(ForestPlants[Random.Range(0, ForestPlants.Length)], distance, lateral, 0.06f,
+                    minHeight, maxHeight, label);
+            // Fern, bilberry and moor grass are knee height; the kit plants these bands
+            // were sized for stood twice that. Scaling is uniform, so a fern taken to 2 m
+            // would also be 8 m across.
+            return SpawnForestPiece(BlackForestPlants[Random.Range(0, BlackForestPlants.Length)], distance, lateral,
+                0.02f, minHeight * 0.5f, maxHeight * 0.55f, label);
+        }
+
+        /// Young spruce stand in for bushes under the Black Forest canopy.
+        private string ForestBush() => RoadPath.Route != null
+            ? "BlackForest|SM_spruce_young"
+            : ForestBushes[Random.Range(0, ForestBushes.Length)];
+
+        private Material BlackForestTint()
+        {
+            var roll = Random.value;
+            return materials[roll < 0.5f ? "Black Forest" : roll < 0.8f ? "Black Forest Dark" : "Black Forest Fresh"];
+        }
+
+        private static readonly string[] BlackForestTrees =
+        {
+            "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_02", "BlackForest|SM_spruce_03",
+            "BlackForest|SM_spruce_04", "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_03",
+            "BlackForest|SM_fir_01", "BlackForest|SM_fir_02",
+        };
+        private static readonly string[] BlackForestSnags = { "BlackForest|SM_snag" };
+        private static readonly string[] BlackForestPlants =
+        {
+            "BlackForest|SM_fern", "BlackForest|SM_fern", "BlackForest|SM_bilberry",
+            "BlackForest|SM_bilberry", "BlackForest|SM_moor_grass",
+        };
 
         private void BuildHollywoodPhotorealPass()
         {
@@ -7228,11 +7271,9 @@ namespace RoadRage.UnityRemake
                 ScatterBand(9f, 34f, 80f, (d, l, s) => ForestTree(d, l, 20f, 32f));
             }
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
-                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
+                SpawnForestPiece(ForestBush(), d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
             ScatterBand(2.8f, 34f, 60f, (d, l, s) =>
-                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
+                SpawnForestPiece(ForestBush(), d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
             ScatterBand(3.5f, 24f, 70f, (d, l, s) =>
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
             ScatterBand(2.2f, 18f, 30f, (d, l, s) =>
