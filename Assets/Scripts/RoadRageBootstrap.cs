@@ -7233,15 +7233,27 @@ namespace RoadRage.UnityRemake
                 upper++;
             }
             var faceSign = upper > 0 && upperZ / upper > (minZ + maxZ) * 0.5f ? 1f : -1f;
-            var faceZ = faceSign > 0f ? maxZ : minZ;
-            float xFrom = minX, xTo = maxX;
+            float xFrom = minX, xTo = maxX, joinX = minX;
             if (tallEnd != 0)
             {
                 var tallX = toPiece.GetColumn(3).x;
                 var farX = Mathf.Abs(minX - tallX) > Mathf.Abs(maxX - tallX) ? minX : maxX;
                 xFrom = tallEnd < 0 ? tallX : farX;
                 xTo = tallEnd < 0 ? farX : tallX;
+                joinX = tallX;
             }
+            // Depth is measured from the face at the join, which is the same profile on
+            // every piece. Measured from each piece's own front-most point - which the
+            // random relief puts up to a metre further out on one piece than the next -
+            // neighbours stood at different distances from the road, and each join
+            // showed the open edge of the piece standing proud: a paper-thin sheet.
+            var faceZ = faceSign > 0f ? float.MinValue : float.MaxValue;
+            foreach (var v in vertices)
+            {
+                if (Mathf.Abs(v.x - joinX) > 0.3f) continue;
+                faceZ = faceSign > 0f ? Mathf.Max(faceZ, v.z) : Mathf.Min(faceZ, v.z);
+            }
+            if (Mathf.Abs(faceZ) == float.MaxValue) faceZ = faceSign > 0f ? maxZ : minZ;
             var span = xTo - xFrom;
             if (Mathf.Abs(span) < 0.01f)
             {
