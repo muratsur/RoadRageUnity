@@ -1054,9 +1054,12 @@ namespace RoadRage.UnityRemake
 			// leaves "Forest Grass" to be solely the cutout foliage created later.
 			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.30f, 0.31f, 0.19f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
-            // Tighter tiling: at the old scale the ground read as one flat wash across the
-            // whole 240m plane instead of ground the player is moving over.
-            ground.mainTextureScale = new Vector2(90f, 420f);
+            // Ground tiling. The previous 90x420 was so dense - and so stretched along the
+            // road (1:4.7) - that the grass texture read as a green corduroy of stripes/
+            // "layers" beside the road rather than ground. Dialled down and made less
+            // stretched (20x40) so it reads as a tiled forest floor, not stripes, while still
+            // avoiding the "one flat wash" the tight tiling was reacting to.
+            ground.mainTextureScale = new Vector2(20f, 40f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
