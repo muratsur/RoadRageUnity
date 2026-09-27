@@ -879,7 +879,7 @@ namespace RoadRage.UnityRemake
 
             if (playerSpeed >= 55f || isBoosting) // Takedown on the cop!
             {
-                WreckCop();
+                WreckCop(byPlayer: true);
             }
             else
             {
@@ -895,7 +895,12 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        public void WreckCop()
+        /// byPlayer: the player took it out. Only then does it play the takedown -
+        /// hit-stop, 0.32x slow motion, the $5,000 bonus. A cruiser that piles into
+        /// traffic or is caught in a tanker blast used to trigger all of that too,
+        /// so every police crash anywhere slowed the whole game down and paid out
+        /// for something the player did not do.
+        public void WreckCop(bool byPlayer = false)
         {
             if (isWrecked) return;
             isWrecked = true;
@@ -905,10 +910,15 @@ namespace RoadRage.UnityRemake
             targetWreckYaw = wreckSlideDir * Random.Range(70f, 130f);
             wreckRoll = wreckSlideDir * 4f;
 
-            if (RoadRageTakedownDirector.Instance != null)
+            var contactPoint = transform.position + Vector3.up * 0.6f;
+            if (byPlayer && RoadRageTakedownDirector.Instance != null)
             {
-                var contactPoint = transform.position + Vector3.up * 0.6f;
                 RoadRageTakedownDirector.Instance.TriggerTakedown(transform, contactPoint, Vector3.up, SpeedKph);
+            }
+            else
+            {
+                CrashEffects.Active?.PlayAt(contactPoint);
+                if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.8f);
             }
 
             if (RoadRagePolicePursuitDirector.Instance != null)
