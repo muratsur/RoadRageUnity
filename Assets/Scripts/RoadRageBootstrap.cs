@@ -7205,6 +7205,16 @@ namespace RoadRage.UnityRemake
             // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
             // over the camera - so it keeps the forest reading as deep.
             ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            if (RoadPath.Route != null)
+            {
+                // The B500 forest is spruce and fir - and a narrow conifer covers a
+                // fraction of the ground a broadleaf crown does, so at the same spacing
+                // the Black Forest mix read as thin. Two more conifer bands close it up
+                // into the dense dark stands the road actually runs through. Open
+                // ground, water and cliffs still keep them out (SpawnForestPiece).
+                ScatterBand(8f, 12f, 34f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+                ScatterBand(9f, 34f, 80f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+            }
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
                 SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
                     d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
