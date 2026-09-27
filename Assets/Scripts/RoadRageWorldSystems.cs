@@ -775,15 +775,16 @@ namespace RoadRage.UnityRemake
                 relocated = true;
             }
 
-            // On a single-lane road a wreck is a wall: everything behind it queues into
-            // a knot the player then drives into, which ended runs within a kilometre.
+            // A wreck is a wall: everything behind it queues into a knot the player then
+            // drives into, which ended runs within a kilometre - on any road, not only a
+            // single-lane one.
             // Crash() slides it off to its own road edge, where it no longer blocks the
             // lane; after a few seconds it is recycled up the road - but only once it is
             // out of view, behind the camera or far ahead. Recycling it on a timer made
             // crashed cars vanish in front of the player.
             wreckAge = IsWreck ? wreckAge + Time.deltaTime : 0f;
             var outOfView = RoadDistance < PlayerDistance - 15f || RoadDistance > PlayerDistance + SpawnAheadMin;
-            if (!relocated && NarrowRoad && IsWreck && wreckAge > NarrowWreckClearSeconds && outOfView)
+            if (!relocated && IsWreck && wreckAge > NarrowWreckClearSeconds && outOfView)
             {
                 RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                 wreckAge = 0f;
@@ -1021,7 +1022,11 @@ namespace RoadRage.UnityRemake
         private void ReactToContact(TrafficCarController other, float deltaDist, float deltaLat)
         {
             var relativeSpeed = Mathf.Abs(currentSpeedKph - other.currentSpeedKph);
-            if (IsWreck || other.IsWreck || relativeSpeed > 18f)
+            // Touching a wreck used to wreck a car whatever the speed, so a queue
+            // braking up behind one crashed into it car by car: the pile-ups. It takes
+            // a real impact now; a slow bump just stops behind it (below).
+            var wreckContact = IsWreck || other.IsWreck;
+            if ((wreckContact && relativeSpeed > 40f) || (!wreckContact && relativeSpeed > 18f))
             {
                 var impact = Mathf.Max(currentSpeedKph, other.currentSpeedKph);
                 var alreadyWrecked = IsWreck && other.IsWreck;
@@ -1107,11 +1112,13 @@ namespace RoadRage.UnityRemake
             wreckYawTarget = sign * variation;
             WreckYaw = sign * variation * 0.2f;
             wreckRoll = sign * 2.5f;
-            // Shove smoothly towards road shoulder. On a single-lane road always towards
-            // the car's own edge: shoved the other way it slid across the only other lane
-            // and blocked the road.
-            if (NarrowRoad) sign = LaneOffset >= 0f ? 1f : -1f;
-            wreckSlideTarget = Mathf.Clamp(laneDrift + sign * 5.2f, -8f, 8f);
+            // Shove smoothly onto the car's own shoulder, clear of every lane. Shoved the
+            // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
+            // inner lane stopped in the outer one - either way a wall that everything
+            // behind it piled into.
+            sign = LaneOffset >= 0f ? 1f : -1f;
+            var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
+            wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns

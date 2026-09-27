@@ -6660,17 +6660,22 @@ namespace RoadRage.UnityRemake
             // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
             // rounded English wood; an alpine pass is a wall of tall narrow conifers with
             // the odd broadleaf in it. Flipped to 30% broadleaf.
-            // On the B500 it is the Black Forest: spruce and fir, the odd dead snag -
-            // from an installed tree pack where there is one (ExternalVegetation).
+            // On the B500 it is the Black Forest: spruce and fir, from an installed tree
+            // pack where there is one (ExternalVegetation). No snags: the bare grey
+            // trunk read as fake.
             var table = RoadPath.Route != null
-                ? (Random.value < 0.03f ? BlackForestSnags : BlackForestTrees)
+                ? BlackForestTrees
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var entry = table[Random.Range(0, table.Length)];
             if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
                 entry = "External|" + Random.Range(0, ExternalTrees.Length);
             var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
-            KeepTrunkOffRoad(tree, distance, Mathf.Sign(lateral));
+            // The tree's real offset, not its sign. Passed Mathf.Sign(lateral) - always
+            // +-1 m, "inside the road" - this moved every tree, wherever it was planted,
+            // onto the edge line: the whole forest stood in one row along the rail with
+            // empty ground behind it.
+            KeepTrunkOffRoad(tree, distance, lateral);
             if (!KeepCanopyOffRoad(tree, distance, Mathf.Sign(lateral)))
             {
                 Destroy(tree);
@@ -6749,7 +6754,6 @@ namespace RoadRage.UnityRemake
             "BlackForest|SM_spruce_04", "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_03",
             "BlackForest|SM_fir_01", "BlackForest|SM_fir_02",
         };
-        private static readonly string[] BlackForestSnags = { "BlackForest|SM_snag" };
         private static readonly string[] BlackForestPlants =
         {
             "BlackForest|SM_fern", "BlackForest|SM_fern", "BlackForest|SM_bilberry",
