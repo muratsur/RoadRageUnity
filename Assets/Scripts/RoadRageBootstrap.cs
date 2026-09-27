@@ -6708,10 +6708,13 @@ namespace RoadRage.UnityRemake
 
             if (biomeIndex == 0) // Greenwood
             {
-                // A closed ring of mountains (Tools/Terrain/build_mountain_ring.py), 420 m to
-                // 1 km out and up to ~450 m tall, opening into a valley along the road, with
-                // its own lighter aerial perspective (RoadRage/Backdrop) so it reads through
-                // the road fog. The ranks of SM_mountain below are only the fallback.
+                // A closed ring of real terrain, 420 m to 1 km out: the northern Black Forest
+                // seen from the Acher valley below the Mummelsee and the Hornisgrinde
+                // (Tools/Terrain/build_black_forest_ring.py). Every ridge stands at its real
+                // angle above the horizon, brought closer to fit inside the fog; the valley
+                // runs along the road. It has its own lighter aerial perspective
+                // (RoadRage/Backdrop) so it reads through the road fog. The ranks of
+                // SM_mountain below are only the fallback.
                 if (!BuildMountainRing())
                 {
                     // A ridge closing off the forest horizon. ForestVillage ships SM_mountain
