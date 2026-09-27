@@ -479,7 +479,9 @@ namespace RoadRage.UnityRemake
         /// A little heavier than civilian traffic: an interceptor shoulders a hatchback
         /// out of the way rather than being deflected off the player's tail by it.
         public float ContactMass => hullHalfLength * hullHalfWidth * 1.35f;
-        public bool ContactActive => isActiveAndEnabled && !isWrecked;
+        /// Wrecks stay solid: a crashed cruiser switched out of the contact pass was a
+        /// car-shaped hole the player and traffic drove straight through.
+        public bool ContactActive => isActiveAndEnabled;
 
         public void ApplyContactPush(float alongRoad, float acrossRoad)
         {
@@ -498,13 +500,15 @@ namespace RoadRage.UnityRemake
         private void OnEnable() => VehicleContacts.Register(this);
         private void OnDisable() => VehicleContacts.Unregister(this);
 
+        /// Nothing may move the cruiser between the contact pass and placing it. This
+        /// used to re-clamp the lateral offset here, after the pass had pushed the
+        /// cruiser clear; on a narrow road the clamp put it straight back inside the car
+        /// it had just been separated from, so it was drawn clipping every frame. Update
+        /// already clamps before the pass runs.
         private void LateUpdate()
         {
             VehicleContacts.ResolveOncePerFrame();
-            if (isWrecked) return;
-            CheckTrafficImpact();
-            var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
+            if (!isWrecked) CheckTrafficImpact();
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
         }
         // ------------------------------------------------------------------------
@@ -748,15 +752,24 @@ namespace RoadRage.UnityRemake
             float targetLane;
             float targetDistDelta;
 
+            // A flanker sits alongside with real clearance: both half-widths plus a gap.
+            // The old fixed 3.4 m offset was often off the edge of a narrow road, so the
+            // lane clamp pinned the flanker about a metre from the player's centre -
+            // inside the player's car. Where there is no room alongside, it drops in
+            // behind instead of squeezing.
+            var laneLimit = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
+            var flankOffset = targetPlayer.HalfWidth + hullHalfWidth + 0.7f;
             switch (SlotIndex % 3)
             {
                 case 0: // Left Flank Interceptor
-                    targetLane = targetPlayer.LateralOffset - 3.4f;
-                    targetDistDelta = 0.5f;
-                    break;
                 case 1: // Right Flank Interceptor
-                    targetLane = targetPlayer.LateralOffset + 3.4f;
+                    targetLane = targetPlayer.LateralOffset + (SlotIndex % 3 == 0 ? -flankOffset : flankOffset);
                     targetDistDelta = 0.5f;
+                    if (Mathf.Abs(targetLane) > laneLimit)
+                    {
+                        targetLane = targetPlayer.LateralOffset;
+                        targetDistDelta = SlotIndex % 3 == 0 ? -14f : -21f;
+                    }
                     break;
                 default: // Rear Pursuer / Rammer
                     targetLane = targetPlayer.LateralOffset;
