@@ -4102,11 +4102,12 @@ namespace RoadRage.UnityRemake
         private int ZoneIndexAt(float distance) =>
             Mathf.FloorToInt(Mathf.Max(0f, distance) / ZoneLength);
 
-        public int BiomeIndexAt(float distance)
-        {
-            var order = (journeyStart + ZoneIndexAt(distance)) % JourneyOrder.Length;
-            return JourneyOrder[order];
-        }
+        /// A run stays in the biome the player picked. It used to move on to the next
+        /// biome in JourneyOrder every ZoneLength (5.4 km), so a Greenwood drive turned
+        /// into Snow Station part-way. Changing biome is the picker's and the N key's
+        /// job. Everything that asks about the biome ahead (curves, elevation, road
+        /// width, mood blending) goes through here, so they all see one biome too.
+        public int BiomeIndexAt(float distance) => JourneyOrder[journeyStart];
 
         public string BiomeNameAt(float distance) => Biomes[BiomeIndexAt(distance)];
 

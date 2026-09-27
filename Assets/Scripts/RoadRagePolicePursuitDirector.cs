@@ -766,27 +766,30 @@ namespace RoadRage.UnityRemake
             if (targetPlayer == null) return;
 
             // 2. Tactical Pursuit AI Navigation based on Formation Slot
-            var maxSpeed = 138f + unitHeatLevel * 14f;
             float targetLane;
             float targetDistDelta;
 
             // A flanker sits alongside with real clearance: both half-widths plus a gap.
             // The old fixed 3.4 m offset was often off the edge of a narrow road, so the
             // lane clamp pinned the flanker about a metre from the player's centre -
-            // inside the player's car. Where there is no room alongside, it drops in
-            // behind instead of squeezing.
+            // inside the player's car. Where its own side has no room it takes the other
+            // side, and only where neither does (a narrow road with the player in the
+            // middle) does it drop in close behind - still in the chase camera's view.
             var laneLimit = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             var flankOffset = targetPlayer.HalfWidth + hullHalfWidth + 0.7f;
             switch (SlotIndex % 3)
             {
                 case 0: // Left Flank Interceptor
                 case 1: // Right Flank Interceptor
-                    targetLane = targetPlayer.LateralOffset + (SlotIndex % 3 == 0 ? -flankOffset : flankOffset);
+                    var flankSide = SlotIndex % 3 == 0 ? -1f : 1f;
+                    targetLane = targetPlayer.LateralOffset + flankSide * flankOffset;
                     targetDistDelta = 0.5f;
+                    if (Mathf.Abs(targetLane) > laneLimit)
+                        targetLane = targetPlayer.LateralOffset - flankSide * flankOffset;
                     if (Mathf.Abs(targetLane) > laneLimit)
                     {
                         targetLane = targetPlayer.LateralOffset;
-                        targetDistDelta = SlotIndex % 3 == 0 ? -14f : -21f;
+                        targetDistDelta = SlotIndex % 3 == 0 ? -9f : -15f;
                     }
                     break;
                 default: // Rear Pursuer / Rammer
@@ -796,9 +799,15 @@ namespace RoadRage.UnityRemake
             }
 
             var distToTarget = (targetPlayer.RoadDistance + targetDistDelta) - RoadDistance;
+            // Units spawn behind, out of view, so they have to be able to catch up: a
+            // fixed 152 km/h top speed at one star was slower than the player's car, the
+            // cruiser never arrived and the pursuit timed out as "lost them" unseen.
+            // While well behind they run at the player's speed plus a closing margin.
+            var maxSpeed = 138f + unitHeatLevel * 14f;
+            if (distToTarget > 20f) maxSpeed = Mathf.Max(maxSpeed, targetPlayer.SpeedKph + 45f);
             if (distToTarget > 5f) // Behind target position: accelerate
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * 36f);
+                SpeedKph = Mathf.MoveTowards(SpeedKph, maxSpeed, Time.deltaTime * (distToTarget > 20f ? 60f : 36f));
             }
             else if (distToTarget < -7f) // Ahead of target position: slow down
             {
