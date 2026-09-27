@@ -12,10 +12,12 @@ public static class LinkTreePackMenu
 {
     private const string RegistryPath = "Assets/Resources/Biomes/ExternalVegetation.asset";
 
-    // Parts of a pack that are not a whole standing tree.
+    // Parts of a pack that are not a whole, grown, snow-free standing tree. Mountain
+    // Trees has plant/small/medium/big/forest stages, dead trees, and snow versions.
     private static readonly string[] Skip =
     {
         "snow", "branch", "billboard", "stump", "trunk", "root", "debris", "fallen", "dead", "impostor", "demo",
+        "plant", "small",
     };
 
     [MenuItem("Road Rage/Link Installed Tree Pack")]
@@ -29,9 +31,15 @@ public static class LinkTreePackMenu
                         x.name.Contains("tree"))
             .Where(x => !Skip.Any(s => x.name.Contains(s)))
             .ToList();
-        // The pack's "forest" versions are made for dense stands - the roadside forest.
-        var forest = candidates.Where(x => x.name.Contains("forest")).ToList();
-        var chosen = forest.Count >= 3 ? forest : candidates;
+        // "Cheap" versions share one bark material, so a whole forest of them batches
+        // into a handful of draw calls - use them where the pack has them. Then its
+        // "forest" versions, made for dense stands, plus the medium and big trees for
+        // variety in size.
+        var cheap = candidates.Where(x => x.name.Contains("cheap")).ToList();
+        if (cheap.Count >= 3) candidates = cheap;
+        var chosen = candidates.Where(x => x.name.Contains("forest") || x.name.Contains("medium") ||
+                                           x.name.Contains("big")).ToList();
+        if (chosen.Count < 3) chosen = candidates;
 
         var registry = AssetDatabase.LoadAssetAtPath<ExternalVegetation>(RegistryPath);
         if (registry == null)
