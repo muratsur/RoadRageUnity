@@ -22,3 +22,9 @@
 
 # Binary Assets & Packages
 *.unitypackage filter=lfs diff=lfs merge=lfs -text
+
+# Kept out of LFS: the repository's LFS budget is exhausted, and these are small
+# generated assets (Tools/Blender/build_guardrail.py). Later rules override the
+# *.png / *.fbx LFS rules above for this folder only.
+Assets/Resources/Biomes/Guardrail/**/*.png -filter binary
+Assets/Resources/Biomes/Guardrail/**/*.fbx -filter binary
