@@ -17,7 +17,7 @@ public static class LinkTreePackMenu
     private static readonly string[] Skip =
     {
         "snow", "branch", "billboard", "stump", "trunk", "root", "debris", "fallen", "dead", "impostor", "demo",
-        "plant", "small",
+        "plant",
     };
 
     [MenuItem("Road Rage/Link Installed Tree Pack")]
@@ -38,7 +38,10 @@ public static class LinkTreePackMenu
         // into a handful of draw calls - use them where the pack has them. Every
         // grown species goes in: picking only the "forest" versions left two.
         var cheap = candidates.Where(x => x.name.Contains("cheap")).ToList();
-        var chosen = cheap.Count >= 3 ? cheap : candidates;
+        if (cheap.Count >= 3) candidates = cheap;
+        // Small and medium trees are the understory; the rest stand as the forest.
+        var young = candidates.Where(x => x.name.Contains("small") || x.name.Contains("medium")).ToList();
+        var chosen = candidates.Where(x => !x.name.Contains("small")).ToList();
 
         var registry = AssetDatabase.LoadAssetAtPath<ExternalVegetation>(RegistryPath);
         if (registry == null)
@@ -48,6 +51,8 @@ public static class LinkTreePackMenu
             AssetDatabase.CreateAsset(registry, RegistryPath);
         }
         registry.Trees = chosen.Select(x => AssetDatabase.LoadAssetAtPath<GameObject>(x.path))
+            .Where(g => g != null).ToArray();
+        registry.YoungTrees = young.Select(x => AssetDatabase.LoadAssetAtPath<GameObject>(x.path))
             .Where(g => g != null).ToArray();
         registry.Source = chosen.Count > 0 ? Path.GetDirectoryName(chosen[0].path) : "";
         EditorUtility.SetDirty(registry);
@@ -65,7 +70,8 @@ public static class LinkTreePackMenu
             Debug.LogWarning("Link Installed Tree Pack: no tree prefabs found under a NatureManufacture folder. " +
                              "Greenwood keeps its own trees.");
         else
-            Debug.Log($"Link Installed Tree Pack: {registry.Trees.Length} trees linked for Greenwood:\n" +
-                      string.Join("\n", chosen.Select(x => x.path)));
+            Debug.Log($"Link Installed Tree Pack: {registry.Trees.Length} trees and {registry.YoungTrees.Length} " +
+                      "understory trees linked for Greenwood:\n" +
+                      string.Join("\n", chosen.Concat(young).Select(x => x.path)));
     }
 }

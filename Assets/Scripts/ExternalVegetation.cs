@@ -12,6 +12,8 @@ namespace RoadRage.UnityRemake
     public sealed class ExternalVegetation : ScriptableObject
     {
         public GameObject[] Trees = System.Array.Empty<GameObject>();
+        /// The pack's smaller trees, planted as the understory between the big ones.
+        public GameObject[] YoungTrees = System.Array.Empty<GameObject>();
         public string Source = "";
     }
 }

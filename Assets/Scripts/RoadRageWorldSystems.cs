@@ -493,6 +493,7 @@ namespace RoadRage.UnityRemake
             variationSeed = 17;
             foreach (var character in name) variationSeed = variationSeed * 31 + character;
             if (!ActiveCars.Contains(this)) ActiveCars.Add(this);
+            visualPlaced = false;
             PlaceOnRoad();
         }
 
@@ -1085,12 +1086,38 @@ namespace RoadRage.UnityRemake
         }
         // ------------------------------------------------------------------------
 
+        private float visualLateral;
+        private float visualLateralSpeed;
+        private float steerYaw;
+        private bool visualPlaced;
+
+        /// Draws the car where it is, smoothed and steered.
+        ///
+        /// The lateral offset is what the contact pass and the behaviours push around,
+        /// and it can flick back and forth by centimetres a frame when a stopped car is
+        /// pressed against another - drawn raw, queued cars shook. The drawn offset
+        /// follows it with a short damper. And a car moving across the road now turns
+        /// its nose into the move, by the angle of its sideways speed against its
+        /// forward speed; drawn square to the road it slid sideways like a pulled toy.
         private void PlaceOnRoad()
         {
-            transform.position = RoadPath.Point(RoadDistance, LaneOffset, 0.16f + verticalOffset);
+            if (!visualPlaced || Mathf.Abs(visualLateral - LaneOffset) > 6f)
+            {
+                visualLateral = LaneOffset;
+                visualLateralSpeed = 0f;
+                visualPlaced = true;
+            }
+            var delta = Time.deltaTime;
+            if (delta > 0f)
+                visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed, 0.12f, 30f, delta);
+            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
-            transform.rotation = facing * Quaternion.Euler(0f, WreckYaw, wreckRoll);
+            var forward = Mathf.Max(3f, currentSpeedKph / 3.6f);
+            var target = IsWreck ? 0f
+                : Mathf.Clamp(Mathf.Atan2(visualLateralSpeed, forward) * Mathf.Rad2Deg * Direction, -22f, 22f);
+            steerYaw = Mathf.Lerp(steerYaw, target, Mathf.Clamp01(delta * 8f));
+            transform.rotation = facing * Quaternion.Euler(0f, WreckYaw + steerYaw, wreckRoll);
         }
 
         private float wreckSlideTarget;

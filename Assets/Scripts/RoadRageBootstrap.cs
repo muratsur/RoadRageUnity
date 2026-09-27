@@ -6460,7 +6460,8 @@ namespace RoadRage.UnityRemake
             GameObject model;
             if (external)
             {
-                var prefab = ExternalTrees[int.Parse(split[1]) % ExternalTrees.Length];
+                var pool = split[1].StartsWith("y") ? ExternalYoungTrees : ExternalTrees;
+                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y')) % pool.Length] : null;
                 model = prefab != null ? Adopt(Instantiate(prefab)) : null;
             }
             else
@@ -6504,7 +6505,7 @@ namespace RoadRage.UnityRemake
             // has more trees round it than open heath does.
             if (heath) return cover == RoadRoute.CoverOpen || Random.value < 0.5f;
             var built = cover == RoadRoute.CoverBuilt;
-            if (label == "Forest Tree") return Random.value < (built ? 0.35f : 0.12f);
+            if (label == "Forest Tree" || label == "Forest Understory") return Random.value < (built ? 0.35f : 0.12f);
             if (label.StartsWith("Forest Bush")) return Random.value < (built ? 0.5f : 0.35f);
             return true;
         }
@@ -6676,6 +6677,9 @@ namespace RoadRage.UnityRemake
             // onto the edge line: the whole forest stood in one row along the rail with
             // empty ground behind it.
             KeepTrunkOffRoad(tree, distance, lateral);
+            // Roots into the ground: the pack's trees are grounded by their bounds, which
+            // reach a little below the trunk, and stood hovering.
+            if (RoadPath.Route != null) tree.transform.position += Vector3.down * 0.6f;
             if (!KeepCanopyOffRoad(tree, distance, Mathf.Sign(lateral)))
             {
                 Destroy(tree);
@@ -6699,6 +6703,7 @@ namespace RoadRage.UnityRemake
         }
 
         private static GameObject[] externalTrees;
+        private static GameObject[] externalYoungTrees;
 
         /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
         /// Tree Pack; empty when there is none.
@@ -6715,6 +6720,9 @@ namespace RoadRage.UnityRemake
                 // shaders this project cannot draw, and every tree renders magenta.
                 // Those are left out, so Greenwood falls back to its own trees.
                 externalTrees = System.Array.FindAll(linked, RendersInThisPipeline);
+                externalYoungTrees = registry != null && registry.YoungTrees != null
+                    ? System.Array.FindAll(registry.YoungTrees, t => t != null && RendersInThisPipeline(t))
+                    : System.Array.Empty<GameObject>();
                 if (externalTrees.Length > 0)
                     Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
                 if (externalTrees.Length < linked.Length)
@@ -6735,6 +6743,27 @@ namespace RoadRage.UnityRemake
                     return false;
             }
             return true;
+        }
+
+        private static GameObject[] ExternalYoungTrees
+        {
+            get
+            {
+                if (externalTrees == null) _ = ExternalTrees;
+                return externalYoungTrees ?? System.Array.Empty<GameObject>();
+            }
+        }
+
+        /// Young trees under the canopy: the pack's small and medium firs where it is
+        /// installed, the Blender young spruce otherwise.
+        private GameObject Understory(float distance, float lateral)
+        {
+            var entry = ExternalYoungTrees.Length > 0
+                ? "External|y" + Random.Range(0, ExternalYoungTrees.Length)
+                : "BlackForest|SM_spruce_young";
+            var tree = SpawnForestPiece(entry, distance, lateral, 0f, 4f, 10f, "Forest Understory");
+            if (tree != null) tree.transform.position += Vector3.down * 0.3f;
+            return tree;
         }
 
         /// Young spruce stand in for bushes under the Black Forest canopy.
@@ -7337,6 +7366,15 @@ namespace RoadRage.UnityRemake
                 {
                     var from = near;
                     ScatterBand(11f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                }
+                // Understory: young firs between the trunks, to about 70 m. Tall firs
+                // lose their lower branches, so under their crowns the eye ran straight
+                // through to bare ground - it read as open land behind a row of trunks.
+                // Young trees are what close a real Black Forest stand at eye level.
+                for (var near = 14f; near < 70f; near += 14f)
+                {
+                    var from = near;
+                    ScatterBand(9f, from, from + 14f, (d, l, s) => Understory(d, l));
                 }
             }
             else
@@ -8242,8 +8280,10 @@ namespace RoadRage.UnityRemake
 
         /// Share of the full traffic count a road carries. A single lane each way has
         /// nowhere to pass, so it takes a third of a six-lane highway's traffic.
+        /// Two lanes each way is Greenwood's mountain road: 0.65 of the highway's traffic
+        /// still packed it into queues and pile-ups, so it runs lighter.
         private static float TrafficScaleFor(int laneCount) =>
-            laneCount >= 3 ? 1f : laneCount == 2 ? 0.65f : 0.35f;
+            laneCount >= 3 ? 1f : laneCount == 2 ? 0.45f : 0.35f;
 
         /// Weaving and wrong-way driving put a car across the only lane of a single-lane
         /// road, so there they become speeding: still an offender worth chasing.

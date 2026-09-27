@@ -2,18 +2,12 @@ using UnityEngine;
 
 namespace RoadRage.UnityRemake
 {
-    /// Camera shake, and nothing else.
+    /// Camera shake, and the haptic pulse that goes with it (RoadRageHaptics).
     ///
-    /// This was a haptics director: screen shake plus gamepad dual-motor rumble, mobile
-    /// Handheld.Vibrate on a heavy crash, and a continuous micro-rumble above 175 km/h.
-    /// All of the vibration is gone. The shipped build has no haptics of any kind - not
-    /// one reference to vibration in 8,500 lines of game.gd - and it sells an impact with
-    /// a single scalar shake, which is what its own comment on a takedown says outright:
-    /// "a strong shake reads as the crunch (no slow-mo)".
-    ///
-    /// The shake stays because the shipped build has that too. What went is everything
-    /// that buzzed a device: a constant rumble at speed gives a player nothing to read,
-    /// and on a phone it is a battery drain you cannot turn off.
+    /// Every impact in the game - a knock, a solid hit, a wreck - comes through the
+    /// three Trigger calls below, so they are also where the gamepad and phone pulse.
+    /// Only discrete pulses: the constant rumble at speed this once had told a player
+    /// nothing and drained a phone.
     public sealed class RoadRageImpactShakeDirector : MonoBehaviour
     {
         public static RoadRageImpactShakeDirector Instance { get; private set; }
@@ -76,12 +70,24 @@ namespace RoadRage.UnityRemake
             Trauma = Mathf.Clamp01(Trauma + amount);
         }
 
-        /// Impact shake, scaled the way the shipped build scales it: a glancing knock, a
-        /// solid hit, and a wreck. No vibration attached to any of them.
-        public void TriggerLightShake(float trauma = 0.25f) => AddTrauma(trauma);
+        /// Impact shake and haptics, in three strengths: a glancing knock, a solid hit,
+        /// and a wreck.
+        public void TriggerLightShake(float trauma = 0.25f)
+        {
+            AddTrauma(trauma);
+            RoadRageHaptics.Light();
+        }
 
-        public void TriggerMediumShake(float trauma = 0.55f) => AddTrauma(trauma);
+        public void TriggerMediumShake(float trauma = 0.55f)
+        {
+            AddTrauma(trauma);
+            RoadRageHaptics.Medium();
+        }
 
-        public void TriggerHeavyCrashShake(float trauma = 1.0f) => AddTrauma(trauma);
+        public void TriggerHeavyCrashShake(float trauma = 1.0f)
+        {
+            AddTrauma(trauma);
+            RoadRageHaptics.Heavy();
+        }
     }
 }

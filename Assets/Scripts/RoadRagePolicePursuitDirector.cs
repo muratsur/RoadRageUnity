@@ -159,7 +159,9 @@ namespace RoadRage.UnityRemake
                 if (HeatLevel >= 4)
                 {
                     roadblockTimer += Time.deltaTime;
-                    if (roadblockTimer >= 14f)
+                    // Every 14 s stacked roadblocks up the road faster than the player
+                    // cleared them - the road knotted into barricades and wrecks.
+                    if (roadblockTimer >= 28f && activeRoadblocks.Count == 0)
                     {
                         roadblockTimer = 0f;
                         SpawnRoadblock();
@@ -418,8 +420,14 @@ namespace RoadRage.UnityRemake
                 }
                 barObj.name = "Barricade Cruiser";
 
-                var rb = barObj.GetComponent<Rigidbody>() ?? barObj.AddComponent<Rigidbody>();
+                // Not `GetComponent() ?? AddComponent()`: a missing component is Unity's
+                // fake null, which `??` does not see, so no body was ever added and
+                // setting its mass threw MissingComponentException. Kinematic: a parked
+                // barricade, not a loose car for the physics to shove about.
+                var rb = barObj.GetComponent<Rigidbody>();
+                if (rb == null) rb = barObj.AddComponent<Rigidbody>();
                 rb.mass = 2800f;
+                rb.isKinematic = true;
             }
 
             activeRoadblocks.Add(root);
