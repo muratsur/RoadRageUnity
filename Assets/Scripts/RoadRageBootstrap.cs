@@ -6703,13 +6703,33 @@ namespace RoadRage.UnityRemake
             {
                 if (externalTrees != null) return externalTrees;
                 var registry = Resources.Load<ExternalVegetation>("Biomes/ExternalVegetation");
-                externalTrees = registry != null && registry.Trees != null
+                var linked = registry != null && registry.Trees != null
                     ? System.Array.FindAll(registry.Trees, t => t != null)
                     : System.Array.Empty<GameObject>();
+                // A pack imported without its render-pipeline support package has
+                // shaders this project cannot draw, and every tree renders magenta.
+                // Those are left out, so Greenwood falls back to its own trees.
+                externalTrees = System.Array.FindAll(linked, RendersInThisPipeline);
                 if (externalTrees.Length > 0)
                     Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                if (externalTrees.Length < linked.Length)
+                    Debug.LogWarning($"RR_TREES {linked.Length - externalTrees.Length} linked trees use shaders URP cannot " +
+                                     "draw (they would be magenta) and are skipped. Import the pack's URP support " +
+                                     "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
                 return externalTrees;
             }
+        }
+
+        private static bool RendersInThisPipeline(GameObject prefab)
+        {
+            foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+            foreach (var material in renderer.sharedMaterials)
+            {
+                if (material == null || material.shader == null || !material.shader.isSupported ||
+                    material.shader.name == "Hidden/InternalErrorShader")
+                    return false;
+            }
+            return true;
         }
 
         /// Young spruce stand in for bushes under the Black Forest canopy.

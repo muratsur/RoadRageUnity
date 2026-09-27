@@ -54,6 +54,14 @@ public static class LinkTreePackMenu
         EditorUtility.SetDirty(registry);
         AssetDatabase.SaveAssets();
 
+        var broken = registry.Trees.Count(t => t.GetComponentsInChildren<Renderer>(true)
+            .SelectMany(r => r.sharedMaterials)
+            .Any(m => m == null || m.shader == null || !m.shader.isSupported || m.shader.name == "Hidden/InternalErrorShader"));
+        if (broken > 0)
+            Debug.LogWarning($"Link Installed Tree Pack: {broken} of {registry.Trees.Length} trees have shaders URP cannot " +
+                             "draw (magenta). Import the URP package from the pack's 'HD and URP support' folder, " +
+                             "then run this again. Until then Greenwood skips them.");
+
         if (registry.Trees.Length == 0)
             Debug.LogWarning("Link Installed Tree Pack: no tree prefabs found under a NatureManufacture folder. " +
                              "Greenwood keeps its own trees.");
