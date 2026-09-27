@@ -1058,15 +1058,16 @@ namespace RoadRage.UnityRemake
 			//
 			// The albedo was RedCanyon/T_grass_D, which the texture dedupe maps to
 			// ElderTreeGate/T_grass_D - a sheet of grass-blade cards on black, made for
-			// cutout foliage. Tiled across the ground it read as fake striped lawn. The
-			// floor is now Runic Forest's brown soil, the same set its MSO already came
-			// from, with a near-neutral tint so no green is added back.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RunicForest", "T_ground_02_D", "T_ground_02_N", new Color(0.80f, 0.77f, 0.72f), 0f, 0.06f),
-				"RunicForest", "T_ground_02_MSO", 0.35f);
-            // Ground tiling: square, about 3.6 m per repeat (the ribbon UVs run 0.08 per
-            // metre). The soil's blotches are large, so a smaller or stretched repeat
-            // turns them back into a visible pattern.
-            ground.mainTextureScale = new Vector2(3.5f, 3.5f);
+			// cutout foliage. Tiled across the ground it read as fake striped lawn, and
+			// the kits' painted soil textures still read as one flat pattern. The floor
+			// is now baked from a modelled forest floor - soil under individual fallen
+			// leaves, needles, twigs and stones (Tools/Blender/build_forest_floor.py) -
+			// so the colour, normal and occlusion come from real overlapping geometry.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestFloor", "T_forest_floor_D", "T_forest_floor_N", Color.white, 0f, 0.1f),
+				"ForestFloor", "T_forest_floor_MSO", 0.35f);
+            // One texture repeat covers 2 m of floor; the ribbon UVs run 0.08 per metre.
+            // Square, so leaves are not stretched along the road.
+            ground.mainTextureScale = new Vector2(6.25f, 6.25f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
@@ -2430,8 +2431,6 @@ namespace RoadRage.UnityRemake
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
                 BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Floor PBR"], relative: true);
             }
             else
             {
