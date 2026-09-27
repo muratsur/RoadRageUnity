@@ -4651,6 +4651,10 @@ namespace RoadRage.UnityRemake
                     n.Contains("Tunnel") || n.Contains("Ceiling") || n.Contains("Overpass") ||
                     n.Contains("Bridge") || n.Contains("Wire") || n.Contains("Floor") || n.Contains("Terrain"))
                     continue;
+                // The guard rail is placed from the measured road width and belongs on the
+                // shoulder line. World-axis bounds on a bend would push each section by a
+                // different amount and leave the rail jagged.
+                if (n == "Forest Guard Rail") continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6843,7 +6847,7 @@ namespace RoadRage.UnityRemake
             // a field - it also gives the bends an edge to read against. One real-scale
             // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
             // borrowed Synthwave fence half a metre behind it.
-            BuildGuardRail(16.4f, materials["Forest Guard Rail"]);
+            BuildGuardRail(materials["Forest Guard Rail"]);
 
             if (NoCanopy) return;
 
@@ -6883,21 +6887,43 @@ namespace RoadRage.UnityRemake
 
         private const float GuardRailSection = 4f;
 
+        /// Gap between the outer edge of the shoulder and the back of the beam. The beam
+        /// face sits ~0.09 m nearer the road than that, the posts ~0.35 m further out.
+        private const float GuardRailOffset = 0.35f;
+
+        private static bool guardRailReported;
+
         /// Lays the guard rail section by section, end to end. Deliberately not a
         /// ScatterBand: its jitter, per-chunk spacing and occasional dropouts are what
         /// make vegetation look varied, and on a rail they read as broken barrier.
-        private void BuildGuardRail(float lateral, Material material)
+        ///
+        /// Placed off the measured road width, not a constant. A fixed 16 m put it
+        /// nine metres into Greenwood's single-lane verge, behind undergrowth taller
+        /// than the rail, where nobody could see it.
+        private void BuildGuardRail(Material material)
         {
+            var placed = 0;
+            var lateral = 0f;
             for (var d = SegBegin(0f, GuardRailSection); d < segEnd; d += GuardRailSection)
-            for (var side = -1; side <= 1; side += 2)
-                PlaceGuardRailSection(d + GuardRailSection * 0.5f, side * lateral, material);
+            {
+                var centre = d + GuardRailSection * 0.5f;
+                lateral = RoadPath.HalfWidthAt(centre) + RoadPath.ShoulderWidth + GuardRailOffset;
+                for (var side = -1; side <= 1; side += 2)
+                    if (PlaceGuardRailSection(centre, side * lateral, material)) placed++;
+            }
+            if (!guardRailReported)
+            {
+                guardRailReported = true;
+                Debug.Log($"RR_EVENT guardrail sections={placed} lateral={lateral:0.0}m");
+            }
         }
 
-        private void PlaceGuardRailSection(float centre, float lateral, Material material)
+        private bool PlaceGuardRailSection(float centre, float lateral, Material material)
         {
             var rail = PlaceBiomeModelOnRoad("Guardrail", "SM_guardrail_section_4m", material,
                 centre, lateral, 0f, Vector3.zero, Vector3.one, "Forest Guard Rail", false);
-            if (rail == null || !TryGetMeshBounds(rail, out var bounds)) return;
+            if (rail == null) return false;
+            if (!TryGetMeshBounds(rail, out var bounds)) return true;
 
             // The FBX axis conversion decides which local axis the beam runs along and
             // which way it faces, so measure instead of assuming. First turn the long
@@ -6916,6 +6942,7 @@ namespace RoadRage.UnityRemake
             var forward = RoadPath.Forward(centre);
             offset = rail.transform.TransformPoint(bounds.center) - rail.transform.position;
             rail.transform.position -= forward * Vector3.Dot(offset, forward);
+            return true;
         }
 
         /// Mesh bounds in the object's own space. Renderer bounds are world-axis
