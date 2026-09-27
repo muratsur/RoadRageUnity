@@ -1063,11 +1063,22 @@ namespace RoadRage.UnityRemake
 			// is now baked from a modelled forest floor - soil under individual fallen
 			// leaves, needles, twigs and stones (Tools/Blender/build_forest_floor.py) -
 			// so the colour, normal and occlusion come from real overlapping geometry.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestFloor", "T_forest_floor_D", "T_forest_floor_N", Color.white, 0f, 0.1f),
-				"ForestFloor", "T_forest_floor_MSO", 0.35f);
+			//
+			// This single-texture version is only the fallback: BuildSplatMaterials
+			// replaces "Forest Floor PBR" with a three-layer blend (litter, humus, verge
+			// dirt) whenever the TerrainSplat shader is available.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestFloor", "T_forest_litter_D", "T_forest_litter_N", Color.white, 0f, 0.1f),
+				"ForestFloor", "T_forest_litter_MSO", 0.35f);
             // One texture repeat covers 2 m of floor; the ribbon UVs run 0.08 per metre.
             // Square, so leaves are not stretched along the road.
             ground.mainTextureScale = new Vector2(6.25f, 6.25f);
+            // The thin strips flush with the asphalt at the road edge. They carry no
+            // vertex colours, so they cannot use the splat blend; this is its verge layer.
+            // Their UVs run 0.08 per relative unit across (0.15 wide) and 0.08 per metre
+            // along, hence the uneven scale: ~2 m repeats both ways.
+            var vergeDirt = BiomeSurface(BiomeMaterial("Forest Verge Dirt", "ForestFloor", "T_forest_verge_D", "T_forest_verge_N", Color.white, 0f, 0.1f),
+				"ForestFloor", "T_forest_verge_MSO", 0.3f);
+            vergeDirt.mainTextureScale = new Vector2(28f, 6.25f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
@@ -2238,6 +2249,17 @@ namespace RoadRage.UnityRemake
                 materials[name] = material;
             }
 
+            // Greenwood: fallen-leaf litter, dark humus in large patches, compacted dirt and
+            // gravel along the road edge. Baked by Tools/Blender/build_forest_floor.py.
+            // Each layer repeats at a different size (2 m, 2.7 m, 1.6 m) so no single
+            // tile grid lines up across the blend.
+            Splat("Forest Floor PBR", "ForestFloor", new[]
+            {
+                ("T_forest_litter", 0.5f, new Color(1.1f, 1.08f, 1.05f)),
+                ("T_forest_humus", 0.37f, new Color(1.15f, 1.12f, 1.1f)),
+                ("T_forest_verge", 0.62f, Color.white),
+            }, 0.1f);
+
             // Red Canyon: sand floor, rocky ground in patches, loose stones at the verge.
             Splat("Canyon Sand", "RedCanyon", new[]
             {
@@ -2375,10 +2397,33 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    -150f, -1.0f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
-                BuildRibbon($"Right {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    1.0f, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
+                // The verge layer (gravel/dirt) runs 6-32 m past the clearance in the open
+                // biomes. On Greenwood's narrow forest road that turned everything in view
+                // into gravel, so there it only covers the road edge to just past the rail
+                // and leaf litter takes over beyond.
+                //
+                // The ground ribbon only has a vertex every ~35 m across, which would
+                // smear that band over 35 m, so Greenwood gets a finely divided near strip
+                // (to 4x the half width, ~1 m per step) and the coarse ribbon beyond it.
+                // Both lie inside the flattened corridor where they meet, so the seam has
+                // no height step, and the weights come from the same function either side.
+                var biomeName = Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)];
+                var vergeFrom = biomeIndex == 0 ? -3f : 6f;
+                var vergeTo = biomeIndex == 0 ? 1.5f : 32f;
+                var nearEdge = biomeIndex == 0 ? 4f : 1f;
+                if (biomeIndex == 0)
+                {
+                    BuildRibbon($"Left {biomeName} Near Ground", -nearEdge, -1.0f, -0.05f, materials[groundName],
+                        sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
+                    BuildRibbon($"Right {biomeName} Near Ground", 1.0f, nearEdge, -0.05f, materials[groundName],
+                        sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
+                }
+                BuildRibbon($"Left {biomeName} Ground",
+                    -150f, -nearEdge, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                    vergeFrom: vergeFrom, vergeTo: vergeTo);
+                BuildRibbon($"Right {biomeName} Ground",
+                    nearEdge, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                    vergeFrom: vergeFrom, vergeTo: vergeTo);
             }
             // Main Asphalt Highway
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, materials["Road"], relative: true));
@@ -2429,8 +2474,8 @@ namespace RoadRage.UnityRemake
             else if (biomeIndex == 0) // Greenwood Forest
             {
                 // Forest Litter & Dirt Verge
-                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Verge Dirt"], relative: true);
             }
             else
             {
@@ -2444,10 +2489,15 @@ namespace RoadRage.UnityRemake
             // near-black flanked by yellow paint blends into one muddy band at speed,
             // which is not what a central reservation looks like from a car. A median
             // that has to be explained is worse than paint that does not.
-            BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
-            BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
-            BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
-            BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
+            //
+            // Greenwood is an unmarked single-lane forest road: no paint at all.
+            if (biomeIndex != 0)
+            {
+                BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
+                BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
+                BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
+                BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
+            }
 
             var lanes = LaneCountFor(biomeIndex);
             if (lanes == 2)
@@ -2489,7 +2539,8 @@ namespace RoadRage.UnityRemake
         /// undulating ground. Road, shoulders and paint stay flat (displace = 0).
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
             Material material, float start = float.NaN, float end = float.NaN, float sampleStep = 6f,
-            bool relative = false, float displace = 0f, int lateralSegments = 1)
+            bool relative = false, float displace = 0f, int lateralSegments = 1,
+            float vergeFrom = 6f, float vergeTo = 32f)
         {
             // NaN means "this segment": ribbons are rebuilt per streamed chunk.
             if (float.IsNaN(start)) start = segStart - 2f;
@@ -2536,8 +2587,8 @@ namespace RoadRage.UnityRemake
                         var patch = TerrainNoise(p.x, p.z, 0.010f) * 0.5f + 0.5f;
                         var detail = TerrainNoise(p.x, p.z, 0.038f) * 0.5f + 0.5f;
                         var verge = 1f - Mathf.SmoothStep(0f, 1f,
-                            Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + 6f,
-                                RoadPath.ClearanceAt(distance) + 32f, Mathf.Abs(lateral)));
+                            Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + vergeFrom,
+                                RoadPath.ClearanceAt(distance) + vergeTo, Mathf.Abs(lateral)));
                         var w1 = Mathf.Clamp01((patch - 0.42f) * 2.6f) * (1f - verge * 0.7f);
                         var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
                         var w0 = Mathf.Max(0.02f, 1f - w1 - w2);

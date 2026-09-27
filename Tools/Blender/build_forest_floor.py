@@ -10,12 +10,18 @@ Runs without the Blender app, through Blender's Python module (needs Python 3.11
     python3.11 -m venv .venv && .venv/bin/pip install bpy==5.0.1
     .venv/bin/python Tools/Blender/build_forest_floor.py
 
-Output (./out_floor next to this script, or $RR_OUT):
-  T_forest_floor_D.png    base colour (sRGB)
-  T_forest_floor_N.png    tangent-space normal, OpenGL (+Y), Unity's convention
-  T_forest_floor_MSO.png  R=metallic G=occlusion A=smoothness, like the biome kits
-  preview.png             the tile repeated 3x3, to check for seams
-The game loads the three textures from Assets/Resources/Biomes/ForestFloor/Textures.
+Three variants are baked, one per layer of Greenwood's TerrainSplat ground:
+  litter  fallen leaves over soil - the base layer
+  humus   dark bare soil, sparse leaves, needles and twigs - large patches
+  verge   compacted dirt and fine gravel - the strip along the road
+
+Output per variant (./out_floor next to this script, or $RR_OUT):
+  T_forest_<variant>_D.png    base colour (sRGB)
+  T_forest_<variant>_N.png    tangent-space normal, OpenGL (+Y), Unity's convention
+  T_forest_<variant>_MSO.png  R=metallic G=occlusion A=smoothness, like the biome kits
+  preview_<variant>.png       the tile repeated 3x3, to check for seams
+The game loads them from Assets/Resources/Biomes/ForestFloor/Textures. RR_VARIANTS
+picks a subset, e.g. RR_VARIANTS=verge.
 """
 import bpy  # noqa: must load before bmesh
 import bmesh
@@ -35,6 +41,17 @@ MARGIN = 0.3        # items this close to an edge are repeated across it
 SEED = 7
 
 rng = random.Random(SEED)
+
+VARIANTS = {
+    # soil ramp (dark, light), leaves, needles, twigs, stones, stone size range,
+    # leaf colour scale (<1 darkens the litter)
+    "litter": dict(soil=((0.035, 0.024, 0.016), (0.13, 0.09, 0.055)), leaves=3400,
+                   needles=1600, twigs=26, stones=40, stone_size=(0.008, 0.03), leaf_scale=0.8),
+    "humus": dict(soil=((0.028, 0.02, 0.014), (0.085, 0.062, 0.042)), leaves=650,
+                  needles=3000, twigs=55, stones=70, stone_size=(0.006, 0.025), leaf_scale=0.7),
+    "verge": dict(soil=((0.075, 0.062, 0.05), (0.17, 0.145, 0.115)), leaves=260,
+                  needles=500, twigs=8, stones=1400, stone_size=(0.003, 0.012), leaf_scale=0.75),
+}
 
 
 def reset():
@@ -126,7 +143,7 @@ def tile_noise(nt, scale, detail=6.0, roughness=0.6, w_offset=0.0):
     return noise
 
 
-def soil_material():
+def soil_material(dark, light):
     m = bpy.data.materials.new("soil")
     nt = m.node_tree
     big = tile_noise(nt, 1.6, detail=8.0)
@@ -137,9 +154,9 @@ def soil_material():
     nt.links.new(big.outputs["Fac"], mix.inputs[2])
     ramp = node(nt, "ShaderNodeValToRGB")
     ramp.color_ramp.elements[0].position = 0.35
-    ramp.color_ramp.elements[0].color = (0.035, 0.024, 0.016, 1)
+    ramp.color_ramp.elements[0].color = (*dark, 1)
     ramp.color_ramp.elements[1].position = 0.95
-    ramp.color_ramp.elements[1].color = (0.13, 0.09, 0.055, 1)
+    ramp.color_ramp.elements[1].color = (*light, 1)
     nt.links.new(mix.outputs[0], ramp.inputs["Fac"])
     rough = node(nt, "ShaderNodeValue")
     rough.outputs[0].default_value = 0.95
@@ -302,19 +319,19 @@ def place(me, mat, x, y, z, rot_z, tilt=0.0, scale=1.0):
         ob["seed"] = seed
 
 
-def build_floor():
-    soil = soil_material()
+def build_floor(v):
+    soil = soil_material(*v["soil"])
     bpy.ops.mesh.primitive_plane_add(size=TILE * 3, location=(TILE / 2, TILE / 2, 0))
     plane = bpy.context.active_object
     plane.data.materials.append(soil)
 
-    leaf_mats = [leaf_material(i, c) for i, c in enumerate(LEAF_COLOURS)]
+    leaf_mats = [leaf_material(i, tuple(k * v["leaf_scale"] for k in c)) for i, c in enumerate(LEAF_COLOURS)]
     shapes = [leaf_mesh("oak", 0.075, 0.042, lobes=3), leaf_mesh("beech", 0.065, 0.036),
               leaf_mesh("birch", 0.045, 0.030), leaf_mesh("willow", 0.085, 0.018),
               leaf_mesh("broad", 0.095, 0.060, lobes=2)]
     needle = box_mesh("needle", 0.05, 0.0012, 0.0012)
     twigs = [twig_mesh(f"twig{i}", rng.uniform(0.12, 0.45), rng.uniform(0.003, 0.009)) for i in range(6)]
-    stones = [stone_mesh(f"stone{i}", rng.uniform(0.008, 0.03)) for i in range(5)]
+    stones = [stone_mesh(f"stone{i}", rng.uniform(*v["stone_size"])) for i in range(8)]
     needle_mat = flat_material("needle", (0.30, 0.17, 0.07), 0.8, 0.3)
     bark_mat = flat_material("bark", (0.16, 0.10, 0.06), 0.9, 0.3)
     stone_mat = flat_material("stone", (0.20, 0.19, 0.17), 0.85, 0.25)
@@ -334,7 +351,7 @@ def build_floor():
 
     placed = 0
     layer = 0.0
-    while placed < 3400:
+    while placed < v["leaves"]:
         x, y = rng.uniform(0, TILE), rng.uniform(0, TILE)
         if rng.random() > drift_density(x, y):
             continue
@@ -342,14 +359,14 @@ def build_floor():
         place(rng.choice(shapes), rng.choice(leaf_mats), x, y, 0.002 + layer,
               rng.uniform(0, 2 * math.pi), tilt=0.35, scale=rng.uniform(0.75, 1.3))
         placed += 1
-    for _ in range(1600):
+    for _ in range(v["needles"]):
         place(needle, needle_mat, rng.uniform(0, TILE), rng.uniform(0, TILE),
               0.0015 + rng.uniform(0, 0.012), rng.uniform(0, 2 * math.pi), tilt=0.1,
               scale=rng.uniform(0.7, 1.2))
-    for _ in range(26):
+    for _ in range(v["twigs"]):
         place(rng.choice(twigs), bark_mat, rng.uniform(0, TILE), rng.uniform(0, TILE),
               0.012, rng.uniform(0, 2 * math.pi), tilt=0.05)
-    for _ in range(40):
+    for _ in range(v["stones"]):
         place(rng.choice(stones), stone_mat, rng.uniform(0, TILE), rng.uniform(0, TILE),
               0.003, rng.uniform(0, 2 * math.pi))
 
@@ -413,9 +430,11 @@ def save(name, arr, colorspace):
     img.save()
 
 
-def main():
+def main(name):
+    global rng
+    rng = random.Random(f"{SEED}-{name}")
     scene = reset()
-    build_floor()
+    build_floor(VARIANTS[name])
     world = bpy.data.worlds.new("black")
     scene.world = world
     try:
@@ -439,18 +458,18 @@ def main():
     ao = render("ao", 32)
 
     albedo[..., 3] = 1.0
-    save("T_forest_floor_D", albedo, "sRGB")
+    save(f"T_forest_{name}_D", albedo, "sRGB")
     n = normal.copy()
     # Renormalise after anti-aliasing blended neighbouring normals together.
     v = n[..., :3] * 2 - 1
     v /= np.maximum(np.linalg.norm(v, axis=-1, keepdims=True), 1e-4)
     n[..., :3] = v * 0.5 + 0.5
     n[..., 3] = 1.0
-    save("T_forest_floor_N", n, "Non-Color")
+    save(f"T_forest_{name}_N", n, "Non-Color")
     mso = np.zeros_like(albedo)
     mso[..., 1] = ao[..., 0]
     mso[..., 3] = 1.0 - rough[..., 0]
-    save("T_forest_floor_MSO", mso, "Non-Color")
+    save(f"T_forest_{name}_MSO", mso, "Non-Color")
     for p in ("albedo", "rough", "normal", "ao"):
         os.remove(os.path.join(OUT, f"_{p}.png"))
 
@@ -462,10 +481,11 @@ def main():
     img = bpy.data.images.new("preview", prev.shape[1], prev.shape[0])
     img.colorspace_settings.name = "sRGB"
     img.pixels.foreach_set(prev.ravel())
-    img.filepath_raw = os.path.join(OUT, "preview.png")
+    img.filepath_raw = os.path.join(OUT, f"preview_{name}.png")
     img.file_format = "PNG"
     img.save()
-    print("RR_DONE")
+    print(f"RR_DONE {name}")
 
 
-main()
+for variant in os.environ.get("RR_VARIANTS", "litter,humus,verge").split(","):
+    main(variant.strip())
