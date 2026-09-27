@@ -137,7 +137,9 @@ namespace RoadRage.UnityRemake
         {
             get
             {
-                var edge = Mathf.Max(1f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - HalfWidth);
+                // LateralExtent, not HalfWidth: a wreck slewed across the road is wider
+                // than the car, and with its raw width its nose went through the rail.
+                var edge = Mathf.Max(1f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - LateralExtent);
                 return Mathf.Clamp(RoadPath.LaneLateral(RoadDistance, LaneFraction) + laneDrift + separation,
                                    -edge, edge);
             }

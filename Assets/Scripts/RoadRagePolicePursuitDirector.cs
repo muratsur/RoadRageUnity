@@ -510,6 +510,8 @@ namespace RoadRage.UnityRemake
         {
             VehicleContacts.ResolveOncePerFrame();
             if (!isWrecked) CheckTrafficImpact();
+            // The contact pass can shove a cruiser sideways; the road edge still holds.
+            LateralOffset = ClampToRoadEdge(LateralOffset);
             transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
         }
         // ------------------------------------------------------------------------
@@ -729,6 +731,18 @@ namespace RoadRage.UnityRemake
             return light;
         }
 
+        /// Keeps the hull on the road and shoulder, whatever pushes it. A wreck slid
+        /// sideways at 6.5 m/s with nothing stopping it, straight through the guard
+        /// rail and into the trees. Measured across the road with the wreck's spin, so
+        /// a cruiser slewed side-on stops with its nose at the rail, not its centre.
+        private float ClampToRoadEdge(float lateral)
+        {
+            var yaw = wreckYaw * Mathf.Deg2Rad;
+            var across = Mathf.Abs(hullHalfLength * Mathf.Sin(yaw)) + Mathf.Abs(hullHalfWidth * Mathf.Cos(yaw));
+            var edge = Mathf.Max(0.5f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - across);
+            return Mathf.Clamp(lateral, -edge, edge);
+        }
+
         private float wreckSlideDir;
         private float wreckYaw;
         private float targetWreckYaw;
@@ -741,6 +755,7 @@ namespace RoadRage.UnityRemake
                 SpeedKph = Mathf.MoveTowards(SpeedKph, 0f, 45f * Time.deltaTime);
                 LateralOffset += wreckSlideDir * 6.5f * Time.deltaTime;
                 wreckYaw = Mathf.MoveTowards(wreckYaw, targetWreckYaw, 180f * Time.deltaTime);
+                LateralOffset = ClampToRoadEdge(LateralOffset);
                 var forwardMove = SpeedKph / 3.6f * Time.deltaTime;
                 RoadDistance = RoadPath.Wrap(RoadDistance + forwardMove);
                 transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
