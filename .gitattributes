@@ -36,3 +36,5 @@ Assets/Resources/Biomes/ForestFloor/**/*.png -filter binary
 # *.png / *.fbx LFS rules above for this folder only.
 Assets/Resources/Biomes/Guardrail/**/*.png -filter binary
 Assets/Resources/Biomes/Guardrail/**/*.fbx -filter binary
+# Baked road centreline (Tools/Terrain/build_b500_road.py): raw binary, no line-ending conversion.
+Assets/Resources/Biomes/Routes/*.bytes binary

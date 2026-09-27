@@ -50,11 +50,16 @@ namespace RoadRage.UnityRemake
         /// historically wrapped stays continuous.
         public static float Wrap(float distance) => distance;
 
+        /// A real road, when the biome has one (Greenwood: the B500). It replaces the
+        /// sines below for both the bends and the hills. See RoadRoute.
+        public static RoadRoute Route;
+
         /// Sum of sines with incommensurate wavelengths: continuous for unbounded
         /// distance and with no period a player could notice (the shortest common
         /// repeat is far beyond any run length).
         public static float CenterX(float distance)
         {
+            if (Route != null) return Route.X(distance);
             // Scaled, not re-shaped. The three sines stay in the same proportion so a
             // bend still has the same character - a long sweep with a shorter wander on
             // top - and only its amplitude changes. Changing the wavelengths per biome
@@ -68,6 +73,7 @@ namespace RoadRage.UnityRemake
         /// stay modest because the chase camera sits low and steep grades hide the road.
         public static float CenterY(float distance)
         {
+            if (Route != null) return Route.Y(distance);
             var scale = ElevationScaleAt(distance);
             return (9f * Mathf.Sin(distance / 197f + 0.9f)
                 + 3.5f * Mathf.Sin(distance / 83f - 0.3f)) * scale;
@@ -112,6 +118,72 @@ namespace RoadRage.UnityRemake
         {
             var gap = direction >= 0f ? to - from : from - to;
             return gap < 0f ? float.PositiveInfinity : gap;
+        }
+    }
+
+    /// A road centreline baked from real map data by Tools/Terrain/build_b500_road.py:
+    /// x (right) and y (up) at even steps of road distance (world Z). The tool has
+    /// already fitted the real road to what this game's road can be - heading within
+    /// ~40 degrees of straight ahead, radius at least ~50 m, hills within ~30 m of
+    /// the horizon - and eased both ends flat and straight, so past its end the road
+    /// runs back the other way (Freudenstadt to Baden-Baden) and so on, without a
+    /// kink at either turnaround.
+    public sealed class RoadRoute
+    {
+        private readonly float[] xs;
+        private readonly float[] ys;
+        private readonly float step;
+        private readonly float length;
+
+        private RoadRoute(float[] xs, float[] ys, float step)
+        {
+            this.xs = xs;
+            this.ys = ys;
+            this.step = step;
+            length = (xs.Length - 1) * step;
+        }
+
+        /// Reads the "RRRT" format the tool writes; null if the asset is missing or
+        /// malformed, and the caller keeps the procedural road.
+        public static RoadRoute Load(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return null;
+            var bytes = asset.bytes;
+            if (bytes.Length < 12 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'R' || bytes[3] != 'T')
+                return null;
+            var count = System.BitConverter.ToInt32(bytes, 4);
+            var step = System.BitConverter.ToSingle(bytes, 8);
+            if (count < 4 || step <= 0f || bytes.Length < 12 + count * 8) return null;
+            var xs = new float[count];
+            var ys = new float[count];
+            for (var i = 0; i < count; i++)
+            {
+                xs[i] = System.BitConverter.ToSingle(bytes, 12 + i * 8);
+                ys[i] = System.BitConverter.ToSingle(bytes, 16 + i * 8);
+            }
+            return new RoadRoute(xs, ys, step);
+        }
+
+        public float X(float distance) => Sample(xs, distance);
+        public float Y(float distance) => Sample(ys, distance);
+
+        /// There and back: distance folds into [0, length], mirrored on every other
+        /// pass (and behind the start). Catmull-Rom between samples, so the road's
+        /// heading is continuous and ribbons sampled finer than the step stay smooth.
+        private float Sample(float[] v, float distance)
+        {
+            var u = Mathf.Repeat(distance, 2f * length);
+            if (u > length) u = 2f * length - u;
+            var f = u / step;
+            var i = Mathf.Min((int)f, v.Length - 2);
+            var t = f - i;
+            var p0 = v[Mathf.Max(i - 1, 0)];
+            var p1 = v[i];
+            var p2 = v[i + 1];
+            var p3 = v[Mathf.Min(i + 2, v.Length - 1)];
+            return 0.5f * (2f * p1 + (-p0 + p2) * t + (2f * p0 - 5f * p1 + 4f * p2 - p3) * t * t
+                           + (-p0 + 3f * p1 - 3f * p2 + p3) * t * t * t);
         }
     }
 
