@@ -57,7 +57,7 @@ END_RADIUS = 400.0                  # m
 # Geroldsau, past Baden-Baden's streets, and stops short of Freudenstadt's. The
 # towns are built-up land the game has no buildings for - it drew them as bare
 # ground, and every run started there.
-TRIM_START_KM = 7.5
+TRIM_START_KM = 8.4
 TRIM_END_KM = 2.0
 STEP = 5.0                          # m, resampling along the real road
 OUT_STEP = 4.0                      # m of Z between output samples
@@ -91,7 +91,7 @@ COVER_CLASSES = {10: 1, 20: 2, 30: 2, 40: 2, 60: 2, 90: 2, 95: 1, 100: 2, 50: 3,
 # Named stops, snapped to the nearest point of the road. Shown as the player
 # passes them.
 PLACES = [
-    ("Schwarzwaldhochstraße B500", 48.7212, 8.2417),
+    ("Schwarzwaldhochstraße B500", 48.7166, 8.2313),
     ("Bühlerhöhe", 48.6787, 8.2345),
     ("Sand", 48.6560, 8.2350),
     ("Hundseck", 48.6450, 8.2210),

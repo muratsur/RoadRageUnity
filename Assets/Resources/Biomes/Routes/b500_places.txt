@@ -1,12 +1,12 @@
-478 Schwarzwaldhochstraße B500
-7955 Bühlerhöhe
-10796 Sand
-12648 Hundseck
-14987 Unterstmatt
-19878 Mummelsee
-25381 Ruhestein
-28208 Schliffkopf
-32817 Zuflucht
-35580 Alexanderschanze
-39230 Kniebis
-47467 Freudenstadt 2 km
+600 Schwarzwaldhochstraße B500
+7136 Bühlerhöhe
+9977 Sand
+11829 Hundseck
+14168 Unterstmatt
+19058 Mummelsee
+24561 Ruhestein
+27389 Schliffkopf
+31997 Zuflucht
+34761 Alexanderschanze
+38411 Kniebis
+46647 Freudenstadt 2 km
