@@ -1085,6 +1085,16 @@ namespace RoadRage.UnityRemake
             var road = BiomeSurface(BiomeMaterial("Road", "Shared", "T_asphalt_D", "T_asphalt_N",
                 new Color(0.42f, 0.44f, 0.47f), 0.03f, 0.22f), "Shared", "T_asphalt_MSO", 0.55f);
             road.mainTextureScale = new Vector2(4.5f, 3.2f);
+            // Greenwood's own road surface (Tools/Road/build_forest_road.py): a worn
+            // country road laid out edge to edge - wheel tracks where tyres run, a sealed
+            // centre joint, edges crumbling into the verge. The ribbon's UVs run 0.16 across
+            // the carriageway (0.08 per relative unit, -1..1) and 0.08 per metre along, so
+            // 6.25 fits the texture exactly across and 1.0417 repeats it every 12 m.
+            // The colour and smoothness are all in the maps: white tint, smoothness 1 so
+            // the MSO alpha is used as is.
+            var forestRoad = BiomeSurface(BiomeMaterial("Forest Road", "ForestRoad", "T_forest_road_D", "T_forest_road_N",
+                Color.white, 0f, 1f), "ForestRoad", "T_forest_road_MSO", 1f);
+            forestRoad.mainTextureScale = new Vector2(6.25f, 1f / (0.08f * 12f));
             var shoulder = BiomeSurface(BiomeMaterial("Shoulder", "Shared", "T_asphalt_D", "T_asphalt_N",
                 new Color(0.32f, 0.34f, 0.34f), 0f, 0.1f), "Shared", "T_asphalt_MSO", 0.45f);
             shoulder.mainTextureScale = new Vector2(1.4f, 3.2f);
@@ -1636,6 +1646,7 @@ namespace RoadRage.UnityRemake
         private static readonly string[] WetRoadMaterialNames =
         {
                       "Road",
+                      "Forest Road",
                       "Shoulder"
         };
 
@@ -2376,7 +2387,8 @@ namespace RoadRage.UnityRemake
                     1.0f, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
             }
             // Main Asphalt Highway
-            EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, materials["Road"], relative: true));
+            var roadMaterial = biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
+            EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
 
             // Road Edge & Terrain Integration per Biome Type:
             var hasCityCurbs = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3;
