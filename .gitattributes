@@ -18,6 +18,9 @@
 *.tga filter=lfs diff=lfs merge=lfs -text
 *.tif filter=lfs diff=lfs merge=lfs -text
 *.tiff filter=lfs diff=lfs merge=lfs -text
+# Kept out of LFS: the repository's LFS budget is exhausted, and these are small
+# generated textures (Tools/Blender/build_forest_floor.py).
+Assets/Resources/Biomes/ForestFloor/**/*.png -filter binary
 *.cubemap filter=lfs diff=lfs merge=lfs -text
 
 # Binary Assets & Packages

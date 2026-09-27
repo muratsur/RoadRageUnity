@@ -1055,14 +1055,30 @@ namespace RoadRage.UnityRemake
 			// material, so "Forest Floor PBR" was never in the dictionary and the ground fell
 			// back to a flat brown material. Naming it correctly fixes the brown ground and
 			// leaves "Forest Grass" to be solely the cutout foliage created later.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RedCanyon", "T_grass_D", "T_grass_N", new Color(0.30f, 0.31f, 0.19f), 0f, 0.06f),
-				"RunicForest", "T_ground_02_MSO", 0.35f);
-            // Ground tiling. The previous 90x420 was so dense - and so stretched along the
-            // road (1:4.7) - that the grass texture read as a green corduroy of stripes/
-            // "layers" beside the road rather than ground. Dialled down and made less
-            // stretched (20x40) so it reads as a tiled forest floor, not stripes, while still
-            // avoiding the "one flat wash" the tight tiling was reacting to.
-            ground.mainTextureScale = new Vector2(20f, 40f);
+			//
+			// The albedo was RedCanyon/T_grass_D, which the texture dedupe maps to
+			// ElderTreeGate/T_grass_D - a sheet of grass-blade cards on black, made for
+			// cutout foliage. Tiled across the ground it read as fake striped lawn, and
+			// the kits' painted soil textures still read as one flat pattern. The floor
+			// is now baked from a modelled forest floor - soil under individual fallen
+			// leaves, needles, twigs and stones (Tools/Blender/build_forest_floor.py) -
+			// so the colour, normal and occlusion come from real overlapping geometry.
+			//
+			// This single-texture version is only the fallback: BuildSplatMaterials
+			// replaces "Forest Floor PBR" with a three-layer blend (litter, humus, verge
+			// dirt) whenever the TerrainSplat shader is available.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestFloor", "T_forest_litter_D", "T_forest_litter_N", Color.white, 0f, 0.1f),
+				"ForestFloor", "T_forest_litter_MSO", 0.35f);
+            // One texture repeat covers 2 m of floor; the ribbon UVs run 0.08 per metre.
+            // Square, so leaves are not stretched along the road.
+            ground.mainTextureScale = new Vector2(6.25f, 6.25f);
+            // The thin strips flush with the asphalt at the road edge. They carry no
+            // vertex colours, so they cannot use the splat blend; this is its verge layer.
+            // Their UVs run 0.08 per relative unit across (0.15 wide) and 0.08 per metre
+            // along, hence the uneven scale: ~2 m repeats both ways.
+            var vergeDirt = BiomeSurface(BiomeMaterial("Forest Verge Dirt", "ForestFloor", "T_forest_verge_D", "T_forest_verge_N", Color.white, 0f, 0.1f),
+				"ForestFloor", "T_forest_verge_MSO", 0.3f);
+            vergeDirt.mainTextureScale = new Vector2(28f, 6.25f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
@@ -1308,16 +1324,16 @@ namespace RoadRage.UnityRemake
             BiomeCutoutMaterial("Forest Branch", "RunicForest", "T_branch_D", "T_branch_N",
                 new Color(0.70f, 0.80f, 0.58f), 0.36f);
             BiomeCutoutMaterial("Forest Undergrowth", "RunicForest", "T_vetegation_atlas_basecolor",
-                "T_vetegation_atlas_normal", new Color(0.68f, 0.82f, 0.54f), 0.34f);
+                "T_vetegation_atlas_normal", new Color(0.58f, 0.66f, 0.48f), 0.34f);
             BiomeCutoutMaterial("Forest Flowers", "RunicForest", "T_flowers_D", "T_flowers_N",
                 new Color(0.86f, 0.86f, 0.70f), 0.36f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
             BiomeCutoutMaterial("Forest Bush", "ForestVillage", "T_bush_D", "T_bush_N",
-                new Color(0.60f, 0.74f, 0.48f), 0.36f);
+                new Color(0.54f, 0.62f, 0.44f), 0.36f);
             BiomeCutoutMaterial("Forest Fern", "ForestVillage", "T_plant_D", "T_plant_N",
-                new Color(0.62f, 0.80f, 0.50f), 0.34f);
+                new Color(0.56f, 0.66f, 0.46f), 0.34f);
             BiomeSurface(BiomeMaterial("Forest Roots", "ForestVillage", "T_roots_D", "T_roots_N",
                 new Color(0.56f, 0.48f, 0.40f), 0f, 0.18f), "ForestVillage", "T_roots_MSO", 0.5f);
             // W-beam guard rail built in Blender (Tools/Blender/build_guardrail.py). Its
@@ -2233,6 +2249,17 @@ namespace RoadRage.UnityRemake
                 materials[name] = material;
             }
 
+            // Greenwood: fallen-leaf litter, dark humus in large patches, compacted dirt and
+            // gravel along the road edge. Baked by Tools/Blender/build_forest_floor.py.
+            // Each layer repeats at a different size (2 m, 2.7 m, 1.6 m) so no single
+            // tile grid lines up across the blend.
+            Splat("Forest Floor PBR", "ForestFloor", new[]
+            {
+                ("T_forest_litter", 0.5f, new Color(1.1f, 1.08f, 1.05f)),
+                ("T_forest_humus", 0.37f, new Color(1.15f, 1.12f, 1.1f)),
+                ("T_forest_verge", 0.62f, Color.white),
+            }, 0.1f);
+
             // Red Canyon: sand floor, rocky ground in patches, loose stones at the verge.
             Splat("Canyon Sand", "RedCanyon", new[]
             {
@@ -2370,10 +2397,33 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    -150f, -1.0f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
-                BuildRibbon($"Right {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
-                    1.0f, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true);
+                // The verge layer (gravel/dirt) runs 6-32 m past the clearance in the open
+                // biomes. On Greenwood's narrow forest road that turned everything in view
+                // into gravel, so there it only covers the road edge to just past the rail
+                // and leaf litter takes over beyond.
+                //
+                // The ground ribbon only has a vertex every ~35 m across, which would
+                // smear that band over 35 m, so Greenwood gets a finely divided near strip
+                // (to 4x the half width, ~1 m per step) and the coarse ribbon beyond it.
+                // Both lie inside the flattened corridor where they meet, so the seam has
+                // no height step, and the weights come from the same function either side.
+                var biomeName = Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)];
+                var vergeFrom = biomeIndex == 0 ? -3f : 6f;
+                var vergeTo = biomeIndex == 0 ? 1.5f : 32f;
+                var nearEdge = biomeIndex == 0 ? 4f : 1f;
+                if (biomeIndex == 0)
+                {
+                    BuildRibbon($"Left {biomeName} Near Ground", -nearEdge, -1.0f, -0.05f, materials[groundName],
+                        sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
+                    BuildRibbon($"Right {biomeName} Near Ground", 1.0f, nearEdge, -0.05f, materials[groundName],
+                        sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
+                }
+                BuildRibbon($"Left {biomeName} Ground",
+                    -150f, -nearEdge, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                    vergeFrom: vergeFrom, vergeTo: vergeTo);
+                BuildRibbon($"Right {biomeName} Ground",
+                    nearEdge, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                    vergeFrom: vergeFrom, vergeTo: vergeTo);
             }
             // Main Asphalt Highway
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, materials["Road"], relative: true));
@@ -2385,6 +2435,10 @@ namespace RoadRage.UnityRemake
             // place the lights - a stop line nobody can see a reason for reads as traffic
             // randomly halting on an open road.
             TrafficCarController.SignalsActive = hasCityCurbs;
+            // A head-on wreck on a one-lane road has nowhere to be passed, so traffic
+            // behind it stacks into a wall across the whole carriageway.
+            TrafficCarController.HeadOnWrecksAllowed = LaneCountFor(biomeIndex) >= 2;
+            TrafficCarController.NarrowRoad = LaneCountFor(biomeIndex) < 2;
             if (hasCityCurbs)
             {
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];
@@ -2421,10 +2475,8 @@ namespace RoadRage.UnityRemake
             else if (biomeIndex == 0) // Greenwood Forest
             {
                 // Forest Litter & Dirt Verge
-                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Left Forest Grass Stripe", -1.7f, -1.1f, 0.045f, materials["Forest Floor PBR"], relative: true);
-                BuildRibbon("Right Forest Grass Stripe", 1.1f, 1.7f, 0.045f, materials["Forest Floor PBR"], relative: true);
+                BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
+                BuildRibbon("Right Forest Verge", 1.0f, 1.15f, 0.02f, materials["Forest Verge Dirt"], relative: true);
             }
             else
             {
@@ -2438,10 +2490,15 @@ namespace RoadRage.UnityRemake
             // near-black flanked by yellow paint blends into one muddy band at speed,
             // which is not what a central reservation looks like from a car. A median
             // that has to be explained is worse than paint that does not.
-            BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
-            BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
-            BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
-            BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
+            //
+            // Greenwood is an unmarked single-lane forest road: no paint at all.
+            if (biomeIndex != 0)
+            {
+                BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
+                BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
+                BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
+                BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
+            }
 
             var lanes = LaneCountFor(biomeIndex);
             if (lanes == 2)
@@ -2483,7 +2540,8 @@ namespace RoadRage.UnityRemake
         /// undulating ground. Road, shoulders and paint stay flat (displace = 0).
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
             Material material, float start = float.NaN, float end = float.NaN, float sampleStep = 6f,
-            bool relative = false, float displace = 0f, int lateralSegments = 1)
+            bool relative = false, float displace = 0f, int lateralSegments = 1,
+            float vergeFrom = 6f, float vergeTo = 32f)
         {
             // NaN means "this segment": ribbons are rebuilt per streamed chunk.
             if (float.IsNaN(start)) start = segStart - 2f;
@@ -2530,8 +2588,8 @@ namespace RoadRage.UnityRemake
                         var patch = TerrainNoise(p.x, p.z, 0.010f) * 0.5f + 0.5f;
                         var detail = TerrainNoise(p.x, p.z, 0.038f) * 0.5f + 0.5f;
                         var verge = 1f - Mathf.SmoothStep(0f, 1f,
-                            Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + 6f,
-                                RoadPath.ClearanceAt(distance) + 32f, Mathf.Abs(lateral)));
+                            Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + vergeFrom,
+                                RoadPath.ClearanceAt(distance) + vergeTo, Mathf.Abs(lateral)));
                         var w1 = Mathf.Clamp01((patch - 0.42f) * 2.6f) * (1f - verge * 0.7f);
                         var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
                         var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
@@ -6296,7 +6354,6 @@ namespace RoadRage.UnityRemake
             "RunicForest|Vegetation/SM_plant_ground_02",
             "RunicForest|Vegetation/SM_bush_01",
             "RunicForest|Vegetation/SM_bush_02",
-            "RunicForest|Flowers/SM_grass_01",
             "RunicForest|Flowers/SM_dead_grass",
             "ForestVillage|Vegetation/SM_plant",
             "ForestVillage|Vegetation/SM_plant1",
@@ -6827,16 +6884,16 @@ namespace RoadRage.UnityRemake
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
-            ScatterBand(1.3f, 7.4f, 13f, (d, l, s) =>
+            ScatterBand(1.8f, 7.4f, 13f, (d, l, s) =>
                 ForestPlant(d, l, 0.9f, 1.7f, "Verge Undergrowth"));
             ScatterBand(1.7f, 13f, 26f, (d, l, s) =>
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
             ScatterBand(2.3f, 26f, 55f, (d, l, s) =>
                 ForestPlant(d, l, 1.2f, 2.4f, "Deep Undergrowth"));
-            ScatterBand(1.9f, 7.2f, 20f, (d, l, s) =>
-            {
-                return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
-            });
+            // The "Forest Grass" band that ran 7-20 m out is gone: a fourth dense layer of
+            // plants over the same verge, it is what made the roadside read as a green
+            // carpet. The grass clump is also out of ForestPlants; the undergrowth bands
+            // above, ferns and bushes still carry the greenery.
 
             // Raised roadside grass-bank ribbons removed - they stacked into flat green
             // terraces/"layers" beside the road. The Forest Floor PBR ground plane already
@@ -6881,7 +6938,7 @@ namespace RoadRage.UnityRemake
                     d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
             ScatterBand(3.5f, 24f, 70f, (d, l, s) =>
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
-            ScatterBand(1.6f, 18f, 30f, (d, l, s) =>
+            ScatterBand(2.2f, 18f, 30f, (d, l, s) =>
                 ForestPlant(d, l, 0.7f, 1.5f, "Forest Fern Dense"));
         }
 
@@ -7504,6 +7561,19 @@ namespace RoadRage.UnityRemake
         private Transform livingTraffic;
         private float trafficTopUpTimer;
 
+        /// Share of the full traffic count a road carries. A single lane each way has
+        /// nowhere to pass, so it takes a third of a six-lane highway's traffic.
+        private static float TrafficScaleFor(int laneCount) =>
+            laneCount >= 3 ? 1f : laneCount == 2 ? 0.65f : 0.35f;
+
+        /// Weaving and wrong-way driving put a car across the only lane of a single-lane
+        /// road, so there they become speeding: still an offender worth chasing.
+        private static TrafficCarController.Offence OffenceForRoad(TrafficCarController.Offence offence, int laneCount) =>
+            laneCount < 2 && (offence == TrafficCarController.Offence.WrongWay ||
+                              offence == TrafficCarController.Offence.Weaving)
+                ? TrafficCarController.Offence.Speeding
+                : offence;
+
         /// Cars on the road at full intensity versus at the start. Twelve is a busy
         /// highway to begin with; by the time a run is going well it should be work.
         private const int BaseTrafficCount = 12;
@@ -7523,11 +7593,14 @@ namespace RoadRage.UnityRemake
             if (trafficTopUpTimer > 0f) return;
             trafficTopUpTimer = 2.5f;
 
+            // Both ends scale with the carriageway. Only the ceiling used to, so at the
+            // start of a run the target was twelve cars on any road - the top-up added a
+            // car every 2.5 s until Greenwood's single lane held twelve, and they bunched
+            // into knots with nowhere to pass.
             var laneCount = LaneCountFor(BiomeIndexAt(TrafficCarController.PlayerDistance));
-            var ceiling = laneCount >= 3 ? PeakTrafficCount
-                        : laneCount == 2 ? Mathf.RoundToInt(PeakTrafficCount * 0.65f)
-                        : Mathf.RoundToInt(PeakTrafficCount * 0.45f);
-            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount, ceiling, GameState.RunIntensity));
+            var roadScale = TrafficScaleFor(laneCount);
+            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount * roadScale, PeakTrafficCount * roadScale,
+                GameState.RunIntensity));
             if (TrafficCarController.All.Count >= target) return;
 
             // Spawned well ahead so a car never appears in view.
@@ -7544,7 +7617,7 @@ namespace RoadRage.UnityRemake
             // hostile rather than merely more crowded.
             var violatorOdds = Mathf.Lerp(0.28f, 0.55f, GameState.RunIntensity);
             var offence = Random.value < violatorOdds
-                ? OffenceCycle[index % OffenceCycle.Length]
+                ? OffenceForRoad(OffenceCycle[index % OffenceCycle.Length], laneCount)
                 : TrafficCarController.Offence.None;
             var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
                         * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
@@ -7604,9 +7677,7 @@ namespace RoadRage.UnityRemake
             // Twelve cars on a six-lane highway is traffic; the same twelve on a two-lane
             // country road is a wall you cannot get through. Scale with the carriageway.
             var laneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var trafficCount = laneCount >= 3 ? lanes.Length
-                             : laneCount == 2 ? Mathf.RoundToInt(lanes.Length * 0.65f)
-                             : Mathf.RoundToInt(lanes.Length * 0.45f);
+            var trafficCount = Mathf.RoundToInt(lanes.Length * TrafficScaleFor(laneCount));
             var brutes = 0;
             var enforcers = 0;
             var cabs = 0;
@@ -7616,7 +7687,7 @@ namespace RoadRage.UnityRemake
                 var speed = direction > 0f ? 68f + i % 5 * 14f : 95f + i % 4 * 15f;
                 var violatorEvery = ArcadeCarController.CinematicPilot ? 2 : 3;
                 var offence = i % violatorEvery == 1
-                    ? OffenceCycle[(i / violatorEvery) % OffenceCycle.Length]
+                    ? OffenceForRoad(OffenceCycle[(i / violatorEvery) % OffenceCycle.Length], laneCount)
                     : TrafficCarController.Offence.None;
 
                 var role = TrafficCarController.VehicleRole.Standard;
