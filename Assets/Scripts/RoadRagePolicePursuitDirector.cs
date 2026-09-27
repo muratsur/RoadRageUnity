@@ -283,8 +283,9 @@ namespace RoadRage.UnityRemake
         private void SpawnPoliceUnit()
         {
             var slot = activePolice.Count;
-            var spawnBehind = Random.value > 0.35f;
-            var distOffset = spawnBehind ? -45f - slot * 8f : 65f + slot * 12f;
+            // Always from behind, out of the chase camera's view: a cruiser spawned 65 m
+            // ahead appeared out of thin air in the middle of the road.
+            var distOffset = -45f - slot * 8f;
             var spawnDist = RoadPath.Wrap(playerController.RoadDistance + distOffset);
             var laneSign = (slot % 2 == 0) ? -1f : 1f;
             var halfW = RoadPath.HalfWidthAt(spawnDist);
@@ -610,6 +611,23 @@ namespace RoadRage.UnityRemake
                 }
                 foreach (var col in vehicleInstance.GetComponentsInChildren<Collider>()) Destroy(col);
                 NormalizeVehicleVisual(vehicleInstance, 4.8f);
+                // Centre the model on the cruiser. The pack's pivots are not at the middle
+                // of the car, and unlike traffic (whose NormalizeVehicleVisual recentres)
+                // this was only scaled - so the visible cruiser sat a metre or two ahead of
+                // or behind the hull the contact pass separates, and was drawn inside the
+                // car in front however correctly the hulls were kept apart.
+                var modelBounds = default(Bounds);
+                var found = false;
+                foreach (var r in vehicleInstance.GetComponentsInChildren<Renderer>())
+                {
+                    if (!found) { modelBounds = r.bounds; found = true; }
+                    else modelBounds.Encapsulate(r.bounds);
+                }
+                if (found)
+                {
+                    var centre = transform.InverseTransformPoint(modelBounds.center);
+                    vehicleInstance.transform.localPosition -= new Vector3(centre.x, 0f, centre.z);
+                }
                 // Hull follows the mesh that was just normalised, so the cruiser
                 // collides as the car you can see rather than as a fixed guess.
                 hullHalfLength = 4.8f * 0.5f;

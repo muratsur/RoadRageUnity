@@ -550,7 +550,14 @@ namespace RoadRage.UnityRemake
         }
         private const float RecycleBehind = 140f;
         private const float WreckRecycleBehind = 70f;
-        private const float RecycleAhead = 300f;
+        /// Where recycled traffic reappears: far enough ahead to be a few pixels in the
+        /// fog rather than a car materialising on the road. It used to be 165-300 m
+        /// (420 m oncoming), in plain view in Greenwood. Chunks are built six ahead, so
+        /// the road is always there at this distance.
+        private const float SpawnAheadMin = 560f;
+        private const float SpawnAheadMax = 740f;
+        /// Beyond this a car is pulled back into the window above.
+        private const float FarAheadLimit = 900f;
         /// A recycled car rerolls its allegiance: the player outruns same-direction
         /// traffic within seconds, so without a fresh supply of rule-breakers the road
         /// ahead turns into long empty stretches with nobody to hunt.
@@ -572,7 +579,7 @@ namespace RoadRage.UnityRemake
                 // Same-direction traffic overtaken by the player reappears up ahead.
                 if (RoadDistance < behindLimit)
                 {
-                    RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.55f, RecycleAhead);
+                    RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                     relocated = true;
                 }
             }
@@ -581,25 +588,28 @@ namespace RoadRage.UnityRemake
                 // Oncoming traffic that has passed comes back from further up the road.
                 if (RoadDistance < behindLimit)
                 {
-                    RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.7f, RecycleAhead * 1.4f);
+                    RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                     relocated = true;
                 }
             }
 
-            if (RoadDistance > PlayerDistance + RecycleAhead * 1.6f)
+            if (RoadDistance > PlayerDistance + FarAheadLimit)
             {
-                RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.4f, RecycleAhead);
+                RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                 relocated = true;
             }
 
             // On a single-lane road a wreck is a wall: everything behind it queues into
             // a knot the player then drives into, which ended runs within a kilometre.
-            // Clear it after a few seconds - long enough to see the crash - by sending it
-            // up the road through the normal recycle event, which also revives it.
+            // Crash() slides it off to its own road edge, where it no longer blocks the
+            // lane; after a few seconds it is recycled up the road - but only once it is
+            // out of view, behind the camera or far ahead. Recycling it on a timer made
+            // crashed cars vanish in front of the player.
             wreckAge = IsWreck ? wreckAge + Time.deltaTime : 0f;
-            if (!relocated && NarrowRoad && IsWreck && wreckAge > NarrowWreckClearSeconds)
+            var outOfView = RoadDistance < PlayerDistance - 15f || RoadDistance > PlayerDistance + SpawnAheadMin;
+            if (!relocated && NarrowRoad && IsWreck && wreckAge > NarrowWreckClearSeconds && outOfView)
             {
-                RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.55f, RecycleAhead);
+                RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                 wreckAge = 0f;
                 relocated = true;
             }
@@ -921,7 +931,10 @@ namespace RoadRage.UnityRemake
             wreckYawTarget = sign * variation;
             WreckYaw = sign * variation * 0.2f;
             wreckRoll = sign * 2.5f;
-            // Shove smoothly towards road shoulder
+            // Shove smoothly towards road shoulder. On a single-lane road always towards
+            // the car's own edge: shoved the other way it slid across the only other lane
+            // and blocked the road.
+            if (NarrowRoad) sign = LaneOffset >= 0f ? 1f : -1f;
             wreckSlideTarget = Mathf.Clamp(laneDrift + sign * 5.2f, -8f, 8f);
         }
 
