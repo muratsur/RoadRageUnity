@@ -2438,6 +2438,7 @@ namespace RoadRage.UnityRemake
             // A head-on wreck on a one-lane road has nowhere to be passed, so traffic
             // behind it stacks into a wall across the whole carriageway.
             TrafficCarController.HeadOnWrecksAllowed = LaneCountFor(biomeIndex) >= 2;
+            TrafficCarController.NarrowRoad = LaneCountFor(biomeIndex) < 2;
             if (hasCityCurbs)
             {
                 var curbMat = biomeIndex == 8 ? materials["Cyber Trim"] : materials["City Asphalt Trim"];
@@ -7441,6 +7442,19 @@ namespace RoadRage.UnityRemake
         private Transform livingTraffic;
         private float trafficTopUpTimer;
 
+        /// Share of the full traffic count a road carries. A single lane each way has
+        /// nowhere to pass, so it takes a third of a six-lane highway's traffic.
+        private static float TrafficScaleFor(int laneCount) =>
+            laneCount >= 3 ? 1f : laneCount == 2 ? 0.65f : 0.35f;
+
+        /// Weaving and wrong-way driving put a car across the only lane of a single-lane
+        /// road, so there they become speeding: still an offender worth chasing.
+        private static TrafficCarController.Offence OffenceForRoad(TrafficCarController.Offence offence, int laneCount) =>
+            laneCount < 2 && (offence == TrafficCarController.Offence.WrongWay ||
+                              offence == TrafficCarController.Offence.Weaving)
+                ? TrafficCarController.Offence.Speeding
+                : offence;
+
         /// Cars on the road at full intensity versus at the start. Twelve is a busy
         /// highway to begin with; by the time a run is going well it should be work.
         private const int BaseTrafficCount = 12;
@@ -7460,11 +7474,14 @@ namespace RoadRage.UnityRemake
             if (trafficTopUpTimer > 0f) return;
             trafficTopUpTimer = 2.5f;
 
+            // Both ends scale with the carriageway. Only the ceiling used to, so at the
+            // start of a run the target was twelve cars on any road - the top-up added a
+            // car every 2.5 s until Greenwood's single lane held twelve, and they bunched
+            // into knots with nowhere to pass.
             var laneCount = LaneCountFor(BiomeIndexAt(TrafficCarController.PlayerDistance));
-            var ceiling = laneCount >= 3 ? PeakTrafficCount
-                        : laneCount == 2 ? Mathf.RoundToInt(PeakTrafficCount * 0.65f)
-                        : Mathf.RoundToInt(PeakTrafficCount * 0.45f);
-            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount, ceiling, GameState.RunIntensity));
+            var roadScale = TrafficScaleFor(laneCount);
+            var target = Mathf.RoundToInt(Mathf.Lerp(BaseTrafficCount * roadScale, PeakTrafficCount * roadScale,
+                GameState.RunIntensity));
             if (TrafficCarController.All.Count >= target) return;
 
             // Spawned well ahead so a car never appears in view.
@@ -7481,7 +7498,7 @@ namespace RoadRage.UnityRemake
             // hostile rather than merely more crowded.
             var violatorOdds = Mathf.Lerp(0.28f, 0.55f, GameState.RunIntensity);
             var offence = Random.value < violatorOdds
-                ? OffenceCycle[index % OffenceCycle.Length]
+                ? OffenceForRoad(OffenceCycle[index % OffenceCycle.Length], laneCount)
                 : TrafficCarController.Offence.None;
             var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
                         * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
@@ -7541,9 +7558,7 @@ namespace RoadRage.UnityRemake
             // Twelve cars on a six-lane highway is traffic; the same twelve on a two-lane
             // country road is a wall you cannot get through. Scale with the carriageway.
             var laneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var trafficCount = laneCount >= 3 ? lanes.Length
-                             : laneCount == 2 ? Mathf.RoundToInt(lanes.Length * 0.65f)
-                             : Mathf.RoundToInt(lanes.Length * 0.45f);
+            var trafficCount = Mathf.RoundToInt(lanes.Length * TrafficScaleFor(laneCount));
             var brutes = 0;
             var enforcers = 0;
             var cabs = 0;
@@ -7553,7 +7568,7 @@ namespace RoadRage.UnityRemake
                 var speed = direction > 0f ? 68f + i % 5 * 14f : 95f + i % 4 * 15f;
                 var violatorEvery = ArcadeCarController.CinematicPilot ? 2 : 3;
                 var offence = i % violatorEvery == 1
-                    ? OffenceCycle[(i / violatorEvery) % OffenceCycle.Length]
+                    ? OffenceForRoad(OffenceCycle[(i / violatorEvery) % OffenceCycle.Length], laneCount)
                     : TrafficCarController.Offence.None;
 
                 var role = TrafficCarController.VehicleRole.Standard;

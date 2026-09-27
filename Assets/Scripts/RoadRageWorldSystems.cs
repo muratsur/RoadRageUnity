@@ -451,6 +451,14 @@ namespace RoadRage.UnityRemake
         /// into a wall, so the streamer turns them off where there is only one lane.
         public static bool HeadOnWrecksAllowed = true;
 
+        /// Single-lane road (Greenwood). There is no room to pass anything there, so
+        /// wrecks clear within seconds and the lane-crossing offences are not handed out.
+        public static bool NarrowRoad;
+
+        /// How long a wreck may sit on a narrow road before it is recycled ahead.
+        private const float NarrowWreckClearSeconds = 4f;
+        private float wreckAge;
+
         /// Whether this car can still score the player a near miss.
         ///
         /// Per car, re-armed once it is well clear, rather than one cooldown across the
@@ -549,6 +557,9 @@ namespace RoadRage.UnityRemake
         private static readonly Offence[] RecycleOffences =
             { Offence.Weaving, Offence.Speeding, Offence.Tailgating, Offence.WrongWay };
 
+        /// Weaving and wrong-way driving both put a car across the only lane there is.
+        private static readonly Offence[] NarrowRoadOffences = { Offence.Speeding, Offence.Tailgating };
+
         private void Recycle()
         {
             var relocated = false;
@@ -581,6 +592,18 @@ namespace RoadRage.UnityRemake
                 relocated = true;
             }
 
+            // On a single-lane road a wreck is a wall: everything behind it queues into
+            // a knot the player then drives into, which ended runs within a kilometre.
+            // Clear it after a few seconds - long enough to see the crash - by sending it
+            // up the road through the normal recycle event, which also revives it.
+            wreckAge = IsWreck ? wreckAge + Time.deltaTime : 0f;
+            if (!relocated && NarrowRoad && IsWreck && wreckAge > NarrowWreckClearSeconds)
+            {
+                RoadDistance = PlayerDistance + Random.Range(RecycleAhead * 0.55f, RecycleAhead);
+                wreckAge = 0f;
+                relocated = true;
+            }
+
             // Everything below belongs to the recycle EVENT. Recycle() runs every
             // frame: without the relocated gate, wrecks un-wrecked instantly and the
             // allegiance reroll flickered violator, fleeing and hit-and-run flags off
@@ -595,8 +618,9 @@ namespace RoadRage.UnityRemake
             // recycled cars worth chasing without ever emptying the road of innocents.
             if (!IsWreck)
             {
+                var offences = NarrowRoad ? NarrowRoadOffences : RecycleOffences;
                 Violation = Random.value < 0.45f
-                    ? RecycleOffences[Random.Range(0, RecycleOffences.Length)]
+                    ? offences[Random.Range(0, offences.Length)]
                     : Offence.None;
                 IsHitAndRunner = false;
                 return;
