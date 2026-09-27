@@ -18,6 +18,9 @@
 Assets/Resources/Sky/**/*.jpg -filter binary
 *.psd filter=lfs diff=lfs merge=lfs -text
 *.tga filter=lfs diff=lfs merge=lfs -text
+# Kept out of LFS (the LFS budget is spent): generated road surface, Tools/Road.
+Assets/Resources/Biomes/ForestRoad/**/*.jpg -filter binary
+Assets/Resources/Biomes/ForestRoad/**/*.png -filter binary
 *.tif filter=lfs diff=lfs merge=lfs -text
 *.tiff filter=lfs diff=lfs merge=lfs -text
 # Kept out of LFS: the repository's LFS budget is exhausted, and these are small
