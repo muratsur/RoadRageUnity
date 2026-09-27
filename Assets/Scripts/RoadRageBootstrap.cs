@@ -4068,6 +4068,7 @@ namespace RoadRage.UnityRemake
             }
             greenwoodRoute ??= RoadRoute.Load("Biomes/Routes/b500");
             if (greenwoodRoute == null) Debug.LogWarning("Missing Biomes/Routes/b500 - Greenwood keeps the procedural road.");
+            else Debug.Log($"RR_ROUTE Greenwood follows the B500: {greenwoodRoute.Length / 1000f:0.0} km, there and back");
             RoadPath.Route = greenwoodRoute;
         }
 

@@ -165,6 +165,9 @@ namespace RoadRage.UnityRemake
             return new RoadRoute(xs, ys, step);
         }
 
+        /// Road distance (world Z) of one pass, start to end.
+        public float Length => length;
+
         public float X(float distance) => Sample(xs, distance);
         public float Y(float distance) => Sample(ys, distance);
 
