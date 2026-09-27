@@ -506,6 +506,22 @@ namespace RoadRage.UnityRemake
                 return;
             }
 
+            // On a road with one lane each way, a slow car or truck in the player's
+            // direction filled the lane and oncoming traffic filled the other, so it
+            // could not be got past. With the player close behind it moves over onto
+            // the shoulder, as slow traffic does on a mountain road, and leaves room
+            // to pass between it and the centre line.
+            if (NarrowRoad && !IsWreck && !IsFleeing && Violation != Offence.Weaving && Direction > 0f)
+            {
+                var behind = RoadDistance - PlayerDistance;
+                if (behind > 0f && behind < 60f)
+                {
+                    var side = LaneOffset >= 0f ? 1f : -1f;
+                    laneDrift = Mathf.MoveTowards(laneDrift, side * 1.8f, delta * 1.6f);
+                    return;
+                }
+            }
+
             switch (Violation)
             {
                 case Offence.Weaving:

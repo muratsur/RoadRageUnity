@@ -2523,7 +2523,14 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (lanes == 2)
+            if (biomeIndex == 0)
+            {
+                // A two-lane country road: one lane each way, split by the German white
+                // centre line - 6 m dashes, 12 m gaps. Only the centre line: the edge and
+                // yellow lines were taken off Greenwood for reading as stray strips.
+                BuildDashedRibbon("Center Dashes", 0f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
+            }
+            else if (lanes == 2)
             {
                 // 2 lanes each way: dashed white lane divider on each side
                 BuildDashedRibbon("Left Lane Dashes", -0.50f, 0.15f, 5.5f, 11f, materials["White Paint"], relative: true);
@@ -6910,7 +6917,7 @@ namespace RoadRage.UnityRemake
             globalHorizonSky.AddComponent<GlobalHorizonFollower>();
             ApplyBiomeSky(biomeIndex);
 
-            if (biomeIndex == 0) // Greenwood
+            if (biomeIndex == 0 && GreenwoodHorizonMountains) // Greenwood
             {
                 // A closed ring of real terrain, 420 m to 1 km out: the northern Black Forest
                 // seen from the Acher valley below the Mummelsee and the Hornisgrinde
@@ -7059,6 +7066,11 @@ namespace RoadRage.UnityRemake
 
         /// Greenwood's horizon: one ring mesh centred on the camera by the horizon
         /// follower. Returns false when the asset is missing so the old ranks are built.
+        /// Off: from the road the ring read as a flat green stripe behind the trees
+        /// rather than as mountains, and it was taken out on that feedback. The ring
+        /// and its fallback stay here to bring back in a better form.
+        private static readonly bool GreenwoodHorizonMountains = false;
+
         private bool BuildMountainRing()
         {
             var material = Resources.Load<Material>("Biomes/Mountains/M_mountain_ring");
