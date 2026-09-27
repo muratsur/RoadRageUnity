@@ -7088,7 +7088,7 @@ namespace RoadRage.UnityRemake
         /// the span, and the side the mesh's bulk sits on (a rail's posts, a cliff's
         /// hillside) goes away from the road.
         private GameObject PlaceAlongSpan(string pack, string mesh, Material material, Vector3 from, Vector3 to,
-            int side, float midDistance, string name, bool? runsAlongX = null)
+            int side, float midDistance, string name)
         {
             var span = to - from;
             if (span.sqrMagnitude < 0.25f) return null;
@@ -7103,8 +7103,7 @@ namespace RoadRage.UnityRemake
                 return piece;
             }
 
-            // Cliffs are deeper than they are long, so they say which axis they run along.
-            var alongX = runsAlongX ?? bounds.size.x > bounds.size.z;
+            var alongX = bounds.size.x > bounds.size.z;
             var rotation = Quaternion.LookRotation(along, Vector3.up) *
                            (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
             if (Vector3.Dot(rotation * bounds.center, RoadPath.Right(midDistance)) * side < 0f)
@@ -7130,13 +7129,12 @@ namespace RoadRage.UnityRemake
         private const float CliffSectionLength = 24f;
         private const float CliffCapLength = 16f;
         /// How far behind the cliff line trees and undergrowth are kept clear: the
-        /// face leans back and rolls over ~20 m behind the line, and the canopy of
-        /// anything nearer would stand in front of the face from the road. Trees
-        /// further back stand on the cliff's top and back slope, which reads as the
-        /// forest carrying on over the hill.
-        private const float CliffClearDepth = 24f;
+        /// whole depth of the rock (face, crest, top and back slope, ~45 m) plus a
+        /// little. Anything planted inside it stuck out through the rock.
+        private const float CliffClearDepth = 50f;
 
         private static readonly string[] CliffMeshes = { "SM_cliff_01", "SM_cliff_02", "SM_cliff_03" };
+        private const string CliffCap = "SM_cliff_end";
         private readonly List<Vector3> cliffZones = new();   // (side, start, end) per chunk
 
         /// Rock walls 22-36 m tall right behind the guard rail, in runs of three or four
@@ -7161,7 +7159,7 @@ namespace RoadRage.UnityRemake
             {
                 if (side != firstSide && !gorge) continue;
                 var distance = start;
-                PlaceCliffCap(material, AdvanceAlongLine(start, -CliffCapLength, side), start, side, tallEndAtTo: true);
+                PlaceCliffPiece(CliffCap, material, AdvanceAlongLine(start, -CliffCapLength, side), start, side, tallEnd: 1);
                 for (var k = 0; k < sections; k++)
                 {
                     var next = AdvanceAlongLine(distance, CliffSectionLength, side);
@@ -7169,43 +7167,153 @@ namespace RoadRage.UnityRemake
                     distance = next;
                 }
                 var capEnd = AdvanceAlongLine(distance, CliffCapLength, side);
-                PlaceCliffCap(material, distance, capEnd, side, tallEndAtTo: false);
+                PlaceCliffPiece(CliffCap, material, distance, capEnd, side, tallEnd: -1);
                 cliffZones.Add(new Vector3(side, start - CliffCapLength - 6f, capEnd + 6f));
             }
         }
 
-        private GameObject PlaceCliffPiece(string mesh, Material material, float fromDistance, float toDistance, int side)
-        {
-            var from = CliffLinePoint(fromDistance, side);
-            var to = CliffLinePoint(toDistance, side);
-            var mid = (fromDistance + toDistance) * 0.5f;
-            var cliff = PlaceAlongSpan("Cliffs", mesh, material, from, to, side, mid, "Forest Cliff", runsAlongX: true);
-            if (cliff == null) return null;
-            KeepFrontBehindLine(cliff, from, to, side, mid);
-            foreach (var r in cliff.GetComponentsInChildren<Renderer>())
-                r.reflectionProbeUsage = ReflectionProbeUsage.Off;
-            return cliff;
-        }
+        private static bool cliffMeshReported;
 
-        /// The caps are mirror images with their origin at the tall end. Which one comes
-        /// out the right way round depends on the FBX axis conversion and the facing
-        /// PlaceAlongSpan picks, so place one and swap it for the other if its tall end
-        /// landed away from the wall.
-        private void PlaceCliffCap(Material material, float fromDistance, float toDistance, int side, bool tallEndAtTo)
+        /// Lays one cliff piece along the cliff line from fromDistance to toDistance by
+        /// bending its mesh to the road, rather than placing it as a straight chord.
+        ///
+        /// Straight 24 m pieces met at the front on a bend, but their 40 m deep backs
+        /// fanned apart on the outside of the curve and ran through each other on the
+        /// inside: a V-shaped notch in the crest every 24 m, through which the open
+        /// end of a piece showed as a paper-thin sheet of rock. Bent, a run is one
+        /// continuous surface on any bend, and it follows the road's rise and fall.
+        ///
+        /// Each vertex keeps its height and its depth behind the face; its position
+        /// along the piece becomes a position along the cliff line (by arc length, so
+        /// the texture is not stretched), and depth is measured out along the road's
+        /// normal there. tallEnd: 0 for a wall section, -1 / +1 for a cap whose tall
+        /// end (the mesh origin) meets the wall at fromDistance / toDistance.
+        private GameObject PlaceCliffPiece(string mesh, Material material, float fromDistance, float toDistance,
+            int side, int tallEnd = 0)
         {
-            var from = CliffLinePoint(fromDistance, side);
-            var to = CliffLinePoint(toDistance, side);
-            var wallEnd = tallEndAtTo ? to : from;
-            var outerEnd = tallEndAtTo ? from : to;
-            foreach (var mesh in new[] { "SM_cliff_end_r", "SM_cliff_end_l" })
+            var piece = BiomeModel("Cliffs", mesh, material);
+            if (piece == null) return null;
+            piece.name = "Forest Cliff";
+            piece.transform.localScale = Vector3.one;
+            piece.transform.SetPositionAndRotation(Vector3.zero, Quaternion.identity);
+            var filter = piece.GetComponentInChildren<MeshFilter>();
+            var source = filter != null ? filter.sharedMesh : null;
+            if (source == null || !source.isReadable)
             {
-                var cap = PlaceCliffPiece(mesh, material, fromDistance, toDistance, side);
-                if (cap == null) return;
-                var origin = cap.transform.position;
-                if (Vector3.SqrMagnitude(origin - wallEnd) <= Vector3.SqrMagnitude(origin - outerEnd)) return;
-                cap.SetActive(false);
-                Destroy(cap);
+                if (!cliffMeshReported)
+                {
+                    cliffMeshReported = true;
+                    Debug.LogWarning($"Cliff mesh {mesh} is missing or not Read/Write enabled - cliffs skipped.");
+                }
+                Destroy(piece);
+                return null;
             }
+
+            // Into the piece's frame (the piece sits at the origin, unrotated).
+            var toPiece = filter.transform.localToWorldMatrix;
+            var vertices = source.vertices;
+            for (var i = 0; i < vertices.Length; i++) vertices[i] = toPiece.MultiplyPoint3x4(vertices[i]);
+
+            // Measure it: which way it runs and which side is the face. The face is the
+            // side the upper part of the rock leans towards - the back slope runs out
+            // low and far behind.
+            float minX = float.MaxValue, maxX = float.MinValue, minZ = float.MaxValue, maxZ = float.MinValue, maxY = float.MinValue;
+            foreach (var v in vertices)
+            {
+                minX = Mathf.Min(minX, v.x); maxX = Mathf.Max(maxX, v.x);
+                minZ = Mathf.Min(minZ, v.z); maxZ = Mathf.Max(maxZ, v.z);
+                maxY = Mathf.Max(maxY, v.y);
+            }
+            float upperZ = 0f;
+            var upper = 0;
+            foreach (var v in vertices)
+            {
+                if (v.y < maxY * 0.6f) continue;
+                upperZ += v.z;
+                upper++;
+            }
+            var faceSign = upper > 0 && upperZ / upper > (minZ + maxZ) * 0.5f ? 1f : -1f;
+            var faceZ = faceSign > 0f ? maxZ : minZ;
+            float xFrom = minX, xTo = maxX;
+            if (tallEnd != 0)
+            {
+                var tallX = toPiece.GetColumn(3).x;
+                var farX = Mathf.Abs(minX - tallX) > Mathf.Abs(maxX - tallX) ? minX : maxX;
+                xFrom = tallEnd < 0 ? tallX : farX;
+                xTo = tallEnd < 0 ? farX : tallX;
+            }
+            var span = xTo - xFrom;
+            if (Mathf.Abs(span) < 0.01f)
+            {
+                Destroy(piece);
+                return null;
+            }
+
+            // The cliff line from -> to, tabulated by arc length.
+            const int samples = 48;
+            var linePoints = new Vector3[samples + 1];
+            var outwards = new Vector3[samples + 1];
+            var arcs = new float[samples + 1];
+            for (var k = 0; k <= samples; k++)
+            {
+                var d = Mathf.Lerp(fromDistance, toDistance, k / (float)samples);
+                linePoints[k] = CliffLinePoint(d, side);
+                outwards[k] = RoadPath.Right(d) * side;
+                arcs[k] = k == 0 ? 0f : arcs[k - 1] + Vector3.Distance(linePoints[k - 1], linePoints[k]);
+            }
+            var origin = linePoints[samples / 2];
+
+            var warped = new Vector3[vertices.Length];
+            for (var i = 0; i < vertices.Length; i++)
+            {
+                var v = vertices[i];
+                var target = Mathf.Clamp01((v.x - xFrom) / span) * arcs[samples];
+                var lo = 0;
+                var hi = samples;
+                while (hi - lo > 1)
+                {
+                    var mid = (lo + hi) >> 1;
+                    if (arcs[mid] < target) lo = mid; else hi = mid;
+                }
+                var t = Mathf.InverseLerp(arcs[lo], arcs[hi], target);
+                var outward = Vector3.Lerp(outwards[lo], outwards[hi], t).normalized;
+                var depth = (faceZ - v.z) * faceSign;
+                warped[i] = Vector3.Lerp(linePoints[lo], linePoints[hi], t) + outward * depth + Vector3.up * v.y - origin;
+            }
+
+            // Where the mapping mirrors the mesh (+x running against the road, the face
+            // on the other side) it would turn inside out: flip the winding back. Unity's
+            // Cross is the same formula in either handedness, so the unmirrored basis
+            // (x, y, z) gives Dot(Cross(x, y), z) = +1.
+            var alongWorld = (linePoints[samples] - linePoints[0]) * Mathf.Sign(span);
+            var depthWorld = outwards[samples / 2] * -faceSign;
+            var mirrored = Vector3.Dot(Vector3.Cross(alongWorld, Vector3.up), depthWorld) < 0f;
+
+            var bent = new Mesh { name = source.name + " (bent)" };
+            if (warped.Length > 65535) bent.indexFormat = UnityEngine.Rendering.IndexFormat.UInt32;
+            bent.vertices = warped;
+            bent.uv = source.uv;
+            var triangles = source.triangles;
+            if (mirrored)
+                for (var i = 0; i < triangles.Length; i += 3)
+                    (triangles[i + 1], triangles[i + 2]) = (triangles[i + 2], triangles[i + 1]);
+            bent.triangles = triangles;
+            bent.RecalculateNormals();
+            bent.RecalculateTangents();
+            bent.RecalculateBounds();
+
+            if (filter.transform != piece.transform)
+            {
+                filter.transform.localPosition = Vector3.zero;
+                filter.transform.localRotation = Quaternion.identity;
+                filter.transform.localScale = Vector3.one;
+            }
+            filter.sharedMesh = bent;
+            piece.AddComponent<OwnedMesh>().Mesh = bent;
+            piece.transform.position = origin;
+            foreach (var r in piece.GetComponentsInChildren<Renderer>())
+                r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            return piece;
         }
 
         private static Vector3 CliffLinePoint(float distance, int side) =>
@@ -7238,25 +7346,6 @@ namespace RoadRage.UnityRemake
                 if (Mathf.Abs(lateral) < line + CliffClearDepth) return true;
             }
             return false;
-        }
-
-        /// A section's ledges and blocks stand proud of its base line, so after placing,
-        /// push it away from the road until nothing is in front of the line - otherwise
-        /// rock could reach back over the guard rail.
-        private static void KeepFrontBehindLine(GameObject piece, Vector3 from, Vector3 to, int side, float midDistance)
-        {
-            if (!TryGetMeshBounds(piece, out var bounds)) return;
-            var outward = RoadPath.Right(midDistance) * side;
-            var origin = (from + to) * 0.5f;
-            var nearest = float.PositiveInfinity;
-            var toWorld = piece.transform.localToWorldMatrix;
-            for (var corner = 0; corner < 8; corner++)
-            {
-                var local = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
-                    (corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f));
-                nearest = Mathf.Min(nearest, Vector3.Dot(toWorld.MultiplyPoint3x4(local) - origin, outward));
-            }
-            if (nearest < 0f) piece.transform.position += outward * -nearest;
         }
 
         /// Mesh bounds in the object's own space. Renderer bounds are world-axis
@@ -8732,6 +8821,19 @@ namespace RoadRage.UnityRemake
     /// Keeps the panorama sky's horizon the same colour as the fog. Zone transitions and
     /// weather move the fog colour at runtime; fogged mountains and ground then meet the
     /// sky without an edge.
+    /// Destroys a mesh built at run time with the object that shows it. Unity does not
+    /// free a runtime mesh when its GameObject goes, so each bent cliff piece would
+    /// otherwise leak its mesh every time a chunk streamed out.
+    public sealed class OwnedMesh : MonoBehaviour
+    {
+        public Mesh Mesh;
+
+        private void OnDestroy()
+        {
+            if (Mesh != null) Destroy(Mesh);
+        }
+    }
+
     public sealed class SkyHorizonSync : MonoBehaviour
     {
         private static readonly int HorizonColor = Shader.PropertyToID("_HorizonColor");

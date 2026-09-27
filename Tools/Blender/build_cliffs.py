@@ -1,13 +1,12 @@
 """Builds Greenwood's roadside cliffs in headless Blender: three 24 m wall sections
-peaking at 22, 30 and 36 m, and a pair of mirrored 16 m end caps, sharing one baked
-texture atlas.
+peaking at 22, 30 and 36 m, and a 16 m end cap, sharing one baked texture atlas.
 
 Each section is a road cutting at landscape scale: thick strata with ledges, big
 fractured blocks and vertical joints, a face leaning back into the hillside, and a
 crest that rolls over into a short top and a back slope down to the ground - a closed
 hill, not a sheet. Every section ends in the same join profile, so they butt together
-in any order as one continuous wall; the caps start from that profile and slope down
-to the ground to close a run. The stone is weathered grey with strata banding, sparse
+in any order as one continuous wall; the cap starts from that profile and slopes
+down to the ground to close a run. The stone is weathered grey with strata banding, sparse
 fractures, water streaks and moss on the ledges.
 
 Runs without the Blender app, through Blender's Python module (needs Python 3.11):
@@ -17,13 +16,14 @@ Runs without the Blender app, through Blender's Python module (needs Python 3.11
 
 Output (./out_cliffs next to this script, or $RR_OUT):
   SM_cliff_01..03.fbx
-  SM_cliff_end_r.fbx, SM_cliff_end_l.fbx (run end caps)
+  SM_cliff_end.fbx (run end cap)
   T_cliffs_D.jpg, T_cliffs_N.jpg, T_cliffs_MSO.png (half size)
   preview.png
 The game loads them from Assets/Resources/Biomes/Cliffs (Meshes/, Textures/).
 Axes: Blender +Z up. Sections run along X, centred on the origin, and face -Y (the
-road). Caps have their origin at the tall end. The game is told they run along X
-and measures which side their bulk is on.
+road). The cap has its origin at the tall end. The game bends each piece along the
+road's cliff line (it measures which way a mesh runs and which side is the face), so
+runs follow bends without gaps.
 """
 import bpy  # noqa: must load before bmesh and mathutils
 import bmesh
@@ -197,9 +197,12 @@ def build_cliff(name, slot, kind, height=END_HEIGHT, rows=96):
         u = (slot + 0.02 + 0.96 * f) / SLOTS
         v = 0.01 + 0.98 * min(1.0, arc_of[loop.vertex_index] / ATLAS_HEIGHT)
         uv.data[loop.index].uv = (u, v)
-    # Blasted rock is angular: flat-shaded facets.
+    # Smooth shaded, so vertices are shared: the game bends every piece to the road
+    # at run time, and flat facets split each triangle's corners into its own
+    # vertices - six times the vertices to bend and keep in memory. The baked normal
+    # map carries the angular detail.
     for p in ob.data.polygons:
-        p.use_smooth = False
+        p.use_smooth = True
     return ob
 
 
@@ -391,7 +394,9 @@ def main():
     scene.cycles.device = "CPU"
 
     faces = [build_cliff(f"SM_cliff_{i + 1:02d}", i, "mid", h) for i, h in enumerate((22.0, 30.0, 36.0))]
-    caps = [build_cliff("SM_cliff_end_r", 3, "cap_r"), build_cliff("SM_cliff_end_l", 3, "cap_l")]
+    # One cap: the game bends it into place at either end of a run, mirroring it
+    # as needed. (The preview uses a mirrored copy.)
+    caps = [build_cliff("SM_cliff_end", 3, "cap_r"), build_cliff("preview_cap_l", 3, "cap_l")]
     objs = faces + caps
     mat = stone_material()
     for o in objs:
@@ -462,13 +467,13 @@ def main():
         o.data.materials.clear()
         o.data.materials.append(baked)
 
-    for o in objs:
+    for o in faces + caps[:1]:
         bpy.ops.object.select_all(action="DESELECT")
         o.select_set(True)
         bpy.context.view_layer.objects.active = o
         bpy.ops.export_scene.fbx(filepath=os.path.join(OUT, o.name + ".fbx"), use_selection=True,
                                  apply_scale_options="FBX_SCALE_UNITS", axis_forward="-Z", axis_up="Y",
-                                 bake_space_transform=True, mesh_smooth_type="FACE", use_tspace=True,
+                                 bake_space_transform=True, mesh_smooth_type="OFF", use_tspace=True,
                                  path_mode="STRIP", add_leaf_bones=False)
         tris = sum(len(p.vertices) - 2 for p in o.data.polygons)
         print(f"RR_CLIFF {o.name} tris={tris} size={tuple(round(v, 2) for v in o.dimensions)}")
