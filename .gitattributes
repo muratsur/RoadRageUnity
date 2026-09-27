@@ -14,6 +14,8 @@
 *.png filter=lfs diff=lfs merge=lfs -text
 *.jpg filter=lfs diff=lfs merge=lfs -text
 *.jpeg filter=lfs diff=lfs merge=lfs -text
+# Kept out of LFS (the LFS budget is spent): generated sky, Tools/Sky/build_sky.py.
+Assets/Resources/Sky/**/*.jpg -filter binary
 *.psd filter=lfs diff=lfs merge=lfs -text
 *.tga filter=lfs diff=lfs merge=lfs -text
 *.tif filter=lfs diff=lfs merge=lfs -text

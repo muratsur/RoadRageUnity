@@ -6687,6 +6687,7 @@ namespace RoadRage.UnityRemake
 
             globalHorizonSky = new GameObject("Global Horizon Sky & Mountains");
             globalHorizonSky.AddComponent<GlobalHorizonFollower>();
+            ApplyBiomeSky(biomeIndex);
 
             if (biomeIndex == 0) // Greenwood
             {
@@ -6743,26 +6744,8 @@ namespace RoadRage.UnityRemake
                     }
                 }
 
-                // Cumulus, which existed and was Hollywood-only. A blue sky with nothing
-                // in it reads as a backdrop; the clouds are what give the range something
-                // to sit under and the eye something to judge its scale against.
-                if (materials.TryGetValue("Hills Cloud", out var cloudMaterial))
-                {
-                    var clouds = new[]
-                    {
-                        new Vector3(-300f, 240f, 420f), new Vector3(280f, 275f, 480f),
-                        new Vector3(-140f, 300f, 620f), new Vector3(200f, 255f, 300f),
-                        new Vector3(-380f, 250f, 160f), new Vector3(360f, 290f, -120f),
-                        new Vector3(-220f, 280f, -260f), new Vector3(240f, 245f, 700f),
-                        new Vector3(40f, 320f, 820f),
-                    };
-                    for (var c = 0; c < clouds.Length; c++)
-                    {
-                        var cloud = BuildCumulusCloudCluster($"Forest Sky Cloud {c}",
-                            clouds[c], 50f + c % 3 * 14f, cloudMaterial);
-                        if (cloud != null) cloud.transform.SetParent(globalHorizonSky.transform, false);
-                    }
-                }
+                // No mesh clouds: Greenwood's sky is a baked panorama (ApplyBiomeSky),
+                // and sphere-cluster cumulus in front of it read as props hung in the air.
             }
             else if (biomeIndex == 9) // Hollywood Hills
             {
@@ -6840,6 +6823,34 @@ namespace RoadRage.UnityRemake
                     }
                 }
             }
+        }
+
+        private Material skyMaterial;
+
+        /// Greenwood gets a baked overcast panorama as its skybox (Tools/Sky/build_sky.py);
+        /// the other biomes keep the fogged solid-colour background they were tuned for.
+        /// A copy of the material is used because the horizon colour is updated every
+        /// frame, and writing to the asset loaded from Resources would edit it on disk
+        /// when playing in the editor.
+        private void ApplyBiomeSky(int biomeIndex)
+        {
+            if (skyMaterial != null) Destroy(skyMaterial);
+            skyMaterial = null;
+            if (biomeIndex == 0)
+            {
+                var source = Resources.Load<Material>("Sky/M_sky_overcast");
+                if (source != null) skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
+                else Debug.LogWarning("Missing sky material Sky/M_sky_overcast; keeping solid background");
+            }
+            RenderSettings.skybox = skyMaterial;
+            if (Camera.main != null) ApplySkyToCamera(Camera.main);
+        }
+
+        private void ApplySkyToCamera(Camera camera)
+        {
+            camera.clearFlags = skyMaterial != null ? CameraClearFlags.Skybox : CameraClearFlags.SolidColor;
+            if (skyMaterial != null && camera.GetComponent<SkyHorizonSync>() == null)
+                camera.gameObject.AddComponent<SkyHorizonSync>();
         }
 
         private GameObject BuildCumulusCloudCluster(string name, Vector3 center, float baseSize, Material material)
@@ -7995,6 +8006,7 @@ namespace RoadRage.UnityRemake
             camera.allowHDR = true;
             camera.clearFlags = CameraClearFlags.SolidColor;
             camera.backgroundColor = Color.Lerp(mood.Sky, mood.Equator, 0.35f);
+            ApplySkyToCamera(camera);
             ApplyCityShotCameraPreset(camera);
             cameraObject.AddComponent<AudioListener>();
             var chase = cameraObject.AddComponent<ChaseCamera>();
@@ -8513,6 +8525,21 @@ namespace RoadRage.UnityRemake
     /// Smoothly keeps the distant horizon mountain ring and sky dome centered on the camera
     /// so distant mountains and clouds are 100% static with zero popping and zero chunk rebuilds.
     /// </summary>
+    /// Keeps the panorama sky's horizon the same colour as the fog. Zone transitions and
+    /// weather move the fog colour at runtime; fogged mountains and ground then meet the
+    /// sky without an edge.
+    public sealed class SkyHorizonSync : MonoBehaviour
+    {
+        private static readonly int HorizonColor = Shader.PropertyToID("_HorizonColor");
+
+        private void LateUpdate()
+        {
+            var sky = RenderSettings.skybox;
+            if (sky != null && sky.HasProperty(HorizonColor))
+                sky.SetColor(HorizonColor, RenderSettings.fogColor);
+        }
+    }
+
     public sealed class GlobalHorizonFollower : MonoBehaviour
     {
         private Transform targetCamera;
