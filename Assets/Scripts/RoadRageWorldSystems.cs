@@ -143,9 +143,35 @@ namespace RoadRage.UnityRemake
             length = (xs.Length - 1) * step;
         }
 
-        /// Reads the "RRRT" format the tool writes; null if the asset is missing or
-        /// malformed, and the caller keeps the procedural road.
+        /// What really lines the road, from the same tool (ESA WorldCover land
+        /// cover): per side and per band out from the centreline.
+        public const int CoverForest = 1, CoverOpen = 2, CoverBuilt = 3, CoverWater = 4;
+        private byte[] cover;
+        private int coverCount;
+        private int coverBands;
+        private float coverStep;
+        private float[] bandStarts;
+
+        /// Named stops along the road (Mummelsee, Ruhestein, ...), by road distance
+        /// within one pass.
+        public (float Distance, string Name)[] Places { get; private set; } =
+            System.Array.Empty<(float, string)>();
+
+        public bool HasCover => cover != null;
+
+        /// Reads the "RRRT" format the tool writes, plus its "_cover" and "_places"
+        /// companions when present; null if the road itself is missing or malformed,
+        /// and the caller keeps the procedural road.
         public static RoadRoute Load(string resourcePath)
+        {
+            var route = LoadRoad(resourcePath);
+            if (route == null) return null;
+            route.LoadCover(resourcePath + "_cover");
+            route.LoadPlaces(resourcePath + "_places");
+            return route;
+        }
+
+        private static RoadRoute LoadRoad(string resourcePath)
         {
             var asset = Resources.Load<TextAsset>(resourcePath);
             if (asset == null) return null;
@@ -168,6 +194,65 @@ namespace RoadRage.UnityRemake
         /// Road distance (world Z) of one pass, start to end.
         public float Length => length;
 
+        private void LoadCover(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var bytes = asset.bytes;
+            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'L' || bytes[3] != 'C')
+                return;
+            var count = System.BitConverter.ToInt32(bytes, 4);
+            var bands = System.BitConverter.ToInt32(bytes, 8);
+            var step = System.BitConverter.ToSingle(bytes, 12);
+            var header = 16 + bands * 4;
+            if (count < 1 || bands < 1 || step <= 0f || bytes.Length < header + count * 2 * bands) return;
+            bandStarts = new float[bands];
+            for (var b = 0; b < bands; b++) bandStarts[b] = System.BitConverter.ToSingle(bytes, 16 + b * 4);
+            cover = new byte[count * 2 * bands];
+            System.Array.Copy(bytes, header, cover, 0, cover.Length);
+            coverCount = count;
+            coverBands = bands;
+            coverStep = step;
+        }
+
+        private void LoadPlaces(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var places = new List<(float, string)>();
+            foreach (var line in asset.text.Split('\n'))
+            {
+                var space = line.IndexOf(' ');
+                if (space < 1) continue;
+                if (!float.TryParse(line.Substring(0, space), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var distance)) continue;
+                places.Add((distance, line.Substring(space + 1).Trim()));
+            }
+            Places = places.ToArray();
+        }
+
+        /// What lines the road at this distance and lateral offset: CoverForest,
+        /// CoverOpen, CoverBuilt or CoverWater, or 0 without cover data. The return
+        /// pass is the mirror image of the outward one along the road, so a side stays
+        /// the same side.
+        public int CoverAt(float distance, float lateral)
+        {
+            if (cover == null) return 0;
+            var i = Mathf.Clamp(Mathf.RoundToInt(Fold(distance) / coverStep), 0, coverCount - 1);
+            var side = lateral < 0f ? 0 : 1;
+            var across = Mathf.Abs(lateral);
+            var band = 0;
+            while (band + 1 < coverBands && across >= bandStarts[band + 1]) band++;
+            return cover[(i * 2 + side) * coverBands + band];
+        }
+
+        /// Road distance folded into one pass, [0, Length]: there and back.
+        public float Fold(float distance)
+        {
+            var u = Mathf.Repeat(distance, 2f * length);
+            return u > length ? 2f * length - u : u;
+        }
+
         public float X(float distance) => Sample(xs, distance);
         public float Y(float distance) => Sample(ys, distance);
 
@@ -176,9 +261,7 @@ namespace RoadRage.UnityRemake
         /// heading is continuous and ribbons sampled finer than the step stay smooth.
         private float Sample(float[] v, float distance)
         {
-            var u = Mathf.Repeat(distance, 2f * length);
-            if (u > length) u = 2f * length - u;
-            var f = u / step;
+            var f = Fold(distance) / step;
             var i = Mathf.Min((int)f, v.Length - 2);
             var t = f - i;
             var p0 = v[Mathf.Max(i - 1, 0)];

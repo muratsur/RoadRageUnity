@@ -658,6 +658,7 @@ namespace RoadRage.UnityRemake
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder, Mathf.Max(0, biomeIndex)));
             activeWeather = WeatherSystem.Roll(Mathf.Max(0, biomeIndex));
             ApplyBiomeRoute(biomeIndex);
+            lastPlaceIndex = -1;
 
             // 7. Rebuild lighting for new biome
             BuildLighting();
@@ -779,6 +780,7 @@ namespace RoadRage.UnityRemake
 				{
 					TrafficCarController.PlayerDistance = controller.RoadDistance;
 					UpdateStreaming(controller.RoadDistance);
+					AnnouncePlaces(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
 					EscalateTraffic();
 					TryStageHitAndRun(controller.SpeedKph);
@@ -1358,6 +1360,9 @@ namespace RoadRage.UnityRemake
                 "Cliffs", "T_cliffs_MSO", 1f);
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
                 new Color(0.60f, 0.60f, 0.56f), 0f, 0.2f), "ForestVillage", "T_rock_01_MSO", 0.6f);
+            // The Mummelsee: a small, deep, dark lake in a spruce hollow. Near black,
+            // glossy, so it shows the sky and the treeline through the probe.
+            MakeMaterial("Mountain Lake", new Color(0.03f, 0.045f, 0.045f), 0f, 0.94f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
                 new Color(0.56f, 0.57f, 0.54f), 0f, 0.2f), "ForestVillage", "T_rock_02_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Mountain", "ForestVillage", "T_mountain_D", "T_mountain_N",
@@ -2593,6 +2598,8 @@ namespace RoadRage.UnityRemake
                             Mathf.InverseLerp(clearance + 28f, clearance + 65f, Mathf.Abs(lateral)));
                         lift = displace * edge * corridor *
                                (TerrainNoise(p.x, p.z, 0.021f) + 0.45f * TerrainNoise(p.x, p.z, 0.061f));
+                        if (colors != null && Mathf.Abs(lateral) > RoadPath.ClearanceAt(distance) + 4f)
+                            lift += LakeBasin(distance, lateral);
                     }
                     vertices[i * across + j] = RoadPath.Point(distance, lateral, height + lift);
                     uv[i * across + j] = new Vector2(f * Mathf.Abs(rightLateral - leftLateral) * 0.08f,
@@ -4750,7 +4757,7 @@ namespace RoadRage.UnityRemake
                 // The guard rail is placed from the measured road width and belongs on the
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
-                if (n == "Forest Guard Rail" || n == "Forest Cliff") continue;
+                if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6425,6 +6432,7 @@ namespace RoadRage.UnityRemake
         {
             // Nothing planted in front of a cliff face.
             if (InCliffZone(distance, lateral)) return null;
+            if (!RouteAllows(label, distance, lateral)) return null;
             var split = entry.Split('|');
             var model = BiomeModel(split[0], split[1], materials["Forest Undergrowth"]);
             if (model == null) return null;
@@ -6437,6 +6445,178 @@ namespace RoadRage.UnityRemake
             return model;
         }
 
+        // ------------------------------------------------------------ the real B500
+
+        /// Whether a forest piece may stand here, going by what really lines the B500
+        /// at this point (ESA WorldCover, baked into the route by
+        /// Tools/Terrain/build_b500_road.py). The forest scatter fills everything with
+        /// trees; the real road runs through forest most of the way but opens onto the
+        /// Grinden heath at Schliffkopf, ski meadows at Unterstmatt and Alexanderschanze,
+        /// the hotel clearings at Buehlerhoehe and Ruhestein, Kniebis, and the
+        /// Mummelsee. Without cover data everything but the heath dressing is allowed.
+        private static bool RouteAllows(string label, float distance, float lateral)
+        {
+            var heath = label.StartsWith("Heath");
+            var cover = RoadPath.Route != null ? RoadPath.Route.CoverAt(distance, lateral) : 0;
+            switch (cover)
+            {
+                case 0: return !heath;
+                case RoadRoute.CoverWater: return false;
+                case RoadRoute.CoverForest: return !heath;
+            }
+            // Open ground or a clearing: heath and meadow, the odd lone spruce, no forest.
+            if (heath) return cover == RoadRoute.CoverOpen || Random.value < 0.5f;
+            if (label == "Forest Tree") return Random.value < 0.04f;
+            if (label.StartsWith("Forest Bush")) return Random.value < 0.2f;
+            return true;
+        }
+
+        private static readonly string[] HeathPlants =
+        {
+            "RunicForest|Flowers/SM_dead_grass",
+            "RunicForest|Flowers/SM_dead_grass",
+            "RunicForest|Flowers/SM_grass_01",
+            "RunicForest|Vegetation/SM_plant_ground",
+            "RunicForest|Vegetation/SM_plant_ground_02",
+            "RunicForest|Flowers/SM_flower_02",
+        };
+
+        private static readonly string[] HeathRocks =
+        {
+            "RunicForest|Small_rocks/SM_rock_01",
+            "RunicForest|Small_rocks/SM_rock_02",
+            "RunicForest|Small_rocks/SM_rock_03",
+        };
+
+        /// The open stretches: moor grass and heather, granite blocks and a few
+        /// wind-bent spruce, with nothing tall between the road and the horizon - the
+        /// long views the Schwarzwaldhochstrasse is known for. Only planted where the
+        /// real roadside is open (RouteAllows), so in forest these bands place nothing.
+        private void BuildRouteOpenGround()
+        {
+            ScatterBand(2.4f, 8f, 60f, (d, l, s) =>
+                SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.5f, 1.3f, "Heath Grass"));
+            ScatterBand(4.5f, 60f, 150f, (d, l, s) =>
+                SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.7f, 1.6f, "Heath Grass Far"));
+            ScatterBand(15f, 10f, 100f, (d, l, s) =>
+                SpawnForestPiece(HeathRocks[Random.Range(0, HeathRocks.Length)], d, l, -0.15f, 0.4f, 1.8f, "Heath Rock"));
+            ScatterBand(24f, 18f, 170f, (d, l, s) =>
+                SpawnForestPiece(PineTrees[Random.Range(0, PineTrees.Length)], d, l, 0f, 5f, 13f, "Heath Spruce"));
+        }
+
+        /// Water beside the road (the Mummelsee): a still, dark lake surface from
+        /// where the water starts out to 260 m, level across its length. The ground
+        /// ribbon dips under it (see BuildRibbon), so the shore is a slope, not a seam.
+        private void BuildRouteLakes()
+        {
+            const float step = 5f;
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var runStart = float.NaN;
+                for (var d = segStart - 2f; d <= segEnd + 2f + step; d += step)
+                {
+                    var water = d <= segEnd + 2f && !float.IsNaN(LakeInnerEdge(d, side));
+                    if (water)
+                    {
+                        if (float.IsNaN(runStart)) runStart = d;
+                        continue;
+                    }
+                    if (float.IsNaN(runStart)) continue;
+                    BuildLake(runStart - step * 0.5f, d - step * 0.5f, side);
+                    runStart = float.NaN;
+                }
+            }
+        }
+
+        /// Distance from the centreline at which water starts on this side, or NaN.
+        private static float LakeInnerEdge(float distance, int side)
+        {
+            // One probe per cover band (12-40, 40-100, 100-220 m); water starts at the
+            // band's inner edge.
+            if (RoadPath.Route.CoverAt(distance, side * 20f) == RoadRoute.CoverWater)
+                return Mathf.Max(RoadPath.ClearanceAt(distance) + 6f, 12f);
+            if (RoadPath.Route.CoverAt(distance, side * 60f) == RoadRoute.CoverWater) return 40f;
+            if (RoadPath.Route.CoverAt(distance, side * 140f) == RoadRoute.CoverWater) return 100f;
+            return float.NaN;
+        }
+
+        private void BuildLake(float from, float to, int side)
+        {
+            const float outer = 260f;
+            const int across = 8;
+            // Level and shoreline from the whole lake, not this chunk's share of it, so
+            // a lake crossing a chunk seam has one surface.
+            var lakeFrom = from;
+            var lakeTo = to;
+            while (lakeFrom > from - 800f && !float.IsNaN(LakeInnerEdge(lakeFrom - 5f, side))) lakeFrom -= 5f;
+            while (lakeTo < to + 800f && !float.IsNaN(LakeInnerEdge(lakeTo + 5f, side))) lakeTo += 5f;
+            var level = float.MaxValue;
+            var inner = float.MaxValue;
+            for (var d = lakeFrom; d <= lakeTo; d += 5f)
+            {
+                level = Mathf.Min(level, RoadPath.Center(d).y);
+                var edge = LakeInnerEdge(d, side);
+                if (!float.IsNaN(edge)) inner = Mathf.Min(inner, edge);
+            }
+            if (inner == float.MaxValue) return;
+            level -= 0.9f;
+            var samples = Mathf.Max(2, Mathf.CeilToInt((to - from) / 5f) + 1);
+            var vertices = new Vector3[samples * across];
+            var uv = new Vector2[vertices.Length];
+            var triangles = new int[(samples - 1) * (across - 1) * 6];
+            var t = 0;
+            for (var i = 0; i < samples; i++)
+            {
+                var d = Mathf.Lerp(from, to, i / (float)(samples - 1));
+                for (var j = 0; j < across; j++)
+                {
+                    var lateral = side * Mathf.Lerp(inner, outer, j / (float)(across - 1));
+                    var p = RoadPath.Point(d, lateral);
+                    vertices[i * across + j] = new Vector3(p.x, level, p.z);
+                    uv[i * across + j] = new Vector2(p.x * 0.02f, p.z * 0.02f);
+                }
+                if (i == samples - 1) continue;
+                for (var j = 0; j < across - 1; j++)
+                {
+                    var v = i * across + j;
+                    // Wound to face up on either side of the road.
+                    if (side > 0)
+                    {
+                        triangles[t++] = v; triangles[t++] = v + across; triangles[t++] = v + across + 1;
+                        triangles[t++] = v; triangles[t++] = v + across + 1; triangles[t++] = v + 1;
+                    }
+                    else
+                    {
+                        triangles[t++] = v; triangles[t++] = v + across + 1; triangles[t++] = v + across;
+                        triangles[t++] = v; triangles[t++] = v + 1; triangles[t++] = v + across + 1;
+                    }
+                }
+            }
+            EnableProbeReflections(CreateMeshObject("Route Lake", vertices, triangles, uv, materials["Mountain Lake"]));
+        }
+
+        /// The ground dips under water, so a lake has a shore rather than hills
+        /// showing through it.
+        private static float LakeBasin(float distance, float lateral) =>
+            RoadPath.Route != null && RoadPath.Route.CoverAt(distance, lateral) == RoadRoute.CoverWater ? -3f : 0f;
+
+        private int lastPlaceIndex = -1;
+
+        /// Names each stop on the B500 as the player passes it, both ways.
+        private void AnnouncePlaces(float distance)
+        {
+            var route = RoadPath.Route;
+            if (route == null) return;
+            var u = route.Fold(distance);
+            for (var i = 0; i < route.Places.Length; i++)
+            {
+                if (i == lastPlaceIndex || Mathf.Abs(route.Places[i].Distance - u) > 40f) continue;
+                lastPlaceIndex = i;
+                GameState.Show($"📍 {route.Places[i].Name.ToUpperInvariant()}");
+                break;
+            }
+        }
+
         internal static int canopyKept;
         internal static int canopyRejected;
 
@@ -6445,7 +6625,8 @@ namespace RoadRage.UnityRemake
             // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
             // rounded English wood; an alpine pass is a wall of tall narrow conifers with
             // the odd broadleaf in it. Flipped to 30% broadleaf.
-            var table = Random.value < 0.30f ? BroadleafTrees : PineTrees;
+            // On the B500 it is the Black Forest: spruce and fir, very little else.
+            var table = Random.value < (RoadPath.Route != null ? 0.08f : 0.30f) ? BroadleafTrees : PineTrees;
             var tree = SpawnForestPiece(table[Random.Range(0, table.Length)], distance, lateral, 0f,
                 minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
@@ -6994,6 +7175,11 @@ namespace RoadRage.UnityRemake
             // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
             // borrowed Synthwave fence half a metre behind it.
             BuildGuardRail(materials["Forest Guard Rail"]);
+            if (RoadPath.Route != null && RoadPath.Route.HasCover)
+            {
+                BuildRouteOpenGround();
+                BuildRouteLakes();
+            }
 
             if (NoCanopy) return;
 
@@ -7181,6 +7367,7 @@ namespace RoadRage.UnityRemake
             for (var side = -1; side <= 1; side += 2)
             {
                 if (side != firstSide && !gorge) continue;
+                if (!RouteForestAlong(start - CliffCapLength, start + runLength + CliffCapLength, side)) continue;
                 var distance = start;
                 PlaceCliffPiece(CliffCap, material, AdvanceAlongLine(start, -CliffCapLength, side), start, side, tallEnd: 1);
                 for (var k = 0; k < sections; k++)
@@ -7337,6 +7524,16 @@ namespace RoadRage.UnityRemake
             foreach (var r in piece.GetComponentsInChildren<Renderer>())
                 r.reflectionProbeUsage = ReflectionProbeUsage.Off;
             return piece;
+        }
+
+        /// A cutting is through forest: on the B500, no rock wall where the real
+        /// roadside is heath, meadow, a village or the lake.
+        private static bool RouteForestAlong(float from, float to, int side)
+        {
+            if (RoadPath.Route == null || !RoadPath.Route.HasCover) return true;
+            for (var d = from; d <= to; d += 10f)
+                if (RoadPath.Route.CoverAt(d, side * 20f) != RoadRoute.CoverForest) return false;
+            return true;
         }
 
         private static Vector3 CliffLinePoint(float distance, int side) =>

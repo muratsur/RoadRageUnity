@@ -24,12 +24,16 @@ What the game can take, and what is changed to fit:
   * Both ends are eased flat and straight so the game can run the route there
     and back (Freudenstadt -> Baden-Baden) without a kink at the turnaround.
 
-Output: Assets/Resources/Biomes/Routes/b500.bytes (little endian):
-    char[4] "RRRT", int32 count, float32 step (m of Z between samples),
+Output, in Assets/Resources/Biomes/Routes (little endian):
+  b500.bytes: char[4] "RRRT", int32 count, float32 step (m of Z between samples),
     count x (float32 x, float32 y)   - road centre at Z = i * step
+  b500_cover.bytes: what really lines the road, from ESA WorldCover (10 m):
+    char[4] "RRLC", int32 count, int32 bands, float32 step, bands x float32 (band
+    start, m from the centreline), then count x [left, right] x bands bytes:
+    1 forest, 2 open, 3 built-up, 4 water
+  b500_places.txt: "<Z> <name>" per named stop (Mummelsee, Ruhestein, ...)
 plus ./out_b500/preview.png (plan and profile).
 """
-import io
 import math
 import os
 import struct
@@ -63,6 +67,37 @@ MAX_RISE = 30.0                     # m, either side of the horizon's height
 END_EASE = 300.0                    # m, flat and straight at both ends
 ZOOM = 14
 TILE_URL = "https://s3.amazonaws.com/elevation-tiles-prod/terrarium/{z}/{x}/{y}.png"
+
+# Land cover: ESA WorldCover 2021 v200, 10 m (CC BY 4.0), read as a window of the
+# cloud-optimised GeoTIFF over HTTP (needs rasterio).
+COVER_URL = ("https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/2021/map/"
+             "ESA_WorldCover_10m_2021_v200_N48E006_Map.tif")
+COVER_BOUNDS = (8.15, 48.44, 8.45, 48.78)          # west, south, east, north
+COVER_ASSET = os.path.join(ROOT, "Assets", "Resources", "Biomes", "Routes", "b500_cover.bytes")
+PLACES_ASSET = os.path.join(ROOT, "Assets", "Resources", "Biomes", "Routes", "b500_places.txt")
+COVER_STEP = 10.0                                  # m of Z between cover samples
+# Bands out from the centreline, each summarised to one class per side.
+COVER_BANDS = ((12.0, 40.0), (40.0, 100.0), (100.0, 220.0))
+COVER_WINDOW = 30.0                                # m along the road a sample spans
+# WorldCover class -> game class: 1 forest, 2 open (grass, heath, crops, bare,
+# wetland), 3 built-up (hotels, villages), 4 water.
+COVER_CLASSES = {10: 1, 20: 2, 30: 2, 40: 2, 60: 2, 90: 2, 95: 1, 100: 2, 50: 3, 80: 4}
+# Named stops, snapped to the nearest point of the road. Shown as the player
+# passes them.
+PLACES = [
+    ("Baden-Baden", 48.7657, 8.2279),
+    ("Bühlerhöhe", 48.6787, 8.2345),
+    ("Sand", 48.6560, 8.2350),
+    ("Hundseck", 48.6450, 8.2210),
+    ("Unterstmatt", 48.6306, 8.2057),
+    ("Mummelsee", 48.5973, 8.2026),
+    ("Ruhestein", 48.5598, 8.2245),
+    ("Schliffkopf", 48.5406, 8.2199),
+    ("Zuflucht", 48.5019, 8.2267),
+    ("Alexanderschanze", 48.4934, 8.2621),
+    ("Kniebis", 48.4732, 8.2975),
+    ("Freudenstadt", 48.4646, 8.4181),
+]
 
 
 def read_route():
@@ -218,7 +253,72 @@ def main():
         f.write(np.stack([xs, ys], axis=1).astype("<f4").tobytes())
     print("wrote", ASSET, os.path.getsize(ASSET), "bytes")
 
+    cover_and_places(s, e, n, rlat, rlon, z)
     preview(e, n, elev, s, xs, ys, zs)
+
+
+def cover_and_places(s, e, n, rlat, rlon, z):
+    """Land cover beside the road and the named stops, both keyed to road
+    distance (Z) the way the game sees it."""
+    import rasterio
+    from rasterio.windows import from_bounds
+    cache = os.path.join(OUT, "worldcover.npy")
+    if os.path.exists(cache):
+        wc = np.load(cache)
+    else:
+        with rasterio.Env(GDAL_DISABLE_READDIR_ON_OPEN="EMPTY_DIR",
+                          CURL_CA_BUNDLE=os.environ.get("CURL_CA_BUNDLE", "")):
+            with rasterio.open("/vsicurl/" + COVER_URL) as ds:
+                wc = ds.read(1, window=from_bounds(*COVER_BOUNDS, ds.transform))
+        np.save(cache, wc)
+    west, south, east, north = COVER_BOUNDS
+    res_lat = (north - south) / wc.shape[0]
+    res_lon = (east - west) / wc.shape[1]
+    lat0 = float(np.mean(rlat))
+    te, tn = np.gradient(e), np.gradient(n)
+    length = np.hypot(te, tn)
+    te, tn = te / length, tn / length
+
+    def cover(i, offset):
+        """Class at `offset` m to the right (negative: left) of real sample i."""
+        de, dn = tn[i] * offset, -te[i] * offset
+        la = rlat[i] + dn / 110540.0
+        lo = rlon[i] + de / (111320.0 * math.cos(math.radians(lat0)))
+        r = int(np.clip((north - la) / res_lat, 0, wc.shape[0] - 1))
+        c = int(np.clip((lo - west) / res_lon, 0, wc.shape[1] - 1))
+        return COVER_CLASSES.get(int(wc[r, c]), 1)
+
+    zs = np.arange(0.0, z[-1], COVER_STEP)
+    half = int(COVER_WINDOW / 2 / STEP)
+    out = np.zeros((len(zs), 2, len(COVER_BANDS)), np.uint8)
+    for k, zz in enumerate(zs):
+        i = int(np.clip(np.searchsorted(z, zz), 0, len(z) - 1))
+        for si, sign in enumerate((-1, 1)):
+            for b, (near, far) in enumerate(COVER_BANDS):
+                votes = [0] * 5
+                for j in range(max(0, i - half), min(len(s), i + half + 1), 2):
+                    for off in np.linspace(near, far, 4):
+                        votes[cover(j, sign * off)] += 1
+                # A lake beside the road is the one thing that must not be
+                # outvoted: it is narrow next to the forest around it.
+                out[k, si, b] = 4 if votes[4] >= 0.2 * sum(votes) else int(np.argmax(votes))
+    with open(COVER_ASSET, "wb") as f:
+        f.write(b"RRLC")
+        f.write(struct.pack("<iif", len(zs), len(COVER_BANDS), COVER_STEP))
+        f.write(struct.pack("<%df" % len(COVER_BANDS), *[b[0] for b in COVER_BANDS]))
+        f.write(out.tobytes())                     # [sample][left, right][band]
+    names = {1: "forest", 2: "open", 3: "built", 4: "water"}
+    share = {names[c]: f"{100 * np.mean(out == c):.0f}%" for c in names}
+    print("wrote", COVER_ASSET, os.path.getsize(COVER_ASSET), "bytes", share)
+
+    lines = []
+    for name, la, lo in PLACES:
+        d = haversine(rlat, rlon, la, lo)
+        i = int(np.argmin(d))
+        lines.append(f"{z[i]:.0f} {name}")
+        print(f"  {name:18s} {s[i] / 1000:5.1f} km real, Z {z[i]:7.0f}, {d[i]:.0f} m from the road")
+    open(PLACES_ASSET, "w", encoding="utf-8").write("\n".join(lines) + "\n")
+    print("wrote", PLACES_ASSET)
 
 
 def preview(e, n, elev, s, xs, ys, zs):
