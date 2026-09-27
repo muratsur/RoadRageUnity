@@ -22,3 +22,7 @@
 
 # Binary Assets & Packages
 *.unitypackage filter=lfs diff=lfs merge=lfs -text
+
+# Kept out of LFS: the repository's LFS budget is exhausted, and this is a small
+# generated sky panorama (Tools/Sky/build_sky.py).
+Assets/Resources/Sky/**/*.jpg -filter binary
