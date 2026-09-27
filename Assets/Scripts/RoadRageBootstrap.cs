@@ -6900,48 +6900,90 @@ namespace RoadRage.UnityRemake
         /// Placed off the measured road width, not a constant. A fixed 16 m put it
         /// nine metres into Greenwood's single-lane verge, behind undergrowth taller
         /// than the rail, where nobody could see it.
+        ///
+        /// Road "distance" is world Z, not length along the road, so stepping it by the
+        /// section length opens gaps on every bend - widest on the outside of the curve.
+        /// Instead each side's rail line is measured along its true length and cut into
+        /// equal pieces, each stretched a few percent to fit exactly. The chunk's end
+        /// points are shared with its neighbours, so the rail also meets across chunks.
         private void BuildGuardRail(Material material)
         {
+            const float sampleStep = 0.5f;
             var placed = 0;
-            var lateral = 0f;
-            for (var d = SegBegin(0f, GuardRailSection); d < segEnd; d += GuardRailSection)
+            var count = Mathf.CeilToInt((segEnd - segStart) / sampleStep) + 1;
+            var distances = new float[count];
+            var arc = new float[count];
+            for (var side = -1; side <= 1; side += 2)
             {
-                var centre = d + GuardRailSection * 0.5f;
-                lateral = RoadPath.HalfWidthAt(centre) + RoadPath.ShoulderWidth + GuardRailOffset;
-                for (var side = -1; side <= 1; side += 2)
-                    if (PlaceGuardRailSection(centre, side * lateral, material)) placed++;
+                var previous = Vector3.zero;
+                for (var i = 0; i < count; i++)
+                {
+                    distances[i] = Mathf.Min(segEnd, segStart + i * sampleStep);
+                    var point = GuardRailPoint(distances[i], side);
+                    arc[i] = i == 0 ? 0f : arc[i - 1] + Vector3.Distance(previous, point);
+                    previous = point;
+                }
+
+                var sections = Mathf.Max(1, Mathf.RoundToInt(arc[count - 1] / GuardRailSection));
+                var length = arc[count - 1] / sections;
+                var j = 0;
+                var fromDistance = segStart;
+                var from = GuardRailPoint(fromDistance, side);
+                for (var k = 1; k <= sections; k++)
+                {
+                    var target = k * length;
+                    while (j < count - 2 && arc[j + 1] < target) j++;
+                    var toDistance = k == sections
+                        ? segEnd
+                        : Mathf.Lerp(distances[j], distances[j + 1], Mathf.InverseLerp(arc[j], arc[j + 1], target));
+                    var to = GuardRailPoint(toDistance, side);
+                    if (PlaceGuardRailSection(from, to, side, (fromDistance + toDistance) * 0.5f, material)) placed++;
+                    from = to;
+                    fromDistance = toDistance;
+                }
             }
             if (!guardRailReported)
             {
                 guardRailReported = true;
+                var lateral = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
                 Debug.Log($"RR_EVENT guardrail sections={placed} lateral={lateral:0.0}m");
             }
         }
 
-        private bool PlaceGuardRailSection(float centre, float lateral, Material material)
+        private static Vector3 GuardRailPoint(float distance, int side) =>
+            RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + GuardRailOffset));
+
+        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material)
         {
-            var rail = PlaceBiomeModelOnRoad("Guardrail", "SM_guardrail_section_4m", material,
-                centre, lateral, 0f, Vector3.zero, Vector3.one, "Forest Guard Rail", false);
+            var span = to - from;
+            if (span.sqrMagnitude < 0.25f) return false;
+            var rail = BiomeModel("Guardrail", "SM_guardrail_section_4m", material);
             if (rail == null) return false;
-            if (!TryGetMeshBounds(rail, out var bounds)) return true;
+            rail.name = "Forest Guard Rail";
+            var along = span.normalized;
+            var middle = (from + to) * 0.5f;
+            if (!TryGetMeshBounds(rail, out var bounds))
+            {
+                rail.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
+                return true;
+            }
 
             // The FBX axis conversion decides which local axis the beam runs along and
-            // which way it faces, so measure instead of assuming. First turn the long
-            // axis onto the road.
-            if (bounds.size.x > bounds.size.z)
-                rail.transform.rotation *= Quaternion.Euler(0f, 90f, 0f);
+            // which way it faces, so measure instead of assuming. Turn the long axis
+            // onto the span, then face the beam (not the posts) towards traffic: the
+            // posts sit behind the beam, so the mesh centre lies on the post side.
+            var alongX = bounds.size.x > bounds.size.z;
+            var rotation = Quaternion.LookRotation(along, Vector3.up) *
+                           (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
+            if (Vector3.Dot(rotation * bounds.center, RoadPath.Right(midDistance)) * side < 0f)
+                rotation *= Quaternion.Euler(0f, 180f, 0f);
 
-            // The posts sit behind the beam, so the mesh centre lies on the post side.
-            // That side has to point away from the road, or traffic sees the back.
-            var right = RoadPath.Right(centre);
-            var offset = rail.transform.TransformPoint(bounds.center) - rail.transform.position;
-            if (Vector3.Dot(offset, right) * Mathf.Sign(lateral) < 0f)
-                rail.transform.rotation *= Quaternion.Euler(0f, 180f, 0f);
-
-            // Centre the section on its slot along the road so neighbours meet end to end.
-            var forward = RoadPath.Forward(centre);
-            offset = rail.transform.TransformPoint(bounds.center) - rail.transform.position;
-            rail.transform.position -= forward * Vector3.Dot(offset, forward);
+            // Stretch to the exact span so neighbours meet, then centre it on the span.
+            var stretch = span.magnitude / Mathf.Max(0.01f, alongX ? bounds.size.x : bounds.size.z);
+            var scale = alongX ? new Vector3(stretch, 1f, 1f) : new Vector3(1f, 1f, stretch);
+            var centreOffset = rotation * Vector3.Scale(scale, bounds.center);
+            rail.transform.localScale = scale;
+            rail.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
             return true;
         }
 
