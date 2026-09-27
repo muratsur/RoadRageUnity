@@ -7088,7 +7088,7 @@ namespace RoadRage.UnityRemake
         /// the span, and the side the mesh's bulk sits on (a rail's posts, a cliff's
         /// hillside) goes away from the road.
         private GameObject PlaceAlongSpan(string pack, string mesh, Material material, Vector3 from, Vector3 to,
-            int side, float midDistance, string name)
+            int side, float midDistance, string name, bool? runsAlongX = null)
         {
             var span = to - from;
             if (span.sqrMagnitude < 0.25f) return null;
@@ -7103,7 +7103,8 @@ namespace RoadRage.UnityRemake
                 return piece;
             }
 
-            var alongX = bounds.size.x > bounds.size.z;
+            // Cliffs are deeper than they are long, so they say which axis they run along.
+            var alongX = runsAlongX ?? bounds.size.x > bounds.size.z;
             var rotation = Quaternion.LookRotation(along, Vector3.up) *
                            (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
             if (Vector3.Dot(rotation * bounds.center, RoadPath.Right(midDistance)) * side < 0f)
@@ -7123,18 +7124,22 @@ namespace RoadRage.UnityRemake
         /// Distance from the outer edge of the shoulder to the line a cliff's front is
         /// kept behind: ~1.4 m past the guard rail's posts.
         private const float CliffOffset = GuardRailOffset + 1.8f;
-        /// Each 24 m section advances 21 m, so neighbours overlap by their tapered ends.
-        private const float CliffSectionStep = 21f;
+        /// Wall sections are 24 m and laid end to end: every section ends in the same
+        /// profile, so neighbours join without a seam. A run is closed off at both ends
+        /// by a 16 m cap that slopes down to the ground.
         private const float CliffSectionLength = 24f;
+        private const float CliffCapLength = 16f;
         /// How far behind the cliff line trees and undergrowth are kept clear: the
-        /// sections are ~15-18 m deep and the canopy of anything just behind the crest
-        /// would stand in front of the face from the road.
+        /// face leans back and rolls over ~20 m behind the line, and the canopy of
+        /// anything nearer would stand in front of the face from the road. Trees
+        /// further back stand on the cliff's top and back slope, which reads as the
+        /// forest carrying on over the hill.
         private const float CliffClearDepth = 24f;
 
         private static readonly string[] CliffMeshes = { "SM_cliff_01", "SM_cliff_02", "SM_cliff_03" };
         private readonly List<Vector3> cliffZones = new();   // (side, start, end) per chunk
 
-        /// Rock walls 22-36 m tall right behind the guard rail, in runs of three to six
+        /// Rock walls 22-36 m tall right behind the guard rail, in runs of three or four
         /// sections, on roughly half the chunks - and on both sides at once in about a
         /// quarter of those, which makes a gorge. Built before the forest so trees and
         /// undergrowth are not planted in front of the faces (see InCliffZone): the small
@@ -7143,37 +7148,63 @@ namespace RoadRage.UnityRemake
         {
             cliffZones.Clear();
             if (material == null || Random.value > 0.5f) return;
-            // Three to six sections, as many as fit in the chunk with 5 m to spare each end.
-            var fits = Mathf.FloorToInt((segEnd - segStart - 10f - CliffSectionLength) / CliffSectionStep) + 1;
+            // As many sections as fit in the chunk with both caps and 5 m to spare each end.
+            var fits = Mathf.FloorToInt((segEnd - segStart - 10f - 2f * CliffCapLength) / CliffSectionLength);
             if (fits < 1) return;
             var sections = Mathf.Min(Random.Range(3, 7), fits);
-            var runLength = (sections - 1) * CliffSectionStep + CliffSectionLength;
-            var start = Random.Range(segStart + 5f, Mathf.Max(segStart + 5.1f, segEnd - runLength - 5f));
+            var runLength = sections * CliffSectionLength;
+            var first = segStart + 5f + CliffCapLength;
+            var start = Random.Range(first, Mathf.Max(first + 0.1f, segEnd - 5f - CliffCapLength - runLength));
             var firstSide = Random.value < 0.5f ? -1 : 1;
             var gorge = Random.value < 0.25f;
             for (var side = -1; side <= 1; side += 2)
             {
                 if (side != firstSide && !gorge) continue;
                 var distance = start;
-                var runEnd = start;
+                PlaceCliffCap(material, AdvanceAlongLine(start, -CliffCapLength, side), start, side, tallEndAtTo: true);
                 for (var k = 0; k < sections; k++)
                 {
-                    var from = CliffLinePoint(distance, side);
                     var next = AdvanceAlongLine(distance, CliffSectionLength, side);
-                    var to = CliffLinePoint(next, side);
-                    var mid = (distance + next) * 0.5f;
-                    var cliff = PlaceAlongSpan("Cliffs", CliffMeshes[Random.Range(0, CliffMeshes.Length)], material,
-                        from, to, side, mid, "Forest Cliff");
-                    if (cliff != null)
-                    {
-                        KeepFrontBehindLine(cliff, from, to, side, mid);
-                        foreach (var r in cliff.GetComponentsInChildren<Renderer>())
-                            r.reflectionProbeUsage = ReflectionProbeUsage.Off;
-                    }
-                    runEnd = next;
-                    distance = AdvanceAlongLine(distance, CliffSectionStep, side);
+                    PlaceCliffPiece(CliffMeshes[Random.Range(0, CliffMeshes.Length)], material, distance, next, side);
+                    distance = next;
                 }
-                cliffZones.Add(new Vector3(side, start - 6f, runEnd + 6f));
+                var capEnd = AdvanceAlongLine(distance, CliffCapLength, side);
+                PlaceCliffCap(material, distance, capEnd, side, tallEndAtTo: false);
+                cliffZones.Add(new Vector3(side, start - CliffCapLength - 6f, capEnd + 6f));
+            }
+        }
+
+        private GameObject PlaceCliffPiece(string mesh, Material material, float fromDistance, float toDistance, int side)
+        {
+            var from = CliffLinePoint(fromDistance, side);
+            var to = CliffLinePoint(toDistance, side);
+            var mid = (fromDistance + toDistance) * 0.5f;
+            var cliff = PlaceAlongSpan("Cliffs", mesh, material, from, to, side, mid, "Forest Cliff", runsAlongX: true);
+            if (cliff == null) return null;
+            KeepFrontBehindLine(cliff, from, to, side, mid);
+            foreach (var r in cliff.GetComponentsInChildren<Renderer>())
+                r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+            return cliff;
+        }
+
+        /// The caps are mirror images with their origin at the tall end. Which one comes
+        /// out the right way round depends on the FBX axis conversion and the facing
+        /// PlaceAlongSpan picks, so place one and swap it for the other if its tall end
+        /// landed away from the wall.
+        private void PlaceCliffCap(Material material, float fromDistance, float toDistance, int side, bool tallEndAtTo)
+        {
+            var from = CliffLinePoint(fromDistance, side);
+            var to = CliffLinePoint(toDistance, side);
+            var wallEnd = tallEndAtTo ? to : from;
+            var outerEnd = tallEndAtTo ? from : to;
+            foreach (var mesh in new[] { "SM_cliff_end_r", "SM_cliff_end_l" })
+            {
+                var cap = PlaceCliffPiece(mesh, material, fromDistance, toDistance, side);
+                if (cap == null) return;
+                var origin = cap.transform.position;
+                if (Vector3.SqrMagnitude(origin - wallEnd) <= Vector3.SqrMagnitude(origin - outerEnd)) return;
+                cap.SetActive(false);
+                Destroy(cap);
             }
         }
 
@@ -7190,7 +7221,7 @@ namespace RoadRage.UnityRemake
             for (var i = 0; i < 3; i++)
             {
                 var got = Vector3.Distance(origin, CliffLinePoint(next, side));
-                next = distance + (next - distance) * metres / Mathf.Max(0.1f, got);
+                next = distance + (next - distance) * Mathf.Abs(metres) / Mathf.Max(0.1f, got);
             }
             return next;
         }

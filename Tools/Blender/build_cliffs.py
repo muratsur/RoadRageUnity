@@ -1,12 +1,14 @@
-"""Builds Greenwood's roadside cliffs in headless Blender: three 24 m sections of
-rock wall, 22, 30 and 36 m tall, sharing one baked texture atlas.
+"""Builds Greenwood's roadside cliffs in headless Blender: three 24 m wall sections
+peaking at 22, 30 and 36 m, and a pair of mirrored 16 m end caps, sharing one baked
+texture atlas.
 
-Each section is a road cutting at landscape scale: thick strata with overhanging
-ledges, big fractured blocks and vertical joints, a face leaning back into the
-hillside, a crest that rolls back over the top, and long tapered ends so sections can
-stand alone or overlap in a run. The stone material is the rock generator's, rescaled
-for the larger surfaces: weathered grey-brown, sparse fractures, strata banding,
-water streaks, dirt on the ledges.
+Each section is a road cutting at landscape scale: thick strata with ledges, big
+fractured blocks and vertical joints, a face leaning back into the hillside, and a
+crest that rolls over into a short top and a back slope down to the ground - a closed
+hill, not a sheet. Every section ends in the same join profile, so they butt together
+in any order as one continuous wall; the caps start from that profile and slope down
+to the ground to close a run. The stone is weathered grey with strata banding, sparse
+fractures, water streaks and moss on the ledges.
 
 Runs without the Blender app, through Blender's Python module (needs Python 3.11):
 
@@ -15,11 +17,13 @@ Runs without the Blender app, through Blender's Python module (needs Python 3.11
 
 Output (./out_cliffs next to this script, or $RR_OUT):
   SM_cliff_01..03.fbx
+  SM_cliff_end_r.fbx, SM_cliff_end_l.fbx (run end caps)
   T_cliffs_D.jpg, T_cliffs_N.jpg, T_cliffs_MSO.png (half size)
   preview.png
 The game loads them from Assets/Resources/Biomes/Cliffs (Meshes/, Textures/).
 Axes: Blender +Z up. Sections run along X, centred on the origin, and face -Y (the
-road); the game measures each mesh to orient it.
+road). Caps have their origin at the tall end. The game is told they run along X
+and measures which side their bulk is on.
 """
 import bpy  # noqa: must load before bmesh and mathutils
 import bmesh
@@ -33,7 +37,7 @@ from mathutils import Vector, noise
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.environ.get("RR_OUT", os.path.join(HERE, "out_cliffs"))
 os.makedirs(OUT, exist_ok=True)
-TEX = int(os.environ.get("RR_TEX", "2048"))
+TEX = int(os.environ.get("RR_TEX", "1536"))   # atlas is 2 x TEX square
 SAMPLES = int(os.environ.get("RR_SAMPLES", "96"))
 rng = random.Random(23)
 
@@ -63,7 +67,7 @@ def to_object(name, bm):
     return ob
 
 
-ATLAS_HEIGHT = 40.0   # m of cliff the atlas covers vertically (tallest crest + roll)
+ATLAS_HEIGHT = 100.0  # m of profile the atlas covers vertically: face, crest, top and back slope
 
 
 def terrace(v, steps):
@@ -76,58 +80,126 @@ def terrace(v, steps):
     return (base + f * f * (3 - 2 * f)) / steps
 
 
-def build_cliff(i, height, length=24.0, cols=112, rows=96):
+END_HEIGHT = 24.0     # crest height where sections join - identical on every section
+STRATA = 1.7          # m per layer, shared so strata line up across joins
+JOIN_SEED = Vector((31.0, -17.0, 0.0))
+JOIN_BLEND = 3.0      # m over which a section's own relief fades into the join profile
+CAP_LENGTH = 16.0
+SLOTS = 4             # atlas columns: three wall sections and the end cap
+
+
+def relief(x, z, seed):
+    """How far the face is pushed back into the hillside at (x, z): strata ledges,
+    fractured blocks, vertical joints and surface bumps."""
+    layer = math.floor(z / STRATA)
+    frac = z / STRATA - layer
+    ledge = fbm(Vector((layer * 3.1, x * 0.03, 0)) + seed, 2)
+    step = 1.6 * ledge + 0.7 * (frac ** 3)
+    blocks = terrace(fbm(Vector((x * 0.11, z * 0.15, 7)) + seed, 3), 4) * 2.4
+    joints = terrace(fbm(Vector((x * 0.3, 0, z * 0.04 + 11)) + seed, 2), 3) * 1.1
+    bumps = 0.55 * fbm(Vector((x * 0.22, z * 0.3, 0)) + seed, 4)
+    fine = 0.14 * fbm(Vector((x * 0.9, z * 1.2, 5)) + seed, 3)
+    return step + blocks + joints + bumps + fine
+
+
+def smooth(t):
+    t = min(1.0, max(0.0, t))
+    return t * t * (3 - 2 * t)
+
+
+def build_cliff(name, slot, kind, height=END_HEIGHT, rows=96):
+    """kind "mid": a 24 m wall section. Both ends have exactly the same profile (the
+    join profile: END_HEIGHT tall, relief sampled at a fixed x with a shared seed), so
+    any section butts against any other without a seam or a step, and a run reads as
+    one continuous wall. The old sections tapered to the ground at both ends and a
+    run of them read as a row of separate spikes.
+
+    kind "cap_r"/"cap_l": a 16 m piece that starts with the join profile at x = 0 (the
+    mesh origin - the game uses it to tell which end is which) and slopes down to the
+    ground towards +x / -x, closing a run off."""
     bm = bmesh.new()
     seed = Vector((rng.uniform(-50, 50), rng.uniform(-50, 50), 0))
-    strata = rng.uniform(1.2, 2.2)                           # m per layer
-    grid = []
-    for r in range(rows + 1):
-        row = []
-        t = r / rows                                        # 0 bottom .. 1 over the crest
-        for c in range(cols + 1):
-            s = c / cols
+    length = 24.0 if kind == "mid" else CAP_LENGTH
+    cols = int(length * 4.7)
+    grid, arc = [], []
+    for c in range(cols + 1):
+        s = c / cols
+        if kind == "mid":
             x = (s - 0.5) * length
-            # Height tapers to the ground at both ends; the crest line wanders.
-            taper = min(1.0, s / 0.25, (1 - s) / 0.25)
-            taper = taper * taper * (3 - 2 * taper)
-            crest = height * taper * (0.78 + 0.35 * fbm(Vector((x * 0.07, 0, 3)) + seed, 3))
-            face_t = min(t / 0.85, 1.0)
-            z = -0.8 + (crest + 0.8) * face_t
-            y = 0.2 * z                                     # leans back into the hillside
-            if t > 0.85:                                    # crest rolls back over the top
-                over = (t - 0.85) / 0.15
-                z = crest + 2.5 * math.sin(over * math.pi / 2) * taper
-                y += 9.0 * over * taper
-            layer = math.floor(z / strata)
-            frac = z / strata - layer
-            ledge = fbm(Vector((layer * 3.1, x * 0.03, 0)) + seed, 2)
-            step = 1.6 * ledge + 0.7 * (frac ** 3)                              # strata ledges
-            blocks = terrace(fbm(Vector((x * 0.11, z * 0.15, 7)) + seed, 3), 4) * 2.4
-            joints = terrace(fbm(Vector((x * 0.3, 0, z * 0.04 + 11)) + seed, 2), 3) * 1.1
-            bumps = 0.55 * fbm(Vector((x * 0.22, z * 0.3, 0)) + seed, 4)
-            fine = 0.14 * fbm(Vector((x * 0.9, z * 1.2, 5)) + seed, 3)
-            y -= (step + blocks + joints + bumps + fine) * taper
-            row.append(bm.verts.new((x, y, z)))
-        grid.append(row)
+            join_w = smooth(min(s * length, (1 - s) * length) / JOIN_BLEND)
+            rise = math.sin(math.pi * s)
+            crest = END_HEIGHT + (height * (0.85 + 0.3 * fbm(Vector((x * 0.07, 0, 3)) + seed, 3))
+                                  - END_HEIGHT) * rise * join_w
+            taper = 1.0
+        else:
+            x = s * length
+            join_w = smooth(x / JOIN_BLEND)
+            taper = 1.0 - smooth(s / 0.95)
+            wobble = 1.0 + 0.2 * fbm(Vector((x * 0.09, 0, 13)) + seed, 3) * join_w
+            crest = END_HEIGHT * taper * wobble
+
+        def joined(fn):
+            return fn(0.0, JOIN_SEED) * (1 - join_w) + fn(x, seed) * join_w
+
+        # The face, then the crest rolling over, a short top, and a back slope down to
+        # the ground: a closed hill rather than a sheet. A sheet showed its edge as a
+        # thin spike whenever a bend put the camera off to one side of it.
+        profile = []
+        for r in range(rows + 1):
+            t = r / rows
+            z = -0.8 + (crest + 0.8) * t
+            y = 0.2 * z - joined(lambda xx, sd: relief(xx, z, sd)) * taper
+            profile.append((y, z))
+        y0, z0 = profile[-1]
+        top = crest + 2.5 * taper
+        for k in range(1, 9):                                   # roll over the crest
+            o = k / 8
+            profile.append((y0 + 9.0 * o * max(taper, 0.05),
+                            z0 + (top - z0) * math.sin(o * math.pi / 2)))
+        y1 = profile[-1][0]
+        for k in range(1, 7):                                   # top
+            o = k / 6
+            lump = joined(lambda xx, sd: fbm(Vector((xx * 0.12, o * 2.0, 21)) + sd, 3))
+            profile.append((y1 + 8.0 * o * max(taper, 0.05), top + 1.2 * lump * taper))
+        y2, z2 = profile[-1]
+        for k in range(1, 15):                                  # back slope
+            o = k / 14
+            lump = joined(lambda xx, sd: fbm(Vector((xx * 0.1, o * 3.0, 27)) + sd, 3))
+            z = z2 + (-0.8 - z2) * smooth(o) + 1.5 * lump * math.sin(o * math.pi) * taper
+            profile.append((y2 + 18.0 * o * max(taper, 0.05), z))
+        column, run, prev = [], [], None
+        for (y, z) in profile:
+            run.append(0.0 if prev is None else run[-1] + math.dist(prev, (y, z)))
+            prev = (y, z)
+            px = -x if kind == "cap_l" else x
+            column.append(bm.verts.new((px, y, z)))
+        grid.append(column)
+        arc.append(run)
+    rows = len(grid[0]) - 1
+    grid = [[grid[c][r] for c in range(cols + 1)] for r in range(rows + 1)]
+    arc = [[arc[c][r] for c in range(cols + 1)] for r in range(rows + 1)]
     for r in range(rows):
         for c in range(cols):
-            bm.faces.new((grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c]))
-    ob = to_object(f"SM_cliff_{i:02d}", bm)
-    # UVs: a front projection, one island per cliff, the three side by side in the
-    # atlas. Automatic unwrapping cut this faceted surface into thousands of tiny
-    # islands whose edges sampled the atlas background and showed as black shards.
+            quad = (grid[r][c], grid[r][c + 1], grid[r + 1][c + 1], grid[r + 1][c])
+            bm.faces.new(tuple(reversed(quad)) if kind == "cap_l" else quad)
+    bm.verts.index_update()
+    arc_of = {grid[r][c].index: arc[r][c] for r in range(rows + 1) for c in range(cols + 1)}
+    ob = to_object(name, bm)
+    # UVs: a front projection, one island per piece, side by side in the atlas (both
+    # caps share a column). Automatic unwrapping cut this faceted surface into
+    # thousands of tiny islands whose edges sampled the atlas background and showed
+    # as black shards.
+    # v runs along the profile (arc length), so the top and back are not smeared.
     uv = ob.data.uv_layers.new()
     for loop in ob.data.loops:
         co = ob.data.vertices[loop.vertex_index].co
-        u = ((i - 1) + 0.02 + 0.96 * (co.x / length + 0.5)) / 3.0
-        v = 0.01 + 0.98 * (co.z + 1.0) / (ATLAS_HEIGHT + 2.0)
+        f = co.x / length + 0.5 if kind == "mid" else abs(co.x) / length
+        u = (slot + 0.02 + 0.96 * f) / SLOTS
+        v = 0.01 + 0.98 * min(1.0, arc_of[loop.vertex_index] / ATLAS_HEIGHT)
         uv.data[loop.index].uv = (u, v)
     # Blasted rock is angular: flat-shaded facets.
     for p in ob.data.polygons:
         p.use_smooth = False
-    # Built at its final density: collapsing a surface this noisy flipped triangles.
-    dec = ob.modifiers.new("decimate", "DECIMATE")
-    dec.ratio = 1.0
     return ob
 
 
@@ -206,7 +278,7 @@ def stone_material():
     nt.links.new(crack_k.outputs[0], crack_col.inputs[0])
     nt.links.new(col.outputs[2], crack_col.inputs[6])
 
-    # Dirt settles on surfaces facing up.
+    # Moss and dirt settle on surfaces facing up.
     nsep = node(nt, "ShaderNodeSeparateXYZ")
     nt.links.new(geo.outputs["Normal"], nsep.inputs[0])
     up = node(nt, "ShaderNodeMapRange")
@@ -222,7 +294,7 @@ def stone_material():
     dirt_k2.inputs[1].default_value = 1.6
     nt.links.new(dirt_k.outputs[0], dirt_k2.inputs[0])
     dirt = node(nt, "ShaderNodeMix", data_type="RGBA")
-    dirt.inputs[7].default_value = (0.075, 0.055, 0.035, 1)
+    dirt.inputs[7].default_value = (0.045, 0.06, 0.022, 1)   # moss on the ledges (Black Forest cuttings)
     nt.links.new(dirt_k2.outputs[0], dirt.inputs[0])
     nt.links.new(crack_col.outputs[2], dirt.inputs[6])
     # Water staining: dark streaks running down the faces.
@@ -318,13 +390,9 @@ def main():
     scene.render.engine = "CYCLES"
     scene.cycles.device = "CPU"
 
-    faces = [build_cliff(i + 1, h) for i, h in enumerate((22.0, 30.0, 36.0))]
-    objs = faces
-    for o in objs:
-        bpy.context.view_layer.objects.active = o
-        o.select_set(True)
-        bpy.ops.object.modifier_apply(modifier="decimate")
-        o.select_set(False)
+    faces = [build_cliff(f"SM_cliff_{i + 1:02d}", i, "mid", h) for i, h in enumerate((22.0, 30.0, 36.0))]
+    caps = [build_cliff("SM_cliff_end_r", 3, "cap_r"), build_cliff("SM_cliff_end_l", 3, "cap_l")]
+    objs = faces + caps
     mat = stone_material()
     for o in objs:
         o.data.materials.append(mat)
@@ -340,19 +408,21 @@ def main():
     bpy.ops.object.mode_set(mode="OBJECT")
 
     def new_img(name, non_color):
-        img = bpy.data.images.new(name, TEX, TEX, alpha=False, float_buffer=True)
+        img = bpy.data.images.new(name, TEX * 2, TEX * 2, alpha=False, float_buffer=True)
         if non_color:
             img.colorspace_settings.name = "Non-Color"
         return img
 
+    # The two caps are mirror images sharing one atlas column: bake the right one.
+    bakes = faces + caps[:1]
     d_img = new_img("d", False)
-    bake(objs, mat, d_img, "DIFFUSE")
+    bake(bakes, mat, d_img, "DIFFUSE")
     n_img = new_img("n", True)
-    bake(objs, mat, n_img, "NORMAL")
+    bake(bakes, mat, n_img, "NORMAL")
     r_img = new_img("r", True)
-    bake(objs, mat, r_img, "ROUGHNESS")
+    bake(bakes, mat, r_img, "ROUGHNESS")
     ao_img = new_img("ao", True)
-    bake(objs, mat, ao_img, "AO", samples=64)
+    bake(bakes, mat, ao_img, "AO", samples=64)
 
     d = pixels(d_img)
     d[..., :3] = np.where(d[..., :3] <= 0.0031308, d[..., :3] * 12.92,
@@ -365,7 +435,7 @@ def main():
     mso = np.zeros_like(d)
     mso[..., 1] = pixels(ao_img)[..., 0]
     mso[..., 3] = 1 - pixels(r_img)[..., 0]
-    half = mso.reshape(TEX // 2, 2, TEX // 2, 2, 4).mean(axis=(1, 3))
+    half = mso.reshape(TEX, 2, TEX, 2, 4).mean(axis=(1, 3))
     save_png("T_cliffs_MSO", half, "Non-Color")
 
     # Swap to the baked material (what Unity will show) and export each mesh.
@@ -404,17 +474,20 @@ def main():
         print(f"RR_CLIFF {o.name} tris={tris} size={tuple(round(v, 2) for v in o.dimensions)}")
 
     # Preview: the three sections in a run beside a road.
+    # Laid out the way the game does it: cap, three sections end to end, cap.
+    caps[1].location = (-36.0, 4.0, 0)
     for k, f in enumerate(faces):
-        f.location = (k * 22.0 - 22.0, 4.0, 0)
+        f.location = (k * 24.0 - 24.0, 4.0, 0)
+    caps[0].location = (36.0, 4.0, 0)
     bpy.ops.mesh.primitive_plane_add(size=1, location=(0, -3, 0.01))
     road = bpy.context.active_object
-    road.scale = (160, 8, 1)
+    road.scale = (220, 8, 1)
     rm = bpy.data.materials.new("road")
     rm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.07, 0.07, 0.072, 1)
     road.data.materials.append(rm)
     bpy.ops.mesh.primitive_plane_add(size=1, location=(0, 20, 0))
     ground = bpy.context.active_object
-    ground.scale = (80, 46, 1)
+    ground.scale = (220, 46, 1)
     gm = bpy.data.materials.new("ground")
     gm.node_tree.nodes["Principled BSDF"].inputs["Base Color"].default_value = (0.05, 0.035, 0.022, 1)
     ground.data.materials.append(gm)
@@ -432,9 +505,13 @@ def main():
     sun.rotation_euler = (math.radians(55), 0, math.radians(-30))
     scene.collection.objects.link(sun)
     cam = bpy.data.objects.new("cam", bpy.data.cameras.new("cam"))
-    cam.data.lens = 20
-    cam.location = (-30.0, -6.0, 2.6)
-    cam.rotation_euler = (math.radians(98), 0, math.radians(-62))
+    cam.data.lens = 18
+    cam.location = (-80.0, -5.0, 3.0)                   # a chase camera, down the road
+
+    def look_at(target):
+        cam.rotation_euler = (Vector(target) - cam.location).to_track_quat("-Z", "Y").to_euler()
+
+    look_at((0.0, 0.0, 6.0))
     scene.collection.objects.link(cam)
     scene.camera = cam
     scene.render.resolution_x, scene.render.resolution_y = 1280, 720
@@ -442,6 +519,11 @@ def main():
     scene.cycles.use_denoising = True
     scene.view_settings.view_transform = "AgX"
     scene.render.filepath = os.path.join(OUT, "preview.png")
+    bpy.ops.render.render(write_still=True)
+    # And from the far side of the road, looking straight at the run.
+    cam.location = (10.0, -40.0, 3.0)
+    look_at((0.0, 4.0, 14.0))
+    scene.render.filepath = os.path.join(OUT, "preview_side.png")
     bpy.ops.render.render(write_still=True)
     print("RR_DONE")
 
