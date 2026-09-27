@@ -1,12 +1,12 @@
-5 Baden-Baden
-14888 Bühlerhöhe
-17729 Sand
-19580 Hundseck
-21920 Unterstmatt
-26810 Mummelsee
-32313 Ruhestein
-35141 Schliffkopf
-39749 Zuflucht
-42513 Alexanderschanze
-46164 Kniebis
-56279 Freudenstadt
+478 Schwarzwaldhochstraße B500
+7955 Bühlerhöhe
+10796 Sand
+12648 Hundseck
+14987 Unterstmatt
+19878 Mummelsee
+25381 Ruhestein
+28208 Schliffkopf
+32817 Zuflucht
+35580 Alexanderschanze
+39230 Kniebis
+47467 Freudenstadt 2 km

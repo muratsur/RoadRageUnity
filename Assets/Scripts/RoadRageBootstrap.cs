@@ -2533,10 +2533,13 @@ namespace RoadRage.UnityRemake
             var lanes = LaneCountFor(biomeIndex);
             if (biomeIndex == 0)
             {
-                // A two-lane country road: one lane each way, split by the German white
-                // centre line - 6 m dashes, 12 m gaps. Only the centre line: the edge and
-                // yellow lines were taken off Greenwood for reading as stray strips.
-                BuildDashedRibbon("Center Dashes", 0f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
+                // Two lanes each way, German markings: a double solid white centre line
+                // and 6 m dashes with 12 m gaps between the lanes. No edge or yellow
+                // lines: those were taken off Greenwood for reading as stray strips.
+                BuildRibbon("Center Line L", -0.028f, -0.012f, 0.038f, materials["White Paint"], relative: true);
+                BuildRibbon("Center Line R", 0.012f, 0.028f, 0.038f, materials["White Paint"], relative: true);
+                BuildDashedRibbon("Left Lane Dashes", -0.50f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
+                BuildDashedRibbon("Right Lane Dashes", 0.50f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
             }
             else if (lanes == 2)
             {
@@ -4072,7 +4075,10 @@ namespace RoadRage.UnityRemake
         /// does not - they would have been standing on the tarmac. And the sewer tunnel
         /// was widened, because its walls stood at 13.4 m and the road they enclose is now
         /// 13.5 m to the kerb: the carriageway would have been wider than the tunnel.
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 1 : 3;
+        ///
+        /// Greenwood was the last single-lane road, and a truck in the only lane each way
+        /// could not be got past: it now has two each way (18 m of carriageway).
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -6483,10 +6489,13 @@ namespace RoadRage.UnityRemake
                 case RoadRoute.CoverWater: return false;
                 case RoadRoute.CoverForest: return !heath;
             }
-            // Open ground or a clearing: heath and meadow, the odd lone spruce, no forest.
+            // Open ground or a clearing: heath and meadow with trees standing along it
+            // and in groups - not a bare field. A built-up patch (a hotel, a car park)
+            // has more trees round it than open heath does.
             if (heath) return cover == RoadRoute.CoverOpen || Random.value < 0.5f;
-            if (label == "Forest Tree") return Random.value < 0.04f;
-            if (label.StartsWith("Forest Bush")) return Random.value < 0.2f;
+            var built = cover == RoadRoute.CoverBuilt;
+            if (label == "Forest Tree") return Random.value < (built ? 0.35f : 0.12f);
+            if (label.StartsWith("Forest Bush")) return Random.value < (built ? 0.5f : 0.35f);
             return true;
         }
 
@@ -6509,7 +6518,7 @@ namespace RoadRage.UnityRemake
         /// real roadside is open (RouteAllows), so in forest these bands place nothing.
         private void BuildRouteOpenGround()
         {
-            ScatterBand(2.4f, 8f, 60f, (d, l, s) =>
+            ScatterBand(1.6f, 8f, 60f, (d, l, s) =>
                 SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.5f, 1.3f, "Heath Grass"));
             ScatterBand(4.5f, 60f, 150f, (d, l, s) =>
                 SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.7f, 1.6f, "Heath Grass Far"));
@@ -7269,6 +7278,9 @@ namespace RoadRage.UnityRemake
                 // ground, water and cliffs still keep them out (SpawnForestPiece).
                 ScatterBand(8f, 12f, 34f, (d, l, s) => ForestTree(d, l, 18f, 30f));
                 ScatterBand(9f, 34f, 80f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                // And deeper: the forest carries on behind the roadside rows instead of
+                // stopping at one line of trees.
+                ScatterBand(10f, 80f, 140f, (d, l, s) => ForestTree(d, l, 20f, 32f));
             }
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
                 SpawnForestPiece(ForestBush(), d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));

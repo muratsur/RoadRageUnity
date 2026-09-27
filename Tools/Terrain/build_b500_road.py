@@ -53,6 +53,12 @@ os.makedirs(OUT, exist_ok=True)
 
 END_NEAR = (48.4646, 8.4181)        # Freudenstadt: the first leg ends here
 END_RADIUS = 400.0                  # m
+# The drive is the mountain road: it starts where the forest closes in above
+# Geroldsau, past Baden-Baden's streets, and stops short of Freudenstadt's. The
+# towns are built-up land the game has no buildings for - it drew them as bare
+# ground, and every run started there.
+TRIM_START_KM = 7.5
+TRIM_END_KM = 2.0
 STEP = 5.0                          # m, resampling along the real road
 OUT_STEP = 4.0                      # m of Z between output samples
 MAX_HEADING = math.radians(42.0)
@@ -85,7 +91,7 @@ COVER_CLASSES = {10: 1, 20: 2, 30: 2, 40: 2, 60: 2, 90: 2, 95: 1, 100: 2, 50: 3,
 # Named stops, snapped to the nearest point of the road. Shown as the player
 # passes them.
 PLACES = [
-    ("Baden-Baden", 48.7657, 8.2279),
+    ("Schwarzwaldhochstraße B500", 48.7212, 8.2417),
     ("Bühlerhöhe", 48.6787, 8.2345),
     ("Sand", 48.6560, 8.2350),
     ("Hundseck", 48.6450, 8.2210),
@@ -96,7 +102,7 @@ PLACES = [
     ("Zuflucht", 48.5019, 8.2267),
     ("Alexanderschanze", 48.4934, 8.2621),
     ("Kniebis", 48.4732, 8.2975),
-    ("Freudenstadt", 48.4646, 8.4181),
+    ("Freudenstadt 2 km", 48.4556, 8.4045),
 ]
 
 
@@ -116,7 +122,13 @@ def read_route():
     while end + 1 < len(d) and d[end + 1] < d[end]:
         end += 1
     print(f"route: {len(pts)} points, first leg ends at {end}")
-    return lat[: end + 1], lon[: end + 1]
+    lat, lon = lat[: end + 1], lon[: end + 1]
+    along = np.concatenate([[0.0], np.cumsum([
+        float(haversine(np.array([lat[i]]), np.array([lon[i]]), lat[i + 1], lon[i + 1])[0])
+        for i in range(len(lat) - 1)])])
+    keep = (along >= TRIM_START_KM * 1000) & (along <= along[-1] - TRIM_END_KM * 1000)
+    print(f"  trimmed to {along[keep][0] / 1000:.1f}-{along[keep][-1] / 1000:.1f} km of {along[-1] / 1000:.1f}")
+    return lat[keep], lon[keep]
 
 
 def haversine(lat, lon, lat0, lon0):
