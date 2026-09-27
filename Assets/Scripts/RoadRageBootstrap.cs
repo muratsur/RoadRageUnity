@@ -1056,14 +1056,17 @@ namespace RoadRage.UnityRemake
 			// back to a flat brown material. Naming it correctly fixes the brown ground and
 			// leaves "Forest Grass" to be solely the cutout foliage created later.
 			//
-			// The albedo is ForestVillage's organic forest floor rather than a grass diffuse:
-			// the grass texture has a strong grain in one direction, and at any tiling it
-			// repeated into stripes that made the roadside read as an artificial lot.
-			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "ForestVillage", "T_ground_01_D", "T_ground_01_N", new Color(0.38f, 0.44f, 0.28f), 0f, 0.06f),
+			// The albedo was RedCanyon/T_grass_D, which the texture dedupe maps to
+			// ElderTreeGate/T_grass_D - a sheet of grass-blade cards on black, made for
+			// cutout foliage. Tiled across the ground it read as fake striped lawn. The
+			// floor is now Runic Forest's brown soil, the same set its MSO already came
+			// from, with a near-neutral tint so no green is added back.
+			var ground = BiomeSurface(BiomeMaterial("Forest Floor PBR", "RunicForest", "T_ground_02_D", "T_ground_02_N", new Color(0.80f, 0.77f, 0.72f), 0f, 0.06f),
 				"RunicForest", "T_ground_02_MSO", 0.35f);
-            // Ground tiling. Kept only mildly stretched along the road so the floor reads
-            // as mottled ground rather than a repeat pattern.
-            ground.mainTextureScale = new Vector2(7f, 15f);
+            // Ground tiling: square, about 3.6 m per repeat (the ribbon UVs run 0.08 per
+            // metre). The soil's blotches are large, so a smaller or stretched repeat
+            // turns them back into a visible pattern.
+            ground.mainTextureScale = new Vector2(3.5f, 3.5f);
 
             var rock = MakeMaterial("Hideout Rock PBR", new Color(0.66f, 0.72f, 0.65f), 0f, 0.18f);
             rock.mainTexture = Texture("rock_albedo");
@@ -6296,7 +6299,6 @@ namespace RoadRage.UnityRemake
             "RunicForest|Vegetation/SM_plant_ground_02",
             "RunicForest|Vegetation/SM_bush_01",
             "RunicForest|Vegetation/SM_bush_02",
-            "RunicForest|Flowers/SM_grass_01",
             "RunicForest|Flowers/SM_dead_grass",
             "ForestVillage|Vegetation/SM_plant",
             "ForestVillage|Vegetation/SM_plant1",
@@ -6833,10 +6835,10 @@ namespace RoadRage.UnityRemake
                 ForestPlant(d, l, 1.0f, 2.0f, "Undergrowth"));
             ScatterBand(2.3f, 26f, 55f, (d, l, s) =>
                 ForestPlant(d, l, 1.2f, 2.4f, "Deep Undergrowth"));
-            ScatterBand(1.9f, 7.2f, 20f, (d, l, s) =>
-            {
-                return ForestPlant(d, l, 0.6f, 1.3f, "Forest Grass");
-            });
+            // The "Forest Grass" band that ran 7-20 m out is gone: a fourth dense layer of
+            // plants over the same verge, it is what made the roadside read as a green
+            // carpet. The grass clump is also out of ForestPlants; the undergrowth bands
+            // above, ferns and bushes still carry the greenery.
 
             // Raised roadside grass-bank ribbons removed - they stacked into flat green
             // terraces/"layers" beside the road. The Forest Floor PBR ground plane already
