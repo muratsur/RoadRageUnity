@@ -1351,6 +1351,9 @@ namespace RoadRage.UnityRemake
             // metallic/smoothness floats are only the fallback if the MSO variant is lost.
             BiomeSurface(BiomeMaterial("Forest Guard Rail", "Guardrail", "T_guardrail_D", "T_guardrail_N",
                 Color.white, 0.6f, 0.4f), "Guardrail", "T_guardrail_MSO");
+            // Roadside cliffs built in Blender (Tools/Blender/build_cliffs.py).
+            BiomeSurface(BiomeMaterial("Forest Cliff", "Cliffs", "T_cliffs_D", "T_cliffs_N", Color.white, 0f, 1f),
+                "Cliffs", "T_cliffs_MSO", 1f);
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
                 new Color(0.60f, 0.60f, 0.56f), 0f, 0.2f), "ForestVillage", "T_rock_01_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
@@ -4724,7 +4727,7 @@ namespace RoadRage.UnityRemake
                 // The guard rail is placed from the measured road width and belongs on the
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
-                if (n == "Forest Guard Rail") continue;
+                if (n == "Forest Guard Rail" || n == "Forest Cliff") continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6397,6 +6400,8 @@ namespace RoadRage.UnityRemake
         private GameObject SpawnForestPiece(string entry, float distance, float lateral, float height,
             float minHeight, float maxHeight, string label)
         {
+            // Nothing planted in front of a cliff face.
+            if (InCliffZone(distance, lateral)) return null;
             var split = entry.Split('|');
             var model = BiomeModel(split[0], split[1], materials["Forest Undergrowth"]);
             if (model == null) return null;
@@ -6703,57 +6708,65 @@ namespace RoadRage.UnityRemake
 
             if (biomeIndex == 0) // Greenwood
             {
-                // A ridge closing off the forest horizon. ForestVillage ships SM_mountain
-                // and the biome already builds a Forest Mountain material for it, and
-                // neither was ever placed - Greenwood ended at a wall of trees with sky
-                // above it, which is what makes a forest read as a corridor rather than a
-                // valley.
-                //
-                // Both flanks and a back rank, none of it across the road. Parented to the
-                // horizon follower, so the ridge holds its distance instead of sliding past
-                // - a mountain you drive level with is a rock.
-                // A range, not eight lumps.
-                //
-                // Eight isolated peaks at one distance read as scenery objects placed
-                // near a road. A mountain range reads as a range because ridgelines
-                // overlap: a near rank whose gaps are filled by a middle rank, and a far
-                // rank behind both that is mostly haze. Three depths, twenty-six peaks,
-                // and every one rotated differently so the same mesh does not repeat a
-                // recognisable profile along the skyline.
-                //
-                // The near rank is deliberately the shortest. Height falls with distance
-                // in a real range only because of perspective, and these are all drawn at
-                // a fixed offset from the camera - so making the far rank the tallest is
-                // what puts the big peaks behind the little ones instead of in front.
-                var ranks = new[]
+                // A closed ring of mountains (Tools/Terrain/build_mountain_ring.py), 420 m to
+                // 1 km out and up to ~450 m tall, opening into a valley along the road, with
+                // its own lighter aerial perspective (RoadRage/Backdrop) so it reads through
+                // the road fog. The ranks of SM_mountain below are only the fallback.
+                if (!BuildMountainRing())
                 {
-                    // depth, count, height, spread
-                    new Vector4(300f, 10f, 130f, 520f),
-                    new Vector4(440f, 9f, 210f, 700f),
-                    new Vector4(620f, 7f, 310f, 900f),
-                };
-                var peakIndex = 0;
-                for (var r = 0; r < ranks.Length; r++)
-                {
-                    var depth = ranks[r].x;
-                    var count = Mathf.RoundToInt(ranks[r].y);
-                    for (var i = 0; i < count; i++)
+                    // A ridge closing off the forest horizon. ForestVillage ships SM_mountain
+                    // and the biome already builds a Forest Mountain material for it, and
+                    // neither was ever placed - Greenwood ended at a wall of trees with sky
+                    // above it, which is what makes a forest read as a corridor rather than a
+                    // valley.
+                    //
+                    // Both flanks and a back rank, none of it across the road. Parented to the
+                    // horizon follower, so the ridge holds its distance instead of sliding past
+                    // - a mountain you drive level with is a rock.
+                    // A range, not eight lumps.
+                    //
+                    // Eight isolated peaks at one distance read as scenery objects placed
+                    // near a road. A mountain range reads as a range because ridgelines
+                    // overlap: a near rank whose gaps are filled by a middle rank, and a far
+                    // rank behind both that is mostly haze. Three depths, twenty-six peaks,
+                    // and every one rotated differently so the same mesh does not repeat a
+                    // recognisable profile along the skyline.
+                    //
+                    // The near rank is deliberately the shortest. Height falls with distance
+                    // in a real range only because of perspective, and these are all drawn at
+                    // a fixed offset from the camera - so making the far rank the tallest is
+                    // what puts the big peaks behind the little ones instead of in front.
+                    var ranks = new[]
                     {
-                        var peak = BiomeModel("ForestVillage", "Mountains/SM_mountain",
-                            materials["Forest Mountain"]);
-                        if (peak == null) continue;
-                        // Odd ranks are offset by half a step so the rank behind fills the
-                        // gaps in the rank in front rather than hiding directly behind it.
-                        var across = (i - (count - 1) * 0.5f + (r % 2 == 0 ? 0f : 0.5f))
-                                     / Mathf.Max(1f, count - 1f) * ranks[r].w * 2f;
-                        var along = depth + Mathf.Sin(i * 2.3f + r) * depth * 0.18f;
-                        peak.name = $"Forest Horizon Mountain {peakIndex}";
-                        peak.transform.SetParent(globalHorizonSky.transform, false);
-                        peak.transform.localPosition = new Vector3(across, -30f, along);
-                        peak.transform.localRotation = Quaternion.Euler(0f, peakIndex * 53f % 360f, 0f);
-                        NormalizeModelHeight(peak, ranks[r].z * (0.82f + i % 4 * 0.12f), 0f);
-                        peakIndex++;
+                        // depth, count, height, spread
+                        new Vector4(300f, 10f, 130f, 520f),
+                        new Vector4(440f, 9f, 210f, 700f),
+                        new Vector4(620f, 7f, 310f, 900f),
+                    };
+                    var peakIndex = 0;
+                    for (var r = 0; r < ranks.Length; r++)
+                    {
+                        var depth = ranks[r].x;
+                        var count = Mathf.RoundToInt(ranks[r].y);
+                        for (var i = 0; i < count; i++)
+                        {
+                            var peak = BiomeModel("ForestVillage", "Mountains/SM_mountain",
+                                materials["Forest Mountain"]);
+                            if (peak == null) continue;
+                            // Odd ranks are offset by half a step so the rank behind fills the
+                            // gaps in the rank in front rather than hiding directly behind it.
+                            var across = (i - (count - 1) * 0.5f + (r % 2 == 0 ? 0f : 0.5f))
+                                         / Mathf.Max(1f, count - 1f) * ranks[r].w * 2f;
+                            var along = depth + Mathf.Sin(i * 2.3f + r) * depth * 0.18f;
+                            peak.name = $"Forest Horizon Mountain {peakIndex}";
+                            peak.transform.SetParent(globalHorizonSky.transform, false);
+                            peak.transform.localPosition = new Vector3(across, -30f, along);
+                            peak.transform.localRotation = Quaternion.Euler(0f, peakIndex * 53f % 360f, 0f);
+                            NormalizeModelHeight(peak, ranks[r].z * (0.82f + i % 4 * 0.12f), 0f);
+                            peakIndex++;
+                        }
                     }
+
                 }
 
                 // No mesh clouds: Greenwood's sky is a baked panorama (ApplyBiomeSky),
@@ -6837,6 +6850,32 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Greenwood's horizon: one ring mesh centred on the camera by the horizon
+        /// follower. Returns false when the asset is missing so the old ranks are built.
+        private bool BuildMountainRing()
+        {
+            var material = Resources.Load<Material>("Biomes/Mountains/M_mountain_ring");
+            if (material == null) return false;
+            var ring = BiomeModel("Mountains", "SM_mountain_ring", material);
+            if (ring == null) return false;
+            ring.name = "Forest Mountain Ring";
+            ring.transform.SetParent(globalHorizonSky.transform, false);
+            // The valley was built along the mesh's forward axis, which is the road's.
+            // Sunk a little so the inner foothills start below the forest floor.
+            ring.transform.localPosition = new Vector3(0f, -12f, 0f);
+            ring.transform.localRotation = Quaternion.identity;
+            foreach (var r in ring.GetComponentsInChildren<Renderer>())
+            {
+                // A kilometre-wide mesh in the shadow cascades costs a lot and adds
+                // nothing at this distance.
+                r.shadowCastingMode = ShadowCastingMode.Off;
+                r.receiveShadows = false;
+                r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                r.sharedMaterial = material;
+            }
+            return true;
+        }
+
         private Material skyMaterial;
 
         /// Greenwood gets a baked overcast panorama as its skybox (Tools/Sky/build_sky.py);
@@ -6904,6 +6943,7 @@ namespace RoadRage.UnityRemake
                 private void BuildForest()
         {
             Random.InitState(40621 ^ chunkSeed);
+            BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
@@ -7033,25 +7073,33 @@ namespace RoadRage.UnityRemake
         private static Vector3 GuardRailPoint(float distance, int side) =>
             RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + GuardRailOffset));
 
-        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material)
+        private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material) =>
+            PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,
+                "Forest Guard Rail") != null;
+
+        /// Places a long roadside piece (guard rail section, cliff) so it spans from -> to,
+        /// stretched to fit exactly, with its front towards the road.
+        ///
+        /// The FBX axis conversion decides which local axis a mesh runs along and which
+        /// way it faces, so this measures instead of assuming: the long axis goes onto
+        /// the span, and the side the mesh's bulk sits on (a rail's posts, a cliff's
+        /// hillside) goes away from the road.
+        private GameObject PlaceAlongSpan(string pack, string mesh, Material material, Vector3 from, Vector3 to,
+            int side, float midDistance, string name)
         {
             var span = to - from;
-            if (span.sqrMagnitude < 0.25f) return false;
-            var rail = BiomeModel("Guardrail", "SM_guardrail_section_4m", material);
-            if (rail == null) return false;
-            rail.name = "Forest Guard Rail";
+            if (span.sqrMagnitude < 0.25f) return null;
+            var piece = BiomeModel(pack, mesh, material);
+            if (piece == null) return null;
+            piece.name = name;
             var along = span.normalized;
             var middle = (from + to) * 0.5f;
-            if (!TryGetMeshBounds(rail, out var bounds))
+            if (!TryGetMeshBounds(piece, out var bounds))
             {
-                rail.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
-                return true;
+                piece.transform.SetPositionAndRotation(middle, Quaternion.LookRotation(along, Vector3.up));
+                return piece;
             }
 
-            // The FBX axis conversion decides which local axis the beam runs along and
-            // which way it faces, so measure instead of assuming. Turn the long axis
-            // onto the span, then face the beam (not the posts) towards traffic: the
-            // posts sit behind the beam, so the mesh centre lies on the post side.
             var alongX = bounds.size.x > bounds.size.z;
             var rotation = Quaternion.LookRotation(along, Vector3.up) *
                            (alongX ? Quaternion.Euler(0f, 90f, 0f) : Quaternion.identity);
@@ -7062,9 +7110,119 @@ namespace RoadRage.UnityRemake
             var stretch = span.magnitude / Mathf.Max(0.01f, alongX ? bounds.size.x : bounds.size.z);
             var scale = alongX ? new Vector3(stretch, 1f, 1f) : new Vector3(1f, 1f, stretch);
             var centreOffset = rotation * Vector3.Scale(scale, bounds.center);
-            rail.transform.localScale = scale;
-            rail.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
-            return true;
+            piece.transform.localScale = scale;
+            piece.transform.SetPositionAndRotation(middle - along * Vector3.Dot(centreOffset, along), rotation);
+            return piece;
+        }
+
+        // ---------------------------------------------------------------- cliffs
+
+        /// Distance from the outer edge of the shoulder to the line a cliff's front is
+        /// kept behind: ~1.4 m past the guard rail's posts.
+        private const float CliffOffset = GuardRailOffset + 1.8f;
+        /// Each 24 m section advances 21 m, so neighbours overlap by their tapered ends.
+        private const float CliffSectionStep = 21f;
+        private const float CliffSectionLength = 24f;
+        /// How far behind the cliff line trees and undergrowth are kept clear: the
+        /// sections are ~15-18 m deep and the canopy of anything just behind the crest
+        /// would stand in front of the face from the road.
+        private const float CliffClearDepth = 24f;
+
+        private static readonly string[] CliffMeshes = { "SM_cliff_01", "SM_cliff_02", "SM_cliff_03" };
+        private readonly List<Vector3> cliffZones = new();   // (side, start, end) per chunk
+
+        /// Rock walls 22-36 m tall right behind the guard rail, in runs of three to six
+        /// sections, on roughly half the chunks - and on both sides at once in about a
+        /// quarter of those, which makes a gorge. Built before the forest so trees and
+        /// undergrowth are not planted in front of the faces (see InCliffZone): the small
+        /// roadside rocks tried before were hidden by exactly that.
+        private void BuildCliffs(Material material)
+        {
+            cliffZones.Clear();
+            if (material == null || Random.value > 0.5f) return;
+            // Three to six sections, as many as fit in the chunk with 5 m to spare each end.
+            var fits = Mathf.FloorToInt((segEnd - segStart - 10f - CliffSectionLength) / CliffSectionStep) + 1;
+            if (fits < 1) return;
+            var sections = Mathf.Min(Random.Range(3, 7), fits);
+            var runLength = (sections - 1) * CliffSectionStep + CliffSectionLength;
+            var start = Random.Range(segStart + 5f, Mathf.Max(segStart + 5.1f, segEnd - runLength - 5f));
+            var firstSide = Random.value < 0.5f ? -1 : 1;
+            var gorge = Random.value < 0.25f;
+            for (var side = -1; side <= 1; side += 2)
+            {
+                if (side != firstSide && !gorge) continue;
+                var distance = start;
+                var runEnd = start;
+                for (var k = 0; k < sections; k++)
+                {
+                    var from = CliffLinePoint(distance, side);
+                    var next = AdvanceAlongLine(distance, CliffSectionLength, side);
+                    var to = CliffLinePoint(next, side);
+                    var mid = (distance + next) * 0.5f;
+                    var cliff = PlaceAlongSpan("Cliffs", CliffMeshes[Random.Range(0, CliffMeshes.Length)], material,
+                        from, to, side, mid, "Forest Cliff");
+                    if (cliff != null)
+                    {
+                        KeepFrontBehindLine(cliff, from, to, side, mid);
+                        foreach (var r in cliff.GetComponentsInChildren<Renderer>())
+                            r.reflectionProbeUsage = ReflectionProbeUsage.Off;
+                    }
+                    runEnd = next;
+                    distance = AdvanceAlongLine(distance, CliffSectionStep, side);
+                }
+                cliffZones.Add(new Vector3(side, start - 6f, runEnd + 6f));
+            }
+        }
+
+        private static Vector3 CliffLinePoint(float distance, int side) =>
+            RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + CliffOffset));
+
+        /// Road distance is world Z, not length along the road: find the distance that
+        /// is `metres` further along the cliff line itself, so sections keep their size
+        /// on bends.
+        private static float AdvanceAlongLine(float distance, float metres, int side)
+        {
+            var origin = CliffLinePoint(distance, side);
+            var next = distance + metres;
+            for (var i = 0; i < 3; i++)
+            {
+                var got = Vector3.Distance(origin, CliffLinePoint(next, side));
+                next = distance + (next - distance) * metres / Mathf.Max(0.1f, got);
+            }
+            return next;
+        }
+
+        /// True where a cliff face stands between this point and the road, so nothing is
+        /// planted in front of it.
+        private bool InCliffZone(float distance, float lateral)
+        {
+            for (var i = 0; i < cliffZones.Count; i++)
+            {
+                var z = cliffZones[i];
+                if (Mathf.Sign(lateral) != z.x || distance < z.y || distance > z.z) continue;
+                var line = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + CliffOffset;
+                if (Mathf.Abs(lateral) < line + CliffClearDepth) return true;
+            }
+            return false;
+        }
+
+        /// A section's ledges and blocks stand proud of its base line, so after placing,
+        /// push it away from the road until nothing is in front of the line - otherwise
+        /// rock could reach back over the guard rail.
+        private static void KeepFrontBehindLine(GameObject piece, Vector3 from, Vector3 to, int side, float midDistance)
+        {
+            if (!TryGetMeshBounds(piece, out var bounds)) return;
+            var outward = RoadPath.Right(midDistance) * side;
+            var origin = (from + to) * 0.5f;
+            var nearest = float.PositiveInfinity;
+            var toWorld = piece.transform.localToWorldMatrix;
+            for (var corner = 0; corner < 8; corner++)
+            {
+                var local = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (corner & 1) == 0 ? -1f : 1f, (corner & 2) == 0 ? -1f : 1f, (corner & 4) == 0 ? -1f : 1f));
+                nearest = Mathf.Min(nearest, Vector3.Dot(toWorld.MultiplyPoint3x4(local) - origin, outward));
+            }
+            if (nearest < 0f) piece.transform.position += outward * -nearest;
         }
 
         /// Mesh bounds in the object's own space. Renderer bounds are world-axis
