@@ -6455,8 +6455,18 @@ namespace RoadRage.UnityRemake
             if (InCliffZone(distance, lateral)) return null;
             if (!RouteAllows(label, distance, lateral)) return null;
             var split = entry.Split('|');
-            var blackForest = split[0] == "BlackForest";
-            var model = BiomeModel(split[0], split[1], blackForest ? BlackForestTint() : materials["Forest Undergrowth"]);
+            var external = split[0] == "External";
+            var blackForest = external || split[0] == "BlackForest";
+            GameObject model;
+            if (external)
+            {
+                var prefab = ExternalTrees[int.Parse(split[1]) % ExternalTrees.Length];
+                model = prefab != null ? Adopt(Instantiate(prefab)) : null;
+            }
+            else
+            {
+                model = BiomeModel(split[0], split[1], blackForest ? BlackForestTint() : materials["Forest Undergrowth"]);
+            }
             if (model == null) return null;
             model.name = label;
             model.transform.position = RoadPath.Point(distance, lateral, height);
@@ -6650,12 +6660,15 @@ namespace RoadRage.UnityRemake
             // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
             // rounded English wood; an alpine pass is a wall of tall narrow conifers with
             // the odd broadleaf in it. Flipped to 30% broadleaf.
-            // On the B500 it is the Black Forest: spruce and fir, the odd dead snag.
+            // On the B500 it is the Black Forest: spruce and fir, the odd dead snag -
+            // from an installed tree pack where there is one (ExternalVegetation).
             var table = RoadPath.Route != null
                 ? (Random.value < 0.03f ? BlackForestSnags : BlackForestTrees)
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
-            var tree = SpawnForestPiece(table[Random.Range(0, table.Length)], distance, lateral, 0f,
-                minHeight, maxHeight, "Forest Tree");
+            var entry = table[Random.Range(0, table.Length)];
+            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
+                entry = "External|" + Random.Range(0, ExternalTrees.Length);
+            var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
             KeepTrunkOffRoad(tree, distance, Mathf.Sign(lateral));
             if (!KeepCanopyOffRoad(tree, distance, Mathf.Sign(lateral)))
@@ -6678,6 +6691,25 @@ namespace RoadRage.UnityRemake
             // would also be 8 m across.
             return SpawnForestPiece(BlackForestPlants[Random.Range(0, BlackForestPlants.Length)], distance, lateral,
                 0.02f, minHeight * 0.5f, maxHeight * 0.55f, label);
+        }
+
+        private static GameObject[] externalTrees;
+
+        /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
+        /// Tree Pack; empty when there is none.
+        private static GameObject[] ExternalTrees
+        {
+            get
+            {
+                if (externalTrees != null) return externalTrees;
+                var registry = Resources.Load<ExternalVegetation>("Biomes/ExternalVegetation");
+                externalTrees = registry != null && registry.Trees != null
+                    ? System.Array.FindAll(registry.Trees, t => t != null)
+                    : System.Array.Empty<GameObject>();
+                if (externalTrees.Length > 0)
+                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                return externalTrees;
+            }
         }
 
         /// Young spruce stand in for bushes under the Black Forest canopy.
