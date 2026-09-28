@@ -61,6 +61,7 @@ public static class LinkAsianCanalMenu
         var report = new StringBuilder();
         var meshes = new List<GameObject>();
         var sizes = new List<Vector3>();
+        var highs = new List<Vector3>();
         var unmatched = 0;
         var fbxs = AssetDatabase.FindAssets("t:Model", new[] { Root }).Select(AssetDatabase.GUIDToAssetPath)
             .Where(p => p.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)).OrderBy(p => p).ToList();
@@ -87,10 +88,11 @@ public static class LinkAsianCanalMenu
             importer.SaveAndReimport();
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
-            var size = Size(prefab);
+            var size = Size(prefab, out var high);
             meshes.Add(prefab);
             sizes.Add(size);
-            report.AppendLine($"{prefab.name}  size={size.x:0.00}x{size.y:0.00}x{size.z:0.00}{line}");
+            highs.Add(high);
+            report.AppendLine($"{prefab.name}  size={size.x:0.00}x{size.y:0.00}x{size.z:0.00} high={high.x:0.00},{high.z:0.00}{line}");
         }
         EditorUtility.ClearProgressBar();
 
@@ -103,6 +105,10 @@ public static class LinkAsianCanalMenu
         }
         registry.Meshes = meshes.ToArray();
         registry.Sizes = sizes.ToArray();
+        registry.Highs = highs.ToArray();
+        registry.Materials = AssetDatabase.FindAssets("t:Material", new[] { Generated })
+            .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g)))
+            .Where(m => m != null).ToArray();
         EditorUtility.SetDirty(registry);
         AssetDatabase.SaveAssets();
 
@@ -413,10 +419,14 @@ public static class LinkAsianCanalMenu
         return material;
     }
 
-    private static Vector3 Size(GameObject prefab)
+    /// Bounds size, and where the top of the mesh is: the mean (x, z) of its highest
+    /// vertices, from the middle of the bounds, in the prefab's own orientation.
+    private static Vector3 Size(GameObject prefab, out Vector3 high)
     {
+        high = Vector3.zero;
         if (prefab == null) return Vector3.zero;
         var instance = Object.Instantiate(prefab);
+        instance.transform.position = Vector3.zero;
         var renderers = instance.GetComponentsInChildren<Renderer>();
         var size = Vector3.zero;
         if (renderers.Length > 0)
@@ -424,6 +434,21 @@ public static class LinkAsianCanalMenu
             var bounds = renderers[0].bounds;
             foreach (var r in renderers) bounds.Encapsulate(r.bounds);
             size = bounds.size;
+            var lod = instance.GetComponent<LODGroup>();
+            var lod0 = lod != null && lod.GetLODs().Length > 0 ? lod.GetLODs()[0].renderers : renderers;
+            var points = new List<Vector3>();
+            foreach (var r in lod0)
+            {
+                if (r == null || !r.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null) continue;
+                foreach (var v in filter.sharedMesh.vertices) points.Add(r.transform.TransformPoint(v));
+            }
+            if (points.Count > 0)
+            {
+                var top = bounds.max.y - size.y * 0.15f;
+                var upper = points.Where(p => p.y >= top).ToList();
+                if (upper.Count > 0)
+                    high = new Vector3(upper.Average(p => p.x) - bounds.center.x, 0f, upper.Average(p => p.z) - bounds.center.z);
+            }
         }
         Object.DestroyImmediate(instance);
         return size;

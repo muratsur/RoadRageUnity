@@ -293,15 +293,15 @@ namespace RoadRage.UnityRemake
         private Transform car;
 		public static string requestedBiome;
         /// Indices the picker and journey currently expose.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
-            "HOLLYWOOD HILLS", "MIDNIGHT DOCKS", "VOLCANO PASS", "SALT FLATS", "STORM COAST"
+            "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST"
         };
-        private static readonly string[] ComingSoon = { "MIDNIGHT DOCKS", "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
+        private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
 		private string biomeName;
 		private WeatherKind activeWeather;
@@ -586,6 +586,7 @@ namespace RoadRage.UnityRemake
             if (value.Contains("brooklyn") || value.Contains("kowloon") || value.Contains("hong")) return Biomes[7];
             if (value.Contains("manhattan") || value.Contains("cyber") || value.Contains("sprawl")) return Biomes[8];
             if (value.Contains("hollywood") || value.Contains("hills")) return Biomes[9];
+            if (value.Contains("canal") || value.Contains("asia")) return Biomes[10];
             if (value.Contains("midnight") || value.Contains("dock")) return Biomes[10];
             if (value.Contains("volcano") || value.Contains("pass")) return Biomes[11];
             if (value.Contains("salt") || value.Contains("flat")) return Biomes[12];
@@ -2339,6 +2340,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
+            CanalTownIndex => new BiomeMood // CANAL TOWN - old quarter, warm haze over the water
+            {
+                FogDensity = 0.0055f, Fog = new Color(0.56f, 0.47f, 0.38f),
+                Sky = new Color(0.56f, 0.52f, 0.50f), Equator = new Color(0.36f, 0.31f, 0.27f),
+                Ground = new Color(0.16f, 0.13f, 0.10f), SunColor = new Color(1f, 0.82f, 0.60f),
+                SunIntensity = 1.25f, PostExposure = 0.10f, BloomIntensity = 0.45f, BloomThreshold = 4f,
+                RoadWetness = 0.35f, AmbientIntensity = 1.1f, Saturation = -10f
+            },
             9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
                 FogDensity = 0.0015f, Fog = new Color(0.75f, 0.85f, 0.95f),
@@ -2395,6 +2404,7 @@ namespace RoadRage.UnityRemake
             7 => "Kowloon Ground",
             8 => "Cyber Ground",
             9 => "Hills Ground",
+            CanalTownIndex => "Kowloon Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2568,7 +2578,11 @@ namespace RoadRage.UnityRemake
         {
             var groundName = GroundNameFor(biomeIndex);
             var isCity = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3 || biomeIndex == 9;
-            if (isCity)
+            if (biomeIndex == CanalTownIndex)
+            {
+                BuildCanalGround(materials[groundName]);
+            }
+            else if (isCity)
             {
                 // Flanking solid foundations on left and right sides (leaves central highway 100% clean with zero z-fighting)
                 BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
@@ -2631,6 +2645,10 @@ namespace RoadRage.UnityRemake
                 var sidewalkMat = biomeIndex == 8 ? materials["Cyber Floor"] : (biomeIndex == 7 ? materials["Kowloon Ground"] : materials["Sidewalk"]);
                 BuildRibbon("Left Paved Sidewalk", -1.85f, -1.24f, 0.14f, sidewalkMat, relative: true);
                 BuildRibbon("Right Paved Sidewalk", 1.24f, 1.85f, 0.14f, sidewalkMat, relative: true);
+            }
+            else if (biomeIndex == CanalTownIndex)
+            {
+                BuildCanalPavements();
             }
             else if (biomeIndex == 9) // Hollywood Hills
             {
@@ -4218,7 +4236,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -4239,7 +4257,7 @@ namespace RoadRage.UnityRemake
         ///
         /// Greenwood was the last single-lane road, and a truck in the only lane each way
         /// could not be got past: it now has two each way (18 m of carriageway).
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 2 : 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4270,7 +4288,8 @@ namespace RoadRage.UnityRemake
         /// sweeping bends; everything else keeps the road it had. Blended across a zone
         /// seam exactly like the half width, because a step change in curvature at a
         /// boundary is a kink in the road, and the gateway stands right on it.
-        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 3.0f : 1f;
+        private static float CurveScaleFor(int biomeIndex) =>
+            biomeIndex == 0 ? 3.0f : biomeIndex == CanalTownIndex ? 0.35f : 1f;
 
         private float CurveScaleAtDistance(float distance)
         {
@@ -4285,7 +4304,8 @@ namespace RoadRage.UnityRemake
             return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
         }
 
-        private static float ElevationScaleFor(int biomeIndex) => biomeIndex == 0 ? 1.8f : 1f;
+        private static float ElevationScaleFor(int biomeIndex) =>
+            biomeIndex == 0 ? 1.8f : biomeIndex == CanalTownIndex ? 0.15f : 1f;
 
         private float ElevationScaleAtDistance(float distance)
         {
@@ -4941,7 +4961,7 @@ namespace RoadRage.UnityRemake
                 // different amount and leave the rail jagged.
                 if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
                 // B500 posts and signs stand just behind the rail on purpose.
-                if (n.StartsWith("B500 ")) continue;
+                if (n.StartsWith("B500 ") || n.StartsWith("Canal ")) continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -5033,7 +5053,271 @@ namespace RoadRage.UnityRemake
 				case 7: BuildBrooklynPhotorealPass(); break;
 				case 8: BuildManhattanPhotorealPass(); break;
 				case 9: BuildHollywoodPhotorealPass(); break;
+                case CanalTownIndex: BuildCanalTown(); break;
                 default: BuildForest(); break;
+            }
+        }
+
+        // ------------------------------------------------------------ CANAL TOWN
+
+        /// CANAL TOWN: an old Asian canal quarter, built from the Asian Canal Environment
+        /// (Leartes Studios) exported from Unreal and linked by Road Rage > Link Asian
+        /// Canal Pack (see CanalPack). The road runs along the canal. On the left, a
+        /// pavement and a terrace of two-storey houses assembled from the kit's 2 m
+        /// modules - stone and timber walls, windows and doors, awnings, pitched tiled
+        /// roofs - with shop stalls, lanterns and laundry. On the right, a quay wall
+        /// drops to the water, and a second terrace faces the road across the canal.
+        private const int CanalTownIndex = 10;
+        private const float CanalModule = 2f;
+        private const float CanalPavement = 4f;   // kerb to house fronts, street side
+        private const float CanalBank = 1.5f;     // kerb to the quay edge, canal side
+        private const float CanalWidth = 14f;
+        private const float CanalQuay = 3f;       // far quay, water to house fronts
+        private const float CanalWaterLevel = -1.3f;
+
+        private static CanalPack canalPack;
+        private static Material canalQuayStone;
+        private static bool canalWarned;
+        private static bool canalPackLoaded;
+
+        private static CanalPack Canal
+        {
+            get
+            {
+                if (!canalPackLoaded)
+                {
+                    canalPackLoaded = true;
+                    canalPack = Resources.Load<CanalPack>("Biomes/AsianCanalPack");
+                }
+                return canalPack != null && canalPack.Meshes.Length > 0 ? canalPack : null;
+            }
+        }
+
+        private static float CanalEdge(float distance) => RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth;
+        private static float CanalStreetFacade(float d) => CanalEdge(d) + CanalPavement;
+        private static float CanalQuayEdge(float d) => CanalEdge(d) + CanalBank;
+        private static float CanalFarEdge(float d) => CanalQuayEdge(d) + CanalWidth;
+        private static float CanalFarFacade(float d) => CanalFarEdge(d) + CanalQuay;
+
+        private Material CanalMaterial(string name, string fallback)
+        {
+            var m = Canal?.FindMaterial(name);
+            return m != null ? m : materials[fallback];
+        }
+
+        /// Ground either side, with the canal cut out of the right-hand side.
+        private void BuildCanalGround(Material fallback)
+        {
+            _ = fallback;
+            var paving = CanalMaterial("M_StoneFloorWet_01", "Kowloon Ground");
+            var half = RoadPath.HalfWidthAt(segStart);
+            BuildRibbon("Left CANAL TOWN Ground", -150f, -1.0f, -0.02f, paving, sampleStep: 6f, relative: true);
+            BuildRibbon("Right CANAL TOWN Ground", 1.0f, CanalQuayEdge(segStart) / half, -0.02f, paving, sampleStep: 6f, relative: true);
+            BuildRibbon("Far CANAL TOWN Ground", CanalFarEdge(segStart) / half, 150f, -0.02f, paving, sampleStep: 6f, relative: true);
+        }
+
+        private void BuildCanalPavements()
+        {
+            var cobble = CanalMaterial("M_CobbleStone_01B", "Sidewalk");
+            var half = RoadPath.HalfWidthAt(segStart);
+            BuildRibbon("Canal Curb Left", -1.03f, -1.0f, 0.12f, materials["City Asphalt Trim"], relative: true);
+            BuildRibbon("Canal Curb Right", 1.0f, 1.03f, 0.12f, materials["City Asphalt Trim"], relative: true);
+            BuildRibbon("Canal Pavement Left", -CanalStreetFacade(segStart) / half, -1.03f, 0.12f, cobble, relative: true);
+            BuildRibbon("Canal Pavement Right", 1.03f, CanalQuayEdge(segStart) / half, 0.12f, cobble, relative: true);
+        }
+
+        private static readonly string[] CanalGroundWalls =
+            { "SM_Wall4x2_01", "SM_Wall4x2_02", "SM_Wall4x2_04", "SM_Wall4x2_05", "SM_Wall4x2_Window_01", "SM_Wall4x2_Window_02" };
+        private static readonly string[] CanalUpperWalls =
+            { "SM_Wall4x2_Window_01", "SM_Wall4x2_Window_02", "SM_Wall4x2_Window_03", "SM_Wall4x2_03", "SM_Wall4x2_03_RED", "SM_Wall4x2_06" };
+        private static readonly string[] CanalRoofs = { "SM_Roof_01_Straight", "SM_Roof_02_Straight" };
+        private static readonly string[] CanalAwnings = { "SM_SmallRoof_01", "SM_SmallRoof_02", "SM_SmallRoof_03" };
+        private static readonly string[] CanalColumns = { "SM_Column_01_RED", "SM_Column_02_RED", "SM_Column_03", "SM_Column_04_RED" };
+        private static readonly string[] CanalLaundry =
+            { "SM_ClothesHanged_01", "SM_ClothesHanged_02", "SM_ClothesHanged_03", "SM_ClothesHanged_4", "SM_ClothesHanged_6" };
+        private static readonly string[] CanalStreetProps =
+        {
+            "SM_Barrel_01", "SM_Barrel_01_Ropes_01", "SM_Crate_01", "SM_SacksPacked_01", "SM_SacksPacked_02", "SM_Pot_01",
+            "SM_Pot_02", "SM_Pot_04", "SM_Basket_01", "SM_Basket_02", "SM_Bucket_01", "SM_Tub_01", "SM_Wheelcart_01",
+        };
+
+        private enum CanalAlign { Min, Center, Max }
+
+        /// Places one kit piece in a frame standing on the road at (distance, lateral),
+        /// its +z pointing away from the road. The piece is measured, not trusted: its
+        /// bounds are centred on the frame across the road axis, stood on the frame's
+        /// floor, and put in front of, behind or across the frame's line in depth - so
+        /// Unreal pivots, wherever they are, do not matter. highAway turns a sloped piece
+        /// so its high side (a roof ridge, an awning's wall edge) is away from the road.
+        private GameObject CanalPiece(string mesh, float distance, float lateral, int side, float height,
+            CanalAlign depthAlign, float depthOffset = 0f, bool highAway = false, string label = "Canal Piece",
+            Transform parent = null, float yaw = 0f)
+        {
+            var pack = Canal;
+            var prefab = pack?.Find(mesh, out _);
+            if (prefab == null) return null;
+            // Measured in a frame at the origin, then moved into place.
+            var frame = new GameObject(label).transform;
+            var piece = Instantiate(prefab, frame, false);
+            if (highAway && pack.HighOf(prefab).z < 0f)
+                piece.transform.localRotation = Quaternion.Euler(0f, 180f, 0f) * piece.transform.localRotation;
+            if (yaw != 0f)
+                piece.transform.localRotation = Quaternion.Euler(0f, yaw, 0f) * piece.transform.localRotation;
+            if (TryGetCombinedBounds(piece, out var b))
+            {
+                var z = depthAlign == CanalAlign.Min ? b.min.z : depthAlign == CanalAlign.Max ? b.max.z : b.center.z;
+                piece.transform.localPosition -= new Vector3(b.center.x, b.min.y, z - depthOffset);
+            }
+            frame.SetParent(parent != null ? parent : chunkRoot, false);
+            var outward = side * RoadPath.Right(distance);
+            outward.y = 0f;
+            frame.SetPositionAndRotation(RoadPath.Point(distance, lateral, height),
+                Quaternion.LookRotation(outward.sqrMagnitude > 1e-4f ? outward.normalized : Vector3.right * side));
+            return frame.gameObject;
+        }
+
+        private void BuildCanalTown()
+        {
+            Random.InitState(88321 ^ chunkSeed);
+            if (Canal == null)
+            {
+                if (canalWarned) return;
+                canalWarned = true;
+                Debug.LogWarning("CANAL TOWN needs the Asian Canal pack: export it from Unreal into Assets/AsianCanal " +
+                                 "and run Road Rage > Link Asian Canal Pack.");
+                return;
+            }
+            var street = new GameObject("Canal Street").transform;
+            street.SetParent(chunkRoot, false);
+            var water = new GameObject("Canal Water Side").transform;
+            water.SetParent(chunkRoot, false);
+
+            BuildCanalWater();
+            BuildCanalTerrace(-1, CanalStreetFacade, true, street);
+            BuildCanalTerrace(1, CanalFarFacade, false, water);
+            BuildCanalQuay(water);
+        }
+
+        private void BuildCanalWater()
+        {
+            var half = RoadPath.HalfWidthAt(segStart);
+            var waterMaterial = Canal?.FindMaterial("M_MuddyCanal_01") ?? materials["Mountain Lake"];
+            EnableProbeReflections(BuildRibbon("Canal Water", CanalQuayEdge(segStart) / half, CanalFarEdge(segStart) / half,
+                CanalWaterLevel, waterMaterial, sampleStep: 6f, relative: true));
+            // Quay walls from the water up to the street, both banks. Double-sided: a
+            // ribbon wall faces one way, and each bank is seen from the other.
+            if (canalQuayStone == null)
+            {
+                canalQuayStone = new Material(CanalMaterial("M_StoneWall_03", "Sewer Concrete")) { name = "Canal Quay Stone" };
+                canalQuayStone.SetFloat("_Cull", 0f);
+            }
+            var stone = canalQuayStone;
+            BuildWallRibbon("Canal Quay Wall Near", CanalQuayEdge(segStart), CanalWaterLevel - 0.5f, 0.12f, stone);
+            BuildWallRibbon("Canal Quay Wall Far", CanalFarEdge(segStart), CanalWaterLevel - 0.5f, 0.0f, stone);
+        }
+
+        /// A terrace of houses, 3 to 6 modules each, facing the road.
+        private void BuildCanalTerrace(int side, System.Func<float, float> facadeAt, bool streetSide, Transform parent)
+        {
+            var d = Mathf.Ceil(segStart / CanalModule) * CanalModule;
+            var plaster = CanalMaterial("M_PlasterOld_01", "Kowloon Ground");
+            while (d < segEnd - CanalModule * 0.5f)
+            {
+                var modules = Mathf.Min(Random.Range(3, 7), Mathf.FloorToInt((segEnd - d) / CanalModule));
+                if (modules <= 0) break;
+                var roof = CanalRoofs[Random.Range(0, CanalRoofs.Length)];
+                var upperStyle = CanalUpperWalls[Random.Range(0, CanalUpperWalls.Length)];
+                var shops = streetSide && Random.value < 0.6f;
+                var door = Random.Range(0, modules);
+                var houseStart = d;
+                for (var m = 0; m < modules; m++, d += CanalModule)
+                {
+                    var c = d + CanalModule * 0.5f;
+                    var f = facadeAt(c);
+                    var ground = m == door ? null : CanalGroundWalls[Random.Range(0, CanalGroundWalls.Length)];
+                    if (ground != null)
+                        CanalPiece(ground, c, side * f, side, 0f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    else
+                    {
+                        CanalPiece("SM_Door1_01", c, side * f, side, 0f, CanalAlign.Min, 0f, false, "Canal Door", parent);
+                        CanalPiece("SM_WoodPanel1x2_01_RED", c, side * f, side, 3f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    }
+                    CanalPiece(Random.value < 0.75f ? upperStyle : CanalUpperWalls[Random.Range(0, CanalUpperWalls.Length)],
+                        c, side * f, side, 4f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    CanalPiece("SM_Beamx2_01", c, side * f, side, 3.9f, CanalAlign.Max, 0.05f, false, "Canal Beam", parent);
+                    // Pitched roof: the front slope overhangs the facade, the back slope
+                    // meets it at the ridge.
+                    var roofMesh = Canal.Find(roof, out var roofSize);
+                    CanalPiece(roof, c, side * f, side, 8f, CanalAlign.Min, -0.45f, true, "Canal Roof", parent);
+                    CanalPiece(roof, c, side * f, side, 8f, CanalAlign.Min, -0.45f + roofSize.z, false, "Canal Roof", parent,
+                        Canal.HighOf(roofMesh).z < 0f ? 0f : 180f);
+                    if (!streetSide) continue;
+
+                    if (shops && m != door && Random.value < 0.8f)
+                    {
+                        CanalPiece(CanalAwnings[Random.Range(0, CanalAwnings.Length)], c, side * f, side, 3.2f,
+                            CanalAlign.Max, 0f, true, "Canal Awning", parent);
+                        if (Random.value < 0.35f)
+                            CanalPiece("SM_Lantern_02", c, side * (f - 0.7f), side, 2.3f, CanalAlign.Center, 0f, false, "Canal Lantern", parent);
+                    }
+                    if (Random.value < 0.22f)
+                        CanalPiece(CanalLaundry[Random.Range(0, CanalLaundry.Length)], c, side * (f - 0.35f), side, 5.6f,
+                            CanalAlign.Center, 0f, false, "Canal Laundry", parent);
+                    if (Random.value < 0.08f)
+                        CanalPiece("SM_Banner_01", c, side * (f - 0.25f), side, 4.4f, CanalAlign.Center, 0f, false, "Canal Banner", parent);
+                    if (Random.value < 0.3f)
+                        CanalPiece("SM_WallBase1x2_02", c, side * f, side, 0f, CanalAlign.Max, 0f, false, "Canal Plinth", parent);
+                    if (Random.value < 0.35f)
+                        CanalPiece(CanalStreetProps[Random.Range(0, CanalStreetProps.Length)], c + Random.Range(-0.5f, 0.5f),
+                            side * (f - Random.Range(0.8f, 1.6f)), side, 0.12f, CanalAlign.Center, 0f, false, "Canal Prop", parent,
+                            Random.Range(0f, 360f));
+                }
+                // Columns at the house ends, the body behind the facade, and now and
+                // then a market stall on the pavement.
+                if (streetSide)
+                {
+                    var column = CanalColumns[Random.Range(0, CanalColumns.Length)];
+                    CanalPiece(column, houseStart, side * (facadeAt(houseStart) - 0.25f), side, 0f, CanalAlign.Center, 0f, false, "Canal Column", parent);
+                    if (Random.value < 0.18f)
+                    {
+                        var at = houseStart + modules * CanalModule * 0.5f;
+                        CanalPiece(Random.value < 0.5f ? "SM_Stand_01" : "SM_Stand_02", at, side * facadeAt(at), side, 0.12f,
+                            CanalAlign.Max, -0.2f, false, "Canal Stall", parent);
+                    }
+                }
+                var mid = houseStart + modules * CanalModule * 0.5f;
+                var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                body.name = "Canal House Body";
+                Destroy(body.GetComponent<Collider>());
+                body.GetComponent<Renderer>().sharedMaterial = plaster;
+                body.transform.SetParent(parent, false);
+                var outward = side * RoadPath.Right(mid);
+                outward.y = 0f;
+                var rot = Quaternion.LookRotation(outward.normalized);
+                body.transform.SetPositionAndRotation(RoadPath.Point(mid, side * (facadeAt(mid) + 2.1f), 4f), rot);
+                body.transform.localScale = new Vector3(modules * CanalModule - 0.05f, 8f, 3.6f);
+
+                // An alley between houses now and then.
+                if (Random.value < 0.15f) d += CanalModule;
+            }
+        }
+
+        /// The canal's edge on the street side: a low stone parapet, stone lanterns,
+        /// steps down to the water, and a lion guarding the way now and then.
+        private void BuildCanalQuay(Transform parent)
+        {
+            for (var d = Mathf.Ceil(segStart / CanalModule) * CanalModule; d < segEnd; d += CanalModule)
+            {
+                var edge = CanalQuayEdge(d);
+                var step = Mathf.RoundToInt(d / CanalModule);
+                CanalPiece("SM_StoneFence_01_Long", d, edge - 0.15f, 1, 0.12f, CanalAlign.Center, 0f, false, "Canal Parapet", parent);
+                if (step % 6 == 0)
+                    CanalPiece("SM_Toro_01", d, edge - 1.0f, 1, 0.12f, CanalAlign.Center, 0f, false, "Canal Toro", parent);
+                if (step % 97 == 13)
+                    CanalPiece("SM_LionStatue_01", d, CanalFarEdge(d) + CanalQuay * 0.5f, 1, 0f, CanalAlign.Center, 0f, false, "Canal Lion", parent, 180f);
+                // Lanterns along the far quay.
+                if (step % 8 == 3)
+                    CanalPiece("SM_Toro_01", d, CanalFarEdge(d) + 1.2f, 1, 0f, CanalAlign.Center, 0f, false, "Canal Toro", parent);
             }
         }
 

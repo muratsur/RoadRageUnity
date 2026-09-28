@@ -13,6 +13,25 @@ namespace RoadRage.UnityRemake
         public GameObject[] Meshes = System.Array.Empty<GameObject>();
         /// Bounds size of each mesh, metres, in the same order.
         public Vector3[] Sizes = System.Array.Empty<Vector3>();
+        /// Where each mesh's top is, from the middle of its bounds (x, z): the ridge of a
+        /// roof, the high edge of an awning. Lets the builder turn a sloped piece so it
+        /// runs down towards the street without guessing which way it was modelled.
+        public Vector3[] Highs = System.Array.Empty<Vector3>();
+        /// The materials built for the pack (cobbles, stone floor, canal water ...).
+        public Material[] Materials = System.Array.Empty<Material>();
+
+        public Vector3 HighOf(GameObject mesh)
+        {
+            var i = System.Array.IndexOf(Meshes, mesh);
+            return i >= 0 && i < Highs.Length ? Highs[i] : Vector3.zero;
+        }
+
+        public Material FindMaterial(string name)
+        {
+            foreach (var m in Materials)
+                if (m != null && string.Equals(m.name, name, System.StringComparison.OrdinalIgnoreCase)) return m;
+            return null;
+        }
 
         public GameObject Find(string name, out Vector3 size)
         {
