@@ -239,7 +239,7 @@ namespace RoadRage.UnityRemake
             GameState.Award(points, "📸 SPEED TRAP");
             Show($"📸 BLITZER  {speed:0} km/h  {new string('★', stars)}{new string('☆', 3 - stars)}\n+{points:N0}{record}");
             RoadRageHaptics.Light();
-            if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayNearMissChirp();
+            if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCameraShutter();
             // Photographed doing 140+ on a 100 road: the police have your plate.
             if (speed >= 140f && RoadRagePolicePursuitDirector.Instance != null)
                 RoadRagePolicePursuitDirector.Instance.AddHeat(speed >= 170f ? 1f : 0.5f);

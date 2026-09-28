@@ -31,7 +31,8 @@ Output, in Assets/Resources/Biomes/Routes (little endian):
     char[4] "RRLC", int32 count, int32 bands, float32 step, bands x float32 (band
     start, m from the centreline), then count x [left, right] x bands bytes:
     1 forest, 2 open, 3 built-up, 4 water
-  b500_places.txt: "<Z> <name>" per named stop (Mummelsee, Ruhestein, ...)
+  b500_places.txt: "<Z> <name>|<English label>" per named stop (Mummelsee, Ruhestein,
+                   ...): the local name for the road signs, the English one for the HUD
 plus ./out_b500/preview.png (plan and profile).
 """
 import math
@@ -91,18 +92,18 @@ COVER_CLASSES = {10: 1, 20: 2, 30: 2, 40: 2, 60: 2, 90: 2, 95: 1, 100: 2, 50: 3,
 # Named stops, snapped to the nearest point of the road. Shown as the player
 # passes them.
 PLACES = [
-    ("Schwarzwaldhochstraße B500", 48.7166, 8.2313),
-    ("Bühlerhöhe", 48.6787, 8.2345),
-    ("Sand", 48.6560, 8.2350),
-    ("Hundseck", 48.6450, 8.2210),
-    ("Unterstmatt", 48.6306, 8.2057),
-    ("Mummelsee", 48.5973, 8.2026),
-    ("Ruhestein", 48.5598, 8.2245),
-    ("Schliffkopf", 48.5406, 8.2199),
-    ("Zuflucht", 48.5019, 8.2267),
-    ("Alexanderschanze", 48.4934, 8.2621),
-    ("Kniebis", 48.4732, 8.2975),
-    ("Freudenstadt 2 km", 48.4556, 8.4045),
+    ("Schwarzwaldhochstraße B500", 48.7166, 8.2313, "Black Forest High Road B500"),
+    ("Bühlerhöhe", 48.6787, 8.2345, "Buhlerhohe Castle"),
+    ("Sand", 48.6560, 8.2350, "Sand"),
+    ("Hundseck", 48.6450, 8.2210, "Hundseck"),
+    ("Unterstmatt", 48.6306, 8.2057, "Unterstmatt Ski Area"),
+    ("Mummelsee", 48.5973, 8.2026, "Mummelsee Lake"),
+    ("Ruhestein", 48.5598, 8.2245, "Ruhestein Pass"),
+    ("Schliffkopf", 48.5406, 8.2199, "Schliffkopf Summit"),
+    ("Zuflucht", 48.5019, 8.2267, "Zuflucht Pass"),
+    ("Alexanderschanze", 48.4934, 8.2621, "Alexanderschanze Pass"),
+    ("Kniebis", 48.4732, 8.2975, "Kniebis"),
+    ("Freudenstadt 2 km", 48.4556, 8.4045, "Freudenstadt 2 km"),
 ]
 
 
@@ -324,10 +325,10 @@ def cover_and_places(s, e, n, rlat, rlon, z):
     print("wrote", COVER_ASSET, os.path.getsize(COVER_ASSET), "bytes", share)
 
     lines = []
-    for name, la, lo in PLACES:
+    for name, la, lo, english in PLACES:
         d = haversine(rlat, rlon, la, lo)
         i = int(np.argmin(d))
-        lines.append(f"{z[i]:.0f} {name}")
+        lines.append(f"{z[i]:.0f} {name}|{english}")
         print(f"  {name:18s} {s[i] / 1000:5.1f} km real, Z {z[i]:7.0f}, {d[i]:.0f} m from the road")
     open(PLACES_ASSET, "w", encoding="utf-8").write("\n".join(lines) + "\n")
     print("wrote", PLACES_ASSET)

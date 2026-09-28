@@ -1,0 +1,8 @@
+Crash sounds built by Tools/Audio/build_crash_sounds.py from CC0 (public domain)
+recordings collected at https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds:
+
+  Kenney - Impact Sounds (kenney.nl), CC0
+  "100 CC0 wood and metal SFX" (OpenGameArt), CC0
+  "75 CC0 breaking/falling/hit SFX" (OpenGameArt), CC0
+
+No attribution is required; this file records where they came from.

@@ -226,7 +226,11 @@ namespace RoadRage.UnityRemake
                 if (space < 1) continue;
                 if (!float.TryParse(line.Substring(0, space), System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out var distance)) continue;
-                places.Add((distance, line.Substring(space + 1).Trim()));
+                // "<Z> <local name>|<English label>": the road signs carry the local
+                // name (baked into their meshes); the game shows the English one.
+                var name = line.Substring(space + 1).Trim();
+                var bar = name.IndexOf('|');
+                places.Add((distance, bar >= 0 ? name.Substring(bar + 1).Trim() : name));
             }
             Places = places.ToArray();
         }
