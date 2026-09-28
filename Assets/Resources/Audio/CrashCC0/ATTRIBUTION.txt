@@ -12,3 +12,6 @@ Assets/Resources/Audio/CrashReal: the recorded crash from the Road Rage 3D proje
 
 Assets/Resources/Audio/SirenReal: the recorded siren from the Road Rage 3D project
 (muratsur/roadrage3d, audio/siren.mp3), made into a seamless loop.
+
+Assets/Resources/Audio/MusicRR3D: the soundtrack of the Road Rage 3D project
+(muratsur/roadrage3d, audio/music*.mp3), copied unchanged.

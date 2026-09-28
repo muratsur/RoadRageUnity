@@ -506,6 +506,7 @@ namespace RoadRage.UnityRemake
                 weatherSystem.Configure(activeWeather, car, particleMaterial);
             }
             gameObject.AddComponent<RoadRageB500Stages>();
+            if (RoadRageMusic.Instance == null) gameObject.AddComponent<RoadRageMusic>();
             RollRunConditions();
 			gameObject.AddComponent<RoadRageHUD>().Initialize(car.GetComponent<ArcadeCarController>(), this);
 			if (HasCommandLineFlag("-picker"))

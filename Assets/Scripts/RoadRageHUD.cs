@@ -2132,7 +2132,7 @@ namespace RoadRage.UnityRemake
             var w = Screen.width;
             var h = Screen.height;
             var modalW = Mathf.Min(w * 0.7f, 400f);
-            var modalH = Mathf.Min(h * 0.75f, 350f);
+            var modalH = Mathf.Min(h * 0.8f, 400f);
             var modalX = w * 0.5f - modalW * 0.5f;
             var modalY = h * 0.5f - modalH * 0.5f;
 
@@ -2165,6 +2165,14 @@ namespace RoadRage.UnityRemake
             {
                 RoadRageHaptics.Enabled = !RoadRageHaptics.Enabled;
                 if (RoadRageHaptics.Enabled) RoadRageHaptics.Medium();
+            }
+            rowY += rowH + 8f;
+
+            // Music Toggle
+            if (GUI.Button(new Rect(modalX + 20f, rowY, modalW - 40f, rowH),
+                    $"MUSIC: {(RoadRageMusic.Enabled ? "ON" : "OFF")}", btnS))
+            {
+                RoadRageMusic.Enabled = !RoadRageMusic.Enabled;
             }
             rowY += rowH + 8f;
 
