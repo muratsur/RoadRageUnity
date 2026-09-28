@@ -9,7 +9,9 @@ real road, minus the real road's own height there. The slopes, cuttings, banks a
 valleys beside the road keep their real shape and size; where the road itself goes
 up or down is still the game's own profile.
 
-Needs only numpy (and the standard library), so it runs under a plain Python or
+Road Rage > Bake B500 Terrain (Assets/Editor/BakeB500TerrainMenu.cs) does the same
+bake inside Unity with nothing to install; this script is the same thing for a
+machine with Python. Needs only numpy and the standard library, so a plain Python or
 Blender's bundled one:
     py -3 Tools\\Terrain\\bake_b500_terrain.py
     "C:\\Program Files\\Blender Foundation\\Blender 4.x\\blender.exe" -b -P Tools\\Terrain\\bake_b500_terrain.py
