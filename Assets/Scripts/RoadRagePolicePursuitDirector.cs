@@ -482,8 +482,27 @@ namespace RoadRage.UnityRemake
         // below it is gone.
         public float ContactDistance => RoadDistance;
         public float ContactLateral => LateralOffset;
-        public float ContactHalfLength => hullHalfLength;
-        public float ContactHalfWidth => hullHalfWidth;
+        /// Projected through the wreck's spin: a cruiser slewed across the road
+        /// sweeps its length sideways. Reported unrotated, a spun wreck's body stuck
+        /// out of its hull and was drawn through every car beside it.
+        public float ContactHalfLength
+        {
+            get
+            {
+                var yaw = wreckYaw * Mathf.Deg2Rad;
+                return Mathf.Abs(hullHalfLength * Mathf.Cos(yaw)) + Mathf.Abs(hullHalfWidth * Mathf.Sin(yaw));
+            }
+        }
+
+        public float ContactHalfWidth
+        {
+            get
+            {
+                var yaw = wreckYaw * Mathf.Deg2Rad;
+                return Mathf.Abs(hullHalfLength * Mathf.Sin(yaw)) + Mathf.Abs(hullHalfWidth * Mathf.Cos(yaw));
+            }
+        }
+
         public float ContactHeight => 0f;
         /// A little heavier than civilian traffic: an interceptor shoulders a hatchback
         /// out of the way rather than being deflected off the player's tail by it.
@@ -496,6 +515,15 @@ namespace RoadRage.UnityRemake
         {
             RoadDistance += alongRoad;
             LateralOffset += acrossRoad;
+            if (!isWrecked) return;
+            // A sliding wreck that meets another car loses the motion that drove it
+            // in, rather than pressing on through it frame after frame.
+            if (Mathf.Abs(acrossRoad) > 0.005f && Mathf.Sign(acrossRoad) != Mathf.Sign(wreckLateralSpeed))
+            {
+                wreckLateralSpeed *= 0.25f;
+                wreckYawRate *= 0.6f;
+            }
+            if (alongRoad < -0.005f) SpeedKph *= 0.85f;
         }
 
         /// Measured off the spawned mesh, like every other vehicle. The 4.8 m / 2.4 m
@@ -764,21 +792,45 @@ namespace RoadRage.UnityRemake
 
         private float wreckSlideDir;
         private float wreckYaw;
-        private float targetWreckYaw;
         private float wreckRoll;
+        private float wreckLateralSpeed;
+        private float wreckYawRate;
+        private float wreckAge;
+
+        /// Sliding tyres on asphalt, roughly 0.75 g: km/h lost per second.
+        private const float WreckFriction = 26f;
 
         private void Update()
         {
             if (isWrecked)
             {
-                SpeedKph = Mathf.MoveTowards(SpeedKph, 0f, 45f * Time.deltaTime);
-                LateralOffset += wreckSlideDir * 6.5f * Time.deltaTime;
-                wreckYaw = Mathf.MoveTowards(wreckYaw, targetWreckYaw, 180f * Time.deltaTime);
-                LateralOffset = ClampToRoadEdge(LateralOffset);
-                var forwardMove = SpeedKph / 3.6f * Time.deltaTime;
-                RoadDistance = RoadPath.Wrap(RoadDistance + forwardMove);
+                // A real slide: the momentum of the hit carries it forward and sideways,
+                // friction bleeds both off, the spin slows as it stops, and the guard
+                // rail stops it dead instead of letting it through.
+                var dt = Time.deltaTime;
+                wreckAge += dt;
+                SpeedKph = Mathf.MoveTowards(SpeedKph, 0f, WreckFriction * dt);
+                wreckLateralSpeed = Mathf.MoveTowards(wreckLateralSpeed, 0f, WreckFriction / 3.6f * dt);
+                var spinFade = Mathf.Clamp01((SpeedKph + Mathf.Abs(wreckLateralSpeed) * 3.6f) / 40f);
+                wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 160f * dt) * Mathf.Lerp(0.9f, 1f, spinFade);
+                wreckYaw += wreckYawRate * dt;
+                wreckRoll = Mathf.Lerp(wreckRoll, 0f, dt * 2.5f);
+                var sliding = LateralOffset + wreckLateralSpeed * dt;
+                LateralOffset = ClampToRoadEdge(sliding);
+                if (!Mathf.Approximately(sliding, LateralOffset))
+                {
+                    // Into the rail: a bounce, a scrape, and the spin knocked out of it.
+                    wreckLateralSpeed *= -0.2f;
+                    wreckYawRate *= 0.5f;
+                    SpeedKph *= 0.97f;
+                }
+                RoadDistance = RoadPath.Wrap(RoadDistance + SpeedKph / 3.6f * dt);
                 transform.position = RoadPath.Point(RoadDistance, LateralOffset, 0.4f);
                 transform.rotation = RoadPath.Rotation(RoadDistance) * Quaternion.Euler(0f, wreckYaw, wreckRoll);
+                // The wreck stays where it came to rest until it is out of sight behind
+                // the player, instead of vanishing in front of them.
+                var behind = targetPlayer != null ? targetPlayer.RoadDistance - RoadDistance : 0f;
+                if (wreckAge > 3f && (behind > 60f || wreckAge > 40f)) Destroy(gameObject);
                 return;
             }
 
@@ -927,8 +979,11 @@ namespace RoadRage.UnityRemake
 
             wreckSlideDir = targetPlayer != null ? Mathf.Sign(LateralOffset - targetPlayer.LateralOffset) : (Random.value > 0.5f ? 1f : -1f);
             if (Mathf.Abs(wreckSlideDir) < 0.1f) wreckSlideDir = 1f;
-            targetWreckYaw = wreckSlideDir * Random.Range(70f, 130f);
-            wreckRoll = wreckSlideDir * 4f;
+            // The hit's energy: faster crashes throw it further and spin it harder.
+            var impact = Mathf.Clamp(SpeedKph, 40f, 200f);
+            wreckLateralSpeed = wreckSlideDir * Mathf.Lerp(2.5f, 8f, (impact - 40f) / 160f);
+            wreckYawRate = wreckSlideDir * Random.Range(0.8f, 1.2f) * Mathf.Lerp(90f, 300f, (impact - 40f) / 160f);
+            wreckRoll = wreckSlideDir * Mathf.Lerp(4f, 9f, (impact - 40f) / 160f);
 
             var contactPoint = transform.position + Vector3.up * 0.6f;
             if (byPlayer && RoadRageTakedownDirector.Instance != null)
@@ -946,7 +1001,6 @@ namespace RoadRage.UnityRemake
                 RoadRagePolicePursuitDirector.Instance.NotifyPoliceDestroyed(this);
             }
 
-            Destroy(gameObject, 4.5f);
         }
     }
     /// German police markings for a cruiser: POLIZEI in white on a blue band along

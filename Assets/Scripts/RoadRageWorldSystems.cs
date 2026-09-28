@@ -818,6 +818,7 @@ namespace RoadRage.UnityRemake
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
             WreckYaw = 0f;
+            wreckYawRate = 0f;
             wreckRoll = 0f;
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
@@ -957,9 +958,17 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 36f * Time.deltaTime);
-                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget, 8f * Time.deltaTime);
-                WreckYaw = Mathf.MoveTowards(WreckYaw, wreckYawTarget, 120f * Time.deltaTime);
+                // Sliding tyres (~0.75 g). The spin comes from the hit and dies away
+                // with the speed, so each crash ends at its own angle rather than
+                // turning to a set one; the body rocks back level after the jolt.
+                var dt = Time.deltaTime;
+                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 26f * dt);
+                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget,
+                    Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
+                if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
+                WreckYaw += wreckYawRate * dt;
+                wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
@@ -1121,7 +1130,7 @@ namespace RoadRage.UnityRemake
         }
 
         private float wreckSlideTarget;
-        private float wreckYawTarget;
+        private float wreckYawRate;
 
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
@@ -1135,10 +1144,10 @@ namespace RoadRage.UnityRemake
             currentSpeedKph = Mathf.Max(currentSpeedKph * 0.4f, impactSpeedKph * 0.72f);
 
             var sign = Mathf.Abs(lateralPush) < 0.01f ? (variationSeed % 2 == 0 ? 1f : -1f) : Mathf.Sign(lateralPush);
-            var variation = 55f + Mathf.Abs(variationSeed % 40);
-            wreckYawTarget = sign * variation;
-            WreckYaw = sign * variation * 0.2f;
-            wreckRoll = sign * 2.5f;
+            // Spin from the hit: harder hits spin it more, and no two the same.
+            var hit = Mathf.Clamp01((Mathf.Max(impactSpeedKph, currentSpeedKph) - 30f) / 120f);
+            wreckYawRate = sign * Mathf.Lerp(60f, 260f, hit) * (0.75f + Mathf.Abs(variationSeed % 50) / 100f);
+            wreckRoll = sign * Mathf.Lerp(3f, 8f, hit);
             // Shove smoothly onto the car's own shoulder, clear of every lane. Shoved the
             // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
             // inner lane stopped in the outer one - either way a wall that everything
