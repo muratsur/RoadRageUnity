@@ -2211,6 +2211,37 @@ namespace RoadRage.UnityRemake
             };
             SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
             Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
+            CancelInvoke(nameof(ReportSceneBudget));
+            Invoke(nameof(ReportSceneBudget), 8f);
+        }
+
+        /// What the frame is made of, by kind of object: renderers visible to a camera
+        /// or a shadow map, their draw calls (submeshes) and triangles. Logged once per
+        /// run, a few seconds in, so a slow biome can be traced without the Profiler.
+        private void ReportSceneBudget()
+        {
+            var groups = new Dictionary<string, (int renderers, int draws, long triangles)>();
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || !r.isVisible || !r.TryGetComponent<MeshFilter>(out var f) || f.sharedMesh == null)
+                    continue;
+                // Named after the object directly under its chunk (a tree, a bush, the
+                // cliff), or after its root when it is not part of a chunk.
+                var t = r.transform;
+                while (t.parent != null && !t.parent.name.StartsWith("Chunk ")) t = t.parent;
+                var key = t.name;
+                var mesh = f.sharedMesh;
+                long triangles = 0;
+                for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
+                groups.TryGetValue(key, out var g);
+                groups[key] = (g.renderers + 1, g.draws + mesh.subMeshCount, g.triangles + triangles);
+            }
+            var lines = new List<string>();
+            foreach (var pair in groups)
+                lines.Add($"{pair.Value.triangles / 1000,8}k tris {pair.Value.draws,6} draws {pair.Value.renderers,6} x {pair.Key}");
+            lines.Sort((a, b) => string.CompareOrdinal(b, a));
+            Debug.Log("RR_BUDGET visible objects by kind (triangles, draw calls, renderers):\n" +
+                      string.Join("\n", lines.GetRange(0, Mathf.Min(15, lines.Count))));
         }
 
         /// The time of day laid over Greenwood's own palette.
