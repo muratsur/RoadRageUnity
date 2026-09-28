@@ -250,7 +250,12 @@ namespace RoadRage.UnityRemake
         /// </summary>
         public void PlayCrashImpact(Vector3 contactPoint, bool heavyTakedown = false)
         {
-            if (crashSource != null)
+            // The recorded crash, through the same player as every other crash.
+            if (RoadRageAudioBridge.Instance != null)
+            {
+                RoadRageAudioBridge.Instance.PlayCrash(heavyTakedown ? 1.0f : 0.7f);
+            }
+            else if (crashSource != null)
             {
                 var clip = heavyTakedown ? crashHeavyClip : crashMediumClip;
                 if (clip != null) crashSource.PlayOneShot(clip, heavyTakedown ? 0.80f : 0.50f);

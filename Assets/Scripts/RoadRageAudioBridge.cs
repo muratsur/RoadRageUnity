@@ -126,6 +126,8 @@ namespace RoadRage.UnityRemake
         private AudioClip[] crashHeavy;
         private AudioClip[] crashMedium;
         private AudioClip[] crashLight;
+        private float lastCrashAt = -1f;
+        private float lastCrashSeverity;
         private AudioClip turboClip;
         private AudioClip nitroClip;
         private AudioClip whooshClip;
@@ -135,12 +137,21 @@ namespace RoadRage.UnityRemake
         {
             if (clipsLoaded) return;
             clipsLoaded = true;
-            crashHeavy = LoadSet("heavy", 4);
-            crashMedium = LoadSet("medium", 4);
-            crashLight = LoadSet("light", 3);
+            // The recorded crash from Road Rage 3D, cut to three lengths
+            // (Tools/Audio/import_crash_recording.py); the CC0 layered set is the
+            // fallback if it is missing.
+            crashHeavy = LoadReal("heavy") ?? LoadSet("heavy", 4);
+            crashMedium = LoadReal("medium") ?? LoadSet("medium", 4);
+            crashLight = LoadReal("light") ?? LoadSet("light", 3);
             turboClip = Resources.Load<AudioClip>("Audio/VPP/turbo");
             nitroClip = Resources.Load<AudioClip>("Audio/SFX/NOS/NOSWhoosh2") ?? Resources.Load<AudioClip>("Audio/SFX/NOS/NOS");
             whooshClip = CreatePassByWhooshClip();
+        }
+
+        private static AudioClip[] LoadReal(string weight)
+        {
+            var clip = Resources.Load<AudioClip>($"Audio/CrashReal/crash_real_{weight}");
+            return clip != null ? new[] { clip } : null;
         }
 
         private static AudioClip[] LoadSet(string weight, int count)
@@ -170,9 +181,14 @@ namespace RoadRage.UnityRemake
         {
             if (crashSource == null) return;
             LoadClips();
+            // One hit, one crash: a takedown reports the same impact from the car and
+            // from the takedown, and two crashes on top of each other sound like two.
+            if (Time.unscaledTime - lastCrashAt < 0.25f && severity <= lastCrashSeverity) return;
+            lastCrashAt = Time.unscaledTime;
+            lastCrashSeverity = severity;
             var set = severity >= 1f ? crashHeavy : severity >= 0.65f ? crashMedium : crashLight;
             if (set.Length == 0) set = crashMedium.Length > 0 ? crashMedium : crashHeavy;
-            crashSource.pitch = Random.Range(0.9f, 1.07f);
+            crashSource.pitch = Random.Range(0.92f, 1.06f);
             if (set.Length > 0)
                 crashSource.PlayOneShot(set[Random.Range(0, set.Length)], Mathf.Clamp(severity, 0.35f, 1f));
             else

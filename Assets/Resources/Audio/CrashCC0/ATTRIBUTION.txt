@@ -6,3 +6,6 @@ recordings collected at https://github.com/lavenderdotpet/CC0-Public-Domain-Soun
   "75 CC0 breaking/falling/hit SFX" (OpenGameArt), CC0
 
 No attribution is required; this file records where they came from.
+
+Assets/Resources/Audio/CrashReal: the recorded crash from the Road Rage 3D project
+(muratsur/roadrage3d, audio/crash.wav), cut by Tools/Audio/import_crash_recording.py.
