@@ -293,7 +293,9 @@ namespace RoadRage.UnityRemake
         private Transform car;
 		public static string requestedBiome;
         /// Indices the picker and journey currently expose.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+        // CANAL TOWN (10) is out: one street of the same few houses repeating was not
+        // worth a biome slot. Its builder stays for -biome=canal.
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
         private static readonly string[] Biomes =
         {
@@ -568,7 +570,9 @@ namespace RoadRage.UnityRemake
             if (string.IsNullOrEmpty(requested))
             {
                 var saved = PlayerPrefs.GetString("ROAD_RAGE_BIOME", "");
-                if (!string.IsNullOrEmpty(saved))
+                // A biome saved before it left the picker starts Greenwood instead.
+                if (!string.IsNullOrEmpty(saved) &&
+                    System.Array.IndexOf(ActiveBiomes, System.Array.IndexOf(Biomes, saved)) >= 0)
                     return saved;
                 return Biomes[0];
             }
@@ -4284,7 +4288,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
