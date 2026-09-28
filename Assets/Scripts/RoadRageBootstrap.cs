@@ -5286,33 +5286,59 @@ namespace RoadRage.UnityRemake
         /// How far below the water line a row's lowest point sits: the foot of its canal
         /// wall is under water, not standing on it.
         private const float CanalRowSink = 0.6f;
-        private static bool canalRowReported;
 
-        /// Rows of houses from the showcase map laid end to end along the road, their
-        /// canal side facing it. Rows follow each other on a fixed grid of their own
-        /// length, so a row crossing a chunk seam is built once, by the chunk holding its
-        /// middle. phase shifts the street side against the canal side so the two banks
-        /// do not mirror each other.
+        /// The pack's houses (exported one per file from the Singapore_Canal map) laid
+        /// along the road on one side, facing it. Each side has its own sequence, so
+        /// the two banks do not mirror each other; phase is kept for the call sites.
         private void BuildCanalRows(int side, System.Func<float, float> facadeAt, float phase, Transform parent)
         {
-            var pack = Canal;
-            for (var r = 0; r < pack.Rows.Length; r++)
+            // Houses stand side by side down the whole street, each at its own
+            // measured length with a narrow alley between. The street is laid out once
+            // from a fixed origin, so a house crossing a chunk seam is built once, by
+            // the chunk holding its middle, and a revisited chunk gets the same houses.
+            foreach (var (start, r, length) in CanalStreet(side, segEnd))
             {
-                if (pack.Rows[r] == null) continue;
-                // Measured once per row prefab, turned to face the road.
-                var length = CanalRowLength(r);
-                if (length < 5f) continue;
-                var start = Mathf.Floor((segStart - phase * length) / length) * length + phase * length;
-                for (var d0 = start; d0 < segEnd; d0 += length * pack.Rows.Length)
-                {
-                    var mid = d0 + length * (r + 0.5f);
-                    if (mid < segStart || mid >= segEnd) continue;
-                    PlaceCanalRow(r, mid, side, facadeAt(mid), parent);
-                }
+                var mid = start + length * 0.5f;
+                if (mid < segStart || mid >= segEnd) continue;
+                PlaceCanalRow(r, mid, side, facadeAt(mid), parent);
             }
         }
 
+        private readonly Dictionary<int, List<(float start, int r, float length)>> canalStreets = new();
+
+        private List<(float start, int r, float length)> CanalStreet(int side, float until)
+        {
+            if (!canalStreets.TryGetValue(side, out var street))
+            {
+                street = new List<(float, int, float)>();
+                canalStreets[side] = street;
+            }
+            var usable = new List<int>();
+            for (var r = 0; r < Canal.Rows.Length; r++)
+                if (CanalRowUsable(r)) usable.Add(r);
+            if (usable.Count == 0) return street;
+            var d = street.Count > 0 ? street[street.Count - 1].start + street[street.Count - 1].length : -400f;
+            var previous = street.Count > 0 ? street[street.Count - 1].r : -1;
+            while (d < until)
+            {
+                var i = street.Count;
+                var hash = (uint)(i * 73856093 ^ (side + 2) * 19349663);
+                var r = usable[(int)(hash % (uint)usable.Count)];
+                if (r == previous && usable.Count > 1) r = usable[((int)(hash % (uint)usable.Count) + 1) % usable.Count];
+                var gap = 0.4f + (hash >> 8) % 8 * 0.15f;
+                var length = CanalRowLength(r);
+                street.Add((d + gap, r, length));
+                d += gap + length;
+                previous = r;
+            }
+            return street;
+        }
+
         private readonly Dictionary<int, float> canalRowLengths = new();
+        /// Height of each house's ground floor above its lowest point: stilts and the
+        /// stone base of a canal house reach below the street, the doors do not.
+        private readonly Dictionary<int, float> canalRowGround = new();
+        private readonly HashSet<int> canalRowsReported = new();
 
         /// A row is one bank of houses: a few tens of metres deep. Deeper than this, the
         /// export is the whole showcase level (both banks, the ground, the bamboo), which
@@ -5378,9 +5404,48 @@ namespace RoadRage.UnityRemake
                 }
                 length = 0f;
             }
+            canalRowGround[r] = probe != null && length > 0f ? GroundFloorAbove(probe, b) : 0f;
             if (probe != null) DestroyImmediate(probe);
             canalRowLengths[r] = length;
+            if (length > 0f && canalRowsReported.Add(r))
+                Debug.Log($"RR_CANAL house '{Canal.Rows[r].name}': {b.size.x:0.0} m along the street, {b.size.z:0.0} m deep, " +
+                          $"{b.size.y:0.0} m tall, ground floor {canalRowGround[r]:0.0} m above its lowest point");
             return length;
+        }
+
+        /// The lowest horizontal slice of the model that covers most of its footprint:
+        /// the ground floor. Posts, stilts and a narrow plinth cover little of it.
+        private static float GroundFloorAbove(GameObject probe, Bounds b)
+        {
+            const float slab = 0.5f;
+            var footprint = b.size.x * b.size.z;
+            var slabs = Mathf.CeilToInt(Mathf.Min(b.size.y * 0.5f, 12f) / slab);
+            if (footprint <= 0f || slabs <= 0) return 0f;
+            var lo = new Vector2[slabs];
+            var hi = new Vector2[slabs];
+            for (var i = 0; i < slabs; i++) { lo[i] = Vector2.one * float.MaxValue; hi[i] = Vector2.one * float.MinValue; }
+            foreach (var f in probe.GetComponentsInChildren<MeshFilter>(false))
+            {
+                var mesh = f.sharedMesh;
+                if (mesh == null || !mesh.isReadable || !f.TryGetComponent<Renderer>(out var rend) || !rend.enabled) continue;
+                var vertices = mesh.vertices;
+                var step = Mathf.Max(1, vertices.Length / 4000);
+                for (var v = 0; v < vertices.Length; v += step)
+                {
+                    var p = f.transform.TransformPoint(vertices[v]);
+                    var i = (int)((p.y - b.min.y) / slab);
+                    if (i < 0 || i >= slabs) continue;
+                    lo[i] = Vector2.Min(lo[i], new Vector2(p.x, p.z));
+                    hi[i] = Vector2.Max(hi[i], new Vector2(p.x, p.z));
+                }
+            }
+            for (var i = 0; i < slabs; i++)
+            {
+                if (hi[i].x < lo[i].x) continue;
+                var area = (hi[i].x - lo[i].x) * (hi[i].y - lo[i].y);
+                if (area >= footprint * 0.45f) return i * slab;
+            }
+            return 0f;
         }
 
         private GameObject PlaceCanalRow(int r, float distance, int side, float facade, Transform parent, bool measureOnly = false)
@@ -5411,14 +5476,13 @@ namespace RoadRage.UnityRemake
                 DestroyImmediate(frame.gameObject);
                 return null;
             }
-            row.transform.localPosition -= new Vector3(b.center.x, b.min.y - (CanalWaterLevel - CanalRowSink), b.min.z);
+            // Measuring: the lowest point at the water line. Placing a house: its ground
+            // floor a few centimetres into the pavement, whatever reaches below it.
+            var baseY = measureOnly || !canalRowGround.TryGetValue(r, out var ground)
+                ? b.min.y - (CanalWaterLevel - CanalRowSink)
+                : b.min.y + ground + 0.05f;
+            row.transform.localPosition -= new Vector3(b.center.x, baseY, b.min.z);
             if (measureOnly) return frame.gameObject;
-
-            if (!canalRowReported)
-            {
-                canalRowReported = true;
-                Debug.Log($"RR_CANAL row '{pack.Rows[r].name}' {b.size.x:0}x{b.size.y:0}x{b.size.z:0} m, front {front}");
-            }
             frame.SetParent(parent != null ? parent : chunkRoot, false);
             var outward = side * RoadPath.Right(distance);
             outward.y = 0f;
