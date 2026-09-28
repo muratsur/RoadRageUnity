@@ -581,6 +581,13 @@ namespace RoadRage.UnityRemake
         private Material redLedMat;
         private Material blueLedMat;
 
+        /// On the B500 the cruisers are German: blue-silver Polizei cars with blue
+        /// lights only, no red. Other biomes keep the American black-and-red.
+        private static bool German => RoadPath.Route != null;
+
+        private static readonly Color PoliceBlueA = new(0.10f, 0.45f, 1f);
+        private static readonly Color PoliceBlueB = new(0.25f, 0.55f, 1f);
+
         private static void NormalizeVehicleVisual(GameObject visual, float targetLength)
         {
             var renderers = visual.GetComponentsInChildren<Renderer>();
@@ -607,7 +614,8 @@ namespace RoadRage.UnityRemake
                 var renderers = vehicleInstance.GetComponentsInChildren<Renderer>();
                 var paintMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
                 {
-                    color = new Color(0.04f, 0.06f, 0.10f) // Dark Police Interceptor Navy
+                    // Dark interceptor navy; silver on the B500, where the blue is the band.
+                    color = German ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.04f, 0.06f, 0.10f)
                 };
                 if (paintMat.HasProperty("_Smoothness")) paintMat.SetFloat("_Smoothness", 0.85f);
                 if (paintMat.HasProperty("_Metallic")) paintMat.SetFloat("_Metallic", 0.65f);
@@ -638,6 +646,7 @@ namespace RoadRage.UnityRemake
                     var centre = transform.InverseTransformPoint(modelBounds.center);
                     vehicleInstance.transform.localPosition -= new Vector3(centre.x, 0f, centre.z);
                 }
+                if (German) PolizeiLivery.Apply(transform, vehicleInstance);
                 // Hull follows the mesh that was just normalised, so the cruiser
                 // collides as the car you can see rather than as a fixed guess.
                 hullHalfLength = 4.8f * 0.5f;
@@ -684,10 +693,11 @@ namespace RoadRage.UnityRemake
             barFrame.GetComponent<Renderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { color = new Color(0.05f, 0.05f, 0.05f) };
             Destroy(barFrame.GetComponent<Collider>());
 
+            var leftColour = German ? PoliceBlueB : Color.red;
             redLedMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
-            redLedMat.color = Color.red;
+            redLedMat.color = leftColour;
             redLedMat.EnableKeyword("_EMISSION");
-            redLedMat.SetColor("_EmissionColor", Color.red * 4.5f);
+            redLedMat.SetColor("_EmissionColor", leftColour * 4.5f);
 
             blueLedMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
             blueLedMat.color = Color.blue;
@@ -718,9 +728,10 @@ namespace RoadRage.UnityRemake
             // is dropped.
             if (RoadRageBootstrap.RichDetailBudget)
             {
-                redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), Color.red);
+                redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), leftColour);
                 blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
             }
+            if (German) PolizeiLivery.AddRoofSign(lightbarRoot.transform);
         }
 
         private static Light MakeStrobe(Transform parent, Vector3 localPosition, Color colour)
@@ -776,7 +787,7 @@ namespace RoadRage.UnityRemake
             var isRed = Mathf.Sin(strobeTimer) > 0f;
             if (redLedMat != null)
             {
-                redLedMat.SetColor("_EmissionColor", isRed ? Color.red * 5.5f : Color.black);
+                redLedMat.SetColor("_EmissionColor", isRed ? (German ? PoliceBlueB : Color.red) * 5.5f : Color.black);
             }
             if (blueLedMat != null)
             {
@@ -936,6 +947,131 @@ namespace RoadRage.UnityRemake
             }
 
             Destroy(gameObject, 4.5f);
+        }
+    }
+    /// German police markings for a cruiser: POLIZEI in white on a blue band along
+    /// both sides and across the back, and a lit POLIZEI sign on the roof light bar.
+    /// Flat quads over the pack's single-material car (Assets/Resources/Police,
+    /// Tools/Blender/build_polizei_livery.py).
+    internal static class PolizeiLivery
+    {
+        private static Material band;
+        private static Material panel;
+        private static bool loaded;
+
+        private static bool Load()
+        {
+            if (loaded) return band != null;
+            loaded = true;
+            var tex = Resources.Load<Texture2D>("Police/T_polizei");
+            if (tex == null)
+            {
+                Debug.LogWarning("Missing Police/T_polizei - cruisers carry no POLIZEI markings.");
+                return false;
+            }
+            var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            // The texture's top half is the band, the bottom half the lit sign.
+            band = new Material(shader) { name = "Polizei Band", mainTexture = tex };
+            band.mainTextureScale = new Vector2(1f, 0.5f);
+            band.mainTextureOffset = new Vector2(0f, 0.5f);
+            if (band.HasProperty("_Smoothness")) band.SetFloat("_Smoothness", 0.6f);
+            panel = new Material(shader) { name = "Polizei Sign", mainTexture = tex };
+            panel.mainTextureScale = new Vector2(1f, 0.5f);
+            panel.mainTextureOffset = Vector2.zero;
+            panel.EnableKeyword("_EMISSION");
+            panel.SetTexture("_EmissionMap", tex);
+            panel.SetTextureScale("_EmissionMap", new Vector2(1f, 0.5f));
+            panel.SetColor("_EmissionColor", Color.white * 1.6f);
+            panel.globalIlluminationFlags = MaterialGlobalIlluminationFlags.None;
+            return true;
+        }
+
+        public static void Apply(Transform car, GameObject model)
+        {
+            if (!Load() || !LocalBounds(car, model, out var b)) return;
+            var bandHeight = Mathf.Clamp(b.size.y * 0.17f, 0.16f, 0.3f);
+            var y = b.min.y + b.size.y * 0.40f;
+            // Along the doors: the length's middle, a little back from the mirrors.
+            var z = b.center.z - b.size.z * 0.06f;
+            var length = b.size.z * 0.5f;
+            var halfWidth = SideAt(car, model, y, z - length * 0.5f, z + length * 0.5f, b);
+            for (var side = -1; side <= 1; side += 2)
+                Quad(car, band, new Vector3(b.center.x + side * (halfWidth + 0.012f), y, z),
+                    Quaternion.LookRotation(new Vector3(-side, 0f, 0f)), length, bandHeight);
+            Quad(car, band, new Vector3(b.center.x, b.min.y + b.size.y * 0.47f, b.min.z - 0.012f),
+                Quaternion.identity, b.size.x * 0.62f, bandHeight * 0.8f);
+        }
+
+        public static void AddRoofSign(Transform lightbar)
+        {
+            if (!Load()) return;
+            var housing = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            housing.name = "Polizei Sign Housing";
+            housing.transform.SetParent(lightbar, false);
+            housing.transform.localPosition = new Vector3(0f, 0.14f, 0f);
+            housing.transform.localScale = new Vector3(0.78f, 0.16f, 0.12f);
+            housing.GetComponent<Renderer>().sharedMaterial = new Material(band.shader) { color = new Color(0.04f, 0.04f, 0.05f) };
+            Object.Destroy(housing.GetComponent<Collider>());
+            Quad(lightbar, panel, new Vector3(0f, 0.14f, -0.062f), Quaternion.identity, 0.74f, 0.14f);
+            Quad(lightbar, panel, new Vector3(0f, 0.14f, 0.062f), Quaternion.Euler(0f, 180f, 0f), 0.74f, 0.14f);
+        }
+
+        /// A quad faces -Z, so `rotation` turns its -Z to the outside.
+        private static void Quad(Transform parent, Material material, Vector3 localPosition, Quaternion localRotation,
+            float width, float height)
+        {
+            var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            quad.name = material.name;
+            quad.transform.SetParent(parent, false);
+            quad.transform.localPosition = localPosition;
+            quad.transform.localRotation = localRotation;
+            quad.transform.localScale = new Vector3(width, height, 1f);
+            var renderer = quad.GetComponent<Renderer>();
+            renderer.sharedMaterial = material;
+            renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            Object.Destroy(quad.GetComponent<Collider>());
+        }
+
+        /// The model's bounds in the car's own frame, whatever way the car faces now.
+        private static bool LocalBounds(Transform car, GameObject model, out Bounds bounds)
+        {
+            bounds = default;
+            var found = false;
+            foreach (var r in model.GetComponentsInChildren<Renderer>())
+            {
+                var lb = r.localBounds;
+                for (var i = 0; i < 8; i++)
+                {
+                    var corner = lb.center + Vector3.Scale(lb.extents,
+                        new Vector3((i & 1) == 0 ? -1 : 1, (i & 2) == 0 ? -1 : 1, (i & 4) == 0 ? -1 : 1));
+                    var p = car.InverseTransformPoint(r.transform.TransformPoint(corner));
+                    if (!found) { bounds = new Bounds(p, Vector3.zero); found = true; }
+                    else bounds.Encapsulate(p);
+                }
+            }
+            return found;
+        }
+
+        /// Half-width of the body at the band, measured from the mesh where it is
+        /// readable - the bounds include the wing mirrors, which would leave the band
+        /// floating off the doors. Falls back to just inside the bounds.
+        private static float SideAt(Transform car, GameObject model, float y, float z0, float z1, Bounds b)
+        {
+            var best = 0f;
+            foreach (var r in model.GetComponentsInChildren<Renderer>())
+            {
+                var mesh = r is SkinnedMeshRenderer skinned ? skinned.sharedMesh
+                    : r.TryGetComponent<MeshFilter>(out var filter) ? filter.sharedMesh : null;
+                if (mesh == null || !mesh.isReadable) continue;
+                var vertices = mesh.vertices;
+                for (var i = 0; i < vertices.Length; i++)
+                {
+                    var p = car.InverseTransformPoint(r.transform.TransformPoint(vertices[i]));
+                    if (p.z < z0 || p.z > z1 || Mathf.Abs(p.y - y) > 0.15f) continue;
+                    best = Mathf.Max(best, Mathf.Abs(p.x - b.center.x));
+                }
+            }
+            return best > 0.3f ? best : b.extents.x * 0.94f;
         }
     }
 }

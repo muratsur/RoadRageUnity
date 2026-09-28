@@ -9,6 +9,12 @@
   SM_stump              a cut stump
   SM_hotel              a Black Forest hotel: plaster ground floor, dark timber upper
                         floor, a big steep hipped roof
+  SM_sign_limit_70/100  German speed limit signs (round, red ring)
+  SM_sign_curve(_l)     curve warning triangle, right (left) bend
+  SM_sign_deer          Wildwechsel (deer crossing) triangle
+  SM_sign_nopass        Ueberholverbot (no overtaking)
+  SM_sign_chevron_l/_r  red and white bend chevron board (Richtungstafel)
+  SM_blitzer            grey roadside speed camera box on a pole
 
 Place names come from Assets/Resources/Biomes/Routes/b500_places.txt (written by
 Tools/Terrain/build_b500_road.py); sign NN is the line index there.
@@ -67,7 +73,16 @@ REGIONS = {
     "roof": (256, 1536, 1024, 2048),
     "trim": (1024, 1536, 1536, 2048),
     "plain": (1536, 1536, 2048, 2048),
+    # The two place-sign rows below the twelve in use hold the traffic signs.
+    "limit70": (512, 768, 768, 1024),
+    "limit100": (768, 768, 1024, 1024),
+    "curve": (1024, 768, 1280, 1024),
+    "deer": (1280, 768, 1536, 1024),
+    "nopass": (1536, 768, 1792, 1024),
+    "chevron": (1792, 768, 2048, 1024),
+    "blitzer": (320, 832, 512, 1024),
 }
+MAX_PLACES = 12
 PLACE_SLOT = (512, 256, 512, 128)   # x0, y0, slot w, slot h: 3 columns x 6 rows
 
 
@@ -161,13 +176,15 @@ def build_atlas(places):
     sign("b500", (250, 200, 10), (10, 10, 10), "B 500", (10, 10, 10), 150)
     sign("westweg", (245, 245, 240), (40, 40, 40), "Westweg", (30, 30, 30), 88, diamond=True)
     sign("arrow", (250, 205, 20), (30, 30, 30), "Wanderweg", (30, 30, 30), 70, arrow=True)
-    for i, name in enumerate(places[:18]):
+    for i, name in enumerate(places[:MAX_PLACES]):
         w, h = size(f"place{i}")
         text = name
         fsize = 78
         while font(fsize).getlength(text) > w - 50 and fsize > 30:
             fsize -= 4
         sign(f"place{i}", (245, 245, 240), (20, 20, 20), text, (15, 15, 15), fsize)
+
+    traffic_signs(fill, size)
 
     # Hotel: plaster ground floor bay with a window and flower box.
     def facade(name, wall_col, frame_col, boards=False):
@@ -304,6 +321,123 @@ def sign_on_post(name, reg, width, height, bottom, posts=1):
     return b.to_object(name)
 
 
+def traffic_signs(fill, size):
+    """German traffic signs (StVO), drawn on 256 px squares. Only the disc or
+    triangle is mapped onto the mesh, so the grey around it never shows."""
+    RED, WHITE, BLACK = (200, 20, 30), (245, 245, 242), (15, 15, 15)
+
+    def canvas(name):
+        w, h = size(name)
+        img = Image.new("RGB", (w, h), (120, 120, 120))
+        return img, ImageDraw.Draw(img), w, h
+
+    def round_sign(name):
+        img, d, w, h = canvas(name)
+        d.ellipse([2, 2, w - 3, h - 3], fill=RED)
+        d.ellipse([30, 30, w - 31, h - 31], fill=WHITE)
+        return img, d, w, h
+
+    for name, text in (("limit70", "70"), ("limit100", "100")):
+        img, d, w, h = round_sign(name)
+        d.text((w / 2, h / 2 + 4), text, fill=BLACK, font=font(118 if len(text) == 2 else 92), anchor="mm")
+        fill(name, np.asarray(img, float) / 255)
+
+    img, d, w, h = round_sign("nopass")
+    for cx, col in ((w * 0.36, RED), (w * 0.64, BLACK)):   # two cars from behind
+        d.rounded_rectangle([cx - 30, h * 0.40, cx + 30, h * 0.62], 10, fill=col)
+        d.rounded_rectangle([cx - 20, h * 0.30, cx + 20, h * 0.44], 8, fill=col)
+        d.rectangle([cx - 28, h * 0.62, cx - 16, h * 0.70], fill=col)
+        d.rectangle([cx + 16, h * 0.62, cx + 28, h * 0.70], fill=col)
+    fill("nopass", np.asarray(img, float) / 255)
+
+    def triangle(name):
+        img, d, w, h = canvas(name)
+        d.polygon([(w / 2, 4), (w - 4, h - 16), (4, h - 16)], fill=RED)
+        d.polygon([(w / 2, 46), (w - 42, h - 38), (42, h - 38)], fill=WHITE)
+        return img, d, w, h
+
+    img, d, w, h = triangle("curve")
+    pts = [(w * 0.44, h * 0.80), (w * 0.44, h * 0.62), (w * 0.52, h * 0.52), (w * 0.56, h * 0.44)]
+    d.line(pts, fill=BLACK, width=16, joint="curve")
+    d.polygon([(w * 0.50, h * 0.40), (w * 0.64, h * 0.34), (w * 0.60, h * 0.50)], fill=BLACK)
+    fill("curve", np.asarray(img, float) / 255)
+
+    img, d, w, h = triangle("deer")   # a leaping deer, facing left
+    d.ellipse([w * 0.38, h * 0.56, w * 0.66, h * 0.68], fill=BLACK)                       # body
+    d.polygon([(w * 0.40, h * 0.60), (w * 0.32, h * 0.46), (w * 0.37, h * 0.44), (w * 0.45, h * 0.58)], fill=BLACK)  # neck
+    d.ellipse([w * 0.27, h * 0.42, w * 0.37, h * 0.49], fill=BLACK)                       # head
+    d.line([(w * 0.34, h * 0.43), (w * 0.37, h * 0.34), (w * 0.41, h * 0.31)], fill=BLACK, width=5)   # antlers
+    d.line([(w * 0.36, h * 0.37), (w * 0.33, h * 0.33)], fill=BLACK, width=5)
+    d.line([(w * 0.42, h * 0.64), (w * 0.33, h * 0.76)], fill=BLACK, width=7)             # front legs
+    d.line([(w * 0.46, h * 0.65), (w * 0.40, h * 0.78)], fill=BLACK, width=7)
+    d.line([(w * 0.62, h * 0.64), (w * 0.72, h * 0.77)], fill=BLACK, width=7)             # hind legs
+    d.line([(w * 0.60, h * 0.66), (w * 0.64, h * 0.79)], fill=BLACK, width=7)
+    fill("deer", np.asarray(img, float) / 255)
+
+    img, d, w, h = canvas("chevron")   # red board, white chevrons pointing right
+    d.rectangle([0, 0, w, h], fill=RED)
+    for k in range(3):
+        x = 40 + k * 70
+        d.polygon([(x, h * 0.28), (x + 30, h * 0.28), (x + 70, h * 0.5), (x + 30, h * 0.72), (x, h * 0.72),
+                   (x + 40, h * 0.5)], fill=WHITE)
+    fill("chevron", np.asarray(img, float) / 255)
+
+    img, d, w, h = canvas("blitzer")   # the camera box's face: lens and flash windows
+    d.rectangle([0, 0, w, h], fill=(150, 152, 150))
+    d.rectangle([w * 0.12, h * 0.18, w * 0.52, h * 0.58], fill=(25, 28, 32))
+    d.ellipse([w * 0.20, h * 0.26, w * 0.44, h * 0.50], fill=(60, 70, 90))
+    d.rectangle([w * 0.60, h * 0.18, w * 0.88, h * 0.58], fill=(200, 60, 50))
+    d.rectangle([w * 0.12, h * 0.70, w * 0.88, h * 0.80], fill=(60, 60, 60))
+    fill("blitzer", np.asarray(img, float) / 255)
+
+
+def sign_disc(name, reg, radius=0.42, centre=2.0, sides=24):
+    """Round sign on a post, front towards -Y, plain metal back."""
+    b = Builder()
+    b.box(-0.03, 0.03, 0.02, 0.08, 0.0, centre + 0.1, "metal")
+    ring = [(math.cos(math.tau * k / sides), math.sin(math.tau * k / sides)) for k in range(sides)]
+    b.poly([(-c * radius, -0.02, centre + s * radius) for c, s in ring],
+           [uv(reg, 0.5 - 0.5 * c, 0.5 + 0.5 * s) for c, s in ring])
+    b.poly([(c * radius, 0.02, centre + s * radius) for c, s in ring],
+           [uv("metal", 0.5 + 0.5 * c, 0.5 + 0.5 * s) for c, s in ring])
+    return b.to_object(name)
+
+
+def sign_triangle(name, reg, side=0.9, bottom=1.6, mirror=False):
+    b = Builder()
+    h = side * math.sqrt(3) / 2
+    b.box(-0.03, 0.03, 0.02, 0.08, 0.0, bottom + h * 0.6, "metal")
+    # Texture triangle: apex (0.5, 1 - 4/256), base corners at v = 16/256.
+    top, base = 1 - 4 / 256, 16 / 256
+    left, right = (1 - 4 / 256, 4 / 256) if mirror else (4 / 256, 1 - 4 / 256)
+    b.poly([(-side / 2, -0.02, bottom), (side / 2, -0.02, bottom), (0, -0.02, bottom + h)],
+           [uv(reg, left, base), uv(reg, right, base), uv(reg, 0.5, top)])
+    b.poly([(side / 2, 0.02, bottom), (-side / 2, 0.02, bottom), (0, 0.02, bottom + h)],
+           [uv("metal", 0, 0), uv("metal", 1, 0), uv("metal", 0.5, 1)])
+    return b.to_object(name)
+
+
+def chevron_board(name, mirror, width=1.0, height=0.5, bottom=0.9):
+    """Richtungstafel on the outside of a bend; chevrons point the way it turns."""
+    b = Builder()
+    for x in (-width * 0.3, width * 0.3):
+        b.box(x - 0.03, x + 0.03, 0.02, 0.08, 0.0, bottom + height, "metal")
+    u0, u1 = (1, 0) if mirror else (0, 1)
+    b.quad((-width / 2, -0.02, bottom), (width / 2, -0.02, bottom), (width / 2, -0.02, bottom + height),
+           (-width / 2, -0.02, bottom + height), "chevron", u0, 0.25, u1, 0.75)
+    b.quad((width / 2, 0.02, bottom), (-width / 2, 0.02, bottom), (-width / 2, 0.02, bottom + height),
+           (width / 2, 0.02, bottom + height), "metal")
+    return b.to_object(name)
+
+
+def blitzer():
+    """Fixed speed camera: a grey box on a pole, lens towards the traffic."""
+    b = Builder()
+    b.box(-0.07, 0.07, -0.07, 0.07, 0.0, 1.3, "metal")
+    b.box(-0.26, 0.26, -0.32, 0.32, 1.3, 2.05, "metal", front="blitzer")
+    return b.to_object("SM_blitzer")
+
+
 def signpost_hike():
     b = Builder()
     b.box(-0.06, 0.06, -0.06, 0.06, 0.0, 2.6, "wood")
@@ -405,7 +539,12 @@ def main():
     build_atlas(places)
     objs = [leitpfosten(), sign_on_post("SM_sign_b500", "b500", 1.0, 0.5, 1.6), signpost_hike(),
             woodpile(), fallen_log(), stump(), hotel()]
-    for i, _ in enumerate(places[:18]):
+    objs += [sign_disc("SM_sign_limit_70", "limit70"), sign_disc("SM_sign_limit_100", "limit100"),
+             sign_disc("SM_sign_nopass", "nopass"), sign_triangle("SM_sign_curve", "curve"),
+             sign_triangle("SM_sign_curve_l", "curve", mirror=True),
+             sign_triangle("SM_sign_deer", "deer"), chevron_board("SM_sign_chevron_r", False),
+             chevron_board("SM_sign_chevron_l", True), blitzer()]
+    for i, _ in enumerate(places[:MAX_PLACES]):
         objs.append(sign_on_post(f"SM_sign_place_{i:02d}", f"place{i}", 2.6, 0.65, 1.7, posts=2))
 
     mat = bpy.data.materials.new("M_b500props")
@@ -425,7 +564,7 @@ def main():
                                  bake_space_transform=True, mesh_smooth_type="FACE", use_tspace=True,
                                  path_mode="STRIP", add_leaf_bones=False)
         print(f"RR_MESH {o.name} tris={sum(len(p.vertices) - 2 for p in o.data.polygons)}")
-    preview(objs[:7] + objs[7:10])
+    preview(objs[:3] + objs[7:15] + objs[15:17])
     print("RR_DONE")
 
 

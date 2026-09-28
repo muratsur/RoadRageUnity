@@ -6735,6 +6735,8 @@ namespace RoadRage.UnityRemake
                     }
             }
 
+            BuildTrafficSigns(rail);
+
             // A trail crossing now and then between the stops.
             if (Random.value < 0.12f)
             {
@@ -6758,6 +6760,71 @@ namespace RoadRage.UnityRemake
                         Quaternion.LookRotation(Flat(side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-8f, 8f), 0f),
                         "B500 Woodpile", 0.1f);
             }
+        }
+
+        /// Bends tighter than this (degrees of heading per 10 m, ~120 m radius) get
+        /// chevron boards and a warning before them.
+        private const float SharpTurn = 4.8f;
+
+        /// Fixed speed cameras, as distances along the route (one pass).
+        internal static IEnumerable<float> BlitzerSites()
+        {
+            var route = RoadPath.Route;
+            if (route == null) yield break;
+            for (var u = 2200f; u < route.Length - 500f; u += 4200f) yield return u;
+        }
+
+        /// German road signs, as on the real B500: red and white chevrons round the
+        /// outside of every sharp bend, a bend warning and a 70 limit before it, deer
+        /// and no-overtaking signs, and the grey Blitzer boxes.
+        private void BuildTrafficSigns(float rail)
+        {
+            for (var d = Mathf.Ceil(segStart / 15f) * 15f; d < segEnd; d += 15f)
+            {
+                var turn = TurnAt(d);
+                if (Mathf.Abs(turn) < SharpTurn) continue;
+                var outside = turn > 0f ? -1 : 1;
+                PlaceRouteProp(turn > 0f ? "SM_sign_chevron_r" : "SM_sign_chevron_l", d,
+                    outside * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 0.7f),
+                    FacingOncoming(d), "B500 Chevron");
+            }
+
+            // Where a sharp bend starts, warn 90 m before it.
+            for (var d = Mathf.Ceil((segStart + 90f) / 15f) * 15f; d < segEnd + 90f; d += 15f)
+            {
+                var turn = TurnAt(d);
+                if (Mathf.Abs(turn) < SharpTurn || Mathf.Abs(TurnAt(d - 15f)) >= SharpTurn ||
+                    Mathf.Abs(TurnAt(d - 30f)) >= SharpTurn) continue;
+                var at = d - 90f;
+                PlaceRouteProp(turn > 0f ? "SM_sign_curve" : "SM_sign_curve_l", at, RoadPath.HalfWidthAt(at) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at), "B500 Sign Curve");
+                PlaceRouteProp("SM_sign_limit_70", at + 12f, RoadPath.HalfWidthAt(at + 12f) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at + 12f), "B500 Sign Limit");
+            }
+
+            foreach (var site in BlitzerSites())
+            foreach (var d in PassesOf(site, site))
+                PlaceRouteProp("SM_blitzer", d, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 1.3f,
+                    FacingOncoming(d), "B500 Blitzer");
+
+            // Now and then: deer crossing, no overtaking, back to 100 on a straight.
+            var roll = Random.value;
+            var at2 = Random.Range(segStart + 10f, segEnd - 10f);
+            var mesh = roll < 0.10f ? "SM_sign_deer"
+                : roll < 0.16f ? "SM_sign_nopass"
+                : roll < 0.24f && Mathf.Abs(TurnAt(at2)) < 1f ? "SM_sign_limit_100"
+                : null;
+            if (mesh != null)
+                PlaceRouteProp(mesh, at2, RoadPath.HalfWidthAt(at2) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at2), "B500 Sign");
+        }
+
+        /// Heading change over 20 m of road, per 10 m, in degrees: positive turns right.
+        private static float TurnAt(float distance)
+        {
+            var a = Flat(RoadPath.Rotation(distance - 10f) * Vector3.forward);
+            var b = Flat(RoadPath.Rotation(distance + 10f) * Vector3.forward);
+            return Vector3.SignedAngle(a, b, Vector3.up) * 0.5f;
         }
 
         private GameObject PlaceRouteProp(string mesh, float distance, float lateral, Quaternion rotation, string name,
