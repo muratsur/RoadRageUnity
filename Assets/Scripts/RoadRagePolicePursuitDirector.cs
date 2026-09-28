@@ -628,8 +628,12 @@ namespace RoadRage.UnityRemake
             if (horizontalLength > 0.01f) visual.transform.localScale *= targetLength / horizontalLength;
         }
 
+        /// Height of the roof above the cruiser's origin: where the lightbar sits.
+        private float roofHeight = 1.45f;
+
         private void BuildPoliceMesh()
         {
+            if (BuildPackCruiser()) return;
             var modelName = unitHeatLevel >= 4 ? "SK_Veh_Preset_Muscle_01" : "SK_Veh_Preset_Sedan_01";
             var prefab = Resources.Load<GameObject>($"Vehicles/{modelName}");
             if (prefab != null)
@@ -710,11 +714,194 @@ namespace RoadRage.UnityRemake
             Destroy(bullbar.GetComponent<Collider>());
         }
 
+        private static bool packCruiserReported;
+        private static readonly Dictionary<Material, Material> urpCopies = new();
+
+        /// The cruiser body from Realistic Mobile Car #26, where Road Rage > Link Police
+        /// Car Pack has linked it. The car is built under an inactive holder so the
+        /// pack's own driving scripts, rigidbody and wheel colliders never wake up;
+        /// they are stripped and the car is only a body on the pursuit's own motion.
+        private bool BuildPackCruiser()
+        {
+            var prefab = PoliceCarPack.LinkedCar;
+            if (prefab == null) return false;
+
+            var holder = new GameObject("Police Interceptor Model");
+            holder.SetActive(false);
+            holder.transform.SetParent(transform, false);
+            var car = Instantiate(prefab, holder.transform);
+            car.transform.localPosition = Vector3.zero;
+            car.transform.localRotation = Quaternion.identity;
+            foreach (var joint in car.GetComponentsInChildren<Joint>(true)) DestroyImmediate(joint);
+            foreach (var script in car.GetComponentsInChildren<MonoBehaviour>(true)) DestroyImmediate(script);
+            foreach (var collider in car.GetComponentsInChildren<Collider>(true)) DestroyImmediate(collider);
+            foreach (var body in car.GetComponentsInChildren<Rigidbody>(true)) DestroyImmediate(body);
+            foreach (var source in car.GetComponentsInChildren<AudioSource>(true)) DestroyImmediate(source);
+            foreach (var cam in car.GetComponentsInChildren<Camera>(true)) DestroyImmediate(cam.gameObject);
+            foreach (var l in car.GetComponentsInChildren<Light>(true)) DestroyImmediate(l);
+            // Nothing left that can run; renderers only report bounds while active.
+            holder.SetActive(true);
+
+            var renderers = car.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                Destroy(holder);
+                return false;
+            }
+            var painted = new Dictionary<Material, Material>();
+            var paint = German ? new Color(0.72f, 0.74f, 0.78f) : new Color(0.05f, 0.07f, 0.11f);
+            foreach (var r in renderers)
+            {
+                var materials = r.sharedMaterials;
+                for (var i = 0; i < materials.Length; i++)
+                {
+                    materials[i] = ToUrp(materials[i]);
+                    // The body paint becomes the force's colour: silver on the B500
+                    // (the blue is the band), dark navy elsewhere.
+                    var matName = materials[i] != null ? materials[i].name.ToLowerInvariant() : "";
+                    if (matName.Contains("body") || matName.Contains("paint"))
+                    {
+                        // One painted copy per source material, shared by every part.
+                        if (!painted.TryGetValue(materials[i], out var copy))
+                        {
+                            copy = new Material(materials[i]) { name = materials[i].name + " (Police)" };
+                            copy.SetColor("_BaseColor", paint);
+                            painted[materials[i]] = copy;
+                        }
+                        materials[i] = copy;
+                    }
+                }
+                r.sharedMaterials = materials;
+            }
+
+            // Measured on the bodywork only: the pack's light glows and flares stand
+            // well out from the car (it measured 3.6 m wide with them), and the hull
+            // the contact pass uses has to be the car you can see.
+            var bodywork = System.Array.FindAll(renderers, part => !IsLightPart(part));
+            if (bodywork.Length > 0) renderers = bodywork;
+            // Long side along the cruiser's z.
+            var b = LocalBounds(holder.transform, renderers);
+            if (b.size.x > b.size.z * 1.2f)
+            {
+                car.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+                b = LocalBounds(holder.transform, renderers);
+            }
+            var scale = 4.8f / Mathf.Max(0.01f, b.size.z);
+            car.transform.localScale *= scale;
+            b = LocalBounds(holder.transform, renderers);
+            // Centred on the hull, wheels on the road.
+            car.transform.localPosition -= new Vector3(b.center.x, b.min.y, b.center.z);
+            b = LocalBounds(holder.transform, renderers);
+
+            roofHeight = b.max.y + 0.02f;
+            hullHalfLength = b.size.z * 0.5f;
+            hullHalfWidth = Mathf.Max(0.8f, b.size.x * 0.5f);
+            if (German) PolizeiLivery.Apply(transform, holder);
+
+            if (!packCruiserReported)
+            {
+                packCruiserReported = true;
+                var all = new HashSet<string>();
+                foreach (var r in renderers)
+                    foreach (var m in r.sharedMaterials) if (m != null) all.Add(m.name);
+                Debug.Log($"RR_POLICE cruiser from '{prefab.name}': {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m " +
+                          $"(scaled x{scale:0.00}), roof {roofHeight:0.00} m. Materials: {string.Join(", ", all)}. " +
+                          $"Painted: {(painted.Count > 0 ? string.Join(", ", System.Linq.Enumerable.Select(painted.Values, m => m.name)) : "none (no body/paint material)")}");
+            }
+            return true;
+        }
+
+        private static bool IsLightPart(Renderer r)
+        {
+            var n = r.name.ToLowerInvariant();
+            if (n.Contains("light") || n.Contains("glow") || n.Contains("flare") || n.Contains("shadow")) return true;
+            foreach (var m in r.sharedMaterials)
+            {
+                var mn = m != null ? m.name.ToLowerInvariant() : "";
+                if (mn.Contains("light") || mn.Contains("glow") || mn.Contains("flare") || mn.Contains("shadow")) return true;
+            }
+            return false;
+        }
+
+        private static Bounds LocalBounds(Transform frame, Renderer[] renderers)
+        {
+            var found = false;
+            var bounds = default(Bounds);
+            foreach (var r in renderers)
+            {
+                if (r == null || r is ParticleSystemRenderer || !r.enabled || !r.gameObject.activeInHierarchy) continue;
+                var world = r.bounds;
+                var c = world.center;
+                var e = world.extents;
+                for (var i = 0; i < 8; i++)
+                {
+                    var corner = c + new Vector3((i & 1) == 0 ? -e.x : e.x, (i & 2) == 0 ? -e.y : e.y, (i & 4) == 0 ? -e.z : e.z);
+                    var local = frame.InverseTransformPoint(corner);
+                    if (!found) { bounds = new Bounds(local, Vector3.zero); found = true; }
+                    else bounds.Encapsulate(local);
+                }
+            }
+            return bounds;
+        }
+
+        /// A URP Lit copy of a material written for the built-in pipeline (magenta in
+        /// URP), carrying over its textures, colour, metal and gloss. Glass stays see-
+        /// through. URP materials are returned as they are.
+        private static Material ToUrp(Material source)
+        {
+            if (source == null || source.shader == null) return source;
+            var shaderName = source.shader.name;
+            if (shaderName.StartsWith("Universal Render Pipeline/") || shaderName.StartsWith("Shader Graphs/"))
+                return source;
+            if (urpCopies.TryGetValue(source, out var cached)) return cached;
+            var lit = Shader.Find("Universal Render Pipeline/Lit");
+            if (lit == null) return source;
+            var copy = new Material(lit) { name = source.name };
+            var tex = source.HasProperty("_MainTex") ? source.GetTexture("_MainTex")
+                : source.HasProperty("_BaseMap") ? source.GetTexture("_BaseMap") : null;
+            if (tex != null) copy.SetTexture("_BaseMap", tex);
+            var colour = source.HasProperty("_Color") ? source.GetColor("_Color")
+                : source.HasProperty("_BaseColor") ? source.GetColor("_BaseColor") : Color.white;
+            copy.SetColor("_BaseColor", colour);
+            if (source.HasProperty("_BumpMap") && source.GetTexture("_BumpMap") != null)
+            {
+                copy.SetTexture("_BumpMap", source.GetTexture("_BumpMap"));
+                copy.EnableKeyword("_NORMALMAP");
+            }
+            if (source.HasProperty("_MetallicGlossMap") && source.GetTexture("_MetallicGlossMap") != null)
+            {
+                copy.SetTexture("_MetallicGlossMap", source.GetTexture("_MetallicGlossMap"));
+                copy.EnableKeyword("_METALLICSPECGLOSSMAP");
+            }
+            if (source.HasProperty("_Metallic")) copy.SetFloat("_Metallic", source.GetFloat("_Metallic"));
+            if (source.HasProperty("_Glossiness")) copy.SetFloat("_Smoothness", source.GetFloat("_Glossiness"));
+            if (source.IsKeywordEnabled("_EMISSION") && source.HasProperty("_EmissionColor"))
+            {
+                copy.EnableKeyword("_EMISSION");
+                copy.SetColor("_EmissionColor", source.GetColor("_EmissionColor"));
+                if (source.HasProperty("_EmissionMap")) copy.SetTexture("_EmissionMap", source.GetTexture("_EmissionMap"));
+            }
+            var lower = source.name.ToLowerInvariant();
+            if (lower.Contains("glass") || lower.Contains("window") || source.renderQueue >= 3000)
+            {
+                copy.SetFloat("_Surface", 1f);
+                copy.SetFloat("_SrcBlend", (float)UnityEngine.Rendering.BlendMode.SrcAlpha);
+                copy.SetFloat("_DstBlend", (float)UnityEngine.Rendering.BlendMode.OneMinusSrcAlpha);
+                copy.SetFloat("_ZWrite", 0f);
+                copy.EnableKeyword("_SURFACE_TYPE_TRANSPARENT");
+                copy.renderQueue = 3000;
+                if (colour.a > 0.95f) copy.SetColor("_BaseColor", new Color(colour.r, colour.g, colour.b, 0.4f));
+                copy.SetFloat("_Smoothness", 0.92f);
+            }
+            urpCopies[source] = copy;
+            return copy;
+        }
+
         private void BuildLightbars()
         {
             var lightbarRoot = new GameObject("Police LED Lightbar");
             lightbarRoot.transform.SetParent(transform, false);
-            lightbarRoot.transform.localPosition = new Vector3(0f, 1.45f, -0.1f);
+            lightbarRoot.transform.localPosition = new Vector3(0f, roofHeight, -0.1f);
 
             var barFrame = GameObject.CreatePrimitive(PrimitiveType.Cube);
             barFrame.name = "Lightbar Frame";
