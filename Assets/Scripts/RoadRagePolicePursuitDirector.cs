@@ -748,7 +748,7 @@ namespace RoadRage.UnityRemake
                 Destroy(holder);
                 return false;
             }
-            var painted = new List<string>();
+            var painted = new Dictionary<Material, Material>();
             var paint = German ? new Color(0.72f, 0.74f, 0.78f) : new Color(0.05f, 0.07f, 0.11f);
             foreach (var r in renderers)
             {
@@ -761,14 +761,24 @@ namespace RoadRage.UnityRemake
                     var matName = materials[i] != null ? materials[i].name.ToLowerInvariant() : "";
                     if (matName.Contains("body") || matName.Contains("paint"))
                     {
-                        materials[i] = new Material(materials[i]) { name = materials[i].name + " (Police)" };
-                        materials[i].SetColor("_BaseColor", paint);
-                        painted.Add(materials[i].name);
+                        // One painted copy per source material, shared by every part.
+                        if (!painted.TryGetValue(materials[i], out var copy))
+                        {
+                            copy = new Material(materials[i]) { name = materials[i].name + " (Police)" };
+                            copy.SetColor("_BaseColor", paint);
+                            painted[materials[i]] = copy;
+                        }
+                        materials[i] = copy;
                     }
                 }
                 r.sharedMaterials = materials;
             }
 
+            // Measured on the bodywork only: the pack's light glows and flares stand
+            // well out from the car (it measured 3.6 m wide with them), and the hull
+            // the contact pass uses has to be the car you can see.
+            var body = System.Array.FindAll(renderers, r => !IsLightPart(r));
+            if (body.Length > 0) renderers = body;
             // Long side along the cruiser's z.
             var b = LocalBounds(holder.transform, renderers);
             if (b.size.x > b.size.z * 1.2f)
@@ -796,9 +806,21 @@ namespace RoadRage.UnityRemake
                     foreach (var m in r.sharedMaterials) if (m != null) all.Add(m.name);
                 Debug.Log($"RR_POLICE cruiser from '{prefab.name}': {b.size.x:0.00} x {b.size.y:0.00} x {b.size.z:0.00} m " +
                           $"(scaled x{scale:0.00}), roof {roofHeight:0.00} m. Materials: {string.Join(", ", all)}. " +
-                          $"Painted: {(painted.Count > 0 ? string.Join(", ", painted) : "none (no body/paint material)")}");
+                          $"Painted: {(painted.Count > 0 ? string.Join(", ", System.Linq.Enumerable.Select(painted.Values, m => m.name)) : "none (no body/paint material)")}");
             }
             return true;
+        }
+
+        private static bool IsLightPart(Renderer r)
+        {
+            var n = r.name.ToLowerInvariant();
+            if (n.Contains("light") || n.Contains("glow") || n.Contains("flare") || n.Contains("shadow")) return true;
+            foreach (var m in r.sharedMaterials)
+            {
+                var mn = m != null ? m.name.ToLowerInvariant() : "";
+                if (mn.Contains("light") || mn.Contains("glow") || mn.Contains("flare") || mn.Contains("shadow")) return true;
+            }
+            return false;
         }
 
         private static Bounds LocalBounds(Transform frame, Renderer[] renderers)
