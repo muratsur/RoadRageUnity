@@ -25,6 +25,7 @@ Assets/Resources/Police/*.png -filter binary
 # Kept out of LFS: crash sounds, Tools/Audio/build_crash_sounds.py.
 Assets/Resources/Audio/CrashCC0/*.ogg -filter binary
 Assets/Resources/Audio/CrashReal/*.ogg -filter binary
+Assets/Resources/Audio/SirenReal/*.ogg -filter binary
 # Baked road centreline (Tools/Terrain/build_b500_road.py): raw binary, no line-ending conversion.
 Assets/Resources/Biomes/Routes/*.bytes binary
 *.psd filter=lfs diff=lfs merge=lfs -text

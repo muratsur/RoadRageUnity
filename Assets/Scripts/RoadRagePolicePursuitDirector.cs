@@ -79,8 +79,10 @@ namespace RoadRage.UnityRemake
             sirenSource.spatialBlend = 0.05f;
             sirenSource.volume = 0.35f;
             sirenSource.pitch = 1.0f;
-            // Authentic recorded police siren from project audio assets
-            sirenSource.clip = Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_1")
+            // The recorded siren from Road Rage 3D (audio/siren.mp3), made to loop
+            // without a click; the pack sirens are the fallback.
+            sirenSource.clip = Resources.Load<AudioClip>("Audio/SirenReal/siren_real")
+                ?? Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_1")
                 ?? Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_2")
                 ?? Resources.Load<AudioClip>("Audio/SFX/Horns/Sirens/siren_3");
         }
