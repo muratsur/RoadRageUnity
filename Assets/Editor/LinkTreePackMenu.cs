@@ -30,7 +30,8 @@ public static class LinkTreePackMenu
 
     private static readonly (string label, string[] match)[] Packs =
     {
-        ("European Forests", new[] { "european", "mysticforge" }),
+        // European Forests installs into "Realistic Tree".
+        ("European Forests", new[] { "european", "mysticforge", "realistic tree" }),
         ("NatureManufacture", new[] { "naturemanufacture" }),
     };
 
