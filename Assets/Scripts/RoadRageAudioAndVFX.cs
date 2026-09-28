@@ -198,7 +198,11 @@ namespace RoadRage.UnityRemake
 
         private void UpdateNitroVFXAndAudio(bool isAccelerating, float speedKmh, bool isDriving)
         {
-            var boosting = isDriving && isAccelerating && speedKmh > 60f;
+            // Only while nitro is actually burning. This used to fire on plain throttle
+            // above 60 km/h, so the nitro whoosh looped (and the exhaust flamed) for
+            // most of every drive.
+            var boost = RoadRageBoostDirector.Instance;
+            var boosting = isDriving && boost != null && boost.IsBoosting;
 
             // Exhaust NOS Flames
             SetParticleEmission(leftNosFlame, boosting);
