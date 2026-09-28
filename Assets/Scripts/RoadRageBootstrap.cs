@@ -6917,8 +6917,10 @@ namespace RoadRage.UnityRemake
             GameObject model;
             if (external)
             {
-                var pool = split[1].StartsWith("y") ? ExternalYoungTrees : ExternalTrees;
-                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y')) % pool.Length] : null;
+                var pool = split[1].StartsWith("y") ? ExternalYoungTrees
+                    : split[1].StartsWith("b") ? ExternalBroadleaf
+                    : ExternalTrees;
+                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y', 'b')) % pool.Length] : null;
                 model = prefab != null ? Adopt(Instantiate(prefab)) : null;
             }
             else
@@ -7357,7 +7359,11 @@ namespace RoadRage.UnityRemake
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var entry = table[Random.Range(0, table.Length)];
             if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
-                entry = "External|" + Random.Range(0, ExternalTrees.Length);
+                // The northern Black Forest is spruce and fir, with beech mixed in on
+                // the lower slopes: about one tree in eight where the pack has them.
+                entry = ExternalBroadleaf.Length > 0 && Random.value < 0.12f
+                    ? "External|b" + Random.Range(0, ExternalBroadleaf.Length)
+                    : "External|" + Random.Range(0, ExternalTrees.Length);
             var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
             // The tree's real offset, not its sign. Passed Mathf.Sign(lateral) - always
@@ -7392,6 +7398,7 @@ namespace RoadRage.UnityRemake
 
         private static GameObject[] externalTrees;
         private static GameObject[] externalYoungTrees;
+        private static GameObject[] externalBroadleaf;
 
         /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
         /// Tree Pack; empty when there is none.
@@ -7411,8 +7418,12 @@ namespace RoadRage.UnityRemake
                 externalYoungTrees = registry != null && registry.YoungTrees != null
                     ? System.Array.FindAll(registry.YoungTrees, t => t != null && RendersInThisPipeline(t))
                     : System.Array.Empty<GameObject>();
+                externalBroadleaf = registry != null && registry.Broadleaf != null
+                    ? System.Array.FindAll(registry.Broadleaf, t => t != null && RendersInThisPipeline(t))
+                    : System.Array.Empty<GameObject>();
                 if (externalTrees.Length > 0)
-                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees and {externalBroadleaf.Length} " +
+                              $"broadleaf from {registry.Source}");
                 if (externalTrees.Length < linked.Length)
                     Debug.LogWarning($"RR_TREES {linked.Length - externalTrees.Length} linked trees use shaders URP cannot " +
                                      "draw (they would be magenta) and are skipped. Import the pack's URP support " +
@@ -7431,6 +7442,16 @@ namespace RoadRage.UnityRemake
                     return false;
             }
             return true;
+        }
+
+        /// Broadleaf trees (beech, oak ...) from the pack, mixed into the conifers.
+        private static GameObject[] ExternalBroadleaf
+        {
+            get
+            {
+                if (externalTrees == null) _ = ExternalTrees;
+                return externalBroadleaf ?? System.Array.Empty<GameObject>();
+            }
         }
 
         private static GameObject[] ExternalYoungTrees
