@@ -63,3 +63,8 @@ Assets/NatureManufacture Assets/
 Assets/NatureManufacture Assets.meta
 Assets/Resources/Biomes/ExternalVegetation.asset
 Assets/Resources/Biomes/ExternalVegetation.asset.meta
+
+# Asian Canal Environment (Leartes Studios, from Fab): licensed for use, not for
+# redistribution. Exported from Unreal to FBX and kept only in the local project.
+Assets/AsianCanal/
+Assets/AsianCanal.meta
