@@ -108,6 +108,7 @@ namespace RoadRage.UnityRemake
 
             ClearEmitter(ref precipitation);
             ClearEmitter(ref spray);
+            PlayAmbience(kind);
 
             // Fog has no particles. It is entirely fog density, tint and sun scale, which
             // BuildLighting already applies from the effect - so there is nothing to emit
@@ -141,6 +142,32 @@ namespace RoadRage.UnityRemake
                 }
 
                 spray.Play();
+            }
+        }
+
+        private AudioSource ambience;
+        private float ambienceVolume;
+
+        /// The weather pack's loop for this weather (rain, storm wind, wind in snow and
+        /// fog), faded in over the game's own particles. Silent where no pack is
+        /// linked, as the weather always was.
+        private void PlayAmbience(WeatherKind kind)
+        {
+            var (clip, volume) = WeatherPack.Linked != null ? WeatherPack.Linked.For(kind) : (null, 0f);
+            if (ambience == null)
+            {
+                ambience = gameObject.AddComponent<AudioSource>();
+                ambience.loop = true;
+                ambience.playOnAwake = false;
+                ambience.spatialBlend = 0f;
+                ambience.volume = 0f;
+            }
+            ambienceVolume = clip != null ? volume : 0f;
+            if (clip != null && (ambience.clip != clip || !ambience.isPlaying))
+            {
+                ambience.clip = clip;
+                ambience.volume = 0f;
+                ambience.Play();
             }
         }
 
@@ -267,6 +294,11 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
+            if (ambience != null)
+            {
+                ambience.volume = Mathf.MoveTowards(ambience.volume, ambienceVolume, Time.unscaledDeltaTime * 0.25f);
+                if (ambienceVolume <= 0f && ambience.volume <= 0f && ambience.isPlaying) ambience.Stop();
+            }
             if (followTarget == null) return;
             // Keep the emitter volume over the player. World simulation space means the
             // already-spawned particles stay where they were, so moving the box does not

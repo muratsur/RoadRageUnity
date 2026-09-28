@@ -175,6 +175,11 @@ namespace RoadRage.UnityRemake
         /// A real crash: body thump, sheet metal, glass on the big ones, debris
         /// settling (Tools/Audio/build_crash_sounds.py). Heavier hits pick the
         /// heavier set; the pitch varies so no two sound the same.
+        /// The recorded crashes are normalised to full scale, so at full volume a
+        /// takedown drowned the engine, the music and the rain: turning the game down
+        /// until the crash was bearable made everything else too quiet.
+        private const float CrashLevel = 0.5f;
+
         public void PlayCrash(float severity = 1f)
         {
             if (crashSource == null) return;
@@ -188,9 +193,9 @@ namespace RoadRage.UnityRemake
             if (set.Length == 0) set = crashMedium.Length > 0 ? crashMedium : crashHeavy;
             crashSource.pitch = Random.Range(0.92f, 1.06f);
             if (set.Length > 0)
-                crashSource.PlayOneShot(set[Random.Range(0, set.Length)], Mathf.Clamp(severity, 0.35f, 1f));
+                crashSource.PlayOneShot(set[Random.Range(0, set.Length)], Mathf.Clamp(severity, 0.35f, 1f) * CrashLevel);
             else
-                crashSource.PlayOneShot(CreateProceduralCrashClip(), Mathf.Clamp01(severity));
+                crashSource.PlayOneShot(CreateProceduralCrashClip(), Mathf.Clamp01(severity) * CrashLevel);
         }
 
         /// Takedowns already play the crash itself; the musical sting that went with

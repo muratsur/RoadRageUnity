@@ -98,3 +98,7 @@ Assets/*NYC*.meta
 # the Realistic Mobile Car pack, which is not committed).
 Assets/Resources/Police/PoliceCarPack.asset
 Assets/Resources/Police/PoliceCarPack.asset.meta
+# The weather registry written by Road Rage > Link Weather Pack (points into the
+# URP Dynamic Weather System pack, which is not committed).
+Assets/Resources/Weather/
+Assets/Resources/Weather.meta
