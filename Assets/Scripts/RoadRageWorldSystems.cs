@@ -1187,14 +1187,24 @@ namespace RoadRage.UnityRemake
                 visualPlaced = true;
             }
             var delta = Time.deltaTime;
+            // Queued in a jam, a car edging round the one in front is pushed back by the
+            // contact pass and pulled out again by its own drift, a few centimetres each
+            // way every frame. At speed that is lost in the motion; standing still it
+            // made the car shake. The slower the car, the heavier the smoothing.
+            var still = 1f - Mathf.Clamp01(currentSpeedKph / 25f);
             if (delta > 0f)
-                visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed, 0.12f, 30f, delta);
+                visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed,
+                    Mathf.Lerp(0.12f, 0.45f, still), 30f, delta);
             transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
             var forward = Mathf.Max(3f, currentSpeedKph / 3.6f);
+            // Steering follows the sideways motion only while the car is rolling: a car
+            // at a standstill cannot turn its body, and those small pushes swung it up
+            // to 22 degrees back and forth.
             var target = IsWreck ? 0f
-                : Mathf.Clamp(Mathf.Atan2(visualLateralSpeed, forward) * Mathf.Rad2Deg * Direction, -22f, 22f);
+                : Mathf.Clamp(Mathf.Atan2(visualLateralSpeed, forward) * Mathf.Rad2Deg * Direction, -22f, 22f) *
+                  Mathf.Clamp01(currentSpeedKph / 20f);
             steerYaw = Mathf.Lerp(steerYaw, target, Mathf.Clamp01(delta * 8f));
             transform.rotation = facing * Quaternion.Euler(0f, WreckYaw + steerYaw, wreckRoll);
         }
