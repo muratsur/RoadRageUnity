@@ -103,6 +103,9 @@ namespace RoadRage.UnityRemake
         public const float MaxIntegrity = 100f;
         public static float Integrity = MaxIntegrity;
         public static bool RunOver;
+        /// Why the run ended, for the results screen: empty for a wreck, "TIME UP" when
+        /// the B500 stage clock ran out (RoadRageB500Stages).
+        public static string RunEndReason = string.Empty;
         public static int LastRunCash;
         // Deferred banking. EndRun computes the run's payout into PendingRunCash/PendingRunFury
         // but does NOT apply it; CommitRun applies it exactly once, when the run truly finishes
@@ -262,6 +265,7 @@ namespace RoadRage.UnityRemake
         {
             Integrity = MaxIntegrity;
             RunOver = false;
+            RunEndReason = string.Empty;
             InnocentsHit = 0;
             Takedowns = 0;
             RunDistanceKm = 0f;

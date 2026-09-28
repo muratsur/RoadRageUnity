@@ -309,6 +309,21 @@ namespace RoadRage.UnityRemake
 		private float startDistance;
 		public WeatherKind Weather => activeWeather;
 
+		private DayTime dayTime = DayTime.Midday;
+
+		/// Weather, and on the B500 the time of day, for the HUD readout.
+		public string ConditionsLabel => RoadPath.Route != null
+			? $"{DayTimeLabel(dayTime)}  |  {WeatherSystem.Label(activeWeather)}"
+			: WeatherSystem.Label(activeWeather);
+
+		private static string DayTimeLabel(DayTime t) => t switch
+		{
+			DayTime.Morning => "🌄 MORNING",
+			DayTime.Evening => "🌇 EVENING",
+			DayTime.Dusk => "🌆 DUSK",
+			_ => "☀️ MIDDAY",
+		};
+
 		private static WeatherKind? ParseWeather(string value)
 		{
 			if (string.IsNullOrEmpty(value)) return null;
@@ -482,6 +497,8 @@ namespace RoadRage.UnityRemake
             {
                 weatherSystem.Configure(activeWeather, car, particleMaterial);
             }
+            gameObject.AddComponent<RoadRageB500Stages>();
+            RollRunConditions();
 			gameObject.AddComponent<RoadRageHUD>().Initialize(car.GetComponent<ArcadeCarController>(), this);
 			if (HasCommandLineFlag("-picker"))
 				OpenPicker();
@@ -717,6 +734,7 @@ namespace RoadRage.UnityRemake
                 if (particleMaterial != null)
                     weatherSystem.Configure(activeWeather, car, particleMaterial);
             }
+            RollRunConditions();
 
             // 11. Stream initial chunks for the new biome
             UpdateStreaming(startDistance);
@@ -2123,7 +2141,129 @@ namespace RoadRage.UnityRemake
 
         private BiomeMood Mood() => Mood(System.Array.IndexOf(Biomes, biomeName));
 
-        private BiomeMood Mood(int biomeIndex) => Neutralize(RawMood(biomeIndex));
+        private BiomeMood Mood(int biomeIndex) =>
+            biomeIndex == 0 && RoadPath.Route != null
+                ? WithDayTime(Neutralize(RawMood(biomeIndex)), dayTime)
+                : Neutralize(RawMood(biomeIndex));
+
+        // ------------------------------------------------------------ varied runs
+
+        /// Every run on the B500 rolls a time of day and the weather, so the same 46 km
+        /// of forest is a misty morning one run, a golden evening the next, dusk with the
+        /// headlights on after that. -daytime=morning|midday|evening|dusk forces it;
+        /// -weather= still forces the weather.
+        public void RollRunConditions()
+        {
+            if (RoadPath.Route == null)
+            {
+                SkyHorizonSync.Tint = Color.white;
+                SetHeadlights(false);
+                return;
+            }
+            var forced = CommandLineValue("-daytime=");
+            if (!string.IsNullOrEmpty(forced) && System.Enum.TryParse(forced, true, out DayTime parsed))
+            {
+                dayTime = parsed;
+            }
+            else
+            {
+                var roll = Random.value;
+                dayTime = roll < 0.25f ? DayTime.Morning : roll < 0.55f ? DayTime.Midday
+                    : roll < 0.80f ? DayTime.Evening : DayTime.Dusk;
+            }
+            activeWeather = ParseWeather(CommandLineValue("-weather=")) ?? WeatherSystem.Roll(0);
+            if (weatherSystem != null && car != null)
+            {
+                var particleMaterial = Resources.Load<Material>("WeatherParticle");
+                if (particleMaterial != null) weatherSystem.Configure(activeWeather, car, particleMaterial);
+            }
+
+            // Low sun in the morning and evening: long shadows across the road.
+            if (sunLight != null)
+            {
+                sunLight.transform.rotation = dayTime switch
+                {
+                    DayTime.Morning => Quaternion.Euler(16f, 75f, 0f),
+                    DayTime.Evening => Quaternion.Euler(11f, -105f, 0f),
+                    DayTime.Dusk => Quaternion.Euler(5f, -125f, 0f),
+                    _ => Quaternion.Euler(54f, 32f, 0f),
+                };
+                sunLight.shadowStrength = dayTime == DayTime.Dusk ? 0.4f : 0.82f;
+            }
+            SkyHorizonSync.Tint = dayTime switch
+            {
+                DayTime.Morning => new Color(1.0f, 0.93f, 0.86f),
+                DayTime.Evening => new Color(1.0f, 0.74f, 0.52f),
+                DayTime.Dusk => new Color(0.30f, 0.32f, 0.48f),
+                _ => Color.white,
+            };
+            SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
+            Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
+        }
+
+        /// The time of day laid over Greenwood's own palette.
+        private static BiomeMood WithDayTime(BiomeMood mood, DayTime t)
+        {
+            switch (t)
+            {
+                case DayTime.Morning:
+                    // Mist in the valleys, a pale warm sun.
+                    mood.FogDensity *= 1.45f;
+                    mood.Fog = Color.Lerp(mood.Fog, new Color(0.62f, 0.64f, 0.64f), 0.55f);
+                    mood.SunColor = new Color(1f, 0.88f, 0.74f);
+                    mood.SunIntensity *= 0.85f;
+                    mood.Sky = Color.Lerp(mood.Sky, new Color(0.62f, 0.60f, 0.58f), 0.3f);
+                    break;
+                case DayTime.Evening:
+                    // Golden hour: orange sun, warm haze, cooler shade.
+                    mood.Fog = Color.Lerp(mood.Fog, new Color(0.62f, 0.48f, 0.34f), 0.6f);
+                    mood.SunColor = new Color(1f, 0.66f, 0.38f);
+                    mood.SunIntensity *= 1.05f;
+                    mood.Sky = Color.Lerp(mood.Sky, new Color(0.46f, 0.44f, 0.52f), 0.4f);
+                    mood.Ground = Color.Lerp(mood.Ground, new Color(0.12f, 0.08f, 0.05f), 0.4f);
+                    mood.AmbientIntensity *= 0.85f;
+                    break;
+                case DayTime.Dusk:
+                    // Blue hour: the sun is down, headlights on.
+                    mood.Fog = new Color(0.13f, 0.15f, 0.22f);
+                    mood.FogDensity *= 1.2f;
+                    mood.SunColor = new Color(0.55f, 0.55f, 0.85f);
+                    mood.SunIntensity *= 0.28f;
+                    mood.Sky = new Color(0.20f, 0.23f, 0.34f);
+                    mood.Equator = new Color(0.10f, 0.12f, 0.18f);
+                    mood.Ground = new Color(0.04f, 0.045f, 0.06f);
+                    mood.AmbientIntensity *= 0.7f;
+                    mood.PostExposure += 0.25f;
+                    mood.BloomIntensity = 0.6f;
+                    break;
+            }
+            return mood;
+        }
+
+        private Light headlightBeam;
+
+        /// One spot light ahead of the player's car for dusk and fog; the road is
+        /// the thing to see, and one light is cheap.
+        private void SetHeadlights(bool on)
+        {
+            if (car == null) return;
+            if (headlightBeam == null && on)
+            {
+                var holder = new GameObject("Headlight Beam");
+                holder.transform.SetParent(car, false);
+                holder.transform.localPosition = new Vector3(0f, 0.9f, 1.8f);
+                holder.transform.localRotation = Quaternion.Euler(9f, 0f, 0f);
+                headlightBeam = holder.AddComponent<Light>();
+                headlightBeam.type = LightType.Spot;
+                headlightBeam.color = new Color(1f, 0.95f, 0.85f);
+                headlightBeam.range = 70f;
+                headlightBeam.spotAngle = 62f;
+                headlightBeam.innerSpotAngle = 30f;
+                headlightBeam.intensity = 9f;
+                headlightBeam.shadows = LightShadows.None;
+            }
+            if (headlightBeam != null) headlightBeam.enabled = on;
+        }
 
         /// Authored palettes. Read these through Mood() so the neutral pass is never
         /// bypassed; this is only separate so the per-biome values stay editable.
@@ -6674,7 +6814,8 @@ namespace RoadRage.UnityRemake
         private void AnnouncePlaces(float distance)
         {
             var route = RoadPath.Route;
-            if (route == null) return;
+            // During a staged run the stage clock names the stops.
+            if (route == null || RoadRageB500Stages.Running) return;
             var u = route.Fold(distance);
             for (var i = 0; i < route.Places.Length; i++)
             {
@@ -9549,12 +9690,18 @@ namespace RoadRage.UnityRemake
     public sealed class SkyHorizonSync : MonoBehaviour
     {
         private static readonly int HorizonColor = Shader.PropertyToID("_HorizonColor");
+        private static readonly int TintId = Shader.PropertyToID("_Tint");
+
+        /// Time-of-day colour over the panorama (RoadRageBootstrap.RollRunConditions).
+        public static Color Tint = Color.white;
 
         private void LateUpdate()
         {
             var sky = RenderSettings.skybox;
             if (sky != null && sky.HasProperty(HorizonColor))
                 sky.SetColor(HorizonColor, RenderSettings.fogColor);
+            if (sky != null && sky.HasProperty(TintId))
+                sky.SetColor(TintId, Tint);
         }
     }
 

@@ -10,6 +10,7 @@ Shader "RoadRage/SkyPanorama"
     {
         _MainTex ("Panorama (upper hemisphere, 4:1)", 2D) = "grey" {}
         _Exposure ("Exposure", Range(0, 4)) = 1.0
+        _Tint ("Tint (time of day)", Color) = (1, 1, 1, 1)
         _Rotation ("Rotation (degrees)", Range(0, 360)) = 0
         _HorizonColor ("Horizon Colour", Color) = (0.6, 0.62, 0.65, 1)
         _HorizonBlend ("Horizon Blend Height", Range(0.001, 0.5)) = 0.08
@@ -36,6 +37,7 @@ Shader "RoadRage/SkyPanorama"
             CBUFFER_START(UnityPerMaterial)
                 float4 _MainTex_ST;
                 float _Exposure;
+                float4 _Tint;
                 float _Rotation;
                 float4 _HorizonColor;
                 float _HorizonBlend;
@@ -74,7 +76,7 @@ Shader "RoadRage/SkyPanorama"
                 float2 duvdy = float2(ddy(longitude) / (2.0 * PI), ddy(elevation) / (0.5 * PI));
                 duvdx.x = abs(duvdx.x) > 0.5 ? 0.0 : duvdx.x;
                 duvdy.x = abs(duvdy.x) > 0.5 ? 0.0 : duvdy.x;
-                half3 sky = SAMPLE_TEXTURE2D_GRAD(_MainTex, sampler_MainTex, uv, duvdx, duvdy).rgb * _Exposure;
+                half3 sky = SAMPLE_TEXTURE2D_GRAD(_MainTex, sampler_MainTex, uv, duvdx, duvdy).rgb * _Exposure * _Tint.rgb;
 
                 // Fade into the fog colour towards and below the horizon.
                 float toHorizon = 1.0 - saturate(dir.y / _HorizonBlend);

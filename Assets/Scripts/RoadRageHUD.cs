@@ -518,7 +518,7 @@ namespace RoadRage.UnityRemake
 
             GUI.Label(new Rect(28f, 22f, 520f, 44f), "ROAD RAGE  /  UNITY REMAKE", titleStyle);
             GUI.Label(new Rect(30f, 62f, 620f, 32f),
-                $"{w.BiomeNameAt(c.RoadDistance)}  |  {WeatherSystem.Label(w.Weather)}  |  {c.SpeedKph:0} km/h  |  {c.DistanceKm:0.00} km",
+                $"{w.BiomeNameAt(c.RoadDistance)}  |  {w.ConditionsLabel}  |  {c.SpeedKph:0} km/h  |  {c.DistanceKm:0.00} km",
                 readoutStyle);
             // Integrity bar - the run's clock. Without a visible failure state the player
             // has no reason to judge targets rather than ram everything.
@@ -591,6 +591,9 @@ namespace RoadRage.UnityRemake
                     "🚦 READY! PRESS [GAS] / [W] TO DRIVE", titleStyle);
                 titleStyle.normal.textColor = prevC;
             }
+
+            if (c.CountdownTimer <= 0f && RoadRageB500Stages.Instance != null)
+                RoadRageB500Stages.Instance.DrawHud(titleStyle, readoutStyle);
 
             if (RoadRagePolicePursuitDirector.Instance != null && RoadRagePolicePursuitDirector.Instance.IsPursuitActive)
             {
@@ -1744,7 +1747,7 @@ namespace RoadRage.UnityRemake
                 alignment = TextAnchor.MiddleCenter,
                 normal = { textColor = new Color(1f, 0.35f, 0.25f) }
             };
-            GUI.Label(new Rect(modalX, modalY + 6f, modalW, headerH * 0.65f), "💥 CRASH REPORT  •  RUN CONCLUDED 💥", bannerStyle);
+            GUI.Label(new Rect(modalX, modalY + 6f, modalW, headerH * 0.65f), GameState.RunEndReason == "TIME UP" ? "⏱ TIME UP  •  RUN CONCLUDED ⏱" : "💥 CRASH REPORT  •  RUN CONCLUDED 💥", bannerStyle);
 
             var subBannerStyle = new GUIStyle(readoutStyle)
             {

@@ -87,7 +87,8 @@ namespace RoadRage.UnityRemake
             7 => new[] { WeatherKind.Clear, WeatherKind.Rain, WeatherKind.Fog },            // HONG KONG
             8 => new[] { WeatherKind.Rain, WeatherKind.Storm, WeatherKind.Clear, WeatherKind.Fog }, // MANHATTAN
             9 => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain },          // HOLLYWOOD HILLS
-            _ => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain },         // GREENWOOD
+            // The B500 ridge is known for fog banks rolling over it.
+            _ => new[] { WeatherKind.Clear, WeatherKind.Clear, WeatherKind.Rain, WeatherKind.Fog }, // GREENWOOD
         };
 
         public static WeatherKind Roll(int biomeIndex)
