@@ -330,6 +330,10 @@ namespace RoadRage.UnityRemake
         public Offence Violation { get; private set; }
 
         public enum VehicleRole { Standard, FuelTanker, CarHauler }
+
+        /// Never rolls an offence: tractors, cyclists and the like are road life, not
+        /// targets.
+        public bool LawAbiding { get; set; }
         public VehicleRole Role { get; set; } = VehicleRole.Standard;
         public bool HasDetonated { get; private set; }
 
@@ -818,7 +822,7 @@ namespace RoadRage.UnityRemake
             if (!IsWreck)
             {
                 var offences = NarrowRoad ? NarrowRoadOffences : RecycleOffences;
-                Violation = Random.value < 0.45f
+                Violation = !LawAbiding && Random.value < 0.45f
                     ? offences[Random.Range(0, offences.Length)]
                     : Offence.None;
                 IsHitAndRunner = false;

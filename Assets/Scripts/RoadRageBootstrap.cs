@@ -311,6 +311,13 @@ namespace RoadRage.UnityRemake
 
 		private DayTime dayTime = DayTime.Midday;
 
+		/// This run's time of day on the B500 (Midday elsewhere).
+		public DayTime TimeOfDay => dayTime;
+
+		/// A shared material by name, for components that dress the road outside the
+		/// chunk builders (RoadRageWildlife). Null if it does not exist.
+		internal Material MaterialNamed(string name) => materials.TryGetValue(name, out var m) ? m : null;
+
 		/// Weather, and on the B500 the time of day, for the HUD readout.
 		public string ConditionsLabel => RoadPath.Route != null
 			? $"{DayTimeLabel(dayTime)}  |  {WeatherSystem.Label(activeWeather)}"
@@ -507,6 +514,7 @@ namespace RoadRage.UnityRemake
             }
             gameObject.AddComponent<RoadRageB500Stages>();
             if (RoadRageMusic.Instance == null) gameObject.AddComponent<RoadRageMusic>();
+            gameObject.AddComponent<RoadRageWildlife>();
             RollRunConditions();
 			gameObject.AddComponent<RoadRageHUD>().Initialize(car.GetComponent<ArcadeCarController>(), this);
 			if (HasCommandLineFlag("-picker"))
@@ -1379,6 +1387,8 @@ namespace RoadRage.UnityRemake
             // B500 roadside furniture and the hotel (Tools/Blender/build_b500_props.py):
             // one opaque atlas for posts, signs, logs and the house.
             BiomeMaterial("B500 Props", "BlackForest", "T_b500props_D", "T_b500props_N", Color.white, 0f, 0.2f);
+            // Tractors, cyclists, riders, timber lorries and deer (Tools/Blender/build_road_life.py).
+            BiomeMaterial("Road Life", "BlackForest", "T_roadlife_D", null, Color.white, 0f, 0.3f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
@@ -8774,9 +8784,18 @@ namespace RoadRage.UnityRemake
             var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
                         * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
 
-            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", models[index % models.Length],
-                Color.white, TrafficCarController.PlayerDistance + Random.Range(560f, 740f),
-                lane, speed, direction, false, 0f, offence);
+            var ahead = TrafficCarController.PlayerDistance + Random.Range(560f, 740f);
+            if (offence == TrafficCarController.Offence.None &&
+                TrySpawnRoadLife(livingTraffic, index, ahead, lane, direction, Mathf.Lerp(1f, 1.18f, GameState.RunIntensity)))
+                return;
+            var model = models[index % models.Length];
+            if (RoadPath.Route != null && offence == TrafficCarController.Offence.None && index % 9 == 4)
+            {
+                model = "Life/SM_logging_truck";
+                speed = Mathf.Min(speed, 78f);
+            }
+            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", model,
+                Color.white, ahead, lane, speed, direction, false, 0f, offence);
         }
 
         private void BuildTraffic()
@@ -8890,6 +8909,13 @@ namespace RoadRage.UnityRemake
                     cabs++;
                 }
 
+                // On the B500 the plain lorry is a timber lorry out of the forest.
+                if (RoadPath.Route != null && model == "SK_Veh_Preset_Truck_02" && role == TrafficCarController.VehicleRole.Standard)
+                    model = "Life/SM_logging_truck";
+                else if (role == TrafficCarController.VehicleRole.Standard && offence == TrafficCarController.Offence.None &&
+                         TrySpawnRoadLife(trafficRoot, i, distances[i], lanes[i], direction))
+                    continue;
+
                 var spawned = CreateTrafficVehicle(trafficRoot, $"{(isCab ? "Taxi" : "Traffic Car")} {i + 1}",
                     model, tint, distances[i], lanes[i], speed, direction, false, 0f, offence, role);
                 if (isCab) AddTaxiRoofSign(spawned);
@@ -8944,9 +8970,26 @@ namespace RoadRage.UnityRemake
             // and visibly from another era than the player's vehicle. These are the same
             // Synty presets the hero car uses, with the same three material slots, so
             // traffic and player finally belong to one art set.
-            var prefab = Resources.Load<GameObject>($"Vehicles/{modelName}");
-            if (prefab == null) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
-            if (prefab != null)
+            // "Life/..." is the B500's own road life, built flat-shaded on one palette
+            // atlas and exported Y up - no Synty slots, no Z-up roll.
+            var life = modelName.StartsWith("Life/");
+            var prefab = life
+                ? Resources.Load<GameObject>($"Biomes/BlackForest/Meshes/{modelName.Substring(5)}")
+                : Resources.Load<GameObject>($"Vehicles/{modelName}");
+            if (prefab == null) Debug.LogWarning($"RR_TRAFFIC missing prefab {modelName}");
+            if (prefab != null && life)
+            {
+                var visual = Instantiate(prefab, root);
+                visual.name = $"{name} Visual";
+                visual.transform.localPosition = Vector3.zero;
+                visual.transform.localRotation = Quaternion.identity;
+                visual.transform.localScale = Vector3.one;
+                foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+                    renderer.sharedMaterial = materials["Road Life"];
+                foreach (var collider in visual.GetComponentsInChildren<Collider>()) Destroy(collider);
+                NormalizeVehicleVisual(visual, VehicleLengthFor(modelName));
+            }
+            else if (prefab != null)
             {
                 // Liveries are BACK: full flat colour lost every detail and read as
                 // toy blobs. Cars keep their livery decals again, while the smooth
@@ -9014,6 +9057,7 @@ namespace RoadRage.UnityRemake
                         DestroyImmediate(b);
                 }
                 NormalizeVehicleVisual(visual, VehicleLengthFor(modelName));
+                if (modelName.Contains("Motorbike")) SeatRider(root, visual);
             }
             var controller = root.gameObject.AddComponent<TrafficCarController>();
             controller.Role = role;
@@ -9079,6 +9123,9 @@ namespace RoadRage.UnityRemake
         /// behind it braked for empty asphalt.
         private static float VehicleLengthFor(string modelName)
         {
+            if (modelName.Contains("logging_truck")) return 10.6f;
+            if (modelName.Contains("tractor")) return 3.95f;
+            if (modelName.Contains("cyclist")) return 1.72f;
             if (modelName.Contains("Motorbike")) return 2.15f;
             if (modelName.Contains("Hatch")) return 4.15f;
             if (modelName.Contains("Sports")) return 4.45f;
@@ -9097,6 +9144,79 @@ namespace RoadRage.UnityRemake
             if (horizontalLength > 0.01f) visual.transform.localScale *= targetLength / horizontalLength;
             if (!TryGetCombinedBounds(visual, out bounds)) return;
             visual.transform.position += new Vector3(-bounds.center.x, -bounds.min.y, -bounds.center.z);
+        }
+
+        /// The Synty bikes come without anyone on them; a riderless bike doing 100 km/h
+        /// is a ghost. The rider's origin is the seat: about a fifth of the bike's length
+        /// behind its middle and four fifths of its height up.
+        private void SeatRider(Transform root, GameObject bike)
+        {
+            var prefab = Resources.Load<GameObject>("Biomes/BlackForest/Meshes/SM_rider_moto");
+            if (prefab == null || !TryGetCombinedBounds(bike, out var bounds)) return;
+            var rider = Instantiate(prefab, root);
+            rider.name = "Rider";
+            foreach (var renderer in rider.GetComponentsInChildren<Renderer>(true))
+                renderer.sharedMaterial = materials["Road Life"];
+            var min = root.InverseTransformPoint(bounds.min);
+            var max = root.InverseTransformPoint(bounds.max);
+            var lo = Vector3.Min(min, max);
+            var hi = Vector3.Max(min, max);
+            rider.transform.localPosition = new Vector3((lo.x + hi.x) * 0.5f, lo.y + (hi.y - lo.y) * 0.8f,
+                (lo.z + hi.z) * 0.5f - (hi.z - lo.z) * 0.2f);
+            rider.transform.localRotation = Quaternion.identity;
+            rider.transform.localScale = Vector3.one;
+        }
+
+        // ------------------------------------------------------------ B500 road life
+
+        private static readonly string[] Bikes =
+        {
+            "SK_Veh_Preset_Motorbike_01", "SK_Veh_Preset_Motorbike_02",
+            "SK_Veh_Preset_Motorbike_03", "SK_Veh_Preset_Motorbike_04",
+        };
+
+        /// What drives the real B500 besides cars: on a summer weekend it is the
+        /// motorbike road of the Black Forest - bikers in groups of three or four - and
+        /// on a weekday tractors, racing cyclists on the climbs, and timber lorries out
+        /// of the forest. Only on the route, in place of every sixth car or so.
+        /// Tractors and cyclists keep to the outside of their lane and never offend;
+        /// one biker group in three is speeding, and a takedown target like any other.
+        private bool TrySpawnRoadLife(Transform parent, int index, float distance, float lane,
+            float direction, float speedScale = 1f)
+        {
+            if (RoadPath.Route == null) return false;
+            var outer = direction > 0f ? -1f : 1f;
+            switch (index % 6)
+            {
+                case 2:
+                {
+                    var cyclist = (index / 6) % 2 == 1;
+                    var slow = CreateTrafficVehicle(parent, cyclist ? $"Cyclist {index + 1}" : $"Tractor {index + 1}",
+                        cyclist ? "Life/SM_cyclist" : "Life/SM_tractor", Color.white, distance,
+                        outer * (cyclist ? 0.97f : 0.85f), cyclist ? Random.Range(24f, 32f) : Random.Range(28f, 38f),
+                        direction, false, 0f);
+                    slow.LawAbiding = true;
+                    return true;
+                }
+                case 5:
+                {
+                    var speeding = (index / 6) % 3 == 1;
+                    var offence = speeding ? TrafficCarController.Offence.Speeding : TrafficCarController.Offence.None;
+                    var speed = Random.Range(92f, 112f) * speedScale;
+                    var riders = 3 + index % 2;
+                    for (var r = 0; r < riders; r++)
+                    {
+                        // Staggered formation in one lane, 7 m apart.
+                        var stagger = (r % 2 == 0 ? -0.07f : 0.07f);
+                        var bike = CreateTrafficVehicle(parent, $"Biker {index + 1}.{r + 1}", Bikes[(index + r) % Bikes.Length],
+                            Color.white, distance + r * 7f * direction, Mathf.Clamp(lane + stagger, -1f, 1f),
+                            speed, direction, false, 0f, offence);
+                        bike.LawAbiding = !speeding;
+                    }
+                    return true;
+                }
+            }
+            return false;
         }
 
         private void BuildAccidentScene(Transform parent, float distance, float side, string firstModel, string secondModel)
