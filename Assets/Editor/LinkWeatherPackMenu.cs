@@ -61,8 +61,28 @@ public static class LinkWeatherPackMenu
 
         string Show(GameObject g) => g != null ? AssetDatabase.GetAssetPath(g) : "none (the game's own)";
         if (rain == null && snow == null && storm == null)
+        {
+            // Say what the pack does contain, so the next pass knows what to look for:
+            // every prefab in its folders with the kinds of component on it.
+            var inPack = AssetDatabase.FindAssets("t:Prefab").Select(AssetDatabase.GUIDToAssetPath)
+                .Where(p => PackFolders.Any(f => p.ToLowerInvariant().Contains(f)))
+                .Select(p =>
+                {
+                    var go = AssetDatabase.LoadAssetAtPath<GameObject>(p);
+                    var kinds = go == null ? "" : string.Join(", ", go.GetComponentsInChildren<Component>(true)
+                        .Where(c => c != null && !(c is Transform))
+                        .Select(c => c.GetType().Name).Distinct());
+                    return $"  {p}  [{kinds}]";
+                }).ToList();
+            var folders = AssetDatabase.GetAllAssetPaths()
+                .Where(p => PackFolders.Any(f => p.ToLowerInvariant().Contains(f)))
+                .Select(p => p.Substring(0, p.LastIndexOf('/') > 0 ? p.LastIndexOf('/') : p.Length))
+                .Distinct().Take(40);
             Debug.LogWarning("Link Weather Pack: no rain or snow effects found in a 'Dynamic Weather' folder. " +
-                             "The game keeps its own weather particles.");
+                             "The game keeps its own weather particles.\n" +
+                             $"Prefabs in the pack ({inPack.Count}):\n{string.Join("\n", inPack)}\n" +
+                             $"Folders:\n  {string.Join("\n  ", folders)}");
+        }
         else
             Debug.Log($"Link Weather Pack:\n  rain  {Show(rain)}\n  storm {Show(storm)}\n  snow  {Show(snow)}\n" +
                       "Candidates:\n" + string.Join("\n", effects.Select(x => "  " + x.path)));
