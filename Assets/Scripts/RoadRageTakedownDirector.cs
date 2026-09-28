@@ -106,6 +106,7 @@ namespace RoadRage.UnityRemake
         {
             IsTakedownActive = true;
             CurrentVictim = victim;
+            RoadRageHaptics.Takedown();
 
             // 1. Play Heavy Crash Audio & Audio Filter
             if (RoadRageAudioBridge.Instance != null)

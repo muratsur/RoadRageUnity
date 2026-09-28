@@ -899,6 +899,7 @@ namespace RoadRage.UnityRemake
 
                 GameState.ApplyDamage(6f);
                 GameState.Show("⚠️ POLICE RAMMED YOU!");
+                RoadRageHaptics.Medium();
                 if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.6f);
             }
         }

@@ -1349,6 +1349,9 @@ namespace RoadRage.UnityRemake
                 new Color(0.80f, 0.84f, 0.80f), 0.45f);
             BiomeCutoutMaterial("Black Forest Fresh", "BlackForest", "T_blackforest_D", "T_blackforest_N",
                 new Color(1.05f, 1.10f, 1.0f), 0.45f);
+            // B500 roadside furniture and the hotel (Tools/Blender/build_b500_props.py):
+            // one opaque atlas for posts, signs, logs and the house.
+            BiomeMaterial("B500 Props", "BlackForest", "T_b500props_D", "T_b500props_N", Color.white, 0f, 0.2f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
@@ -4788,6 +4791,8 @@ namespace RoadRage.UnityRemake
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
                 if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
+                // B500 posts and signs stand just behind the rail on purpose.
+                if (n.StartsWith("B500 ")) continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6472,6 +6477,7 @@ namespace RoadRage.UnityRemake
                 onCliff = true;
             }
             if (!RouteAllows(label, distance, lateral)) return null;
+            if (InHotelGrounds(distance, lateral)) return null;
             var split = entry.Split('|');
             var external = split[0] == "External";
             var blackForest = external || split[0] == "BlackForest";
@@ -6484,7 +6490,10 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                model = BiomeModel(split[0], split[1], blackForest ? BlackForestTint() : materials["Forest Undergrowth"]);
+                var material = !blackForest ? materials["Forest Undergrowth"]
+                    : split[1].StartsWith("SM_log") || split[1].StartsWith("SM_stump") ? materials["B500 Props"]
+                    : BlackForestTint();
+                model = BiomeModel(split[0], split[1], material);
             }
             if (model == null) return null;
             model.name = label;
@@ -6674,6 +6683,161 @@ namespace RoadRage.UnityRemake
                 GameState.Show($"📍 {route.Places[i].Name.ToUpperInvariant()}");
                 break;
             }
+        }
+
+        // ------------------------------------------------------------ B500 roadside
+
+        private const float PlaceSignLead = 120f;
+        private const float HotelSetback = 32f;
+
+        /// What a driver on the real road sees besides the trees: white delineator
+        /// posts every 50 m, the yellow B 500 route marker, a name sign before each
+        /// stop, the yellow-and-red Westweg signposts where the trail crosses, stacked
+        /// timber at the forest edge, and the big hotels at the clearings.
+        private void BuildRouteProps()
+        {
+            var route = RoadPath.Route;
+            var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+
+            // Leitpfosten, both sides, every 50 m of road.
+            for (var d = Mathf.Ceil(segStart / 50f) * 50f; d < segEnd; d += 50f)
+            for (var side = -1; side <= 1; side += 2)
+                PlaceRouteProp("SM_leitpfosten", d, side * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 0.45f),
+                    FacingOncoming(d), "B500 Leitpfosten");
+
+            // Route marker on the right about every 3 km.
+            for (var d = Mathf.Ceil(segStart / 3000f) * 3000f; d < segEnd; d += 3000f)
+                PlaceRouteProp("SM_sign_b500", d + 40f, RoadPath.HalfWidthAt(d + 40f) + RoadPath.ShoulderWidth + GuardRailOffset + 1.0f,
+                    FacingOncoming(d + 40f), "B500 Sign");
+
+            // Place names and signposts, in whichever direction this pass runs.
+            for (var i = 0; i < route.Places.Length; i++)
+            {
+                var place = route.Places[i].Distance;
+                foreach (var d in PassesOf(place - PlaceSignLead, place + PlaceSignLead))
+                    PlaceRouteProp($"SM_sign_place_{i:00}", d, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 1.2f,
+                        FacingOncoming(d), "B500 Place Sign");
+                if (i == 0 || i == route.Places.Length - 1) continue;
+                foreach (var d in PassesOf(place + 25f, place - 25f))
+                {
+                    var lateral = -(RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 2.5f);
+                    if (!InCliffZone(d, lateral))
+                        PlaceRouteProp("SM_signpost_hike", d, lateral, FacingOncoming(d) * Quaternion.Euler(0f, 30f, 0f),
+                            "B500 Signpost");
+                }
+                if (HotelSide(i, out var side))
+                    foreach (var d in PassesOf(place, place))
+                    {
+                        var lateral = side * (RoadPath.ClearanceAt(d) + HotelSetback);
+                        if (!InCliffZone(d, lateral))
+                            PlaceRouteProp("SM_hotel", d, lateral, Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))),
+                                "B500 Hotel", 0.4f);
+                    }
+            }
+
+            // A trail crossing now and then between the stops.
+            if (Random.value < 0.12f)
+            {
+                var d = Random.Range(segStart + 10f, segEnd - 10f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                if (!InCliffZone(d, side * (rail + 2.5f)))
+                    PlaceRouteProp("SM_signpost_hike", d, side * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 2.5f),
+                        FacingOncoming(d) * Quaternion.Euler(0f, side * 30f, 0f), "B500 Signpost");
+            }
+
+            // Polter: cut timber stacked at the forest edge for the lorry, end grain to
+            // the road.
+            if (Random.value < 0.25f)
+            {
+                var d = Random.Range(segStart + 15f, segEnd - 15f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                var lateral = side * (rail + Random.Range(4f, 9f));
+                if (!InCliffZone(d, lateral) && route.CoverAt(d, lateral) != RoadRoute.CoverWater &&
+                    !InHotelGrounds(d, lateral))
+                    PlaceRouteProp("SM_woodpile", d, lateral,
+                        Quaternion.LookRotation(Flat(side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-8f, 8f), 0f),
+                        "B500 Woodpile", 0.1f);
+            }
+        }
+
+        private GameObject PlaceRouteProp(string mesh, float distance, float lateral, Quaternion rotation, string name,
+            float sink = 0f)
+        {
+            var model = BiomeModel("BlackForest", mesh, materials["B500 Props"]);
+            if (model == null) return null;
+            model.name = name;
+            model.transform.SetPositionAndRotation(RoadPath.Point(distance, lateral, -sink), rotation);
+            model.transform.localScale = Vector3.one;
+            return model;
+        }
+
+        private static Vector3 Flat(Vector3 v)
+        {
+            v.y = 0f;
+            return v.sqrMagnitude > 1e-6f ? v.normalized : Vector3.forward;
+        }
+
+        /// Sign faces are the mesh's +Z; the player always drives towards +Z, so this
+        /// turns them to the traffic coming up the road.
+        private static Quaternion FacingOncoming(float distance) =>
+            Quaternion.LookRotation(Flat(-(RoadPath.Rotation(distance) * Vector3.forward)));
+
+        /// Road distances in this chunk where the route is at `outbound` on the way
+        /// there, or at `inbound` on the way back - so a sign put ahead of a place is
+        /// ahead of it in both directions.
+        private List<float> PassesOf(float outbound, float inbound)
+        {
+            var found = new List<float>(2);
+            var length = RoadPath.Route.Length;
+            var period = 2f * length;
+            if (outbound >= 0f && outbound <= length)
+            {
+                var d = outbound + period * Mathf.Ceil((segStart - outbound) / period);
+                if (d < segEnd) found.Add(d);
+            }
+            if (inbound >= 0f && inbound <= length)
+            {
+                var back = period - inbound;
+                var d = back + period * Mathf.Ceil((segStart - back) / period);
+                if (d < segEnd && (found.Count == 0 || Mathf.Abs(found[0] - d) > 1f)) found.Add(d);
+            }
+            return found;
+        }
+
+        /// The hotel at a stop goes on whichever side the map shows buildings, else
+        /// open ground; a stop with forest both sides has none. The first and last
+        /// entries are the route's ends, not stops.
+        private static bool HotelSide(int placeIndex, out int side)
+        {
+            side = 0;
+            var route = RoadPath.Route;
+            if (route == null || !route.HasCover || placeIndex <= 0 || placeIndex >= route.Places.Length - 1) return false;
+            var place = route.Places[placeIndex].Distance;
+            var lateral = RoadPath.ClearanceAt(place) + HotelSetback;
+            foreach (var want in new[] { RoadRoute.CoverBuilt, RoadRoute.CoverOpen })
+            for (var s = 1; s >= -1; s -= 2)
+            {
+                if (route.CoverAt(place, s * lateral) != want) continue;
+                side = s;
+                return true;
+            }
+            return false;
+        }
+
+        /// Keeps trees and undergrowth off the hotel and its forecourt.
+        private static bool InHotelGrounds(float distance, float lateral)
+        {
+            var route = RoadPath.Route;
+            if (route == null || !route.HasCover) return false;
+            var u = route.Fold(distance);
+            for (var i = 1; i < route.Places.Length - 1; i++)
+            {
+                if (Mathf.Abs(u - route.Places[i].Distance) > 22f) continue;
+                if (!HotelSide(i, out var side) || lateral * side <= 0f) return false;
+                var across = Mathf.Abs(lateral) - RoadPath.ClearanceAt(distance);
+                return across > 4f && across < HotelSetback + 16f;
+            }
+            return false;
         }
 
         internal static int canopyKept;
@@ -7350,6 +7514,7 @@ namespace RoadRage.UnityRemake
             // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
             // borrowed Synthwave fence half a metre behind it.
             BuildGuardRail(materials["Forest Guard Rail"]);
+            if (RoadPath.Route != null) BuildRouteProps();
             if (RoadPath.Route != null && RoadPath.Route.HasCover)
             {
                 BuildRouteOpenGround();
@@ -7402,6 +7567,12 @@ namespace RoadRage.UnityRemake
                     var from = near;
                     ScatterBand(9f, from, from + 14f, (d, l, s) => Understory(d, l));
                 }
+                // Forestry: windthrow and cut stumps on the floor. A managed Black Forest
+                // stand is never a clean lawn under the trees.
+                ScatterBand(26f, 12f, 70f, (d, l, s) =>
+                    SpawnForestPiece("BlackForest|SM_log_fallen", d, l, -0.1f, 0.45f, 0.75f, "Forest Log"));
+                ScatterBand(14f, 10f, 60f, (d, l, s) =>
+                    SpawnForestPiece("BlackForest|SM_stump", d, l, -0.05f, 0.3f, 0.6f, "Forest Stump"));
             }
             else
             {

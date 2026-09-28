@@ -37,6 +37,23 @@ namespace RoadRage.UnityRemake
         public static void Medium() => Pulse(0.35f, 0.60f, 0.14f, 40, 150);
         public static void Heavy() => Pulse(0.85f, 1.00f, 0.32f, 90, 255);
 
+        /// A crisp tick on the high motor alone: a near miss, felt as a whoosh past
+        /// the door rather than a hit.
+        public static void Tick() => Pulse(0f, 0.45f, 0.05f, 12, 60);
+
+        /// A takedown: a hard hit, then the crunch as the other car folds up.
+        public static void Takedown()
+        {
+            Heavy();
+            if (!Enabled || Gamepad.current == null) return;
+            EnsureRunner();
+            runner.Echo(0.18f, 0.5f, 0.35f, 0.25f);
+        }
+
+        /// 0-1, set every frame by the player's car while it is scraping the edge of
+        /// the road. Gamepad only: a phone buzzing continuously is noise.
+        public static float EdgeScrape { get; set; }
+
         private static void Pulse(float low, float high, float seconds, int phoneMs, int phoneAmplitude)
         {
             if (!Enabled) return;
@@ -73,13 +90,39 @@ namespace RoadRage.UnityRemake
         /// leaves a motor running when the game is paused or loses focus.
         private sealed class HapticsRunner : MonoBehaviour
         {
+            private float echoAt = -1f;
+            private float echoLow, echoHigh, echoSeconds;
+
+            public void Echo(float delay, float low, float high, float seconds)
+            {
+                echoAt = Time.unscaledTime + delay;
+                echoLow = low;
+                echoHigh = high;
+                echoSeconds = seconds;
+            }
+
             private void Update()
             {
                 var pad = Gamepad.current;
-                if (pad == null || Time.unscaledTime < padUntil) return;
-                var boosting = Enabled && Time.timeScale > 0f && RoadRageBoostDirector.Instance != null &&
-                               RoadRageBoostDirector.Instance.IsBoosting;
-                pad.SetMotorSpeeds(boosting ? 0.08f : 0f, boosting ? 0.04f : 0f);
+                if (pad == null) return;
+                if (echoAt >= 0f && Time.unscaledTime >= echoAt)
+                {
+                    echoAt = -1f;
+                    if (Enabled)
+                    {
+                        pad.SetMotorSpeeds(echoLow, echoHigh);
+                        padUntil = Time.unscaledTime + echoSeconds;
+                    }
+                }
+                if (Time.unscaledTime < padUntil) return;
+                var live = Enabled && Time.timeScale > 0f;
+                var boosting = live && RoadRageBoostDirector.Instance != null && RoadRageBoostDirector.Instance.IsBoosting;
+                // Scraping the edge: a coarse judder on the low motor, pulsed so it
+                // reads as the car hammering along the kerb and rail posts.
+                var scrape = live ? Mathf.Clamp01(EdgeScrape) : 0f;
+                var judder = scrape > 0f && Mathf.Repeat(Time.unscaledTime * 14f, 1f) < 0.5f ? scrape : 0f;
+                pad.SetMotorSpeeds(Mathf.Max(boosting ? 0.08f : 0f, 0.35f * judder),
+                    Mathf.Max(boosting ? 0.04f : 0f, 0.12f * scrape));
             }
 
             private void OnApplicationFocus(bool focused)
