@@ -1674,8 +1674,11 @@ namespace RoadRage.UnityRemake
             if (!lowDetail)
             {
                 QualitySettings.shadows = UnityEngine.ShadowQuality.All;
-                QualitySettings.shadowDistance = 160f;
-                QualitySettings.shadowCascades = 4;
+                // Mirrors the URP assets, which are what URP actually reads. 160 m in
+                // four cascades drew every shadow caster up to four times; in the forest
+                // that was most of the frame's draw calls.
+                QualitySettings.shadowDistance = 120f;
+                QualitySettings.shadowCascades = 2;
                 QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Medium;
             }
             else
@@ -7168,7 +7171,7 @@ namespace RoadRage.UnityRemake
             if (!tree || Mathf.Abs(lateral) > 30f)
                 foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
             var group = piece.AddComponent<LODGroup>();
-            group.SetLODs(new[] { new LOD(tree ? 0.012f : 0.035f, renderers) });
+            group.SetLODs(new[] { new LOD(tree ? 0.025f : 0.035f, renderers) });
             group.RecalculateBounds();
         }
 
