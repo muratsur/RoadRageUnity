@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 
@@ -109,12 +108,7 @@ namespace RoadRage.UnityRemake
 
             ClearEmitter(ref precipitation);
             ClearEmitter(ref spray);
-            if (packEffect != null)
-            {
-                packEffect.SetActive(false);
-                Destroy(packEffect);
-                packEffect = null;
-            }
+            PlayAmbience(kind);
 
             // Fog has no particles. It is entirely fog density, tint and sun scale, which
             // BuildLighting already applies from the effect - so there is nothing to emit
@@ -127,23 +121,15 @@ namespace RoadRage.UnityRemake
                 return;
             }
 
-            var packPrefab = WeatherPack.Linked != null ? WeatherPack.Linked.For(kind) : null;
-            if (packPrefab != null)
-            {
-                packEffect = SpawnPackEffect(packPrefab, kind);
-            }
-            else
-            {
-                precipitation = BuildPrecipitation(kind, particleMaterial);
+            precipitation = BuildPrecipitation(kind, particleMaterial);
 
-                if (followTarget != null)
-                    precipitation.transform.position = followTarget.position;
+            if (followTarget != null)
+                precipitation.transform.position = followTarget.position;
 
-                // BuildPrecipitation starts internally. Clear any particles emitted at the
-                // initial position, then restart at the car.
-                precipitation.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
-                precipitation.Play();
-            }
+            // BuildPrecipitation starts internally. Clear any particles emitted at the
+            // initial position, then restart at the car.
+            precipitation.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+            precipitation.Play();
 
             if (kind != WeatherKind.Snow)
             {
@@ -159,55 +145,30 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        private GameObject packEffect;
-        private static readonly HashSet<GameObject> packEffectsReported = new();
+        private AudioSource ambience;
+        private float ambienceVolume;
 
-        /// The weather pack's own effect for this weather, kept over the car. It is built
-        /// under an inactive holder and stripped of the pack's scripts first: those run
-        /// the pack's sky, fog and lighting, which the game's biomes own. Its particles,
-        /// sounds and their materials are kept; on constrained hardware their emission
-        /// is scaled down like the game's own rain.
-        private GameObject SpawnPackEffect(GameObject prefab, WeatherKind kind)
+        /// The weather pack's loop for this weather (rain, storm wind, wind in snow and
+        /// fog), faded in over the game's own particles. Silent where no pack is
+        /// linked, as the weather always was.
+        private void PlayAmbience(WeatherKind kind)
         {
-            var holder = new GameObject($"{kind} Pack Weather");
-            holder.SetActive(false);
-            holder.transform.SetParent(transform, false);
-            var effect = Instantiate(prefab, holder.transform);
-            effect.transform.localPosition = Vector3.zero;
-            foreach (var script in effect.GetComponentsInChildren<MonoBehaviour>(true)) DestroyImmediate(script);
-            foreach (var l in effect.GetComponentsInChildren<Light>(true)) DestroyImmediate(l);
-            foreach (var cam in effect.GetComponentsInChildren<Camera>(true)) DestroyImmediate(cam.gameObject);
-            var systems = effect.GetComponentsInChildren<ParticleSystem>(true);
-            var budget = ParticleBudget;
-            var highest = float.MinValue;
-            foreach (var ps in systems)
+            var (clip, volume) = WeatherPack.Linked != null ? WeatherPack.Linked.For(kind) : (null, 0f);
+            if (ambience == null)
             {
-                if (budget < 1f)
-                {
-                    var emission = ps.emission;
-                    emission.rateOverTimeMultiplier *= budget;
-                    var main = ps.main;
-                    main.maxParticles = Mathf.Max(1, Mathf.RoundToInt(main.maxParticles * budget));
-                }
-                var shape = ps.shape;
-                highest = Mathf.Max(highest, ps.transform.localPosition.y + (shape.enabled ? shape.position.y : 0f));
-                if (ps.TryGetComponent<ParticleSystemRenderer>(out var r))
-                {
-                    r.shadowCastingMode = ShadowCastingMode.Off;
-                    r.receiveShadows = false;
-                }
+                ambience = gameObject.AddComponent<AudioSource>();
+                ambience.loop = true;
+                ambience.playOnAwake = false;
+                ambience.spatialBlend = 0f;
+                ambience.volume = 0f;
             }
-            if (followTarget != null) holder.transform.position = followTarget.position;
-            holder.SetActive(true);
-            foreach (var ps in systems)
+            ambienceVolume = clip != null ? volume : 0f;
+            if (clip != null && (ambience.clip != clip || !ambience.isPlaying))
             {
-                ps.Clear(true);
-                ps.Play(true);
+                ambience.clip = clip;
+                ambience.volume = 0f;
+                ambience.Play();
             }
-            if (packEffectsReported.Add(prefab))
-                Debug.Log($"RR_WEATHER {kind} from the weather pack: '{prefab.name}', {systems.Length} particle systems, " +
-                          $"emitters up to {highest:0.0} m above the car, budget x{budget:0.0}");
-            return holder;
         }
 
         /// Stop, hide and destroy an emitter before letting go of the reference. Destroy is
@@ -333,14 +294,17 @@ namespace RoadRage.UnityRemake
 
         private void LateUpdate()
         {
+            if (ambience != null)
+            {
+                ambience.volume = Mathf.MoveTowards(ambience.volume, ambienceVolume, Time.unscaledDeltaTime * 0.25f);
+                if (ambienceVolume <= 0f && ambience.volume <= 0f && ambience.isPlaying) ambience.Stop();
+            }
             if (followTarget == null) return;
             // Keep the emitter volume over the player. World simulation space means the
             // already-spawned particles stay where they were, so moving the box does not
             // drag the storm along with the car.
             if (precipitation != null)
                 precipitation.transform.position = followTarget.position;
-            if (packEffect != null)
-                packEffect.transform.position = followTarget.position;
             if (spray != null)
                 spray.transform.position = followTarget.position - followTarget.forward * 2.6f + Vector3.up * 0.15f;
         }

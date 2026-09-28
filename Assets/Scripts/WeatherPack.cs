@@ -2,17 +2,19 @@ using UnityEngine;
 
 namespace RoadRage.UnityRemake
 {
-    /// Rain, storm and snow effects from a third-party weather pack installed in this
-    /// copy of the project (URP Dynamic Weather System, Asset Store). The pack is
-    /// licensed for use, not redistribution, so it is never committed, and it installs
-    /// outside Resources. Road Rage > Link Weather Pack finds its effects and writes this
-    /// to Resources/Weather/WeatherPack (also not committed). Where an effect is missing
-    /// the game keeps its own particles for that weather.
+    /// Weather sound from a third-party pack installed in this copy of the project
+    /// (URP Dynamic Weather System, Asset Store): its rain, storm and wind loops. The
+    /// pack's own rain particles are thinner than the game's (400 drops a second
+    /// falling straight down in a 25 m square), so the game keeps its precipitation
+    /// and only takes the sound, which it had none of. The pack is licensed for use,
+    /// not redistribution, so it is never committed, and it installs outside
+    /// Resources. Road Rage > Link Weather Pack finds the loops and writes this to
+    /// Resources/Weather/WeatherPack (also not committed).
     public sealed class WeatherPack : ScriptableObject
     {
-        public GameObject Rain;
-        public GameObject Storm;
-        public GameObject Snow;
+        public AudioClip Rain;
+        public AudioClip Storm;
+        public AudioClip Wind;
         public string Source = "";
 
         private static WeatherPack loaded;
@@ -31,12 +33,14 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        public GameObject For(WeatherKind kind) => kind switch
+        /// The loop for a weather, and how loud it sits under the engine and music.
+        public (AudioClip clip, float volume) For(WeatherKind kind) => kind switch
         {
-            WeatherKind.Rain => Rain,
-            WeatherKind.Storm => Storm != null ? Storm : Rain,
-            WeatherKind.Snow => Snow,
-            _ => null,
+            WeatherKind.Rain => (Rain, 0.45f),
+            WeatherKind.Storm => (Storm != null ? Storm : Rain, 0.6f),
+            WeatherKind.Snow => (Wind, 0.35f),
+            WeatherKind.Fog => (Wind, 0.12f),
+            _ => (null, 0f),
         };
     }
 }
