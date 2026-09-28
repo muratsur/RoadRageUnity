@@ -86,6 +86,8 @@ namespace RoadRage.UnityRemake
 
             GameState.ResetRun();
             GameState.BeginRun();
+            // A new time of day and weather every run on the B500.
+            if (RoadRageBootstrap.Instance != null) RoadRageBootstrap.Instance.RollRunConditions();
 
             var car = GameObject.FindWithTag("Player");
             if (car != null)
