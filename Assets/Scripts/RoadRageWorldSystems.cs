@@ -534,11 +534,15 @@ namespace RoadRage.UnityRemake
                 }
             }
 
+            // A weave is steering, and steering needs the car to be moving: the phase
+            // ran on the clock, so a weaver stopped in a queue swung from side to side
+            // on the spot. It now advances with the speed and holds still at a stop.
+            var rolling = Mathf.Clamp01(currentSpeedKph / 40f);
             switch (Violation)
             {
                 case Offence.Weaving:
                     // Wide, lazy lane drift - the most readable tell at speed.
-                    weavePhase += delta * weaveRate * (IsFleeing ? 1.6f : 1f);
+                    weavePhase += delta * weaveRate * (IsFleeing ? 1.6f : 1f) * rolling;
                     laneDrift = Mathf.Sin(weavePhase) * (IsFleeing ? 7.4f : 5.2f);
                     break;
                 case Offence.Tailgating:
@@ -549,7 +553,7 @@ namespace RoadRage.UnityRemake
                     // target that drives in a straight line is not a chase.
                     if (IsFleeing)
                     {
-                        weavePhase += delta * weaveRate * 1.3f;
+                        weavePhase += delta * weaveRate * 1.3f * rolling;
                         laneDrift = Mathf.Sin(weavePhase) * 4.5f;
                     }
                     else
