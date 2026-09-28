@@ -130,7 +130,6 @@ namespace RoadRage.UnityRemake
         private float lastCrashSeverity;
         private AudioClip turboClip;
         private AudioClip nitroClip;
-        private AudioClip whooshClip;
         private bool clipsLoaded;
 
         private void LoadClips()
@@ -145,7 +144,6 @@ namespace RoadRage.UnityRemake
             crashLight = LoadReal("light") ?? LoadSet("light", 3);
             turboClip = Resources.Load<AudioClip>("Audio/VPP/turbo");
             nitroClip = Resources.Load<AudioClip>("Audio/SFX/NOS/NOSWhoosh2") ?? Resources.Load<AudioClip>("Audio/SFX/NOS/NOS");
-            whooshClip = CreatePassByWhooshClip();
         }
 
         private static AudioClip[] LoadReal(string weight)
@@ -210,14 +208,10 @@ namespace RoadRage.UnityRemake
             sfxSource.PlayOneShot(nitroClip, 0.7f);
         }
 
-        /// A near miss is the rush of air as a car goes past the window.
+        /// Near misses are silent: the nitro gain and the score popup say it, and a
+        /// whoosh on every overtake became a constant noise.
         public void PlayNearMissChirp()
         {
-            if (sfxSource == null) return;
-            LoadClips();
-            // Road Rage 3D plays it at -8 dB, unpitched.
-            sfxSource.pitch = 1f;
-            sfxSource.PlayOneShot(whooshClip, 0.4f);
         }
 
         private AudioClip shutterClip;
@@ -242,31 +236,6 @@ namespace RoadRage.UnityRemake
             }
             sfxSource.pitch = 1f;
             sfxSource.PlayOneShot(shutterClip, 0.8f);
-        }
-
-        /// The near-miss whoosh from Road Rage 3D (make_audio.gd, _whoosh): 0.55 s of
-        /// noise through a one-pole low-pass whose cutoff sweeps up and back down as the
-        /// car goes by, under a half-sine swell. Same recipe, same rate and seed.
-        private static AudioClip CreatePassByWhooshClip()
-        {
-            const int sampleRate = 22050;
-            const float length = 0.55f;
-            var samples = (int)(sampleRate * length);
-            var data = new float[samples];
-            var rng = new System.Random(12345);
-            var prev = 0f;
-            for (var i = 0; i < samples; i++)
-            {
-                var t = (float)i / sampleRate;
-                var noise = (float)rng.NextDouble() * 2f - 1f;
-                var cutoff = 0.04f + 0.28f * Mathf.Sin(Mathf.PI * (t / length));
-                prev = Mathf.Lerp(prev, noise, cutoff);
-                var envelope = Mathf.Sin(Mathf.PI * (t / length));
-                data[i] = prev * envelope * 0.75f;
-            }
-            var clip = AudioClip.Create("PassByWhoosh", samples, 1, sampleRate, false);
-            clip.SetData(data, 0);
-            return clip;
         }
 
         public void SetSlowMotionFilter(bool enabled)
