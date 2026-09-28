@@ -35,6 +35,11 @@ public static class LinkTreePackMenu
         ("NatureManufacture", new[] { "naturemanufacture" }),
     };
 
+    /// Whether a folder in the path names that pipeline ("HDRP", "URP", "Prefabs_URP" ...).
+    private static bool InFolder(string path, string pipeline) =>
+        path.Replace('\\', '/').Split('/').Reverse().Skip(1).Any(folder =>
+            folder.ToLowerInvariant().Split(' ', '_', '-', '(', ')', '[', ']').Contains(pipeline));
+
     [MenuItem("Road Rage/Link Installed Tree Pack")]
     public static void Link()
     {
@@ -57,6 +62,11 @@ public static class LinkTreePackMenu
                 .Where(x => Conifer.Any(x.name.Contains) || Broadleaf.Any(x.name.Contains) || x.name.Contains("tree"))
                 .Where(x => !Skip.Any(s => x.name.Contains(s)))
                 .ToList();
+            // Packs ship one prefab set per render pipeline (Prefabs/HDRP, Prefabs/URP,
+            // Prefabs/Built-in). HDRP and Built-in materials draw magenta in URP.
+            candidates = candidates.Where(x => !InFolder(x.path, "hdrp")).ToList();
+            var urp = candidates.Where(x => InFolder(x.path, "urp")).ToList();
+            if (urp.Count > 0) candidates = urp;
             if (candidates.Count == 0) continue;
             source = label;
             break;
