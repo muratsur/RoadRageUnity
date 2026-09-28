@@ -7210,7 +7210,7 @@ namespace RoadRage.UnityRemake
             if (!tree || Mathf.Abs(lateral) > 30f)
                 foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
             var group = piece.AddComponent<LODGroup>();
-            group.SetLODs(new[] { new LOD(tree ? 0.025f : 0.035f, renderers) });
+            group.SetLODs(new[] { new LOD(tree ? 0.04f : 0.035f, renderers) });
             group.RecalculateBounds();
         }
 
@@ -7904,10 +7904,13 @@ namespace RoadRage.UnityRemake
                     var from = near;
                     ScatterBand(8f, from, from + 8f, (d, l, s) => ForestTree(d, l, 18f, 32f));
                 }
+                // Behind 76 m the near bands already close the view, so the back of the
+                // stand is thinned to half: RR_BUDGET counted ~5,900 visible trees at
+                // 7.9 M triangles, the largest single cost in the frame.
                 for (var near = 76f; near < 160f; near += 12f)
                 {
                     var from = near;
-                    ScatterBand(11f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                    ScatterBand(22f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
                 }
                 // Understory: young firs between the trunks, to about 70 m. Tall firs
                 // lose their lower branches, so under their crowns the eye ran straight
