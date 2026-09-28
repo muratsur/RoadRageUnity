@@ -984,6 +984,30 @@ namespace RoadRage.UnityRemake
                     desiredSpeed = Mathf.Min(desiredSpeed, safeSpeed);
                 }
 
+                // A wrecked cruiser is a wall like a wrecked car.
+                foreach (var cop in PoliceVehicleController.OnRoad)
+                {
+                    if (cop == null || !cop.IsWrecked) continue;
+                    var laneSpacing = Mathf.Max(1.2f, RoadPath.HalfWidthAt(RoadDistance) * 0.5f);
+                    var lateralFootprint = Mathf.Min(LateralExtent + cop.ContactHalfWidth, laneSpacing * 1.4f);
+                    if (Mathf.Abs(cop.ContactLateral - LaneOffset) > lateralFootprint) continue;
+                    var centreGap = RoadPath.ForwardGap(RoadDistance, cop.ContactDistance, Direction);
+                    if (centreGap <= 0.05f) continue;
+                    var gap = centreGap - (LongitudinalExtent + cop.ContactHalfLength);
+                    if (gap >= 38f) continue;
+                    nearestGap = Mathf.Min(nearestGap, gap);
+                    if (gap < nearestBlockerGap)
+                    {
+                        nearestBlockerGap = gap;
+                        blockerOffset = cop.ContactLateral;
+                        blockerRoadDistance = cop.ContactDistance;
+                        hasBlocker = true;
+                    }
+                    var copSafe = gap < 10f ? 0f
+                        : Mathf.Lerp(18f, 24f, Mathf.InverseLerp(10f, 38f, gap));
+                    desiredSpeed = Mathf.Min(desiredSpeed, copSafe);
+                }
+
                 var acceleration = desiredSpeed < currentSpeedKph ? 55f : 16f;
                 // Gridlock escape with hysteresis: once a driver starts edging around
                 // an obstruction it COMMITS to the pass. Releasing the drift as soon

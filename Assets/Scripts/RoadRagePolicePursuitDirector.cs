@@ -265,8 +265,10 @@ namespace RoadRage.UnityRemake
                 GameState.Combo = 0;
             }
 
+            // The units drop back and leave once out of sight. Deleting them outright
+            // made cruisers vanish from beside the player the moment a bust landed.
             for (var i = activePolice.Count - 1; i >= 0; i--)
-                if (activePolice[i] != null) Destroy(activePolice[i].gameObject);
+                if (activePolice[i] != null) activePolice[i].StandDown();
             activePolice.Clear();
 
             for (var i = activeSpikes.Count - 1; i >= 0; i--)
@@ -536,8 +538,38 @@ namespace RoadRage.UnityRemake
         /// the hulls meet rather than never.
         private const float ContactMargin = 0.35f;
 
-        private void OnEnable() => VehicleContacts.Register(this);
-        private void OnDisable() => VehicleContacts.Unregister(this);
+        /// Every cruiser on the road, live, standing down or wrecked. Traffic brakes
+        /// for the wrecks: it only knew its own cars, so a crashed cruiser left across
+        /// a lane was driven straight into and shoved through by the contact pass.
+        public static readonly List<PoliceVehicleController> OnRoad = new();
+        public bool IsWrecked => isWrecked;
+
+        private void OnEnable()
+        {
+            VehicleContacts.Register(this);
+            if (!OnRoad.Contains(this)) OnRoad.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            VehicleContacts.Unregister(this);
+            OnRoad.Remove(this);
+        }
+
+        private bool standingDown;
+        private float standDownAge;
+
+        /// The pursuit is over: lights off, ease off the gas and drop back, then leave
+        /// once well behind or far off.
+        public void StandDown()
+        {
+            if (isWrecked || standingDown) return;
+            standingDown = true;
+            if (redLedMat != null) redLedMat.SetColor("_EmissionColor", Color.black);
+            if (blueLedMat != null) blueLedMat.SetColor("_EmissionColor", Color.black);
+            if (redStrobe != null) redStrobe.intensity = 0f;
+            if (blueStrobe != null) blueStrobe.intensity = 0f;
+        }
 
         /// Nothing may move the cruiser between the contact pass and placing it. This
         /// used to re-clamp the lateral offset here, after the pass had pushed the
@@ -1020,6 +1052,19 @@ namespace RoadRage.UnityRemake
                 // the player, instead of vanishing in front of them.
                 var behind = targetPlayer != null ? targetPlayer.RoadDistance - RoadDistance : 0f;
                 if (wreckAge > 3f && (behind > 60f || wreckAge > 40f)) Destroy(gameObject);
+                return;
+            }
+
+            if (standingDown)
+            {
+                var dt = Time.deltaTime;
+                standDownAge += dt;
+                var cruise = targetPlayer != null ? targetPlayer.SpeedKph * 0.55f : 50f;
+                SpeedKph = Mathf.MoveTowards(SpeedKph, cruise, 30f * dt);
+                RoadDistance = RoadPath.Wrap(RoadDistance + SpeedKph / 3.6f * dt);
+                transform.rotation = RoadPath.Rotation(RoadDistance);
+                var behindPlayer = targetPlayer != null ? targetPlayer.RoadDistance - RoadDistance : 999f;
+                if (behindPlayer > 70f || Mathf.Abs(behindPlayer) > 300f || standDownAge > 30f) Destroy(gameObject);
                 return;
             }
 
