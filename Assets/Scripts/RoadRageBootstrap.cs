@@ -2211,13 +2211,21 @@ namespace RoadRage.UnityRemake
             };
             SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
             Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
-            CancelInvoke(nameof(ReportSceneBudget));
-            Invoke(nameof(ReportSceneBudget), 8f);
+            StartCoroutine(ReportSceneBudgetSoon(++budgetRun));
         }
 
         /// What the frame is made of, by kind of object: renderers visible to a camera
         /// or a shadow map, their draw calls (submeshes) and triangles. Logged once per
         /// run, a few seconds in, so a slow biome can be traced without the Profiler.
+        private int budgetRun;
+
+        /// Reports for the latest run only: a run restarted within the wait skips it.
+        private System.Collections.IEnumerator ReportSceneBudgetSoon(int run)
+        {
+            yield return new WaitForSeconds(8f);
+            if (run == budgetRun) ReportSceneBudget();
+        }
+
         private void ReportSceneBudget()
         {
             var groups = new Dictionary<string, (int renderers, int draws, long triangles)>();
