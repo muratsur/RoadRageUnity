@@ -5194,7 +5194,7 @@ namespace RoadRage.UnityRemake
             water.SetParent(chunkRoot, false);
 
             BuildCanalWater();
-            if (Canal.Rows.Length > 0)
+            if (CanalHasUsableRows())
             {
                 // The artist's own houses, exported whole from the showcase map.
                 BuildCanalRows(-1, CanalStreetFacade, 0.37f, street);
@@ -5266,6 +5266,32 @@ namespace RoadRage.UnityRemake
 
         private readonly Dictionary<int, float> canalRowLengths = new();
 
+        /// A row is one bank of houses: a few tens of metres deep. Deeper than this, the
+        /// export is the whole showcase level (both banks, the ground, the bamboo), which
+        /// cannot be repeated along the road: it overlaps itself and costs thousands of
+        /// draw calls per chunk.
+        private const float CanalRowMaxDepth = 45f;
+        /// Parts smaller than this (cups, lanterns, bamboo stems) are left out of rows:
+        /// at driving speed they are invisible and they are most of the draw calls.
+        private const float CanalRowMinPart = 1.5f;
+        private static readonly string[] CanalRowProps =
+            { "bamboo", "plant", "grass", "ivy", "cloth", "rope", "cable", "wire", "cup", "bottle", "debris", "trash",
+              "leaf", "leaves", "fog", "actor", "decal", "flower", "pot" };
+        private static bool canalLevelWarned;
+
+        private bool CanalRowUsable(int r)
+        {
+            var pack = Canal;
+            return pack.Rows[r] != null && CanalRowLength(r) >= 5f;
+        }
+
+        private bool CanalHasUsableRows()
+        {
+            for (var r = 0; r < Canal.Rows.Length; r++)
+                if (CanalRowUsable(r)) return true;
+            return false;
+        }
+
         /// Bounds of the parts still switched on (the sky and backdrop parts are off).
         private static bool ActiveBounds(GameObject item, out Bounds bounds)
         {
@@ -5273,6 +5299,7 @@ namespace RoadRage.UnityRemake
             var found = false;
             foreach (var r in item.GetComponentsInChildren<Renderer>(false))
             {
+                if (!r.enabled) continue;
                 if (!found) { bounds = r.bounds; found = true; }
                 else bounds.Encapsulate(r.bounds);
             }
@@ -5283,7 +5310,21 @@ namespace RoadRage.UnityRemake
         {
             if (canalRowLengths.TryGetValue(r, out var cached)) return cached;
             var probe = PlaceCanalRow(r, 0f, 1, 0f, null, measureOnly: true);
-            var length = probe != null && ActiveBounds(probe, out var b) ? b.size.x : 0f;
+            var b = default(Bounds);
+            var length = probe != null && ActiveBounds(probe, out b) ? b.size.x : 0f;
+            if (length > 0f && (b.size.z > CanalRowMaxDepth || b.size.x > 400f))
+            {
+                if (!canalLevelWarned)
+                {
+                    canalLevelWarned = true;
+                    Debug.LogWarning($"RR_CANAL '{Canal.Rows[r].name}' is {b.size.x:0} x {b.size.z:0} m: that is the whole " +
+                                     "level, not one bank of houses, so CANAL TOWN does not repeat it. In Unreal select only " +
+                                     "the houses along ONE side of the canal (about 60-120 m long, under 40 m deep), File > " +
+                                     "Export Selected into Assets/AsianCanal/Assemblies, one file per row, and run Road Rage > " +
+                                     "Link Asian Canal Pack.");
+                }
+                length = 0f;
+            }
             if (probe != null) DestroyImmediate(probe);
             canalRowLengths[r] = length;
             return length;
@@ -5295,8 +5336,18 @@ namespace RoadRage.UnityRemake
             var frame = new GameObject("Canal Row").transform;
             var row = Instantiate(pack.Rows[r], frame, false);
             foreach (var renderer in row.GetComponentsInChildren<Renderer>(true))
-                if (System.Array.IndexOf(pack.RowSkip, renderer.name) >= 0 || renderer.bounds.size.magnitude > 600f)
-                    renderer.gameObject.SetActive(false);
+            {
+                var size = renderer.bounds.size.magnitude;
+                var n = renderer.name.ToLowerInvariant();
+                if (System.Array.IndexOf(pack.RowSkip, renderer.name) >= 0 || size > 600f || size < CanalRowMinPart ||
+                    System.Array.Exists(CanalRowProps, n.Contains))
+                {
+                    renderer.enabled = false;
+                    continue;
+                }
+                // Only the houses themselves cast shadows; trim, signs and awnings do not.
+                if (size < 6f) renderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
             foreach (var l in row.GetComponentsInChildren<Light>(true)) l.gameObject.SetActive(false);
             foreach (var c in row.GetComponentsInChildren<Collider>(true)) Destroy(c);
             // Canal side towards the road (frame -z), long side along the road (frame x).
@@ -5320,6 +5371,14 @@ namespace RoadRage.UnityRemake
             outward.y = 0f;
             frame.SetPositionAndRotation(RoadPath.Point(distance, side * facade, 0f),
                 Quaternion.LookRotation(outward.sqrMagnitude > 1e-4f ? outward.normalized : Vector3.right * side));
+            // The row never moves: merge its parts that share a material into a few
+            // batches, as the rest of the chunk does.
+            var parts = new List<GameObject>();
+            foreach (var renderer in row.GetComponentsInChildren<MeshRenderer>(false))
+                if (renderer.enabled && renderer.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null &&
+                    mf.sharedMesh.isReadable)
+                    parts.Add(renderer.gameObject);
+            if (parts.Count > 1) StaticBatchingUtility.Combine(parts.ToArray(), frame.gameObject);
             return frame.gameObject;
         }
 
