@@ -777,8 +777,8 @@ namespace RoadRage.UnityRemake
             // Measured on the bodywork only: the pack's light glows and flares stand
             // well out from the car (it measured 3.6 m wide with them), and the hull
             // the contact pass uses has to be the car you can see.
-            var body = System.Array.FindAll(renderers, r => !IsLightPart(r));
-            if (body.Length > 0) renderers = body;
+            var bodywork = System.Array.FindAll(renderers, part => !IsLightPart(part));
+            if (bodywork.Length > 0) renderers = bodywork;
             // Long side along the cruiser's z.
             var b = LocalBounds(holder.transform, renderers);
             if (b.size.x > b.size.z * 1.2f)
