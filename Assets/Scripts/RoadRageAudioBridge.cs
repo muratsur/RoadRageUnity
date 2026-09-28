@@ -215,8 +215,9 @@ namespace RoadRage.UnityRemake
         {
             if (sfxSource == null) return;
             LoadClips();
-            sfxSource.pitch = Random.Range(0.9f, 1.1f);
-            sfxSource.PlayOneShot(whooshClip, 0.55f);
+            // Road Rage 3D plays it at -8 dB, unpitched.
+            sfxSource.pitch = 1f;
+            sfxSource.PlayOneShot(whooshClip, 0.4f);
         }
 
         private AudioClip shutterClip;
@@ -243,24 +244,25 @@ namespace RoadRage.UnityRemake
             sfxSource.PlayOneShot(shutterClip, 0.8f);
         }
 
-        /// Band-limited noise swelling and falling away: air, not a tone.
+        /// The near-miss whoosh from Road Rage 3D (make_audio.gd, _whoosh): 0.55 s of
+        /// noise through a one-pole low-pass whose cutoff sweeps up and back down as the
+        /// car goes by, under a half-sine swell. Same recipe, same rate and seed.
         private static AudioClip CreatePassByWhooshClip()
         {
-            const int sampleRate = 44100;
-            var samples = sampleRate * 6 / 10;
+            const int sampleRate = 22050;
+            const float length = 0.55f;
+            var samples = (int)(sampleRate * length);
             var data = new float[samples];
-            var low = 0f;
-            var band = 0f;
+            var rng = new System.Random(12345);
+            var prev = 0f;
             for (var i = 0; i < samples; i++)
             {
-                var t = (float)i / samples;
-                var noise = Random.value * 2f - 1f;
-                // Two one-pole filters: a moving band, brightest as the car passes.
-                var cutoff = Mathf.Lerp(0.04f, 0.22f, Mathf.Sin(t * Mathf.PI));
-                low += (noise - low) * cutoff;
-                band += (low - band) * 0.02f;
-                var envelope = Mathf.Pow(Mathf.Sin(t * Mathf.PI), 1.6f) * (t < 0.45f ? t / 0.45f : 1f);
-                data[i] = (low - band) * envelope * 1.6f;
+                var t = (float)i / sampleRate;
+                var noise = (float)rng.NextDouble() * 2f - 1f;
+                var cutoff = 0.04f + 0.28f * Mathf.Sin(Mathf.PI * (t / length));
+                prev = Mathf.Lerp(prev, noise, cutoff);
+                var envelope = Mathf.Sin(Mathf.PI * (t / length));
+                data[i] = prev * envelope * 0.75f;
             }
             var clip = AudioClip.Create("PassByWhoosh", samples, 1, sampleRate, false);
             clip.SetData(data, 0);
