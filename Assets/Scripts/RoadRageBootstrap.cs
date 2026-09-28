@@ -4102,11 +4102,12 @@ namespace RoadRage.UnityRemake
         private int ZoneIndexAt(float distance) =>
             Mathf.FloorToInt(Mathf.Max(0f, distance) / ZoneLength);
 
-        public int BiomeIndexAt(float distance)
-        {
-            var order = (journeyStart + ZoneIndexAt(distance)) % JourneyOrder.Length;
-            return JourneyOrder[order];
-        }
+        /// A run stays in the biome the player picked. It used to move on to the next
+        /// biome in JourneyOrder every ZoneLength (5.4 km), so a Greenwood drive turned
+        /// into Snow Station part-way. Changing biome is the picker's and the N key's
+        /// job. Everything that asks about the biome ahead (curves, elevation, road
+        /// width, mood blending) goes through here, so they all see one biome too.
+        public int BiomeIndexAt(float distance) => JourneyOrder[journeyStart];
 
         public string BiomeNameAt(float distance) => Biomes[BiomeIndexAt(distance)];
 
@@ -7626,7 +7627,8 @@ namespace RoadRage.UnityRemake
                 GameState.RunIntensity));
             if (TrafficCarController.All.Count >= target) return;
 
-            // Spawned well ahead so a car never appears in view.
+            // Spawned well ahead so a car never appears in view: 560-740 m, the same window
+            // traffic is recycled into. 320-520 m was in plain view in Greenwood's fog.
             var models = new[]
             {
                 "SK_Veh_Preset_Sedan_01", "SK_Veh_Preset_Hatch_01", "SK_Veh_Preset_Sports_01",
@@ -7646,7 +7648,7 @@ namespace RoadRage.UnityRemake
                         * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
 
             CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", models[index % models.Length],
-                Color.white, TrafficCarController.PlayerDistance + Random.Range(320f, 520f),
+                Color.white, TrafficCarController.PlayerDistance + Random.Range(560f, 740f),
                 lane, speed, direction, false, 0f, offence);
         }
 
