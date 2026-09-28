@@ -20,6 +20,15 @@ namespace RoadRage.UnityRemake
         /// The materials built for the pack (cobbles, stone floor, canal water ...).
         public Material[] Materials = System.Array.Empty<Material>();
 
+        /// Whole rows of houses exported from the pack's showcase map (Unreal: File >
+        /// Export Selected) into Assets/AsianCanal/Assemblies, every piece where the
+        /// artist put it. RowFronts is the side of each row that faced the canal (its
+        /// stone wall reaches lowest), in the model's own axes; RowSkip names parts
+        /// that are not buildings - sky domes, HDRI spheres, the level's backdrop.
+        public GameObject[] Rows = System.Array.Empty<GameObject>();
+        public Vector3[] RowFronts = System.Array.Empty<Vector3>();
+        public string[] RowSkip = System.Array.Empty<string>();
+
         public Vector3 HighOf(GameObject mesh)
         {
             var i = System.Array.IndexOf(Meshes, mesh);
