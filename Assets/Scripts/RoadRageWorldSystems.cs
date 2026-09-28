@@ -143,9 +143,35 @@ namespace RoadRage.UnityRemake
             length = (xs.Length - 1) * step;
         }
 
-        /// Reads the "RRRT" format the tool writes; null if the asset is missing or
-        /// malformed, and the caller keeps the procedural road.
+        /// What really lines the road, from the same tool (ESA WorldCover land
+        /// cover): per side and per band out from the centreline.
+        public const int CoverForest = 1, CoverOpen = 2, CoverBuilt = 3, CoverWater = 4;
+        private byte[] cover;
+        private int coverCount;
+        private int coverBands;
+        private float coverStep;
+        private float[] bandStarts;
+
+        /// Named stops along the road (Mummelsee, Ruhestein, ...), by road distance
+        /// within one pass.
+        public (float Distance, string Name)[] Places { get; private set; } =
+            System.Array.Empty<(float, string)>();
+
+        public bool HasCover => cover != null;
+
+        /// Reads the "RRRT" format the tool writes, plus its "_cover" and "_places"
+        /// companions when present; null if the road itself is missing or malformed,
+        /// and the caller keeps the procedural road.
         public static RoadRoute Load(string resourcePath)
+        {
+            var route = LoadRoad(resourcePath);
+            if (route == null) return null;
+            route.LoadCover(resourcePath + "_cover");
+            route.LoadPlaces(resourcePath + "_places");
+            return route;
+        }
+
+        private static RoadRoute LoadRoad(string resourcePath)
         {
             var asset = Resources.Load<TextAsset>(resourcePath);
             if (asset == null) return null;
@@ -168,6 +194,65 @@ namespace RoadRage.UnityRemake
         /// Road distance (world Z) of one pass, start to end.
         public float Length => length;
 
+        private void LoadCover(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var bytes = asset.bytes;
+            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'L' || bytes[3] != 'C')
+                return;
+            var count = System.BitConverter.ToInt32(bytes, 4);
+            var bands = System.BitConverter.ToInt32(bytes, 8);
+            var step = System.BitConverter.ToSingle(bytes, 12);
+            var header = 16 + bands * 4;
+            if (count < 1 || bands < 1 || step <= 0f || bytes.Length < header + count * 2 * bands) return;
+            bandStarts = new float[bands];
+            for (var b = 0; b < bands; b++) bandStarts[b] = System.BitConverter.ToSingle(bytes, 16 + b * 4);
+            cover = new byte[count * 2 * bands];
+            System.Array.Copy(bytes, header, cover, 0, cover.Length);
+            coverCount = count;
+            coverBands = bands;
+            coverStep = step;
+        }
+
+        private void LoadPlaces(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var places = new List<(float, string)>();
+            foreach (var line in asset.text.Split('\n'))
+            {
+                var space = line.IndexOf(' ');
+                if (space < 1) continue;
+                if (!float.TryParse(line.Substring(0, space), System.Globalization.NumberStyles.Float,
+                        System.Globalization.CultureInfo.InvariantCulture, out var distance)) continue;
+                places.Add((distance, line.Substring(space + 1).Trim()));
+            }
+            Places = places.ToArray();
+        }
+
+        /// What lines the road at this distance and lateral offset: CoverForest,
+        /// CoverOpen, CoverBuilt or CoverWater, or 0 without cover data. The return
+        /// pass is the mirror image of the outward one along the road, so a side stays
+        /// the same side.
+        public int CoverAt(float distance, float lateral)
+        {
+            if (cover == null) return 0;
+            var i = Mathf.Clamp(Mathf.RoundToInt(Fold(distance) / coverStep), 0, coverCount - 1);
+            var side = lateral < 0f ? 0 : 1;
+            var across = Mathf.Abs(lateral);
+            var band = 0;
+            while (band + 1 < coverBands && across >= bandStarts[band + 1]) band++;
+            return cover[(i * 2 + side) * coverBands + band];
+        }
+
+        /// Road distance folded into one pass, [0, Length]: there and back.
+        public float Fold(float distance)
+        {
+            var u = Mathf.Repeat(distance, 2f * length);
+            return u > length ? 2f * length - u : u;
+        }
+
         public float X(float distance) => Sample(xs, distance);
         public float Y(float distance) => Sample(ys, distance);
 
@@ -176,9 +261,7 @@ namespace RoadRage.UnityRemake
         /// heading is continuous and ribbons sampled finer than the step stay smooth.
         private float Sample(float[] v, float distance)
         {
-            var u = Mathf.Repeat(distance, 2f * length);
-            if (u > length) u = 2f * length - u;
-            var f = u / step;
+            var f = Fold(distance) / step;
             var i = Mathf.Min((int)f, v.Length - 2);
             var t = f - i;
             var p0 = v[Mathf.Max(i - 1, 0)];
@@ -410,6 +493,7 @@ namespace RoadRage.UnityRemake
             variationSeed = 17;
             foreach (var character in name) variationSeed = variationSeed * 31 + character;
             if (!ActiveCars.Contains(this)) ActiveCars.Add(this);
+            visualPlaced = false;
             PlaceOnRoad();
         }
 
@@ -421,6 +505,22 @@ namespace RoadRage.UnityRemake
             {
                 laneDrift = Mathf.Lerp(laneDrift, overtakeDriftTarget, delta * 2.5f);
                 return;
+            }
+
+            // On a road with one lane each way, a slow car or truck in the player's
+            // direction filled the lane and oncoming traffic filled the other, so it
+            // could not be got past. With the player close behind it moves over onto
+            // the shoulder, as slow traffic does on a mountain road, and leaves room
+            // to pass between it and the centre line.
+            if (NarrowRoad && !IsWreck && !IsFleeing && Violation != Offence.Weaving && Direction > 0f)
+            {
+                var behind = RoadDistance - PlayerDistance;
+                if (behind > 0f && behind < 60f)
+                {
+                    var side = LaneOffset >= 0f ? 1f : -1f;
+                    laneDrift = Mathf.MoveTowards(laneDrift, side * 1.8f, delta * 1.6f);
+                    return;
+                }
             }
 
             switch (Violation)
@@ -676,15 +776,16 @@ namespace RoadRage.UnityRemake
                 relocated = true;
             }
 
-            // On a single-lane road a wreck is a wall: everything behind it queues into
-            // a knot the player then drives into, which ended runs within a kilometre.
+            // A wreck is a wall: everything behind it queues into a knot the player then
+            // drives into, which ended runs within a kilometre - on any road, not only a
+            // single-lane one.
             // Crash() slides it off to its own road edge, where it no longer blocks the
             // lane; after a few seconds it is recycled up the road - but only once it is
             // out of view, behind the camera or far ahead. Recycling it on a timer made
             // crashed cars vanish in front of the player.
             wreckAge = IsWreck ? wreckAge + Time.deltaTime : 0f;
             var outOfView = RoadDistance < PlayerDistance - 15f || RoadDistance > PlayerDistance + SpawnAheadMin;
-            if (!relocated && NarrowRoad && IsWreck && wreckAge > NarrowWreckClearSeconds && outOfView)
+            if (!relocated && IsWreck && wreckAge > NarrowWreckClearSeconds && outOfView)
             {
                 RoadDistance = PlayerDistance + Random.Range(SpawnAheadMin, SpawnAheadMax);
                 wreckAge = 0f;
@@ -922,7 +1023,11 @@ namespace RoadRage.UnityRemake
         private void ReactToContact(TrafficCarController other, float deltaDist, float deltaLat)
         {
             var relativeSpeed = Mathf.Abs(currentSpeedKph - other.currentSpeedKph);
-            if (IsWreck || other.IsWreck || relativeSpeed > 18f)
+            // Touching a wreck used to wreck a car whatever the speed, so a queue
+            // braking up behind one crashed into it car by car: the pile-ups. It takes
+            // a real impact now; a slow bump just stops behind it (below).
+            var wreckContact = IsWreck || other.IsWreck;
+            if ((wreckContact && relativeSpeed > 40f) || (!wreckContact && relativeSpeed > 18f))
             {
                 var impact = Mathf.Max(currentSpeedKph, other.currentSpeedKph);
                 var alreadyWrecked = IsWreck && other.IsWreck;
@@ -981,12 +1086,38 @@ namespace RoadRage.UnityRemake
         }
         // ------------------------------------------------------------------------
 
+        private float visualLateral;
+        private float visualLateralSpeed;
+        private float steerYaw;
+        private bool visualPlaced;
+
+        /// Draws the car where it is, smoothed and steered.
+        ///
+        /// The lateral offset is what the contact pass and the behaviours push around,
+        /// and it can flick back and forth by centimetres a frame when a stopped car is
+        /// pressed against another - drawn raw, queued cars shook. The drawn offset
+        /// follows it with a short damper. And a car moving across the road now turns
+        /// its nose into the move, by the angle of its sideways speed against its
+        /// forward speed; drawn square to the road it slid sideways like a pulled toy.
         private void PlaceOnRoad()
         {
-            transform.position = RoadPath.Point(RoadDistance, LaneOffset, 0.16f + verticalOffset);
+            if (!visualPlaced || Mathf.Abs(visualLateral - LaneOffset) > 6f)
+            {
+                visualLateral = LaneOffset;
+                visualLateralSpeed = 0f;
+                visualPlaced = true;
+            }
+            var delta = Time.deltaTime;
+            if (delta > 0f)
+                visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed, 0.12f, 30f, delta);
+            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
-            transform.rotation = facing * Quaternion.Euler(0f, WreckYaw, wreckRoll);
+            var forward = Mathf.Max(3f, currentSpeedKph / 3.6f);
+            var target = IsWreck ? 0f
+                : Mathf.Clamp(Mathf.Atan2(visualLateralSpeed, forward) * Mathf.Rad2Deg * Direction, -22f, 22f);
+            steerYaw = Mathf.Lerp(steerYaw, target, Mathf.Clamp01(delta * 8f));
+            transform.rotation = facing * Quaternion.Euler(0f, WreckYaw + steerYaw, wreckRoll);
         }
 
         private float wreckSlideTarget;
@@ -1008,11 +1139,13 @@ namespace RoadRage.UnityRemake
             wreckYawTarget = sign * variation;
             WreckYaw = sign * variation * 0.2f;
             wreckRoll = sign * 2.5f;
-            // Shove smoothly towards road shoulder. On a single-lane road always towards
-            // the car's own edge: shoved the other way it slid across the only other lane
-            // and blocked the road.
-            if (NarrowRoad) sign = LaneOffset >= 0f ? 1f : -1f;
-            wreckSlideTarget = Mathf.Clamp(laneDrift + sign * 5.2f, -8f, 8f);
+            // Shove smoothly onto the car's own shoulder, clear of every lane. Shoved the
+            // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
+            // inner lane stopped in the outer one - either way a wall that everything
+            // behind it piled into.
+            sign = LaneOffset >= 0f ? 1f : -1f;
+            var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
+            wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns

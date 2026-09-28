@@ -658,6 +658,7 @@ namespace RoadRage.UnityRemake
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder, Mathf.Max(0, biomeIndex)));
             activeWeather = WeatherSystem.Roll(Mathf.Max(0, biomeIndex));
             ApplyBiomeRoute(biomeIndex);
+            lastPlaceIndex = -1;
 
             // 7. Rebuild lighting for new biome
             BuildLighting();
@@ -779,6 +780,7 @@ namespace RoadRage.UnityRemake
 				{
 					TrafficCarController.PlayerDistance = controller.RoadDistance;
 					UpdateStreaming(controller.RoadDistance);
+					AnnouncePlaces(controller.RoadDistance);
 					BlendZoneLighting(controller.RoadDistance);
 					EscalateTraffic();
 					TryStageHitAndRun(controller.SpeedKph);
@@ -1339,6 +1341,17 @@ namespace RoadRage.UnityRemake
                 "T_vetegation_atlas_normal", new Color(0.58f, 0.66f, 0.48f), 0.34f);
             BiomeCutoutMaterial("Forest Flowers", "RunicForest", "T_flowers_D", "T_flowers_N",
                 new Color(0.86f, 0.86f, 0.70f), 0.36f);
+            // Black Forest vegetation (Tools/Blender/build_black_forest.py): Norway spruce,
+            // silver fir and the ground cover under them, all on one atlas - bark and
+            // needles in one material. Three tints so a stand is not one flat colour.
+            BiomeCutoutMaterial("Black Forest", "BlackForest", "T_blackforest_D", "T_blackforest_N", Color.white, 0.45f);
+            BiomeCutoutMaterial("Black Forest Dark", "BlackForest", "T_blackforest_D", "T_blackforest_N",
+                new Color(0.80f, 0.84f, 0.80f), 0.45f);
+            BiomeCutoutMaterial("Black Forest Fresh", "BlackForest", "T_blackforest_D", "T_blackforest_N",
+                new Color(1.05f, 1.10f, 1.0f), 0.45f);
+            // B500 roadside furniture and the hotel (Tools/Blender/build_b500_props.py):
+            // one opaque atlas for posts, signs, logs and the house.
+            BiomeMaterial("B500 Props", "BlackForest", "T_b500props_D", "T_b500props_N", Color.white, 0f, 0.2f);
             BiomeSurface(BiomeMaterial("Forest Pebble", "RunicForest", "T_small_rock_D", "T_small_rock_N",
                 new Color(0.62f, 0.62f, 0.58f), 0f, 0.2f), "RunicForest", "T_small_rock_MSO", 0.6f);
 
@@ -1358,6 +1371,9 @@ namespace RoadRage.UnityRemake
                 "Cliffs", "T_cliffs_MSO", 1f);
             BiomeSurface(BiomeMaterial("Forest Boulder", "ForestVillage", "T_rock_01_D", "T_rock_01_N",
                 new Color(0.60f, 0.60f, 0.56f), 0f, 0.2f), "ForestVillage", "T_rock_01_MSO", 0.6f);
+            // The Mummelsee: a small, deep, dark lake in a spruce hollow. Near black,
+            // glossy, so it shows the sky and the treeline through the probe.
+            MakeMaterial("Mountain Lake", new Color(0.03f, 0.045f, 0.045f), 0f, 0.94f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
                 new Color(0.56f, 0.57f, 0.54f), 0f, 0.2f), "ForestVillage", "T_rock_02_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Mountain", "ForestVillage", "T_mountain_D", "T_mountain_N",
@@ -2518,7 +2534,17 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (lanes == 2)
+            if (biomeIndex == 0)
+            {
+                // Two lanes each way, German markings: a double solid white centre line
+                // and 6 m dashes with 12 m gaps between the lanes. No edge or yellow
+                // lines: those were taken off Greenwood for reading as stray strips.
+                BuildRibbon("Center Line L", -0.028f, -0.012f, 0.038f, materials["White Paint"], relative: true);
+                BuildRibbon("Center Line R", 0.012f, 0.028f, 0.038f, materials["White Paint"], relative: true);
+                BuildDashedRibbon("Left Lane Dashes", -0.50f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
+                BuildDashedRibbon("Right Lane Dashes", 0.50f, 0.14f, 6f, 18f, materials["White Paint"], relative: true);
+            }
+            else if (lanes == 2)
             {
                 // 2 lanes each way: dashed white lane divider on each side
                 BuildDashedRibbon("Left Lane Dashes", -0.50f, 0.15f, 5.5f, 11f, materials["White Paint"], relative: true);
@@ -2593,6 +2619,8 @@ namespace RoadRage.UnityRemake
                             Mathf.InverseLerp(clearance + 28f, clearance + 65f, Mathf.Abs(lateral)));
                         lift = displace * edge * corridor *
                                (TerrainNoise(p.x, p.z, 0.021f) + 0.45f * TerrainNoise(p.x, p.z, 0.061f));
+                        if (colors != null && Mathf.Abs(lateral) > RoadPath.ClearanceAt(distance) + 4f)
+                            lift += LakeBasin(distance, lateral);
                     }
                     vertices[i * across + j] = RoadPath.Point(distance, lateral, height + lift);
                     uv[i * across + j] = new Vector2(f * Mathf.Abs(rightLateral - leftLateral) * 0.08f,
@@ -3942,6 +3970,15 @@ namespace RoadRage.UnityRemake
 
                 showroomStage = new GameObject("Turntable").transform;
                 showroomStage.SetParent(rig, false);
+
+                // Directional lights light the whole world, wherever they are parked:
+                // left on, these two lit the road as two extra suns from the first
+                // garage visit onwards, and the road and car paint burned out to
+                // white. They are on only while the showroom camera is.
+                var gate = rig.gameObject.AddComponent<ShowroomLightGate>();
+                gate.Camera = ShowroomCamera;
+                gate.Lights = new[] { key, rim };
+                key.enabled = rim.enabled = false;
             }
 
             if (showroomCar == carIndex) return;
@@ -4050,7 +4087,10 @@ namespace RoadRage.UnityRemake
         /// does not - they would have been standing on the tarmac. And the sewer tunnel
         /// was widened, because its walls stood at 13.4 m and the road they enclose is now
         /// 13.5 m to the kerb: the carriageway would have been wider than the tunnel.
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 1 : 3;
+        ///
+        /// Greenwood was the last single-lane road, and a truck in the only lane each way
+        /// could not be got past: it now has two each way (18 m of carriageway).
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4750,7 +4790,9 @@ namespace RoadRage.UnityRemake
                 // The guard rail is placed from the measured road width and belongs on the
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
-                if (n == "Forest Guard Rail" || n == "Forest Cliff") continue;
+                if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
+                // B500 posts and signs stand just behind the rail on purpose.
+                if (n.StartsWith("B500 ")) continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6423,18 +6465,446 @@ namespace RoadRage.UnityRemake
         private GameObject SpawnForestPiece(string entry, float distance, float lateral, float height,
             float minHeight, float maxHeight, string label)
         {
-            // Nothing planted in front of a cliff face.
-            if (InCliffZone(distance, lateral)) return null;
+            // Nothing planted in front of a cliff face - but behind it, the forest
+            // carries on over the rock, as it does above a real cutting. A bare top
+            // and back slope read as a pale slab.
+            var onCliff = false;
+            var cliffY = 0f;
+            if (InCliffZone(distance, lateral))
+            {
+                var line = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + CliffOffset;
+                if (Mathf.Abs(lateral) < line + 10f || !CliffTop(distance, lateral, out cliffY)) return null;
+                onCliff = true;
+            }
+            if (!RouteAllows(label, distance, lateral)) return null;
+            if (InHotelGrounds(distance, lateral)) return null;
             var split = entry.Split('|');
-            var model = BiomeModel(split[0], split[1], materials["Forest Undergrowth"]);
+            var external = split[0] == "External";
+            var blackForest = external || split[0] == "BlackForest";
+            GameObject model;
+            if (external)
+            {
+                var pool = split[1].StartsWith("y") ? ExternalYoungTrees : ExternalTrees;
+                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y')) % pool.Length] : null;
+                model = prefab != null ? Adopt(Instantiate(prefab)) : null;
+            }
+            else
+            {
+                var material = !blackForest ? materials["Forest Undergrowth"]
+                    : split[1].StartsWith("SM_log") || split[1].StartsWith("SM_stump") ? materials["B500 Props"]
+                    : BlackForestTint();
+                model = BiomeModel(split[0], split[1], material);
+            }
             if (model == null) return null;
             model.name = label;
             model.transform.position = RoadPath.Point(distance, lateral, height);
-            model.transform.rotation = RoadPath.Rotation(distance) *
-                                       Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
+            if (onCliff)
+            {
+                var p = model.transform.position;
+                model.transform.position = new Vector3(p.x, cliffY + height - 0.3f, p.z);
+            }
+            // The kit meshes lie on their backs (Z up); the Black Forest ones are
+            // exported Y up and stand straight whatever the road's grade.
+            model.transform.rotation = blackForest
+                ? Quaternion.Euler(0f, Random.Range(0f, 360f), 0f)
+                : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
             return model;
+        }
+
+        // ------------------------------------------------------------ the real B500
+
+        /// Whether a forest piece may stand here, going by what really lines the B500
+        /// at this point (ESA WorldCover, baked into the route by
+        /// Tools/Terrain/build_b500_road.py). The forest scatter fills everything with
+        /// trees; the real road runs through forest most of the way but opens onto the
+        /// Grinden heath at Schliffkopf, ski meadows at Unterstmatt and Alexanderschanze,
+        /// the hotel clearings at Buehlerhoehe and Ruhestein, Kniebis, and the
+        /// Mummelsee. Without cover data everything but the heath dressing is allowed.
+        private static bool RouteAllows(string label, float distance, float lateral)
+        {
+            var heath = label.StartsWith("Heath");
+            var cover = RoadPath.Route != null ? RoadPath.Route.CoverAt(distance, lateral) : 0;
+            switch (cover)
+            {
+                case 0: return !heath;
+                case RoadRoute.CoverWater: return false;
+                case RoadRoute.CoverForest: return !heath;
+            }
+            // Open ground or a clearing: heath and meadow with trees standing along it
+            // and in groups - not a bare field. A built-up patch (a hotel, a car park)
+            // has more trees round it than open heath does.
+            if (heath) return cover == RoadRoute.CoverOpen || Random.value < 0.5f;
+            var built = cover == RoadRoute.CoverBuilt;
+            if (label == "Forest Tree" || label == "Forest Understory") return Random.value < (built ? 0.35f : 0.12f);
+            if (label.StartsWith("Forest Bush")) return Random.value < (built ? 0.5f : 0.35f);
+            return true;
+        }
+
+        private static readonly string[] HeathPlants =
+        {
+            "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass",
+            "BlackForest|SM_bilberry", "BlackForest|SM_bilberry", "BlackForest|SM_fern",
+        };
+
+        private static readonly string[] HeathRocks =
+        {
+            "RunicForest|Small_rocks/SM_rock_01",
+            "RunicForest|Small_rocks/SM_rock_02",
+            "RunicForest|Small_rocks/SM_rock_03",
+        };
+
+        /// The open stretches: moor grass and heather, granite blocks and a few
+        /// wind-bent spruce, with nothing tall between the road and the horizon - the
+        /// long views the Schwarzwaldhochstrasse is known for. Only planted where the
+        /// real roadside is open (RouteAllows), so in forest these bands place nothing.
+        private void BuildRouteOpenGround()
+        {
+            ScatterBand(1.6f, 8f, 60f, (d, l, s) =>
+                SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.5f, 1.3f, "Heath Grass"));
+            ScatterBand(4.5f, 60f, 150f, (d, l, s) =>
+                SpawnForestPiece(HeathPlants[Random.Range(0, HeathPlants.Length)], d, l, 0.05f, 0.7f, 1.6f, "Heath Grass Far"));
+            ScatterBand(15f, 10f, 100f, (d, l, s) =>
+                SpawnForestPiece(HeathRocks[Random.Range(0, HeathRocks.Length)], d, l, -0.15f, 0.4f, 1.8f, "Heath Rock"));
+            ScatterBand(24f, 18f, 170f, (d, l, s) =>
+                SpawnForestPiece(Random.value < 0.5f ? "BlackForest|SM_spruce_young" : BlackForestTrees[Random.Range(0, BlackForestTrees.Length)],
+                    d, l, 0f, 4f, 13f, "Heath Spruce"));
+        }
+
+        /// Water beside the road (the Mummelsee): a still, dark lake surface from
+        /// where the water starts out to 260 m, level across its length. The ground
+        /// ribbon dips under it (see BuildRibbon), so the shore is a slope, not a seam.
+        private void BuildRouteLakes()
+        {
+            const float step = 5f;
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var runStart = float.NaN;
+                for (var d = segStart - 2f; d <= segEnd + 2f + step; d += step)
+                {
+                    var water = d <= segEnd + 2f && !float.IsNaN(LakeInnerEdge(d, side));
+                    if (water)
+                    {
+                        if (float.IsNaN(runStart)) runStart = d;
+                        continue;
+                    }
+                    if (float.IsNaN(runStart)) continue;
+                    BuildLake(runStart - step * 0.5f, d - step * 0.5f, side);
+                    runStart = float.NaN;
+                }
+            }
+        }
+
+        /// Distance from the centreline at which water starts on this side, or NaN.
+        private static float LakeInnerEdge(float distance, int side)
+        {
+            // One probe per cover band (12-40, 40-100, 100-220 m); water starts at the
+            // band's inner edge.
+            if (RoadPath.Route.CoverAt(distance, side * 20f) == RoadRoute.CoverWater)
+                return Mathf.Max(RoadPath.ClearanceAt(distance) + 6f, 12f);
+            if (RoadPath.Route.CoverAt(distance, side * 60f) == RoadRoute.CoverWater) return 40f;
+            if (RoadPath.Route.CoverAt(distance, side * 140f) == RoadRoute.CoverWater) return 100f;
+            return float.NaN;
+        }
+
+        private void BuildLake(float from, float to, int side)
+        {
+            const float outer = 260f;
+            const int across = 8;
+            // Level and shoreline from the whole lake, not this chunk's share of it, so
+            // a lake crossing a chunk seam has one surface.
+            var lakeFrom = from;
+            var lakeTo = to;
+            while (lakeFrom > from - 800f && !float.IsNaN(LakeInnerEdge(lakeFrom - 5f, side))) lakeFrom -= 5f;
+            while (lakeTo < to + 800f && !float.IsNaN(LakeInnerEdge(lakeTo + 5f, side))) lakeTo += 5f;
+            var level = float.MaxValue;
+            var inner = float.MaxValue;
+            for (var d = lakeFrom; d <= lakeTo; d += 5f)
+            {
+                level = Mathf.Min(level, RoadPath.Center(d).y);
+                var edge = LakeInnerEdge(d, side);
+                if (!float.IsNaN(edge)) inner = Mathf.Min(inner, edge);
+            }
+            if (inner == float.MaxValue) return;
+            level -= 0.9f;
+            var samples = Mathf.Max(2, Mathf.CeilToInt((to - from) / 5f) + 1);
+            var vertices = new Vector3[samples * across];
+            var uv = new Vector2[vertices.Length];
+            var triangles = new int[(samples - 1) * (across - 1) * 6];
+            var t = 0;
+            for (var i = 0; i < samples; i++)
+            {
+                var d = Mathf.Lerp(from, to, i / (float)(samples - 1));
+                for (var j = 0; j < across; j++)
+                {
+                    var lateral = side * Mathf.Lerp(inner, outer, j / (float)(across - 1));
+                    var p = RoadPath.Point(d, lateral);
+                    vertices[i * across + j] = new Vector3(p.x, level, p.z);
+                    uv[i * across + j] = new Vector2(p.x * 0.02f, p.z * 0.02f);
+                }
+                if (i == samples - 1) continue;
+                for (var j = 0; j < across - 1; j++)
+                {
+                    var v = i * across + j;
+                    // Wound to face up on either side of the road.
+                    if (side > 0)
+                    {
+                        triangles[t++] = v; triangles[t++] = v + across; triangles[t++] = v + across + 1;
+                        triangles[t++] = v; triangles[t++] = v + across + 1; triangles[t++] = v + 1;
+                    }
+                    else
+                    {
+                        triangles[t++] = v; triangles[t++] = v + across + 1; triangles[t++] = v + across;
+                        triangles[t++] = v; triangles[t++] = v + 1; triangles[t++] = v + across + 1;
+                    }
+                }
+            }
+            EnableProbeReflections(CreateMeshObject("Route Lake", vertices, triangles, uv, materials["Mountain Lake"]));
+        }
+
+        /// The ground dips under water, so a lake has a shore rather than hills
+        /// showing through it.
+        private static float LakeBasin(float distance, float lateral) =>
+            RoadPath.Route != null && RoadPath.Route.CoverAt(distance, lateral) == RoadRoute.CoverWater ? -3f : 0f;
+
+        private int lastPlaceIndex = -1;
+
+        /// Names each stop on the B500 as the player passes it, both ways.
+        private void AnnouncePlaces(float distance)
+        {
+            var route = RoadPath.Route;
+            if (route == null) return;
+            var u = route.Fold(distance);
+            for (var i = 0; i < route.Places.Length; i++)
+            {
+                if (i == lastPlaceIndex || Mathf.Abs(route.Places[i].Distance - u) > 40f) continue;
+                lastPlaceIndex = i;
+                GameState.Show($"📍 {route.Places[i].Name.ToUpperInvariant()}");
+                break;
+            }
+        }
+
+        // ------------------------------------------------------------ B500 roadside
+
+        private const float PlaceSignLead = 120f;
+        private const float HotelSetback = 32f;
+
+        /// What a driver on the real road sees besides the trees: white delineator
+        /// posts every 50 m, the yellow B 500 route marker, a name sign before each
+        /// stop, the yellow-and-red Westweg signposts where the trail crosses, stacked
+        /// timber at the forest edge, and the big hotels at the clearings.
+        private void BuildRouteProps()
+        {
+            var route = RoadPath.Route;
+            var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+
+            // Leitpfosten, both sides, every 50 m of road.
+            for (var d = Mathf.Ceil(segStart / 50f) * 50f; d < segEnd; d += 50f)
+            for (var side = -1; side <= 1; side += 2)
+                PlaceRouteProp("SM_leitpfosten", d, side * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 0.45f),
+                    FacingOncoming(d), "B500 Leitpfosten");
+
+            // Route marker on the right about every 3 km.
+            for (var d = Mathf.Ceil(segStart / 3000f) * 3000f; d < segEnd; d += 3000f)
+                PlaceRouteProp("SM_sign_b500", d + 40f, RoadPath.HalfWidthAt(d + 40f) + RoadPath.ShoulderWidth + GuardRailOffset + 1.0f,
+                    FacingOncoming(d + 40f), "B500 Sign");
+
+            // Place names and signposts, in whichever direction this pass runs.
+            for (var i = 0; i < route.Places.Length; i++)
+            {
+                var place = route.Places[i].Distance;
+                foreach (var d in PassesOf(place - PlaceSignLead, place + PlaceSignLead))
+                    PlaceRouteProp($"SM_sign_place_{i:00}", d, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 1.2f,
+                        FacingOncoming(d), "B500 Place Sign");
+                if (i == 0 || i == route.Places.Length - 1) continue;
+                foreach (var d in PassesOf(place + 25f, place - 25f))
+                {
+                    var lateral = -(RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 2.5f);
+                    if (!InCliffZone(d, lateral))
+                        PlaceRouteProp("SM_signpost_hike", d, lateral, FacingOncoming(d) * Quaternion.Euler(0f, 30f, 0f),
+                            "B500 Signpost");
+                }
+                if (HotelSide(i, out var side))
+                    foreach (var d in PassesOf(place, place))
+                    {
+                        var lateral = side * (RoadPath.ClearanceAt(d) + HotelSetback);
+                        if (!InCliffZone(d, lateral))
+                            PlaceRouteProp("SM_hotel", d, lateral, Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))),
+                                "B500 Hotel", 0.4f);
+                    }
+            }
+
+            BuildTrafficSigns(rail);
+
+            // A trail crossing now and then between the stops.
+            if (Random.value < 0.12f)
+            {
+                var d = Random.Range(segStart + 10f, segEnd - 10f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                if (!InCliffZone(d, side * (rail + 2.5f)))
+                    PlaceRouteProp("SM_signpost_hike", d, side * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 2.5f),
+                        FacingOncoming(d) * Quaternion.Euler(0f, side * 30f, 0f), "B500 Signpost");
+            }
+
+            // Polter: cut timber stacked at the forest edge for the lorry, end grain to
+            // the road.
+            if (Random.value < 0.25f)
+            {
+                var d = Random.Range(segStart + 15f, segEnd - 15f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                var lateral = side * (rail + Random.Range(4f, 9f));
+                if (!InCliffZone(d, lateral) && route.CoverAt(d, lateral) != RoadRoute.CoverWater &&
+                    !InHotelGrounds(d, lateral))
+                    PlaceRouteProp("SM_woodpile", d, lateral,
+                        Quaternion.LookRotation(Flat(side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-8f, 8f), 0f),
+                        "B500 Woodpile", 0.1f);
+            }
+        }
+
+        /// Bends tighter than this (degrees of heading per 10 m, ~120 m radius) get
+        /// chevron boards and a warning before them.
+        private const float SharpTurn = 4.8f;
+
+        /// Fixed speed cameras, as distances along the route (one pass).
+        internal static IEnumerable<float> BlitzerSites()
+        {
+            var route = RoadPath.Route;
+            if (route == null) yield break;
+            for (var u = 2200f; u < route.Length - 500f; u += 4200f) yield return u;
+        }
+
+        /// German road signs, as on the real B500: red and white chevrons round the
+        /// outside of every sharp bend, a bend warning and a 70 limit before it, deer
+        /// and no-overtaking signs, and the grey Blitzer boxes.
+        private void BuildTrafficSigns(float rail)
+        {
+            for (var d = Mathf.Ceil(segStart / 15f) * 15f; d < segEnd; d += 15f)
+            {
+                var turn = TurnAt(d);
+                if (Mathf.Abs(turn) < SharpTurn) continue;
+                var outside = turn > 0f ? -1 : 1;
+                PlaceRouteProp(turn > 0f ? "SM_sign_chevron_r" : "SM_sign_chevron_l", d,
+                    outside * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 0.7f),
+                    FacingOncoming(d), "B500 Chevron");
+            }
+
+            // Where a sharp bend starts, warn 90 m before it.
+            for (var d = Mathf.Ceil((segStart + 90f) / 15f) * 15f; d < segEnd + 90f; d += 15f)
+            {
+                var turn = TurnAt(d);
+                if (Mathf.Abs(turn) < SharpTurn || Mathf.Abs(TurnAt(d - 15f)) >= SharpTurn ||
+                    Mathf.Abs(TurnAt(d - 30f)) >= SharpTurn) continue;
+                var at = d - 90f;
+                PlaceRouteProp(turn > 0f ? "SM_sign_curve" : "SM_sign_curve_l", at, RoadPath.HalfWidthAt(at) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at), "B500 Sign Curve");
+                PlaceRouteProp("SM_sign_limit_70", at + 12f, RoadPath.HalfWidthAt(at + 12f) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at + 12f), "B500 Sign Limit");
+            }
+
+            foreach (var site in BlitzerSites())
+            foreach (var d in PassesOf(site, site))
+                PlaceRouteProp("SM_blitzer", d, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 1.3f,
+                    FacingOncoming(d), "B500 Blitzer");
+
+            // Now and then: deer crossing, no overtaking, back to 100 on a straight.
+            var roll = Random.value;
+            var at2 = Random.Range(segStart + 10f, segEnd - 10f);
+            var mesh = roll < 0.10f ? "SM_sign_deer"
+                : roll < 0.16f ? "SM_sign_nopass"
+                : roll < 0.24f && Mathf.Abs(TurnAt(at2)) < 1f ? "SM_sign_limit_100"
+                : null;
+            if (mesh != null)
+                PlaceRouteProp(mesh, at2, RoadPath.HalfWidthAt(at2) + RoadPath.ShoulderWidth + GuardRailOffset + 1.1f,
+                    FacingOncoming(at2), "B500 Sign");
+        }
+
+        /// Heading change over 20 m of road, per 10 m, in degrees: positive turns right.
+        private static float TurnAt(float distance)
+        {
+            var a = Flat(RoadPath.Rotation(distance - 10f) * Vector3.forward);
+            var b = Flat(RoadPath.Rotation(distance + 10f) * Vector3.forward);
+            return Vector3.SignedAngle(a, b, Vector3.up) * 0.5f;
+        }
+
+        private GameObject PlaceRouteProp(string mesh, float distance, float lateral, Quaternion rotation, string name,
+            float sink = 0f)
+        {
+            var model = BiomeModel("BlackForest", mesh, materials["B500 Props"]);
+            if (model == null) return null;
+            model.name = name;
+            model.transform.SetPositionAndRotation(RoadPath.Point(distance, lateral, -sink), rotation);
+            model.transform.localScale = Vector3.one;
+            return model;
+        }
+
+        private static Vector3 Flat(Vector3 v)
+        {
+            v.y = 0f;
+            return v.sqrMagnitude > 1e-6f ? v.normalized : Vector3.forward;
+        }
+
+        /// Sign faces are the mesh's +Z; the player always drives towards +Z, so this
+        /// turns them to the traffic coming up the road.
+        private static Quaternion FacingOncoming(float distance) =>
+            Quaternion.LookRotation(Flat(-(RoadPath.Rotation(distance) * Vector3.forward)));
+
+        /// Road distances in this chunk where the route is at `outbound` on the way
+        /// there, or at `inbound` on the way back - so a sign put ahead of a place is
+        /// ahead of it in both directions.
+        private List<float> PassesOf(float outbound, float inbound)
+        {
+            var found = new List<float>(2);
+            var length = RoadPath.Route.Length;
+            var period = 2f * length;
+            if (outbound >= 0f && outbound <= length)
+            {
+                var d = outbound + period * Mathf.Ceil((segStart - outbound) / period);
+                if (d < segEnd) found.Add(d);
+            }
+            if (inbound >= 0f && inbound <= length)
+            {
+                var back = period - inbound;
+                var d = back + period * Mathf.Ceil((segStart - back) / period);
+                if (d < segEnd && (found.Count == 0 || Mathf.Abs(found[0] - d) > 1f)) found.Add(d);
+            }
+            return found;
+        }
+
+        /// The hotel at a stop goes on whichever side the map shows buildings, else
+        /// open ground; a stop with forest both sides has none. The first and last
+        /// entries are the route's ends, not stops.
+        private static bool HotelSide(int placeIndex, out int side)
+        {
+            side = 0;
+            var route = RoadPath.Route;
+            if (route == null || !route.HasCover || placeIndex <= 0 || placeIndex >= route.Places.Length - 1) return false;
+            var place = route.Places[placeIndex].Distance;
+            var lateral = RoadPath.ClearanceAt(place) + HotelSetback;
+            foreach (var want in new[] { RoadRoute.CoverBuilt, RoadRoute.CoverOpen })
+            for (var s = 1; s >= -1; s -= 2)
+            {
+                if (route.CoverAt(place, s * lateral) != want) continue;
+                side = s;
+                return true;
+            }
+            return false;
+        }
+
+        /// Keeps trees and undergrowth off the hotel and its forecourt.
+        private static bool InHotelGrounds(float distance, float lateral)
+        {
+            var route = RoadPath.Route;
+            if (route == null || !route.HasCover) return false;
+            var u = route.Fold(distance);
+            for (var i = 1; i < route.Places.Length - 1; i++)
+            {
+                if (Mathf.Abs(u - route.Places[i].Distance) > 22f) continue;
+                if (!HotelSide(i, out var side) || lateral * side <= 0f) return false;
+                var across = Mathf.Abs(lateral) - RoadPath.ClearanceAt(distance);
+                return across > 4f && across < HotelSetback + 16f;
+            }
+            return false;
         }
 
         internal static int canopyKept;
@@ -6445,11 +6915,25 @@ namespace RoadRage.UnityRemake
             // Pine-dominant, not broadleaf-dominant. This was 62% broadleaf, which gives a
             // rounded English wood; an alpine pass is a wall of tall narrow conifers with
             // the odd broadleaf in it. Flipped to 30% broadleaf.
-            var table = Random.value < 0.30f ? BroadleafTrees : PineTrees;
-            var tree = SpawnForestPiece(table[Random.Range(0, table.Length)], distance, lateral, 0f,
-                minHeight, maxHeight, "Forest Tree");
+            // On the B500 it is the Black Forest: spruce and fir, from an installed tree
+            // pack where there is one (ExternalVegetation). No snags: the bare grey
+            // trunk read as fake.
+            var table = RoadPath.Route != null
+                ? BlackForestTrees
+                : Random.value < 0.30f ? BroadleafTrees : PineTrees;
+            var entry = table[Random.Range(0, table.Length)];
+            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
+                entry = "External|" + Random.Range(0, ExternalTrees.Length);
+            var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
-            KeepTrunkOffRoad(tree, distance, Mathf.Sign(lateral));
+            // The tree's real offset, not its sign. Passed Mathf.Sign(lateral) - always
+            // +-1 m, "inside the road" - this moved every tree, wherever it was planted,
+            // onto the edge line: the whole forest stood in one row along the rail with
+            // empty ground behind it.
+            KeepTrunkOffRoad(tree, distance, lateral);
+            // Roots into the ground: the pack's trees are grounded by their bounds, which
+            // reach a little below the trunk, and stood hovering.
+            if (RoadPath.Route != null) tree.transform.position += Vector3.down * 0.6f;
             if (!KeepCanopyOffRoad(tree, distance, Mathf.Sign(lateral)))
             {
                 Destroy(tree);
@@ -6460,9 +6944,104 @@ namespace RoadRage.UnityRemake
             return tree;
         }
 
-        private GameObject ForestPlant(float distance, float lateral, float minHeight, float maxHeight, string label) =>
-            SpawnForestPiece(ForestPlants[Random.Range(0, ForestPlants.Length)], distance, lateral, 0.06f,
-                minHeight, maxHeight, label);
+        private GameObject ForestPlant(float distance, float lateral, float minHeight, float maxHeight, string label)
+        {
+            if (RoadPath.Route == null)
+                return SpawnForestPiece(ForestPlants[Random.Range(0, ForestPlants.Length)], distance, lateral, 0.06f,
+                    minHeight, maxHeight, label);
+            // Fern, bilberry and moor grass are knee height; the kit plants these bands
+            // were sized for stood twice that. Scaling is uniform, so a fern taken to 2 m
+            // would also be 8 m across.
+            return SpawnForestPiece(BlackForestPlants[Random.Range(0, BlackForestPlants.Length)], distance, lateral,
+                0.02f, minHeight * 0.5f, maxHeight * 0.55f, label);
+        }
+
+        private static GameObject[] externalTrees;
+        private static GameObject[] externalYoungTrees;
+
+        /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
+        /// Tree Pack; empty when there is none.
+        private static GameObject[] ExternalTrees
+        {
+            get
+            {
+                if (externalTrees != null) return externalTrees;
+                var registry = Resources.Load<ExternalVegetation>("Biomes/ExternalVegetation");
+                var linked = registry != null && registry.Trees != null
+                    ? System.Array.FindAll(registry.Trees, t => t != null)
+                    : System.Array.Empty<GameObject>();
+                // A pack imported without its render-pipeline support package has
+                // shaders this project cannot draw, and every tree renders magenta.
+                // Those are left out, so Greenwood falls back to its own trees.
+                externalTrees = System.Array.FindAll(linked, RendersInThisPipeline);
+                externalYoungTrees = registry != null && registry.YoungTrees != null
+                    ? System.Array.FindAll(registry.YoungTrees, t => t != null && RendersInThisPipeline(t))
+                    : System.Array.Empty<GameObject>();
+                if (externalTrees.Length > 0)
+                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                if (externalTrees.Length < linked.Length)
+                    Debug.LogWarning($"RR_TREES {linked.Length - externalTrees.Length} linked trees use shaders URP cannot " +
+                                     "draw (they would be magenta) and are skipped. Import the pack's URP support " +
+                                     "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
+                return externalTrees;
+            }
+        }
+
+        private static bool RendersInThisPipeline(GameObject prefab)
+        {
+            foreach (var renderer in prefab.GetComponentsInChildren<Renderer>(true))
+            foreach (var material in renderer.sharedMaterials)
+            {
+                if (material == null || material.shader == null || !material.shader.isSupported ||
+                    material.shader.name == "Hidden/InternalErrorShader")
+                    return false;
+            }
+            return true;
+        }
+
+        private static GameObject[] ExternalYoungTrees
+        {
+            get
+            {
+                if (externalTrees == null) _ = ExternalTrees;
+                return externalYoungTrees ?? System.Array.Empty<GameObject>();
+            }
+        }
+
+        /// Young trees under the canopy: the pack's small and medium firs where it is
+        /// installed, the Blender young spruce otherwise.
+        private GameObject Understory(float distance, float lateral)
+        {
+            var entry = ExternalYoungTrees.Length > 0
+                ? "External|y" + Random.Range(0, ExternalYoungTrees.Length)
+                : "BlackForest|SM_spruce_young";
+            var tree = SpawnForestPiece(entry, distance, lateral, 0f, 4f, 10f, "Forest Understory");
+            if (tree != null) tree.transform.position += Vector3.down * 0.3f;
+            return tree;
+        }
+
+        /// Young spruce stand in for bushes under the Black Forest canopy.
+        private string ForestBush() => RoadPath.Route != null
+            ? "BlackForest|SM_spruce_young"
+            : ForestBushes[Random.Range(0, ForestBushes.Length)];
+
+        private Material BlackForestTint()
+        {
+            var roll = Random.value;
+            return materials[roll < 0.5f ? "Black Forest" : roll < 0.8f ? "Black Forest Dark" : "Black Forest Fresh"];
+        }
+
+        private static readonly string[] BlackForestTrees =
+        {
+            "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_02", "BlackForest|SM_spruce_03",
+            "BlackForest|SM_spruce_04", "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_03",
+            "BlackForest|SM_fir_01", "BlackForest|SM_fir_02",
+        };
+        private static readonly string[] BlackForestPlants =
+        {
+            "BlackForest|SM_fern", "BlackForest|SM_fern", "BlackForest|SM_bilberry",
+            "BlackForest|SM_bilberry", "BlackForest|SM_moor_grass",
+        };
 
         private void BuildHollywoodPhotorealPass()
         {
@@ -6729,7 +7308,7 @@ namespace RoadRage.UnityRemake
             globalHorizonSky.AddComponent<GlobalHorizonFollower>();
             ApplyBiomeSky(biomeIndex);
 
-            if (biomeIndex == 0) // Greenwood
+            if (biomeIndex == 0 && GreenwoodHorizonMountains) // Greenwood
             {
                 // A closed ring of real terrain, 420 m to 1 km out: the northern Black Forest
                 // seen from the Acher valley below the Mummelsee and the Hornisgrinde
@@ -6878,6 +7457,11 @@ namespace RoadRage.UnityRemake
 
         /// Greenwood's horizon: one ring mesh centred on the camera by the horizon
         /// follower. Returns false when the asset is missing so the old ranks are built.
+        /// Off: from the road the ring read as a flat green stripe behind the trees
+        /// rather than as mountains, and it was taken out on that feedback. The ring
+        /// and its fallback stay here to bring back in a better form.
+        private static readonly bool GreenwoodHorizonMountains = false;
+
         private bool BuildMountainRing()
         {
             var material = Resources.Load<Material>("Biomes/Mountains/M_mountain_ring");
@@ -6970,6 +7554,9 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(40621 ^ chunkSeed);
             BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
+            // The new cliff colliders have to be in the physics scene before the forest
+            // is planted on them.
+            if (cliffZones.Count > 0) Physics.SyncTransforms();
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
@@ -6994,6 +7581,12 @@ namespace RoadRage.UnityRemake
             // W-beam rail replaces the old pair of a flat ribbon on cube posts and a
             // borrowed Synthwave fence half a metre behind it.
             BuildGuardRail(materials["Forest Guard Rail"]);
+            if (RoadPath.Route != null) BuildRouteProps();
+            if (RoadPath.Route != null && RoadPath.Route.HasCover)
+            {
+                BuildRouteOpenGround();
+                BuildRouteLakes();
+            }
 
             if (NoCanopy) return;
 
@@ -7011,20 +7604,58 @@ namespace RoadRage.UnityRemake
             // Taller, and one band closer. The reference is a road cut through timber that
             // stands well above the car, not a treeline you look over - so the near band
             // starts at the verge rather than 26 m out, and every band gained height.
-            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 14f, 22f));
-            ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 16f, 24f));
-            ScatterBand(7f, 18f, 30f, (d, l, s) => ForestTree(d, l, 18f, 28f));
-            ScatterBand(8f, 26f, 42f, (d, l, s) => ForestTree(d, l, 20f, 32f));
-            ScatterBand(8f, 34f, 56f, (d, l, s) => ForestTree(d, l, 16f, 26f));
-            // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
-            // over the camera - so it keeps the forest reading as deep.
-            ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            if (RoadPath.Route != null)
+            {
+                // A forest, not two rows and a field. ScatterBand places one item per
+                // step along the road at a random point across the band's width, so a
+                // wide band spreads the same count over far more ground: the old 34-80
+                // and 70-160 m bands came out at one tree per ~300 m2 - an open field
+                // with the odd tree - while the overlapping near bands made the rows.
+                // Narrow strips of even width, stacked to 160 m, give the same density
+                // all the way back: ~1 tree per 50 m2 near the road, ~1 per 90 m2
+                // further out where they are small on screen. Open ground, water and
+                // cliffs still keep them out (SpawnForestPiece).
+                for (var near = 12f; near < 76f; near += 8f)
+                {
+                    var from = near;
+                    ScatterBand(8f, from, from + 8f, (d, l, s) => ForestTree(d, l, 18f, 32f));
+                }
+                for (var near = 76f; near < 160f; near += 12f)
+                {
+                    var from = near;
+                    ScatterBand(11f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                }
+                // Understory: young firs between the trunks, to about 70 m. Tall firs
+                // lose their lower branches, so under their crowns the eye ran straight
+                // through to bare ground - it read as open land behind a row of trunks.
+                // Young trees are what close a real Black Forest stand at eye level.
+                for (var near = 14f; near < 70f; near += 14f)
+                {
+                    var from = near;
+                    ScatterBand(9f, from, from + 14f, (d, l, s) => Understory(d, l));
+                }
+                // Forestry: windthrow and cut stumps on the floor. A managed Black Forest
+                // stand is never a clean lawn under the trees.
+                ScatterBand(26f, 12f, 70f, (d, l, s) =>
+                    SpawnForestPiece("BlackForest|SM_log_fallen", d, l, -0.1f, 0.45f, 0.75f, "Forest Log"));
+                ScatterBand(14f, 10f, 60f, (d, l, s) =>
+                    SpawnForestPiece("BlackForest|SM_stump", d, l, -0.05f, 0.3f, 0.6f, "Forest Stump"));
+            }
+            else
+            {
+                ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 14f, 22f));
+                ScatterBand(7f, 9f, 18f, (d, l, s) => ForestTree(d, l, 16f, 24f));
+                ScatterBand(7f, 18f, 30f, (d, l, s) => ForestTree(d, l, 18f, 28f));
+                ScatterBand(8f, 26f, 42f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                ScatterBand(8f, 34f, 56f, (d, l, s) => ForestTree(d, l, 16f, 26f));
+                // Far canopy. Cheap in coverage terms - it sits at the horizon rather than
+                // over the camera - so it keeps the forest reading as deep.
+                ScatterBand(11f, 70f, 160f, (d, l, s) => ForestTree(d, l, 18f, 30f));
+            }
             ScatterBand(2.2f, 18f, 38f, (d, l, s) =>
-                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
+                SpawnForestPiece(ForestBush(), d, l, 0.05f, 1.4f, 3.0f, "Forest Bush"));
             ScatterBand(2.8f, 34f, 60f, (d, l, s) =>
-                SpawnForestPiece(ForestBushes[Random.Range(0, ForestBushes.Length)],
-                    d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
+                SpawnForestPiece(ForestBush(), d, l, 0.05f, 1.2f, 2.6f, "Forest Bush Deep"));
             ScatterBand(3.5f, 24f, 70f, (d, l, s) =>
                 ForestPlant(d, l, 0.6f, 1.4f, "Forest Ground Cover"));
             ScatterBand(2.2f, 18f, 30f, (d, l, s) =>
@@ -7181,6 +7812,7 @@ namespace RoadRage.UnityRemake
             for (var side = -1; side <= 1; side += 2)
             {
                 if (side != firstSide && !gorge) continue;
+                if (!RouteForestAlong(start - CliffCapLength, start + runLength + CliffCapLength, side)) continue;
                 var distance = start;
                 PlaceCliffPiece(CliffCap, material, AdvanceAlongLine(start, -CliffCapLength, side), start, side, tallEnd: 1);
                 for (var k = 0; k < sections; k++)
@@ -7346,9 +7978,23 @@ namespace RoadRage.UnityRemake
             filter.sharedMesh = bent;
             piece.AddComponent<OwnedMesh>().Mesh = bent;
             piece.transform.position = origin;
+            // A collider only for planting the forest on top (CliffTop), on the Ignore
+            // Raycast layer so no game raycast sees it.
+            piece.layer = CliffLayer;
+            piece.AddComponent<MeshCollider>().sharedMesh = bent;
             foreach (var r in piece.GetComponentsInChildren<Renderer>())
                 r.reflectionProbeUsage = ReflectionProbeUsage.Off;
             return piece;
+        }
+
+        /// A cutting is through forest: on the B500, no rock wall where the real
+        /// roadside is heath, meadow, a village or the lake.
+        private static bool RouteForestAlong(float from, float to, int side)
+        {
+            if (RoadPath.Route == null || !RoadPath.Route.HasCover) return true;
+            for (var d = from; d <= to; d += 10f)
+                if (RoadPath.Route.CoverAt(d, side * 20f) != RoadRoute.CoverForest) return false;
+            return true;
         }
 
         private static Vector3 CliffLinePoint(float distance, int side) =>
@@ -7371,6 +8017,20 @@ namespace RoadRage.UnityRemake
 
         /// True where a cliff face stands between this point and the road, so nothing is
         /// planted in front of it.
+        private const int CliffLayer = 2;   // Ignore Raycast
+
+        /// The height of the rock top or back slope at this point, if a cliff is there
+        /// and it is not too steep to stand a tree on.
+        private static bool CliffTop(float distance, float lateral, out float y)
+        {
+            y = 0f;
+            var p = RoadPath.Point(distance, lateral);
+            if (!Physics.Raycast(p + Vector3.up * 300f, Vector3.down, out var hit, 600f, 1 << CliffLayer)) return false;
+            if (hit.normal.y < 0.6f) return false;
+            y = hit.point.y;
+            return true;
+        }
+
         private bool InCliffZone(float distance, float lateral)
         {
             for (var i = 0; i < cliffZones.Count; i++)
@@ -7902,8 +8562,10 @@ namespace RoadRage.UnityRemake
 
         /// Share of the full traffic count a road carries. A single lane each way has
         /// nowhere to pass, so it takes a third of a six-lane highway's traffic.
+        /// Two lanes each way is Greenwood's mountain road: 0.65 of the highway's traffic
+        /// still packed it into queues and pile-ups, so it runs lighter.
         private static float TrafficScaleFor(int laneCount) =>
-            laneCount >= 3 ? 1f : laneCount == 2 ? 0.65f : 0.35f;
+            laneCount >= 3 ? 1f : laneCount == 2 ? 0.45f : 0.35f;
 
         /// Weaving and wrong-way driving put a car across the only lane of a single-lane
         /// road, so there they become speeding: still an offender worth chasing.
@@ -8867,6 +9529,20 @@ namespace RoadRage.UnityRemake
         private void OnDestroy()
         {
             if (Mesh != null) Destroy(Mesh);
+        }
+    }
+
+    /// Keeps the showroom's lights in step with its camera (see EnsureShowroom).
+    public sealed class ShowroomLightGate : MonoBehaviour
+    {
+        public Camera Camera;
+        public Light[] Lights;
+
+        private void LateUpdate()
+        {
+            var on = Camera != null && Camera.enabled;
+            foreach (var light in Lights)
+                if (light != null && light.enabled != on) light.enabled = on;
         }
     }
 

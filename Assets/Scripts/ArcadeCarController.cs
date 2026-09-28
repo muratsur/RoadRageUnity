@@ -34,7 +34,11 @@ namespace RoadRage.UnityRemake
         }
 
         private void OnEnable() => VehicleContacts.Register(this);
-        private void OnDisable() => VehicleContacts.Unregister(this);
+        private void OnDisable()
+        {
+            VehicleContacts.Unregister(this);
+            RoadRageHaptics.EdgeScrape = 0f;
+        }
         // ------------------------------------------------------------------------
 
         public float DistanceKm => totalDistance / 1000f;
@@ -243,6 +247,7 @@ namespace RoadRage.UnityRemake
                     verticalOffset = 0f;
                     verticalVelocity = 0f;
                     // Landing impact!
+                    if (AirtimeDuration > 0.2f && AirtimeDuration <= 0.45f) RoadRageHaptics.Light();
                     if (AirtimeDuration > 0.45f)
                     {
                         var bonus = Mathf.RoundToInt(AirtimeDuration * 1200f);
@@ -272,6 +277,9 @@ namespace RoadRage.UnityRemake
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
             var edge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
             LateralOffset = Mathf.Clamp(LateralOffset + (lateralVelocity + impactKnock) * Time.deltaTime, -edge, edge);
+            RoadRageHaptics.EdgeScrape = Mathf.Abs(LateralOffset) >= edge - 0.05f && verticalOffset <= 0f
+                ? Mathf.InverseLerp(30f, 160f, SpeedKph)
+                : 0f;
             // Both decay towards zero over roughly a second, so an impact reads as a shove
             // you drive out of rather than a step you never saw.
             impactKnock = Mathf.MoveTowards(impactKnock, 0f, 11f * Time.deltaTime);

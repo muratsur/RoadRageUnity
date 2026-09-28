@@ -1,0 +1,10 @@
+Greenwood's road and roadside follow the Schwarzwaldhochstrasse (B500),
+Baden-Baden to Freudenstadt. Built by Tools/Terrain/build_b500_road.py from:
+
+- Land cover: ESA WorldCover 10 m 2021 v200. (c) ESA WorldCover project 2021 /
+  Contains modified Copernicus Sentinel data (2021) processed by ESA WorldCover
+  consortium. Licensed CC BY 4.0.
+- Elevation: AWS Terrain Tiles (EU-DEM, Copernicus; SRTM, NASA).
+- Road centreline: a Google My Maps directions export (Tools/Terrain/b500.kml).
+  For prototyping only: rebuild from an OpenStreetMap export (ODbL, needs
+  "(c) OpenStreetMap contributors" in the credits) before release.

@@ -56,3 +56,10 @@ Tools/SymbolCheck/obj/
 # Python bytecode from the tools under Tools/
 __pycache__/
 *.pyc
+
+# Asset Store packs are licensed for use, not redistribution: installed locally,
+# never committed. Road Rage > Link Installed Tree Pack writes the registry below.
+Assets/NatureManufacture Assets/
+Assets/NatureManufacture Assets.meta
+Assets/Resources/Biomes/ExternalVegetation.asset
+Assets/Resources/Biomes/ExternalVegetation.asset.meta

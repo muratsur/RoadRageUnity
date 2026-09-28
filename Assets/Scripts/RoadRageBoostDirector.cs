@@ -356,6 +356,7 @@ namespace RoadRage.UnityRemake
                         GameState.Award(points, label);
                         GameState.BumpDaily("nearmiss", 1f);
                         if (IsBoosting) nearMissesDuringBurn++;
+                        RoadRageHaptics.Tick();
 
                         if (RoadRageAudioBridge.Instance != null)
                         {
