@@ -2823,6 +2823,21 @@ namespace RoadRage.UnityRemake
             return real * Mathf.SmoothStep(0f, 1f, across / 6f);
         }
 
+        /// The lowest real ground under a footprint of this radius, a little below it:
+        /// a trunk on a slope roots on its downhill side, and the ground mesh between
+        /// its vertices lies below the exact height at any one point.
+        private static float RealGroundUnder(float distance, float lateral, float radius)
+        {
+            var route = RoadPath.Route;
+            if (route == null || !route.HasTerrain) return 0f;
+            var y = RealGround(distance, lateral);
+            y = Mathf.Min(y, RealGround(distance + radius, lateral));
+            y = Mathf.Min(y, RealGround(distance - radius, lateral));
+            y = Mathf.Min(y, RealGround(distance, lateral + radius));
+            y = Mathf.Min(y, RealGround(distance, lateral - radius));
+            return y - 0.15f;
+        }
+
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
             Material material, float start = float.NaN, float end = float.NaN, float sampleStep = 6f,
             bool relative = false, float displace = 0f, int lateralSegments = 1,
@@ -3267,7 +3282,7 @@ namespace RoadRage.UnityRemake
             var model = BiomeModel(pack, resourceName, material);
             if (model == null) return null;
             model.name = label ?? resourceName;
-            model.transform.position = RoadPath.Point(distance, lateral, height + RealGround(distance, lateral));
+            model.transform.position = RoadPath.Point(distance, lateral, height + RealGroundUnder(distance, lateral, 1.5f));
             model.transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(localEuler);
             model.transform.localScale = scale;
             if (enforceClearance && Mathf.Abs(lateral) > 0.01f)
@@ -7094,7 +7109,7 @@ namespace RoadRage.UnityRemake
             var model = Model(resourceName, material);
             if (model == null) return null;
             model.name = label;
-            model.transform.position = RoadPath.Point(distance, lateral, height + RealGround(distance, lateral));
+            model.transform.position = RoadPath.Point(distance, lateral, height + RealGroundUnder(distance, lateral, 1.5f));
             model.transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one * Random.Range(minScale, maxScale);
             EnsureOutsideRoad(model, distance, Mathf.Sign(lateral));
@@ -7193,7 +7208,7 @@ namespace RoadRage.UnityRemake
             }
             if (model == null) return null;
             model.name = label;
-            model.transform.position = RoadPath.Point(distance, lateral, height + (onCliff ? 0f : RealGround(distance, lateral)));
+            model.transform.position = RoadPath.Point(distance, lateral, height + (onCliff ? 0f : RealGroundUnder(distance, lateral, 2f)));
             if (onCliff)
             {
                 var p = model.transform.position;

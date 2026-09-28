@@ -55,7 +55,10 @@ namespace RoadRage.UnityRemake
         /// Above this height difference one vehicle is over the other, not into it.
         private const float ClearanceHeight = 1.6f;
         /// Above this many vehicles the pass drops to a single relaxation.
-        private const int CrowdedSet = 18;
+        /// A five-star pursuit puts ~20 vehicles on the road with the wrecks, and with a
+        /// single pass a cruiser pushed out of a wreck into its neighbour was pushed
+        /// straight back in: it drove through. 40 vehicles is 780 pairs, still cheap.
+        private const int CrowdedSet = 40;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Reset()
