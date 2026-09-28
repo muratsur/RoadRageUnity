@@ -5077,6 +5077,7 @@ namespace RoadRage.UnityRemake
 
         private static CanalPack canalPack;
         private static Material canalQuayStone;
+        private static Material canalWaterMaterial;
         private static bool canalWarned;
         private static bool canalPackLoaded;
 
@@ -5193,15 +5194,33 @@ namespace RoadRage.UnityRemake
             water.SetParent(chunkRoot, false);
 
             BuildCanalWater();
-            BuildCanalTerrace(-1, CanalStreetFacade, true, street);
-            BuildCanalTerrace(1, CanalFarFacade, false, water);
+            if (Canal.Rows.Length > 0)
+            {
+                // The artist's own houses, exported whole from the showcase map.
+                BuildCanalRows(-1, CanalStreetFacade, 0.37f, street);
+                BuildCanalRows(1, CanalFarEdge, 0f, water);
+            }
+            else
+            {
+                BuildCanalTerrace(-1, CanalStreetFacade, true, street);
+                BuildCanalTerrace(1, CanalFarFacade, false, water);
+            }
             BuildCanalQuay(water);
         }
 
         private void BuildCanalWater()
         {
             var half = RoadPath.HalfWidthAt(segStart);
-            var waterMaterial = Canal?.FindMaterial("M_MuddyCanal_01") ?? materials["Mountain Lake"];
+            // Dark, still, reflective water. The pack's MuddyCanal textures are the canal
+            // bed; its water is an Unreal shader that does not export.
+            if (canalWaterMaterial == null)
+            {
+                canalWaterMaterial = new Material(materials["Mountain Lake"]) { name = "Canal Water" };
+                canalWaterMaterial.color = new Color(0.035f, 0.06f, 0.055f);
+                if (canalWaterMaterial.HasProperty("_BaseColor"))
+                    canalWaterMaterial.SetColor("_BaseColor", new Color(0.035f, 0.06f, 0.055f));
+            }
+            var waterMaterial = canalWaterMaterial;
             EnableProbeReflections(BuildRibbon("Canal Water", CanalQuayEdge(segStart) / half, CanalFarEdge(segStart) / half,
                 CanalWaterLevel, waterMaterial, sampleStep: 6f, relative: true));
             // Quay walls from the water up to the street, both banks. Double-sided: a
@@ -5214,6 +5233,94 @@ namespace RoadRage.UnityRemake
             var stone = canalQuayStone;
             BuildWallRibbon("Canal Quay Wall Near", CanalQuayEdge(segStart), CanalWaterLevel - 0.5f, 0.12f, stone);
             BuildWallRibbon("Canal Quay Wall Far", CanalFarEdge(segStart), CanalWaterLevel - 0.5f, 0.0f, stone);
+        }
+
+        /// How far below the water line a row's lowest point sits: the foot of its canal
+        /// wall is under water, not standing on it.
+        private const float CanalRowSink = 0.6f;
+        private static bool canalRowReported;
+
+        /// Rows of houses from the showcase map laid end to end along the road, their
+        /// canal side facing it. Rows follow each other on a fixed grid of their own
+        /// length, so a row crossing a chunk seam is built once, by the chunk holding its
+        /// middle. phase shifts the street side against the canal side so the two banks
+        /// do not mirror each other.
+        private void BuildCanalRows(int side, System.Func<float, float> facadeAt, float phase, Transform parent)
+        {
+            var pack = Canal;
+            for (var r = 0; r < pack.Rows.Length; r++)
+            {
+                if (pack.Rows[r] == null) continue;
+                // Measured once per row prefab, turned to face the road.
+                var length = CanalRowLength(r);
+                if (length < 5f) continue;
+                var start = Mathf.Floor((segStart - phase * length) / length) * length + phase * length;
+                for (var d0 = start; d0 < segEnd; d0 += length * pack.Rows.Length)
+                {
+                    var mid = d0 + length * (r + 0.5f);
+                    if (mid < segStart || mid >= segEnd) continue;
+                    PlaceCanalRow(r, mid, side, facadeAt(mid), parent);
+                }
+            }
+        }
+
+        private readonly Dictionary<int, float> canalRowLengths = new();
+
+        /// Bounds of the parts still switched on (the sky and backdrop parts are off).
+        private static bool ActiveBounds(GameObject item, out Bounds bounds)
+        {
+            bounds = default;
+            var found = false;
+            foreach (var r in item.GetComponentsInChildren<Renderer>(false))
+            {
+                if (!found) { bounds = r.bounds; found = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            return found;
+        }
+
+        private float CanalRowLength(int r)
+        {
+            if (canalRowLengths.TryGetValue(r, out var cached)) return cached;
+            var probe = PlaceCanalRow(r, 0f, 1, 0f, null, measureOnly: true);
+            var length = probe != null && ActiveBounds(probe, out var b) ? b.size.x : 0f;
+            if (probe != null) DestroyImmediate(probe);
+            canalRowLengths[r] = length;
+            return length;
+        }
+
+        private GameObject PlaceCanalRow(int r, float distance, int side, float facade, Transform parent, bool measureOnly = false)
+        {
+            var pack = Canal;
+            var frame = new GameObject("Canal Row").transform;
+            var row = Instantiate(pack.Rows[r], frame, false);
+            foreach (var renderer in row.GetComponentsInChildren<Renderer>(true))
+                if (System.Array.IndexOf(pack.RowSkip, renderer.name) >= 0 || renderer.bounds.size.magnitude > 600f)
+                    renderer.gameObject.SetActive(false);
+            foreach (var l in row.GetComponentsInChildren<Light>(true)) l.gameObject.SetActive(false);
+            foreach (var c in row.GetComponentsInChildren<Collider>(true)) Destroy(c);
+            // Canal side towards the road (frame -z), long side along the road (frame x).
+            var front = r < pack.RowFronts.Length ? pack.RowFronts[r] : Vector3.back;
+            row.transform.localRotation = Quaternion.FromToRotation(front, Vector3.back) * row.transform.localRotation;
+            if (!ActiveBounds(row, out var b))
+            {
+                DestroyImmediate(frame.gameObject);
+                return null;
+            }
+            row.transform.localPosition -= new Vector3(b.center.x, b.min.y - (CanalWaterLevel - CanalRowSink), b.min.z);
+            if (measureOnly) return frame.gameObject;
+
+            if (!canalRowReported)
+            {
+                canalRowReported = true;
+                Debug.Log($"RR_CANAL row '{pack.Rows[r].name}' {b.size.x:0}x{b.size.y:0}x{b.size.z:0} m, front {front}");
+            }
+            frame.SetParent(parent != null ? parent : chunkRoot, false);
+            var outward = side * RoadPath.Right(distance);
+            outward.y = 0f;
+            frame.SetPositionAndRotation(RoadPath.Point(distance, side * facade, 0f),
+                Quaternion.LookRotation(outward.sqrMagnitude > 1e-4f ? outward.normalized : Vector3.right * side));
+            return frame.gameObject;
         }
 
         /// A terrace of houses, 3 to 6 modules each, facing the road.

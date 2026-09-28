@@ -66,6 +66,9 @@ public static class LinkAsianCanalMenu
         var fbxs = AssetDatabase.FindAssets("t:Model", new[] { Root }).Select(AssetDatabase.GUIDToAssetPath)
             .Where(p => p.EndsWith(".fbx", System.StringComparison.OrdinalIgnoreCase)).OrderBy(p => p).ToList();
         n = 0;
+        var rows = new List<GameObject>();
+        var rowFronts = new List<Vector3>();
+        var rowSkip = new HashSet<string>();
         foreach (var path in fbxs)
         {
             EditorUtility.DisplayProgressBar("Link Asian Canal Pack", Path.GetFileName(path), n++ / (float)fbxs.Count);
@@ -88,6 +91,15 @@ public static class LinkAsianCanalMenu
             importer.SaveAndReimport();
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (path.Replace('\\', '/').Contains("/Assemblies/"))
+            {
+                var front = AnalyseRow(prefab, rowSkip, out var rowSize);
+                rows.Add(prefab);
+                rowFronts.Add(front);
+                report.AppendLine($"ROW {prefab.name}  size={rowSize.x:0.0}x{rowSize.y:0.0}x{rowSize.z:0.0} " +
+                                  $"front={front.x:0},{front.z:0}{line}");
+                continue;
+            }
             var size = Size(prefab, out var high);
             meshes.Add(prefab);
             sizes.Add(size);
@@ -105,6 +117,9 @@ public static class LinkAsianCanalMenu
         }
         registry.Meshes = meshes.ToArray();
         registry.Sizes = sizes.ToArray();
+        registry.Rows = rows.ToArray();
+        registry.RowFronts = rowFronts.ToArray();
+        registry.RowSkip = rowSkip.ToArray();
         registry.Highs = highs.ToArray();
         registry.Materials = AssetDatabase.FindAssets("t:Material", new[] { Generated })
             .Select(g => AssetDatabase.LoadAssetAtPath<Material>(AssetDatabase.GUIDToAssetPath(g)))
@@ -113,7 +128,7 @@ public static class LinkAsianCanalMenu
         AssetDatabase.SaveAssets();
 
         File.WriteAllText(Path.Combine(Root, "catalog.txt"), report.ToString());
-        Debug.Log($"Link Asian Canal Pack: {materials.Count} materials, {meshes.Count} meshes, {unmatched} material " +
+        Debug.Log($"Link Asian Canal Pack: {rows.Count} house rows, {materials.Count} materials, {meshes.Count} meshes, {unmatched} material " +
                   $"slots without textures. Catalogue: {Root}/catalog.txt");
     }
 
@@ -452,5 +467,51 @@ public static class LinkAsianCanalMenu
         }
         Object.DestroyImmediate(instance);
         return size;
+    }
+
+    /// A row of houses from the showcase map: which way its canal side faces, and its
+    /// size without the parts that are not buildings.
+    private static Vector3 AnalyseRow(GameObject prefab, HashSet<string> skip, out Vector3 size)
+    {
+        size = Vector3.zero;
+        var instance = Object.Instantiate(prefab);
+        instance.transform.position = Vector3.zero;
+        var kept = new List<Renderer>();
+        foreach (var r in instance.GetComponentsInChildren<Renderer>())
+        {
+            var n = r.name.ToLowerInvariant();
+            if (r.bounds.size.magnitude > 600f || n.Contains("sky") || n.Contains("hdri") || n.Contains("dome") ||
+                n.Contains("atmos") || n.Contains("cloud") || n.Contains("backdrop"))
+            {
+                skip.Add(r.name);
+                continue;
+            }
+            kept.Add(r);
+        }
+        if (kept.Count == 0) { Object.DestroyImmediate(instance); return Vector3.back; }
+        var bounds = kept[0].bounds;
+        foreach (var r in kept) bounds.Encapsulate(r.bounds);
+        size = bounds.size;
+        var longX = size.x >= size.z;
+        // The canal side is where the stone wall goes down to the water: the mean
+        // position, across the row, of its lowest vertices.
+        var low = bounds.min.y + size.y * 0.06f;
+        double sum = 0;
+        var count = 0;
+        foreach (var r in kept)
+        {
+            if (!r.TryGetComponent<MeshFilter>(out var filter) || filter.sharedMesh == null) continue;
+            var verts = filter.sharedMesh.vertices;
+            for (var i = 0; i < verts.Length; i += 4)
+            {
+                var p = r.transform.TransformPoint(verts[i]);
+                if (p.y > low) continue;
+                sum += longX ? p.z - bounds.center.z : p.x - bounds.center.x;
+                count++;
+            }
+        }
+        Object.DestroyImmediate(instance);
+        var sign = count > 0 && sum < 0 ? -1f : 1f;
+        return longX ? new Vector3(0f, 0f, sign) : new Vector3(sign, 0f, 0f);
     }
 }
