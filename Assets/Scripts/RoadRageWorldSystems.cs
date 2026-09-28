@@ -415,6 +415,7 @@ namespace RoadRage.UnityRemake
         {
             get
             {
+                if (Ragdolled) return ragdollExtent.x;
                 if (WreckYaw == 0f) return HalfLength;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
                 return Mathf.Abs(HalfLength * Mathf.Cos(yaw)) + Mathf.Abs(HalfWidth * Mathf.Sin(yaw));
@@ -425,6 +426,7 @@ namespace RoadRage.UnityRemake
         {
             get
             {
+                if (Ragdolled) return ragdollExtent.y;
                 if (WreckYaw == 0f) return HalfWidth;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
                 return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
@@ -438,11 +440,16 @@ namespace RoadRage.UnityRemake
         public float ContactHeight => verticalOffset;
         /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
         /// the pair meeting in the middle.
-        public float ContactMass => HalfLength * HalfWidth;
-        public bool ContactActive => isActiveAndEnabled && !Ragdolled;
+        /// A car the physics owns cannot be pushed by the pass; everything else moves
+        /// round it, as round any wreck lying in the road.
+        public float ContactMass => Ragdolled ? 1000f : HalfLength * HalfWidth;
+        /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
+        /// hole in the road that police and traffic drove straight through.
+        public bool ContactActive => isActiveAndEnabled;
 
         public void ApplyContactPush(float alongRoad, float acrossRoad)
         {
+            if (Ragdolled) return;
             RoadDistance += alongRoad;
             // Into the separation channel, never laneDrift - behaviour rewrites that
             // every frame and would throw the correction away.
@@ -847,12 +854,71 @@ namespace RoadRage.UnityRemake
             if (Ragdolled) return;
             Ragdolled = true;
             IsWreck = true;
-            VehicleContacts.Unregister(this);
+            ragdollRestTime = 0f;
+            TrackRagdoll();
+        }
+
+        private Vector2 ragdollExtent;
+        private float ragdollRestTime;
+
+        /// While the physics throws it about, the road-space position, size and height
+        /// follow the real body - so the contact pass, the police and traffic all see the
+        /// car where it actually lies, on its roof or its side. Once it has come to rest
+        /// it is frozen as a wreck; once the player is well past, it goes back to being
+        /// an ordinary wreck, which the recycling then clears away out of sight.
+        private void TrackRagdoll()
+        {
+            var p = transform.position;
+            RoadDistance = p.z;
+            separation = 0f;
+            laneDrift = Vector3.Dot(p - RoadPath.Center(RoadDistance), RoadPath.Right(RoadDistance)) -
+                        RoadPath.LaneLateral(RoadDistance, LaneFraction);
+            var found = false;
+            var bounds = default(Bounds);
+            foreach (var r in GetComponentsInChildren<Renderer>())
+            {
+                if (!found) { bounds = r.bounds; found = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            if (found)
+            {
+                ragdollExtent = new Vector2(bounds.extents.z, bounds.extents.x);
+                verticalOffset = Mathf.Max(0f, bounds.min.y - RoadPath.Center(RoadDistance).y - 0.3f);
+            }
+
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                var still = rb.linearVelocity.sqrMagnitude < 0.5f && rb.angularVelocity.sqrMagnitude < 0.5f;
+                ragdollRestTime = still ? ragdollRestTime + Time.deltaTime : 0f;
+                if (ragdollRestTime > 1.5f) rb.isKinematic = true;
+            }
+
+            if (PlayerDistance - RoadDistance > 90f)
+            {
+                Ragdolled = false;
+                WreckYaw = 0f;
+                wreckYawRate = 0f;
+                wreckRoll = 0f;
+                verticalOffset = 0f;
+                currentSpeedKph = 0f;
+                visualPlaced = false;
+                if (rb != null)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                    rb.isKinematic = true;
+                }
+            }
         }
 
         private void Update()
         {
-            if (Ragdolled) return;
+            if (Ragdolled)
+            {
+                TrackRagdoll();
+                return;
+            }
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
