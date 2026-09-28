@@ -2800,6 +2800,29 @@ namespace RoadRage.UnityRemake
         /// quad - the single biggest reason terrain read as cardboard. With `displace`
         /// the strip is subdivided across its width and pushed by noise, becoming real
         /// undulating ground. Road, shoulders and paint stay flat (displace = 0).
+        /// Half width of the real B500 plus its shoulder: where the real banks start.
+        private const float RealRoadEdge = 4.5f;
+        /// Real heights beyond this are eased in (a 200 m valley side stays big but does
+        /// not tower over the horizon ring the rest of the sky was tuned against).
+        private const float RealGroundLimit = 90f;
+
+        /// The real ground beside the B500 (Road Rage > Bake B500 Terrain, from the LGL
+        /// DGM1), relative to the road; 0 without the table. The game's carriageway is
+        /// wider than the real one, so the real bank is taken from the real road's edge
+        /// and laid from the game's, and eased in over the first 6 m so the shoulder and
+        /// rail stay level with the road.
+        private static float RealGround(float distance, float lateral)
+        {
+            var route = RoadPath.Route;
+            if (route == null || !route.HasTerrain) return 0f;
+            var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth;
+            var across = Mathf.Abs(lateral) - edge;
+            if (across <= 0f) return 0f;
+            var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
+            real = RealGroundLimit * (float)System.Math.Tanh(real / RealGroundLimit);
+            return real * Mathf.SmoothStep(0f, 1f, across / 6f);
+        }
+
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
             Material material, float start = float.NaN, float end = float.NaN, float sampleStep = 6f,
             bool relative = false, float displace = 0f, int lateralSegments = 1,
@@ -2809,6 +2832,10 @@ namespace RoadRage.UnityRemake
             if (float.IsNaN(start)) start = segStart - 2f;
             if (float.IsNaN(end)) end = segEnd + 2f;
             if (displace > 0f) lateralSegments = Mathf.Max(lateralSegments, 10);
+            // The displaced ground of a route with a baked terrain table takes the real
+            // ground instead of noise, finely divided across.
+            var realGround = displace > 0f && RoadPath.Route != null && RoadPath.Route.HasTerrain;
+            if (realGround) lateralSegments = Mathf.Max(lateralSegments, Mathf.Abs(rightLateral - leftLateral) > 20f ? 80 : 14);
             var across = Mathf.Max(1, lateralSegments) + 1;
             var sampleCount = Mathf.CeilToInt((end - start) / sampleStep) + 1;
             var vertices = new Vector3[sampleCount * across];
@@ -2823,9 +2850,20 @@ namespace RoadRage.UnityRemake
                 for (var j = 0; j < across; j++)
                 {
                     var f = across == 1 ? 0f : j / (float)(across - 1);
+                    // Over real terrain the vertices crowd towards the road, where the
+                    // banks and cuttings are seen up close, and spread out towards the
+                    // valley sides.
+                    if (realGround)
+                        f = Mathf.Abs(leftLateral) < Mathf.Abs(rightLateral) ? f * f : 1f - (1f - f) * (1f - f);
                     var lateral = Mathf.Lerp(leftLateral, rightLateral, f) * scale;
                     var lift = 0f;
-                    if (displace > 0f)
+                    if (realGround)
+                    {
+                        lift = RealGround(distance, lateral);
+                        if (colors != null && Mathf.Abs(lateral) > RoadPath.ClearanceAt(distance) + 4f)
+                            lift += LakeBasin(distance, lateral);
+                    }
+                    else if (displace > 0f)
                     {
                         var p = RoadPath.Point(distance, lateral);
                         // Fade at the strip edges so neighbouring ribbons still meet.
@@ -3229,7 +3267,7 @@ namespace RoadRage.UnityRemake
             var model = BiomeModel(pack, resourceName, material);
             if (model == null) return null;
             model.name = label ?? resourceName;
-            model.transform.position = RoadPath.Point(distance, lateral, height);
+            model.transform.position = RoadPath.Point(distance, lateral, height + RealGround(distance, lateral));
             model.transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(localEuler);
             model.transform.localScale = scale;
             if (enforceClearance && Mathf.Abs(lateral) > 0.01f)
@@ -7056,7 +7094,7 @@ namespace RoadRage.UnityRemake
             var model = Model(resourceName, material);
             if (model == null) return null;
             model.name = label;
-            model.transform.position = RoadPath.Point(distance, lateral, height);
+            model.transform.position = RoadPath.Point(distance, lateral, height + RealGround(distance, lateral));
             model.transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one * Random.Range(minScale, maxScale);
             EnsureOutsideRoad(model, distance, Mathf.Sign(lateral));
@@ -7155,7 +7193,7 @@ namespace RoadRage.UnityRemake
             }
             if (model == null) return null;
             model.name = label;
-            model.transform.position = RoadPath.Point(distance, lateral, height);
+            model.transform.position = RoadPath.Point(distance, lateral, height + (onCliff ? 0f : RealGround(distance, lateral)));
             if (onCliff)
             {
                 var p = model.transform.position;

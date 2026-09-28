@@ -168,6 +168,7 @@ namespace RoadRage.UnityRemake
             if (route == null) return null;
             route.LoadCover(resourcePath + "_cover");
             route.LoadPlaces(resourcePath + "_places");
+            route.LoadTerrain(resourcePath + "_terrain");
             return route;
         }
 
@@ -248,6 +249,60 @@ namespace RoadRage.UnityRemake
             var band = 0;
             while (band + 1 < coverBands && across >= bandStarts[band + 1]) band++;
             return cover[(i * 2 + side) * coverBands + band];
+        }
+
+        /// The real ground beside the road, from Road Rage > Bake B500 Terrain (DGM1):
+        /// height relative to the real road, per row of road distance and per offset
+        /// from the real centreline. Null without the baked table.
+        private short[] terrain;
+        private int terrainRows;
+        private float terrainStep;
+        private float[] terrainOffsets;
+
+        public bool HasTerrain => terrain != null;
+
+        private void LoadTerrain(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var bytes = asset.bytes;
+            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'T' || bytes[3] != 'R')
+                return;
+            var rows = System.BitConverter.ToInt32(bytes, 4);
+            var step = System.BitConverter.ToSingle(bytes, 8);
+            var cols = System.BitConverter.ToInt32(bytes, 12);
+            var header = 16 + cols * 4;
+            if (rows < 2 || cols < 2 || step <= 0f || bytes.Length < header + rows * cols * 2) return;
+            terrainOffsets = new float[cols];
+            for (var c = 0; c < cols; c++) terrainOffsets[c] = System.BitConverter.ToSingle(bytes, 16 + c * 4);
+            terrain = new short[rows * cols];
+            System.Buffer.BlockCopy(bytes, header, terrain, 0, rows * cols * 2);
+            terrainRows = rows;
+            terrainStep = step;
+        }
+
+        /// Real ground height (m) relative to the road, at an offset from the real
+        /// centreline (right positive), bilinear in the table. The return pass mirrors
+        /// the outward one along the road, as the land cover does.
+        public float TerrainAt(float distance, float realOffset)
+        {
+            if (terrain == null) return 0f;
+            var cols = terrainOffsets.Length;
+            var f = Mathf.Clamp(Fold(distance) / terrainStep, 0f, terrainRows - 1.001f);
+            var r = (int)f;
+            var tr = f - r;
+            var o = Mathf.Clamp(realOffset, terrainOffsets[0], terrainOffsets[cols - 1]);
+            var c = 0;
+            var hi = cols - 2;
+            while (c < hi)
+            {
+                var mid = (c + hi + 1) / 2;
+                if (terrainOffsets[mid] <= o) c = mid; else hi = mid - 1;
+            }
+            var tc = Mathf.InverseLerp(terrainOffsets[c], terrainOffsets[c + 1], o);
+            var a = Mathf.Lerp(terrain[r * cols + c], terrain[r * cols + c + 1], tc);
+            var b = Mathf.Lerp(terrain[(r + 1) * cols + c], terrain[(r + 1) * cols + c + 1], tc);
+            return Mathf.Lerp(a, b, tr) * 0.01f;
         }
 
         /// Road distance folded into one pass, [0, Length]: there and back.
