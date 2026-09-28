@@ -3967,6 +3967,15 @@ namespace RoadRage.UnityRemake
 
                 showroomStage = new GameObject("Turntable").transform;
                 showroomStage.SetParent(rig, false);
+
+                // Directional lights light the whole world, wherever they are parked:
+                // left on, these two lit the road as two extra suns from the first
+                // garage visit onwards, and the road and car paint burned out to
+                // white. They are on only while the showroom camera is.
+                var gate = rig.gameObject.AddComponent<ShowroomLightGate>();
+                gate.Camera = ShowroomCamera;
+                gate.Lights = new[] { key, rim };
+                key.enabled = rim.enabled = false;
             }
 
             if (showroomCar == carIndex) return;
@@ -9247,6 +9256,20 @@ namespace RoadRage.UnityRemake
         private void OnDestroy()
         {
             if (Mesh != null) Destroy(Mesh);
+        }
+    }
+
+    /// Keeps the showroom's lights in step with its camera (see EnsureShowroom).
+    public sealed class ShowroomLightGate : MonoBehaviour
+    {
+        public Camera Camera;
+        public Light[] Lights;
+
+        private void LateUpdate()
+        {
+            var on = Camera != null && Camera.enabled;
+            foreach (var light in Lights)
+                if (light != null && light.enabled != on) light.enabled = on;
         }
     }
 
