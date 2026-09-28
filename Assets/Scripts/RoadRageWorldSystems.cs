@@ -988,6 +988,30 @@ namespace RoadRage.UnityRemake
                     desiredSpeed = Mathf.Min(desiredSpeed, safeSpeed);
                 }
 
+                // A wrecked cruiser is a wall like a wrecked car.
+                foreach (var cop in PoliceVehicleController.OnRoad)
+                {
+                    if (cop == null || !cop.IsWrecked) continue;
+                    var laneSpacing = Mathf.Max(1.2f, RoadPath.HalfWidthAt(RoadDistance) * 0.5f);
+                    var lateralFootprint = Mathf.Min(LateralExtent + cop.ContactHalfWidth, laneSpacing * 1.4f);
+                    if (Mathf.Abs(cop.ContactLateral - LaneOffset) > lateralFootprint) continue;
+                    var centreGap = RoadPath.ForwardGap(RoadDistance, cop.ContactDistance, Direction);
+                    if (centreGap <= 0.05f) continue;
+                    var gap = centreGap - (LongitudinalExtent + cop.ContactHalfLength);
+                    if (gap >= 38f) continue;
+                    nearestGap = Mathf.Min(nearestGap, gap);
+                    if (gap < nearestBlockerGap)
+                    {
+                        nearestBlockerGap = gap;
+                        blockerOffset = cop.ContactLateral;
+                        blockerRoadDistance = cop.ContactDistance;
+                        hasBlocker = true;
+                    }
+                    var copSafe = gap < 10f ? 0f
+                        : Mathf.Lerp(18f, 24f, Mathf.InverseLerp(10f, 38f, gap));
+                    desiredSpeed = Mathf.Min(desiredSpeed, copSafe);
+                }
+
                 var acceleration = desiredSpeed < currentSpeedKph ? 55f : 16f;
                 // Gridlock escape with hysteresis: once a driver starts edging around
                 // an obstruction it COMMITS to the pass. Releasing the drift as soon
@@ -1000,8 +1024,17 @@ namespace RoadRage.UnityRemake
                     // direction is ever chosen, and it just matches the blocker's speed
                     // forever. If the blocker is stopped, this parks the follower (and
                     // everyone behind it) permanently. Fall back to a deterministic side.
-                    overtakeDir = Mathf.Sign(LaneOffset - blockerOffset);
-                    if (Mathf.Abs(overtakeDir) < 0.01f) overtakeDir = variationSeed % 2 == 0 ? 1f : -1f;
+                    // The side is chosen once per blocker. Re-choosing it every frame, a
+                    // car sitting almost dead behind the blocker flipped sides each frame
+                    // as the contact pass nudged it across - it shook on the spot.
+                    var sameBlocker = overtakeBlockerRoad > -1e8f &&
+                                      Mathf.Abs(overtakeBlockerRoad - blockerRoadDistance) < 3f &&
+                                      Mathf.Abs(overtakeDir) > 0.01f;
+                    if (!sameBlocker)
+                    {
+                        overtakeDir = Mathf.Sign(LaneOffset - blockerOffset);
+                        if (Mathf.Abs(overtakeDir) < 0.01f) overtakeDir = variationSeed % 2 == 0 ? 1f : -1f;
+                    }
                     overtakeBlockerRoad = blockerRoadDistance;
                     overtakeDriftTarget = OvertakeDrift(overtakeDir);
                 }

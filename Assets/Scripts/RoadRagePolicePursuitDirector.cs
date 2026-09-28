@@ -265,8 +265,10 @@ namespace RoadRage.UnityRemake
                 GameState.Combo = 0;
             }
 
+            // The units drop back and leave once out of sight. Deleting them outright
+            // made cruisers vanish from beside the player the moment a bust landed.
             for (var i = activePolice.Count - 1; i >= 0; i--)
-                if (activePolice[i] != null) Destroy(activePolice[i].gameObject);
+                if (activePolice[i] != null) activePolice[i].StandDown();
             activePolice.Clear();
 
             for (var i = activeSpikes.Count - 1; i >= 0; i--)
@@ -536,8 +538,38 @@ namespace RoadRage.UnityRemake
         /// the hulls meet rather than never.
         private const float ContactMargin = 0.35f;
 
-        private void OnEnable() => VehicleContacts.Register(this);
-        private void OnDisable() => VehicleContacts.Unregister(this);
+        /// Every cruiser on the road, live, standing down or wrecked. Traffic brakes
+        /// for the wrecks: it only knew its own cars, so a crashed cruiser left across
+        /// a lane was driven straight into and shoved through by the contact pass.
+        public static readonly List<PoliceVehicleController> OnRoad = new();
+        public bool IsWrecked => isWrecked;
+
+        private void OnEnable()
+        {
+            VehicleContacts.Register(this);
+            if (!OnRoad.Contains(this)) OnRoad.Add(this);
+        }
+
+        private void OnDisable()
+        {
+            VehicleContacts.Unregister(this);
+            OnRoad.Remove(this);
+        }
+
+        private bool standingDown;
+        private float standDownAge;
+
+        /// The pursuit is over: lights off, ease off the gas and drop back, then leave
+        /// once well behind or far off.
+        public void StandDown()
+        {
+            if (isWrecked || standingDown) return;
+            standingDown = true;
+            if (redLedMat != null) redLedMat.SetColor("_EmissionColor", Color.black);
+            if (blueLedMat != null) blueLedMat.SetColor("_EmissionColor", Color.black);
+            if (redStrobe != null) redStrobe.intensity = 0f;
+            if (blueStrobe != null) blueStrobe.intensity = 0f;
+        }
 
         /// Nothing may move the cruiser between the contact pass and placing it. This
         /// used to re-clamp the lateral offset here, after the pass had pushed the
@@ -715,6 +747,8 @@ namespace RoadRage.UnityRemake
         }
 
         private static bool packCruiserReported;
+        /// Height of the cruiser's origin above the road: every placement puts it here.
+        private const float RideHeight = 0.4f;
         private static readonly Dictionary<Material, Material> urpCopies = new();
 
         /// The cruiser body from Realistic Mobile Car #26, where Road Rage > Link Police
@@ -726,6 +760,11 @@ namespace RoadRage.UnityRemake
             var prefab = PoliceCarPack.LinkedCar;
             if (prefab == null) return false;
 
+            // Built and measured with the cruiser square to the world: it is spawned
+            // already turned to the road, and world-space bounds measured on a curve
+            // came out skewed (a 1.9 m car measured 3.6 m wide).
+            var heading = transform.rotation;
+            transform.rotation = Quaternion.identity;
             var holder = new GameObject("Police Interceptor Model");
             holder.SetActive(false);
             holder.transform.SetParent(transform, false);
@@ -746,6 +785,7 @@ namespace RoadRage.UnityRemake
             if (renderers.Length == 0)
             {
                 Destroy(holder);
+                transform.rotation = heading;
                 return false;
             }
             var painted = new Dictionary<Material, Material>();
@@ -779,24 +819,26 @@ namespace RoadRage.UnityRemake
             // the contact pass uses has to be the car you can see.
             var bodywork = System.Array.FindAll(renderers, part => !IsLightPart(part));
             if (bodywork.Length > 0) renderers = bodywork;
-            // Long side along the cruiser's z.
+            // Long side along the cruiser's z, taken from the body mesh itself: the
+            // pack's car need not sit square inside its prefab, and a car turned a
+            // few degrees drove crabwise down the road.
+            AlignLongAxis(holder.transform, car.transform, renderers);
             var b = LocalBounds(holder.transform, renderers);
-            if (b.size.x > b.size.z * 1.2f)
-            {
-                car.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-                b = LocalBounds(holder.transform, renderers);
-            }
             var scale = 4.8f / Mathf.Max(0.01f, b.size.z);
             car.transform.localScale *= scale;
             b = LocalBounds(holder.transform, renderers);
-            // Centred on the hull, wheels on the road.
-            car.transform.localPosition -= new Vector3(b.center.x, b.min.y, b.center.z);
+            // Centred on the hull, wheels on the road. The cruiser's own origin rides
+            // RideHeight above the road (it is placed there every frame), so the car
+            // sits that far below it; set on the origin, it hovered 0.4 m up.
+            car.transform.localPosition -= new Vector3(b.center.x, b.min.y + RideHeight, b.center.z);
             b = LocalBounds(holder.transform, renderers);
 
-            roofHeight = b.max.y + 0.02f;
+            roofHeight = b.max.y + 0.02f;   // measured after the drop, so the bar sits on the roof
             hullHalfLength = b.size.z * 0.5f;
             hullHalfWidth = Mathf.Max(0.8f, b.size.x * 0.5f);
+            // The livery measures the car the same way, so it too is laid on square.
             if (German) PolizeiLivery.Apply(transform, holder);
+            transform.rotation = heading;
 
             if (!packCruiserReported)
             {
@@ -809,6 +851,42 @@ namespace RoadRage.UnityRemake
                           $"Painted: {(painted.Count > 0 ? string.Join(", ", System.Linq.Enumerable.Select(painted.Values, m => m.name)) : "none (no body/paint material)")}");
             }
             return true;
+        }
+
+        /// Turns the car so the long axis of its biggest mesh (the body) runs along the
+        /// holder's z. Front and back are the pack's own: the turn is the smallest one
+        /// that squares the body up.
+        private static void AlignLongAxis(Transform holder, Transform car, Renderer[] renderers)
+        {
+            MeshFilter body = null;
+            var biggest = 0f;
+            foreach (var r in renderers)
+            {
+                if (!r.TryGetComponent<MeshFilter>(out var f) || f.sharedMesh == null) continue;
+                var size = Vector3.Scale(f.sharedMesh.bounds.size, f.transform.lossyScale);
+                var volume = Mathf.Abs(size.x * size.y * size.z);
+                if (volume > biggest) { biggest = volume; body = f; }
+            }
+            if (body == null) return;
+            var meshSize = body.sharedMesh.bounds.size;
+            // The long horizontal axis of the mesh: whichever of its three is longest
+            // once the up axis is set aside.
+            var candidates = new[] { Vector3.right, Vector3.up, Vector3.forward };
+            var best = Vector3.forward;
+            var bestLength = -1f;
+            foreach (var axis in candidates)
+            {
+                var inHolder = holder.InverseTransformDirection(body.transform.TransformDirection(axis));
+                if (Mathf.Abs(inHolder.y) > 0.7f) continue;   // that one points up
+                var length = Vector3.Scale(meshSize, axis).magnitude;
+                if (length > bestLength) { bestLength = length; best = inHolder; }
+            }
+            best.y = 0f;
+            if (best.sqrMagnitude < 1e-4f) return;
+            var yaw = Mathf.Atan2(best.x, best.z) * Mathf.Rad2Deg;
+            if (yaw > 90f) yaw -= 180f;
+            if (yaw < -90f) yaw += 180f;
+            car.localRotation = Quaternion.Euler(0f, -yaw, 0f) * car.localRotation;
         }
 
         private static bool IsLightPart(Renderer r)
@@ -1023,6 +1101,19 @@ namespace RoadRage.UnityRemake
                 return;
             }
 
+            if (standingDown)
+            {
+                var dt = Time.deltaTime;
+                standDownAge += dt;
+                var cruise = targetPlayer != null ? targetPlayer.SpeedKph * 0.55f : 50f;
+                SpeedKph = Mathf.MoveTowards(SpeedKph, cruise, 30f * dt);
+                RoadDistance = RoadPath.Wrap(RoadDistance + SpeedKph / 3.6f * dt);
+                transform.rotation = RoadPath.Rotation(RoadDistance);
+                var behindPlayer = targetPlayer != null ? targetPlayer.RoadDistance - RoadDistance : 999f;
+                if (behindPlayer > 70f || Mathf.Abs(behindPlayer) > 300f || standDownAge > 30f) Destroy(gameObject);
+                return;
+            }
+
             // 1. Alternate High-Intensity LED Emergency Strobes (Shader Emission)
             strobeTimer += Time.deltaTime * 12f;
             var isRed = Mathf.Sin(strobeTimer) > 0f;
@@ -1165,6 +1256,12 @@ namespace RoadRage.UnityRemake
         {
             if (isWrecked) return;
             isWrecked = true;
+            // A wreck goes dark. Left strobing, a crashed cruiser sliding across the
+            // road read as one still driving, badly.
+            if (redLedMat != null) redLedMat.SetColor("_EmissionColor", Color.black);
+            if (blueLedMat != null) blueLedMat.SetColor("_EmissionColor", Color.black);
+            if (redStrobe != null) redStrobe.intensity = 0f;
+            if (blueStrobe != null) blueStrobe.intensity = 0f;
 
             wreckSlideDir = targetPlayer != null ? Mathf.Sign(LateralOffset - targetPlayer.LateralOffset) : (Random.value > 0.5f ? 1f : -1f);
             if (Mathf.Abs(wreckSlideDir) < 0.1f) wreckSlideDir = 1f;
