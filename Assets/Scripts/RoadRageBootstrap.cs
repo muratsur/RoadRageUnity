@@ -7123,6 +7123,7 @@ namespace RoadRage.UnityRemake
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
             if (external) ThinExternalTree(model, lateral);
+            else ThinForestPiece(model, lateral, label);
             return model;
         }
 
@@ -7612,6 +7613,24 @@ namespace RoadRage.UnityRemake
                                      "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
                 return externalTrees;
             }
+        }
+
+        /// A forest chunk holds about a thousand pieces and six chunks are built ahead,
+        /// and none of the kit meshes has LODs: every fern 800 m away was drawn, and
+        /// drawn again into each shadow cascade. Each piece now culls once it is small
+        /// on screen (ground cover sooner than trees), and only trees near the road cast
+        /// shadows - undergrowth shadows are lost in the trees' own.
+        private static void ThinForestPiece(GameObject piece, float lateral, string label)
+        {
+            if (piece.GetComponentInChildren<LODGroup>() != null) return;
+            var tree = label.StartsWith("Forest Tree") || label.StartsWith("Forest Understory");
+            var renderers = piece.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
+            if (!tree || Mathf.Abs(lateral) > 30f)
+                foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+            var group = piece.AddComponent<LODGroup>();
+            group.SetLODs(new[] { new LOD(tree ? 0.012f : 0.035f, renderers) });
+            group.RecalculateBounds();
         }
 
         /// How far from the road the pack's trees are planted, metres.
