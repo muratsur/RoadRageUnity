@@ -94,3 +94,7 @@ Assets/RealisticMobileCars*.meta
 # NYC-Like City Buildings Set (HDRP, Asset Store)
 Assets/*NYC*/
 Assets/*NYC*.meta
+# The police car registry written by Road Rage > Link Police Car Pack (points into
+# the Realistic Mobile Car pack, which is not committed).
+Assets/Resources/Police/PoliceCarPack.asset
+Assets/Resources/Police/PoliceCarPack.asset.meta
