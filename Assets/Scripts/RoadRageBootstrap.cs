@@ -1675,8 +1675,11 @@ namespace RoadRage.UnityRemake
             if (!lowDetail)
             {
                 QualitySettings.shadows = UnityEngine.ShadowQuality.All;
-                QualitySettings.shadowDistance = 160f;
-                QualitySettings.shadowCascades = 4;
+                // Mirrors the URP assets, which are what URP actually reads. 160 m in
+                // four cascades drew every shadow caster up to four times; in the forest
+                // that was most of the frame's draw calls.
+                QualitySettings.shadowDistance = 120f;
+                QualitySettings.shadowCascades = 2;
                 QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Medium;
             }
             else
@@ -2209,6 +2212,45 @@ namespace RoadRage.UnityRemake
             };
             SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
             Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
+            StartCoroutine(ReportSceneBudgetSoon(++budgetRun));
+        }
+
+        /// What the frame is made of, by kind of object: renderers visible to a camera
+        /// or a shadow map, their draw calls (submeshes) and triangles. Logged once per
+        /// run, a few seconds in, so a slow biome can be traced without the Profiler.
+        private int budgetRun;
+
+        /// Reports for the latest run only: a run restarted within the wait skips it.
+        private System.Collections.IEnumerator ReportSceneBudgetSoon(int run)
+        {
+            yield return new WaitForSeconds(8f);
+            if (run == budgetRun) ReportSceneBudget();
+        }
+
+        private void ReportSceneBudget()
+        {
+            var groups = new Dictionary<string, (int renderers, int draws, long triangles)>();
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || !r.isVisible || !r.TryGetComponent<MeshFilter>(out var f) || f.sharedMesh == null)
+                    continue;
+                // Named after the object directly under its chunk (a tree, a bush, the
+                // cliff), or after its root when it is not part of a chunk.
+                var t = r.transform;
+                while (t.parent != null && !t.parent.name.StartsWith("Chunk ")) t = t.parent;
+                var key = t.name;
+                var mesh = f.sharedMesh;
+                long triangles = 0;
+                for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
+                groups.TryGetValue(key, out var g);
+                groups[key] = (g.renderers + 1, g.draws + mesh.subMeshCount, g.triangles + triangles);
+            }
+            var lines = new List<string>();
+            foreach (var pair in groups)
+                lines.Add($"{pair.Value.triangles / 1000,8}k tris {pair.Value.draws,6} draws {pair.Value.renderers,6} x {pair.Key}");
+            lines.Sort((a, b) => string.CompareOrdinal(b, a));
+            Debug.Log("RR_BUDGET visible objects by kind (triangles, draw calls, renderers):\n" +
+                      string.Join("\n", lines.GetRange(0, Mathf.Min(15, lines.Count))));
         }
 
         /// The time of day laid over Greenwood's own palette.
@@ -7088,8 +7130,10 @@ namespace RoadRage.UnityRemake
             GameObject model;
             if (external)
             {
-                var pool = split[1].StartsWith("y") ? ExternalYoungTrees : ExternalTrees;
-                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y')) % pool.Length] : null;
+                var pool = split[1].StartsWith("y") ? ExternalYoungTrees
+                    : split[1].StartsWith("b") ? ExternalBroadleaf
+                    : ExternalTrees;
+                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y', 'b')) % pool.Length] : null;
                 model = prefab != null ? Adopt(Instantiate(prefab)) : null;
             }
             else
@@ -7114,6 +7158,8 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
+            if (external) ThinExternalTree(model, lateral);
+            else ThinForestPiece(model, lateral, label);
             return model;
         }
 
@@ -7527,8 +7573,16 @@ namespace RoadRage.UnityRemake
                 ? BlackForestTrees
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var entry = table[Random.Range(0, table.Length)];
-            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
-                entry = "External|" + Random.Range(0, ExternalTrees.Length);
+            // The pack's trees are film-quality meshes; past the near bands the fog hides
+            // what they add, and at 61 M triangles a frame they cost the frame rate.
+            // The far forest keeps the light Black Forest trees.
+            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0 &&
+                Mathf.Abs(lateral) < ExternalTreeReach)
+                // The northern Black Forest is spruce and fir, with beech mixed in on
+                // the lower slopes: about one tree in eight where the pack has them.
+                entry = ExternalBroadleaf.Length > 0 && Random.value < 0.12f
+                    ? "External|b" + Random.Range(0, ExternalBroadleaf.Length)
+                    : "External|" + Random.Range(0, ExternalTrees.Length);
             var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
             // The tree's real offset, not its sign. Passed Mathf.Sign(lateral) - always
@@ -7563,6 +7617,7 @@ namespace RoadRage.UnityRemake
 
         private static GameObject[] externalTrees;
         private static GameObject[] externalYoungTrees;
+        private static GameObject[] externalBroadleaf;
 
         /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
         /// Tree Pack; empty when there is none.
@@ -7582,14 +7637,83 @@ namespace RoadRage.UnityRemake
                 externalYoungTrees = registry != null && registry.YoungTrees != null
                     ? System.Array.FindAll(registry.YoungTrees, t => t != null && RendersInThisPipeline(t))
                     : System.Array.Empty<GameObject>();
+                externalBroadleaf = registry != null && registry.Broadleaf != null
+                    ? System.Array.FindAll(registry.Broadleaf, t => t != null && RendersInThisPipeline(t))
+                    : System.Array.Empty<GameObject>();
                 if (externalTrees.Length > 0)
-                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees and {externalBroadleaf.Length} " +
+                              $"broadleaf from {registry.Source}");
                 if (externalTrees.Length < linked.Length)
                     Debug.LogWarning($"RR_TREES {linked.Length - externalTrees.Length} linked trees use shaders URP cannot " +
                                      "draw (they would be magenta) and are skipped. Import the pack's URP support " +
                                      "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
                 return externalTrees;
             }
+        }
+
+        /// A forest chunk holds about a thousand pieces and six chunks are built ahead,
+        /// and none of the kit meshes has LODs: every fern 800 m away was drawn, and
+        /// drawn again into each shadow cascade. Each piece now culls once it is small
+        /// on screen (ground cover sooner than trees), and only trees near the road cast
+        /// shadows - undergrowth shadows are lost in the trees' own.
+        private static void ThinForestPiece(GameObject piece, float lateral, string label)
+        {
+            if (piece.GetComponentInChildren<LODGroup>() != null) return;
+            var tree = label.StartsWith("Forest Tree") || label.StartsWith("Forest Understory");
+            var renderers = piece.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
+            if (!tree || Mathf.Abs(lateral) > 30f)
+                foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+            var group = piece.AddComponent<LODGroup>();
+            group.SetLODs(new[] { new LOD(tree ? 0.04f : 0.035f, renderers) });
+            group.RecalculateBounds();
+        }
+
+        /// How far from the road the pack's trees are planted, metres.
+        private const float ExternalTreeReach = 45f;
+        private static bool externalTreeReported;
+
+        /// Keeps a pack tree affordable: its lower LODs take over at twice the usual
+        /// screen size and it is culled once it is a sliver; only trees by the road cast
+        /// shadows, and only from their full-detail LOD. A pack tree without an LODGroup
+        /// gets one that culls it when small.
+        private static void ThinExternalTree(GameObject tree, float lateral)
+        {
+            var near = Mathf.Abs(lateral) < 18f;
+            var group = tree.GetComponentInChildren<LODGroup>();
+            if (group != null)
+            {
+                var lods = group.GetLODs();
+                var previous = 1f;
+                for (var i = 0; i < lods.Length; i++)
+                {
+                    var height = lods[i].screenRelativeTransitionHeight * 2f;
+                    if (i == lods.Length - 1) height = Mathf.Max(height, 0.025f);
+                    // Transitions must keep falling from one LOD to the next.
+                    previous = lods[i].screenRelativeTransitionHeight = Mathf.Min(height, previous * 0.9f);
+                    foreach (var r in lods[i].renderers)
+                        if (r != null && (i > 0 || !near)) r.shadowCastingMode = ShadowCastingMode.Off;
+                }
+                group.SetLODs(lods);
+            }
+            else
+            {
+                var renderers = tree.GetComponentsInChildren<Renderer>();
+                if (!near)
+                    foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+                group = tree.AddComponent<LODGroup>();
+                group.SetLODs(new[] { new LOD(0.03f, renderers) });
+                group.RecalculateBounds();
+            }
+
+            if (externalTreeReported) return;
+            externalTreeReported = true;
+            var triangles = 0L;
+            foreach (var f in tree.GetComponentsInChildren<MeshFilter>(true))
+                if (f.sharedMesh != null)
+                    for (var m = 0; m < f.sharedMesh.subMeshCount; m++) triangles += f.sharedMesh.GetIndexCount(m) / 3;
+            Debug.Log($"RR_TREES pack tree '{tree.name}': {triangles} triangles over all LODs, " +
+                      $"{group.lodCount} LODs, planted within {ExternalTreeReach} m of the road");
         }
 
         private static bool RendersInThisPipeline(GameObject prefab)
@@ -7602,6 +7726,16 @@ namespace RoadRage.UnityRemake
                     return false;
             }
             return true;
+        }
+
+        /// Broadleaf trees (beech, oak ...) from the pack, mixed into the conifers.
+        private static GameObject[] ExternalBroadleaf
+        {
+            get
+            {
+                if (externalTrees == null) _ = ExternalTrees;
+                return externalBroadleaf ?? System.Array.Empty<GameObject>();
+            }
         }
 
         private static GameObject[] ExternalYoungTrees
@@ -8231,10 +8365,13 @@ namespace RoadRage.UnityRemake
                     var from = near;
                     ScatterBand(8f, from, from + 8f, (d, l, s) => ForestTree(d, l, 18f, 32f));
                 }
+                // Behind 76 m the near bands already close the view, so the back of the
+                // stand is thinned to half: RR_BUDGET counted ~5,900 visible trees at
+                // 7.9 M triangles, the largest single cost in the frame.
                 for (var near = 76f; near < 160f; near += 12f)
                 {
                     var from = near;
-                    ScatterBand(11f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                    ScatterBand(22f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
                 }
                 // Understory: young firs between the trunks, to about 70 m. Tall firs
                 // lose their lower branches, so under their crowns the eye ran straight

@@ -70,3 +70,27 @@ Assets/AsianCanal/
 Assets/AsianCanal.meta
 Assets/Resources/Biomes/AsianCanalPack.asset
 Assets/Resources/Biomes/AsianCanalPack.asset.meta
+
+# More Asset Store packs, licensed for use, not redistribution (kept local only):
+# European Forests - Realistic Trees (MysticForge), URP Dynamic Weather System,
+# Realistic Mobile Car #26 (Surdov Vadym). Folder names vary by version, so match
+# them loosely; check `git status` shows none of them.
+Assets/*European*/
+Assets/*European*.meta
+Assets/MysticForge*/
+Assets/MysticForge*.meta
+Assets/*Dynamic Weather*/
+Assets/*Dynamic Weather*.meta
+Assets/*DynamicWeather*/
+Assets/*DynamicWeather*.meta
+Assets/*Mobile Car*/
+Assets/*Mobile Car*.meta
+Assets/Surdov*/
+Assets/Surdov*.meta
+Assets/Realistic Tree/
+Assets/Realistic Tree.meta
+Assets/RealisticMobileCars*/
+Assets/RealisticMobileCars*.meta
+# NYC-Like City Buildings Set (HDRP, Asset Store)
+Assets/*NYC*/
+Assets/*NYC*.meta
