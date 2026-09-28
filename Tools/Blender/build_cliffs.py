@@ -281,12 +281,14 @@ def stone_material():
     nt.links.new(crack_k.outputs[0], crack_col.inputs[0])
     nt.links.new(col.outputs[2], crack_col.inputs[6])
 
-    # Moss and dirt settle on surfaces facing up.
+    # Moss and needle litter cover everything facing up - the crest, the top and
+    # the gentle back slope are forest floor, not bare stone. (A patchy dusting here
+    # left the tops pale, and from the road they read as a bare slab.)
     nsep = node(nt, "ShaderNodeSeparateXYZ")
     nt.links.new(geo.outputs["Normal"], nsep.inputs[0])
     up = node(nt, "ShaderNodeMapRange")
-    up.inputs["From Min"].default_value = 0.55
-    up.inputs["From Max"].default_value = 0.9
+    up.inputs["From Min"].default_value = 0.35
+    up.inputs["From Max"].default_value = 0.7
     nt.links.new(nsep.outputs["Z"], up.inputs["Value"])
     dirt_noise = node(nt, "ShaderNodeTexNoise", Scale=1.5, Detail=5.0)
     nt.links.new(pos, dirt_noise.inputs["Vector"])
@@ -294,10 +296,10 @@ def stone_material():
     nt.links.new(up.outputs["Result"], dirt_k.inputs[0])
     nt.links.new(dirt_noise.outputs["Fac"], dirt_k.inputs[1])
     dirt_k2 = node(nt, "ShaderNodeMath", operation="MULTIPLY", use_clamp=True)
-    dirt_k2.inputs[1].default_value = 1.6
+    dirt_k2.inputs[1].default_value = 3.0
     nt.links.new(dirt_k.outputs[0], dirt_k2.inputs[0])
     dirt = node(nt, "ShaderNodeMix", data_type="RGBA")
-    dirt.inputs[7].default_value = (0.045, 0.06, 0.022, 1)   # moss on the ledges (Black Forest cuttings)
+    dirt.inputs[7].default_value = (0.05, 0.055, 0.025, 1)   # moss and needle litter
     nt.links.new(dirt_k2.outputs[0], dirt.inputs[0])
     nt.links.new(crack_col.outputs[2], dirt.inputs[6])
     # Water staining: dark streaks running down the faces.
