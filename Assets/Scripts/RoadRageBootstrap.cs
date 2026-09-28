@@ -5274,6 +5274,9 @@ namespace RoadRage.UnityRemake
         /// Parts smaller than this (cups, lanterns, bamboo stems) are left out of rows:
         /// at driving speed they are invisible and they are most of the draw calls.
         private const float CanalRowMinPart = 1.5f;
+        /// One bank of houses is a few hundred parts at most; the showcase level has 561
+        /// objects before its foliage.
+        private const int CanalRowMaxParts = 400;
         private static readonly string[] CanalRowProps =
             { "bamboo", "plant", "grass", "ivy", "cloth", "rope", "cable", "wire", "cup", "bottle", "debris", "trash",
               "leaf", "leaves", "fog", "actor", "decal", "flower", "pot" };
@@ -5312,12 +5315,14 @@ namespace RoadRage.UnityRemake
             var probe = PlaceCanalRow(r, 0f, 1, 0f, null, measureOnly: true);
             var b = default(Bounds);
             var length = probe != null && ActiveBounds(probe, out b) ? b.size.x : 0f;
-            if (length > 0f && (b.size.z > CanalRowMaxDepth || b.size.x > 400f))
+            // Every object of the level counts, whether or not the row would draw it.
+            var parts = Canal.Rows[r].GetComponentsInChildren<Renderer>(true).Length;
+            if (length > 0f && (b.size.z > CanalRowMaxDepth || b.size.x > 400f || parts > CanalRowMaxParts))
             {
                 if (!canalLevelWarned)
                 {
                     canalLevelWarned = true;
-                    Debug.LogWarning($"RR_CANAL '{Canal.Rows[r].name}' is {b.size.x:0} x {b.size.z:0} m: that is the whole " +
+                    Debug.LogWarning($"RR_CANAL '{Canal.Rows[r].name}' is {b.size.x:0} x {b.size.z:0} m with {parts} parts: that is the whole " +
                                      "level, not one bank of houses, so CANAL TOWN does not repeat it. In Unreal select only " +
                                      "the houses along ONE side of the canal (about 60-120 m long, under 40 m deep), File > " +
                                      "Export Selected into Assets/AsianCanal/Assemblies, one file per row, and run Road Rage > " +
@@ -8100,8 +8105,14 @@ namespace RoadRage.UnityRemake
             if (biomeIndex == 0)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
-                if (source != null) skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
-                else Debug.LogWarning("Missing sky material Sky/M_sky_overcast; keeping solid background");
+                if (source == null)
+                    Debug.LogWarning("Missing sky material Sky/M_sky_overcast; keeping solid background");
+                // A shader that failed to compile draws the whole sky magenta; the fogged
+                // solid background is better than that.
+                else if (source.shader == null || !source.shader.isSupported)
+                    Debug.LogWarning($"Sky shader '{(source.shader != null ? source.shader.name : "none")}' cannot draw on " +
+                                     "this setup (see the red shader error in the Console); keeping solid background");
+                else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
             RenderSettings.skybox = skyMaterial;
             if (Camera.main != null) ApplySkyToCamera(Camera.main);
