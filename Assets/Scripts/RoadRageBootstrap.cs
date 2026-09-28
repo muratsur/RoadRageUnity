@@ -2180,7 +2180,13 @@ namespace RoadRage.UnityRemake
                 dayTime = roll < 0.25f ? DayTime.Morning : roll < 0.55f ? DayTime.Midday
                     : roll < 0.80f ? DayTime.Evening : DayTime.Dusk;
             }
-            activeWeather = ParseWeather(CommandLineValue("-weather=")) ?? WeatherSystem.Roll(0);
+            var forcedWeather = ParseWeather(CommandLineValue("-weather="));
+            activeWeather = forcedWeather ?? WeatherSystem.Roll(0);
+            // Fog in the blue hour leaves a dark grey wall where the forest and the ridge
+            // should be. Fog banks on the B500 are a daytime look: move the run to morning
+            // or midday rather than drop the fog.
+            if (activeWeather == WeatherKind.Fog && dayTime == DayTime.Dusk && string.IsNullOrEmpty(forced))
+                dayTime = Random.value < 0.5f ? DayTime.Morning : DayTime.Midday;
             if (weatherSystem != null && car != null)
             {
                 var particleMaterial = Resources.Load<Material>("WeatherParticle");
