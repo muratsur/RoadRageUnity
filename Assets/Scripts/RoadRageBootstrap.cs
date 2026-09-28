@@ -6460,8 +6460,17 @@ namespace RoadRage.UnityRemake
         private GameObject SpawnForestPiece(string entry, float distance, float lateral, float height,
             float minHeight, float maxHeight, string label)
         {
-            // Nothing planted in front of a cliff face.
-            if (InCliffZone(distance, lateral)) return null;
+            // Nothing planted in front of a cliff face - but behind it, the forest
+            // carries on over the rock, as it does above a real cutting. A bare top
+            // and back slope read as a pale slab.
+            var onCliff = false;
+            var cliffY = 0f;
+            if (InCliffZone(distance, lateral))
+            {
+                var line = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + CliffOffset;
+                if (Mathf.Abs(lateral) < line + 10f || !CliffTop(distance, lateral, out cliffY)) return null;
+                onCliff = true;
+            }
             if (!RouteAllows(label, distance, lateral)) return null;
             var split = entry.Split('|');
             var external = split[0] == "External";
@@ -6480,6 +6489,11 @@ namespace RoadRage.UnityRemake
             if (model == null) return null;
             model.name = label;
             model.transform.position = RoadPath.Point(distance, lateral, height);
+            if (onCliff)
+            {
+                var p = model.transform.position;
+                model.transform.position = new Vector3(p.x, cliffY + height - 0.3f, p.z);
+            }
             // The kit meshes lie on their backs (Z up); the Black Forest ones are
             // exported Y up and stand straight whatever the road's grade.
             model.transform.rotation = blackForest
@@ -7309,6 +7323,9 @@ namespace RoadRage.UnityRemake
         {
             Random.InitState(40621 ^ chunkSeed);
             BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
+            // The new cliff colliders have to be in the physics scene before the forest
+            // is planted on them.
+            if (cliffZones.Count > 0) Physics.SyncTransforms();
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
@@ -7723,6 +7740,10 @@ namespace RoadRage.UnityRemake
             filter.sharedMesh = bent;
             piece.AddComponent<OwnedMesh>().Mesh = bent;
             piece.transform.position = origin;
+            // A collider only for planting the forest on top (CliffTop), on the Ignore
+            // Raycast layer so no game raycast sees it.
+            piece.layer = CliffLayer;
+            piece.AddComponent<MeshCollider>().sharedMesh = bent;
             foreach (var r in piece.GetComponentsInChildren<Renderer>())
                 r.reflectionProbeUsage = ReflectionProbeUsage.Off;
             return piece;
@@ -7758,6 +7779,20 @@ namespace RoadRage.UnityRemake
 
         /// True where a cliff face stands between this point and the road, so nothing is
         /// planted in front of it.
+        private const int CliffLayer = 2;   // Ignore Raycast
+
+        /// The height of the rock top or back slope at this point, if a cliff is there
+        /// and it is not too steep to stand a tree on.
+        private static bool CliffTop(float distance, float lateral, out float y)
+        {
+            y = 0f;
+            var p = RoadPath.Point(distance, lateral);
+            if (!Physics.Raycast(p + Vector3.up * 300f, Vector3.down, out var hit, 600f, 1 << CliffLayer)) return false;
+            if (hit.normal.y < 0.6f) return false;
+            y = hit.point.y;
+            return true;
+        }
+
         private bool InCliffZone(float distance, float lateral)
         {
             for (var i = 0; i < cliffZones.Count; i++)
