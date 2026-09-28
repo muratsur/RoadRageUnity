@@ -63,7 +63,10 @@ namespace RoadRage.UnityRemake
             // dry asphalt under heavy fog reads as dusty, not damp.
             WeatherKind.Fog => new WeatherEffect
             {
-                FogDensityScale = 3.4f, FogTint = new Color(0.58f, 0.61f, 0.66f), FogTintAmount = 0.70f,
+                // 3.4 closed the view to about 100 m: the forest turned to grey cards and
+                // the horizon vanished. At 2.3 the treeline still fades out, but the road
+                // ahead and the nearer ridges stay readable.
+                FogDensityScale = 2.3f, FogTint = new Color(0.58f, 0.61f, 0.66f), FogTintAmount = 0.62f,
                 SunScale = 0.42f, WetnessAdd = 0.35f, ExposureAdd = -0.02f
             },
             _ => new WeatherEffect
