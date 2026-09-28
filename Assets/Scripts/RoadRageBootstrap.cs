@@ -411,6 +411,7 @@ namespace RoadRage.UnityRemake
             RoadPath.HalfWidthProvider = HalfWidthAtDistance;
             RoadPath.CurveScaleProvider = CurveScaleAtDistance;
             RoadPath.ElevationScaleProvider = ElevationScaleAtDistance;
+            ApplyBiomeRoute(biomeIndex);
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
@@ -656,6 +657,7 @@ namespace RoadRage.UnityRemake
             var biomeIndex = System.Array.IndexOf(Biomes, biomeName);
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder, Mathf.Max(0, biomeIndex)));
             activeWeather = WeatherSystem.Roll(Mathf.Max(0, biomeIndex));
+            ApplyBiomeRoute(biomeIndex);
 
             // 7. Rebuild lighting for new biome
             BuildLighting();
@@ -4052,6 +4054,26 @@ namespace RoadRage.UnityRemake
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
+
+        private static RoadRoute greenwoodRoute;
+
+        /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
+        /// Freudenstadt and back: its bends and hills, fitted to this road by
+        /// Tools/Terrain/build_b500_road.py. Every other biome keeps the procedural
+        /// road. Set before any chunk is built, since everything placed along the
+        /// road reads its shape through RoadPath.
+        private static void ApplyBiomeRoute(int biomeIndex)
+        {
+            if (biomeIndex != 0)
+            {
+                RoadPath.Route = null;
+                return;
+            }
+            greenwoodRoute ??= RoadRoute.Load("Biomes/Routes/b500");
+            if (greenwoodRoute == null) Debug.LogWarning("Missing Biomes/Routes/b500 - Greenwood keeps the procedural road.");
+            else Debug.Log($"RR_ROUTE Greenwood follows the B500: {greenwoodRoute.Length / 1000f:0.0} km, there and back");
+            RoadPath.Route = greenwoodRoute;
+        }
 
         /// Smoothly interpolated so the carriageway tapers across a zone seam. The taper
         /// straddles the boundary, which is also where the gateway stands.

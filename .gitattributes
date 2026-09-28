@@ -16,6 +16,8 @@
 *.jpeg filter=lfs diff=lfs merge=lfs -text
 # Kept out of LFS (the LFS budget is spent): generated sky, Tools/Sky/build_sky.py.
 Assets/Resources/Sky/**/*.jpg -filter binary
+# Baked road centreline (Tools/Terrain/build_b500_road.py): raw binary, no line-ending conversion.
+Assets/Resources/Biomes/Routes/*.bytes binary
 *.psd filter=lfs diff=lfs merge=lfs -text
 *.tga filter=lfs diff=lfs merge=lfs -text
 # Kept out of LFS (the LFS budget is spent): generated road surface, Tools/Road.
