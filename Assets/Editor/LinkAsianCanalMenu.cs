@@ -88,6 +88,9 @@ public static class LinkAsianCanalMenu
                 importer.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), slot), match);
                 line.Append($" [{slot} -> {match.name}]");
             }
+            // Rows are merged into static batches when the game places them, which
+            // needs the mesh data on the CPU.
+            if (path.Replace('\\', '/').Contains("/Assemblies/")) importer.isReadable = true;
             importer.SaveAndReimport();
 
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
