@@ -35,7 +35,10 @@ public static class LinkAsianCanalMenu
         }
         Directory.CreateDirectory(Generated);
 
+        stems = null;
         var sets = CollectTextureSets();
+        setNames.Clear();
+        foreach (var set in sets.Values) setNames[set.Key] = set.Name;
         var materials = new Dictionary<string, Material>();
         try
         {
@@ -66,12 +69,12 @@ public static class LinkAsianCanalMenu
         {
             EditorUtility.DisplayProgressBar("Link Asian Canal Pack", Path.GetFileName(path), n++ / (float)fbxs.Count);
             var importer = (ModelImporter)AssetImporter.GetAtPath(path);
-            var meshKey = Key(Path.GetFileNameWithoutExtension(path));
+            var meshName = Path.GetFileNameWithoutExtension(path);
             var slots = AssetDatabase.LoadAllAssetsAtPath(path).OfType<Material>().Select(m => m.name).Distinct().ToList();
             var line = new StringBuilder();
             foreach (var slot in slots)
             {
-                var match = Match(Key(slot), meshKey, materials);
+                var match = Match(slot, meshName, materials);
                 if (match == null)
                 {
                     unmatched++;
@@ -167,7 +170,7 @@ public static class LinkAsianCanalMenu
     private static Material BuildMaterial(TextureSet set)
     {
         if (!set.Maps.ContainsKey("B")) return null;
-        var path = $"{Generated}/M_{set.Name}.mat";
+        var path = $"{Generated}/M_{(set.Name.StartsWith("T_") ? set.Name.Substring(2) : set.Name)}.mat";
         var material = AssetDatabase.LoadAssetAtPath<Material>(path);
         if (material == null)
         {
@@ -314,16 +317,100 @@ public static class LinkAsianCanalMenu
         return k;
     }
 
-    private static Material Match(string slotKey, string meshKey, Dictionary<string, Material> materials)
+    /// Unreal material instances share texture sets: MI_WoodPainted_02, _04 and _05 are
+    /// all T_WoodPainted_01 with different parameters, MI_Fabric_02 is T_Fabric_01,
+    /// MI_Barrel_01 is T_Barrels_01, MI_StoneFloor_01 is T_Stone_Floor_01A. So slots
+    /// and texture sets are compared by their words - split on underscores and case,
+    /// numbers and variant letters dropped, plurals made singular.
+    private static string Stem(string name)
     {
-        if (materials.TryGetValue(slotKey, out var exact)) return exact;
-        // "wood_01_red" -> "wood_01"; "barrel_01_ropes" -> "barrel_01"
-        for (var k = slotKey; k.Contains('_'); k = k.Substring(0, k.LastIndexOf('_')))
-            if (materials.TryGetValue(k, out var shorter)) return shorter;
-        var containing = materials.Where(kv => slotKey.Contains(kv.Key) || kv.Key.Contains(slotKey))
-            .OrderByDescending(kv => kv.Key.Length).FirstOrDefault();
-        if (containing.Value != null) return containing.Value;
-        return materials.TryGetValue(meshKey, out var byMesh) ? byMesh : null;
+        var n = name;
+        foreach (var prefix in new[] { "MI_", "M_", "MAT_", "T_", "SM_" })
+            if (n.StartsWith(prefix, System.StringComparison.OrdinalIgnoreCase)) { n = n.Substring(prefix.Length); break; }
+        var words = new List<string>();
+        foreach (var part in n.Split('_'))
+        foreach (var w in System.Text.RegularExpressions.Regex.Split(part, "(?<=[a-z])(?=[A-Z])"))
+        {
+            var word = w.ToLowerInvariant();
+            if (word.Length == 0 || System.Text.RegularExpressions.Regex.IsMatch(word, "^[0-9]+[a-z]?$") ||
+                word.Length == 1 || word == "inst" || word == "mat") continue;
+            if (word.Length > 3 && word.EndsWith("s") && !word.EndsWith("ss")) word = word.Substring(0, word.Length - 1);
+            words.Add(word);
+        }
+        return string.Join("", words);
+    }
+
+    /// Slots whose words name no texture set of their own.
+    private static readonly Dictionary<string, string> Aliases = new()
+    {
+        { "woodmaskedred", "woodpainted" },
+        { "woodmasked", "woodpainted" },
+    };
+
+    private static Dictionary<string, Material> stems;
+    /// Texture set key -> its original name, whose capitals split the words.
+    private static readonly Dictionary<string, string> setNames = new();
+
+    private static Material Match(string slot, string meshName, Dictionary<string, Material> materials)
+    {
+        if (materials.TryGetValue(Key(slot), out var exact)) return exact;
+        if (stems == null || stems.Count == 0)
+        {
+            // Shortest key first, so T_WoodPainted_01 wins over T_WoodPainted_01_Trim_01.
+            stems = new Dictionary<string, Material>();
+            foreach (var kv in materials.OrderBy(kv => kv.Key.Length))
+            {
+                var stem = Stem(setNames.TryGetValue(kv.Key, out var original) ? original : kv.Key);
+                if (!stems.ContainsKey(stem)) stems[stem] = kv.Value;
+            }
+        }
+        var slotStem = Stem(slot);
+        var found = Lookup(slotStem);
+        if (found == null && Aliases.TryGetValue(slotStem, out var alias)) found = Lookup(alias);
+        if (found == null)
+        {
+            // Drop trailing words: "stonefloorwetdark" -> ... -> "stonefloor".
+            var words = System.Text.RegularExpressions.Regex.Split(slot.Contains("_") ? slot.Substring(slot.IndexOf('_') + 1) : slot,
+                "(?<=[a-z])(?=[A-Z])|_");
+            for (var n = words.Length - 1; n >= 1 && found == null; n--)
+                found = Lookup(Stem(string.Join("_", words.Take(n))));
+        }
+        found ??= Lookup(Stem(meshName));
+        if (found == null) return null;
+        // Colour variants of a shared texture set get a tinted copy.
+        var tint = Tint(slot);
+        return tint == Color.white ? found : Tinted(found, slot, tint);
+    }
+
+    private static Material Lookup(string stem) =>
+        !string.IsNullOrEmpty(stem) && stems.TryGetValue(stem, out var m) ? m : null;
+
+    private static Color Tint(string slot)
+    {
+        var s = slot.ToLowerInvariant();
+        if (s.Contains("red")) return new Color(0.78f, 0.22f, 0.16f);
+        if (s.Contains("dark")) return new Color(0.55f, 0.55f, 0.55f);
+        if (s.Contains("green")) return new Color(0.35f, 0.62f, 0.38f);
+        if (s.Contains("blue")) return new Color(0.35f, 0.48f, 0.75f);
+        return Color.white;
+    }
+
+    private static Material Tinted(Material source, string slot, Color tint)
+    {
+        var path = $"{Generated}/M_{slot}.mat";
+        var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+        if (material == null)
+        {
+            material = new Material(source);
+            AssetDatabase.CreateAsset(material, path);
+        }
+        else
+        {
+            material.CopyPropertiesFromMaterial(source);
+        }
+        material.SetColor("_BaseColor", tint);
+        EditorUtility.SetDirty(material);
+        return material;
     }
 
     private static Vector3 Size(GameObject prefab)
