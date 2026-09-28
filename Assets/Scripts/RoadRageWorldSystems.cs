@@ -1020,8 +1020,17 @@ namespace RoadRage.UnityRemake
                     // direction is ever chosen, and it just matches the blocker's speed
                     // forever. If the blocker is stopped, this parks the follower (and
                     // everyone behind it) permanently. Fall back to a deterministic side.
-                    overtakeDir = Mathf.Sign(LaneOffset - blockerOffset);
-                    if (Mathf.Abs(overtakeDir) < 0.01f) overtakeDir = variationSeed % 2 == 0 ? 1f : -1f;
+                    // The side is chosen once per blocker. Re-choosing it every frame, a
+                    // car sitting almost dead behind the blocker flipped sides each frame
+                    // as the contact pass nudged it across - it shook on the spot.
+                    var sameBlocker = overtakeBlockerRoad > -1e8f &&
+                                      Mathf.Abs(overtakeBlockerRoad - blockerRoadDistance) < 3f &&
+                                      Mathf.Abs(overtakeDir) > 0.01f;
+                    if (!sameBlocker)
+                    {
+                        overtakeDir = Mathf.Sign(LaneOffset - blockerOffset);
+                        if (Mathf.Abs(overtakeDir) < 0.01f) overtakeDir = variationSeed % 2 == 0 ? 1f : -1f;
+                    }
                     overtakeBlockerRoad = blockerRoadDistance;
                     overtakeDriftTarget = OvertakeDrift(overtakeDir);
                 }

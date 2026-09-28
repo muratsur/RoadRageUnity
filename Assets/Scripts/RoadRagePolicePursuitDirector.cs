@@ -1210,6 +1210,12 @@ namespace RoadRage.UnityRemake
         {
             if (isWrecked) return;
             isWrecked = true;
+            // A wreck goes dark. Left strobing, a crashed cruiser sliding across the
+            // road read as one still driving, badly.
+            if (redLedMat != null) redLedMat.SetColor("_EmissionColor", Color.black);
+            if (blueLedMat != null) blueLedMat.SetColor("_EmissionColor", Color.black);
+            if (redStrobe != null) redStrobe.intensity = 0f;
+            if (blueStrobe != null) blueStrobe.intensity = 0f;
 
             wreckSlideDir = targetPlayer != null ? Mathf.Sign(LateralOffset - targetPlayer.LateralOffset) : (Random.value > 0.5f ? 1f : -1f);
             if (Mathf.Abs(wreckSlideDir) < 0.1f) wreckSlideDir = 1f;
