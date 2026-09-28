@@ -293,15 +293,15 @@ namespace RoadRage.UnityRemake
         private Transform car;
 		public static string requestedBiome;
         /// Indices the picker and journey currently expose.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
-            "HOLLYWOOD HILLS", "MIDNIGHT DOCKS", "VOLCANO PASS", "SALT FLATS", "STORM COAST"
+            "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST"
         };
-        private static readonly string[] ComingSoon = { "MIDNIGHT DOCKS", "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
+        private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
 		private string biomeName;
 		private WeatherKind activeWeather;
@@ -586,6 +586,7 @@ namespace RoadRage.UnityRemake
             if (value.Contains("brooklyn") || value.Contains("kowloon") || value.Contains("hong")) return Biomes[7];
             if (value.Contains("manhattan") || value.Contains("cyber") || value.Contains("sprawl")) return Biomes[8];
             if (value.Contains("hollywood") || value.Contains("hills")) return Biomes[9];
+            if (value.Contains("canal") || value.Contains("asia")) return Biomes[10];
             if (value.Contains("midnight") || value.Contains("dock")) return Biomes[10];
             if (value.Contains("volcano") || value.Contains("pass")) return Biomes[11];
             if (value.Contains("salt") || value.Contains("flat")) return Biomes[12];
@@ -1674,8 +1675,11 @@ namespace RoadRage.UnityRemake
             if (!lowDetail)
             {
                 QualitySettings.shadows = UnityEngine.ShadowQuality.All;
-                QualitySettings.shadowDistance = 160f;
-                QualitySettings.shadowCascades = 4;
+                // Mirrors the URP assets, which are what URP actually reads. 160 m in
+                // four cascades drew every shadow caster up to four times; in the forest
+                // that was most of the frame's draw calls.
+                QualitySettings.shadowDistance = 120f;
+                QualitySettings.shadowCascades = 2;
                 QualitySettings.shadowResolution = UnityEngine.ShadowResolution.Medium;
             }
             else
@@ -2214,6 +2218,45 @@ namespace RoadRage.UnityRemake
             };
             SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
             Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
+            StartCoroutine(ReportSceneBudgetSoon(++budgetRun));
+        }
+
+        /// What the frame is made of, by kind of object: renderers visible to a camera
+        /// or a shadow map, their draw calls (submeshes) and triangles. Logged once per
+        /// run, a few seconds in, so a slow biome can be traced without the Profiler.
+        private int budgetRun;
+
+        /// Reports for the latest run only: a run restarted within the wait skips it.
+        private System.Collections.IEnumerator ReportSceneBudgetSoon(int run)
+        {
+            yield return new WaitForSeconds(8f);
+            if (run == budgetRun) ReportSceneBudget();
+        }
+
+        private void ReportSceneBudget()
+        {
+            var groups = new Dictionary<string, (int renderers, int draws, long triangles)>();
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
+            {
+                if (!r.enabled || !r.isVisible || !r.TryGetComponent<MeshFilter>(out var f) || f.sharedMesh == null)
+                    continue;
+                // Named after the object directly under its chunk (a tree, a bush, the
+                // cliff), or after its root when it is not part of a chunk.
+                var t = r.transform;
+                while (t.parent != null && !t.parent.name.StartsWith("Chunk ")) t = t.parent;
+                var key = t.name;
+                var mesh = f.sharedMesh;
+                long triangles = 0;
+                for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
+                groups.TryGetValue(key, out var g);
+                groups[key] = (g.renderers + 1, g.draws + mesh.subMeshCount, g.triangles + triangles);
+            }
+            var lines = new List<string>();
+            foreach (var pair in groups)
+                lines.Add($"{pair.Value.triangles / 1000,8}k tris {pair.Value.draws,6} draws {pair.Value.renderers,6} x {pair.Key}");
+            lines.Sort((a, b) => string.CompareOrdinal(b, a));
+            Debug.Log("RR_BUDGET visible objects by kind (triangles, draw calls, renderers):\n" +
+                      string.Join("\n", lines.GetRange(0, Mathf.Min(15, lines.Count))));
         }
 
         /// The time of day laid over Greenwood's own palette.
@@ -2345,6 +2388,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
+            CanalTownIndex => new BiomeMood // CANAL TOWN - old quarter, warm haze over the water
+            {
+                FogDensity = 0.0055f, Fog = new Color(0.56f, 0.47f, 0.38f),
+                Sky = new Color(0.56f, 0.52f, 0.50f), Equator = new Color(0.36f, 0.31f, 0.27f),
+                Ground = new Color(0.16f, 0.13f, 0.10f), SunColor = new Color(1f, 0.82f, 0.60f),
+                SunIntensity = 1.25f, PostExposure = 0.10f, BloomIntensity = 0.45f, BloomThreshold = 4f,
+                RoadWetness = 0.35f, AmbientIntensity = 1.1f, Saturation = -10f
+            },
             9 => new BiomeMood // HOLLYWOOD HILLS - Crisp California daylight with blue skies
             {
                 FogDensity = 0.0015f, Fog = new Color(0.75f, 0.85f, 0.95f),
@@ -2401,6 +2452,7 @@ namespace RoadRage.UnityRemake
             7 => "Kowloon Ground",
             8 => "Cyber Ground",
             9 => "Hills Ground",
+            CanalTownIndex => "Kowloon Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2574,7 +2626,11 @@ namespace RoadRage.UnityRemake
         {
             var groundName = GroundNameFor(biomeIndex);
             var isCity = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3 || biomeIndex == 9;
-            if (isCity)
+            if (biomeIndex == CanalTownIndex)
+            {
+                BuildCanalGround(materials[groundName]);
+            }
+            else if (isCity)
             {
                 // Flanking solid foundations on left and right sides (leaves central highway 100% clean with zero z-fighting)
                 BuildRibbon($"Left {Biomes[Mathf.Clamp(biomeIndex, 0, Biomes.Length - 1)]} Ground",
@@ -2637,6 +2693,10 @@ namespace RoadRage.UnityRemake
                 var sidewalkMat = biomeIndex == 8 ? materials["Cyber Floor"] : (biomeIndex == 7 ? materials["Kowloon Ground"] : materials["Sidewalk"]);
                 BuildRibbon("Left Paved Sidewalk", -1.85f, -1.24f, 0.14f, sidewalkMat, relative: true);
                 BuildRibbon("Right Paved Sidewalk", 1.24f, 1.85f, 0.14f, sidewalkMat, relative: true);
+            }
+            else if (biomeIndex == CanalTownIndex)
+            {
+                BuildCanalPavements();
             }
             else if (biomeIndex == 9) // Hollywood Hills
             {
@@ -4224,7 +4284,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -4245,7 +4305,7 @@ namespace RoadRage.UnityRemake
         ///
         /// Greenwood was the last single-lane road, and a truck in the only lane each way
         /// could not be got past: it now has two each way (18 m of carriageway).
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 ? 2 : 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4276,7 +4336,8 @@ namespace RoadRage.UnityRemake
         /// sweeping bends; everything else keeps the road it had. Blended across a zone
         /// seam exactly like the half width, because a step change in curvature at a
         /// boundary is a kink in the road, and the gateway stands right on it.
-        private static float CurveScaleFor(int biomeIndex) => biomeIndex == 0 ? 3.0f : 1f;
+        private static float CurveScaleFor(int biomeIndex) =>
+            biomeIndex == 0 ? 3.0f : biomeIndex == CanalTownIndex ? 0.35f : 1f;
 
         private float CurveScaleAtDistance(float distance)
         {
@@ -4291,7 +4352,8 @@ namespace RoadRage.UnityRemake
             return Mathf.Lerp(here, next, Mathf.SmoothStep(0f, 1f, t));
         }
 
-        private static float ElevationScaleFor(int biomeIndex) => biomeIndex == 0 ? 1.8f : 1f;
+        private static float ElevationScaleFor(int biomeIndex) =>
+            biomeIndex == 0 ? 1.8f : biomeIndex == CanalTownIndex ? 0.15f : 1f;
 
         private float ElevationScaleAtDistance(float distance)
         {
@@ -4947,7 +5009,7 @@ namespace RoadRage.UnityRemake
                 // different amount and leave the rail jagged.
                 if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
                 // B500 posts and signs stand just behind the rail on purpose.
-                if (n.StartsWith("B500 ")) continue;
+                if (n.StartsWith("B500 ") || n.StartsWith("Canal ")) continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -5039,7 +5101,442 @@ namespace RoadRage.UnityRemake
 				case 7: BuildBrooklynPhotorealPass(); break;
 				case 8: BuildManhattanPhotorealPass(); break;
 				case 9: BuildHollywoodPhotorealPass(); break;
+                case CanalTownIndex: BuildCanalTown(); break;
                 default: BuildForest(); break;
+            }
+        }
+
+        // ------------------------------------------------------------ CANAL TOWN
+
+        /// CANAL TOWN: an old Asian canal quarter, built from the Asian Canal Environment
+        /// (Leartes Studios) exported from Unreal and linked by Road Rage > Link Asian
+        /// Canal Pack (see CanalPack). The road runs along the canal. On the left, a
+        /// pavement and a terrace of two-storey houses assembled from the kit's 2 m
+        /// modules - stone and timber walls, windows and doors, awnings, pitched tiled
+        /// roofs - with shop stalls, lanterns and laundry. On the right, a quay wall
+        /// drops to the water, and a second terrace faces the road across the canal.
+        private const int CanalTownIndex = 10;
+        private const float CanalModule = 2f;
+        private const float CanalPavement = 4f;   // kerb to house fronts, street side
+        private const float CanalBank = 1.5f;     // kerb to the quay edge, canal side
+        private const float CanalWidth = 14f;
+        private const float CanalQuay = 3f;       // far quay, water to house fronts
+        private const float CanalWaterLevel = -1.3f;
+
+        private static CanalPack canalPack;
+        private static Material canalQuayStone;
+        private static Material canalWaterMaterial;
+        private static bool canalWarned;
+        private static bool canalPackLoaded;
+
+        private static CanalPack Canal
+        {
+            get
+            {
+                if (!canalPackLoaded)
+                {
+                    canalPackLoaded = true;
+                    canalPack = Resources.Load<CanalPack>("Biomes/AsianCanalPack");
+                }
+                return canalPack != null && canalPack.Meshes.Length > 0 ? canalPack : null;
+            }
+        }
+
+        private static float CanalEdge(float distance) => RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth;
+        private static float CanalStreetFacade(float d) => CanalEdge(d) + CanalPavement;
+        private static float CanalQuayEdge(float d) => CanalEdge(d) + CanalBank;
+        private static float CanalFarEdge(float d) => CanalQuayEdge(d) + CanalWidth;
+        private static float CanalFarFacade(float d) => CanalFarEdge(d) + CanalQuay;
+
+        private Material CanalMaterial(string name, string fallback)
+        {
+            var m = Canal?.FindMaterial(name);
+            return m != null ? m : materials[fallback];
+        }
+
+        /// Ground either side, with the canal cut out of the right-hand side.
+        private void BuildCanalGround(Material fallback)
+        {
+            _ = fallback;
+            var paving = CanalMaterial("M_StoneFloorWet_01", "Kowloon Ground");
+            var half = RoadPath.HalfWidthAt(segStart);
+            BuildRibbon("Left CANAL TOWN Ground", -150f, -1.0f, -0.02f, paving, sampleStep: 6f, relative: true);
+            BuildRibbon("Right CANAL TOWN Ground", 1.0f, CanalQuayEdge(segStart) / half, -0.02f, paving, sampleStep: 6f, relative: true);
+            BuildRibbon("Far CANAL TOWN Ground", CanalFarEdge(segStart) / half, 150f, -0.02f, paving, sampleStep: 6f, relative: true);
+        }
+
+        private void BuildCanalPavements()
+        {
+            var cobble = CanalMaterial("M_CobbleStone_01B", "Sidewalk");
+            var half = RoadPath.HalfWidthAt(segStart);
+            BuildRibbon("Canal Curb Left", -1.03f, -1.0f, 0.12f, materials["City Asphalt Trim"], relative: true);
+            BuildRibbon("Canal Curb Right", 1.0f, 1.03f, 0.12f, materials["City Asphalt Trim"], relative: true);
+            BuildRibbon("Canal Pavement Left", -CanalStreetFacade(segStart) / half, -1.03f, 0.12f, cobble, relative: true);
+            BuildRibbon("Canal Pavement Right", 1.03f, CanalQuayEdge(segStart) / half, 0.12f, cobble, relative: true);
+        }
+
+        private static readonly string[] CanalGroundWalls =
+            { "SM_Wall4x2_01", "SM_Wall4x2_02", "SM_Wall4x2_04", "SM_Wall4x2_05", "SM_Wall4x2_Window_01", "SM_Wall4x2_Window_02" };
+        private static readonly string[] CanalUpperWalls =
+            { "SM_Wall4x2_Window_01", "SM_Wall4x2_Window_02", "SM_Wall4x2_Window_03", "SM_Wall4x2_03", "SM_Wall4x2_03_RED", "SM_Wall4x2_06" };
+        private static readonly string[] CanalRoofs = { "SM_Roof_01_Straight", "SM_Roof_02_Straight" };
+        private static readonly string[] CanalAwnings = { "SM_SmallRoof_01", "SM_SmallRoof_02", "SM_SmallRoof_03" };
+        private static readonly string[] CanalColumns = { "SM_Column_01_RED", "SM_Column_02_RED", "SM_Column_03", "SM_Column_04_RED" };
+        private static readonly string[] CanalLaundry =
+            { "SM_ClothesHanged_01", "SM_ClothesHanged_02", "SM_ClothesHanged_03", "SM_ClothesHanged_4", "SM_ClothesHanged_6" };
+        private static readonly string[] CanalStreetProps =
+        {
+            "SM_Barrel_01", "SM_Barrel_01_Ropes_01", "SM_Crate_01", "SM_SacksPacked_01", "SM_SacksPacked_02", "SM_Pot_01",
+            "SM_Pot_02", "SM_Pot_04", "SM_Basket_01", "SM_Basket_02", "SM_Bucket_01", "SM_Tub_01", "SM_Wheelcart_01",
+        };
+
+        private enum CanalAlign { Min, Center, Max }
+
+        /// Places one kit piece in a frame standing on the road at (distance, lateral),
+        /// its +z pointing away from the road. The piece is measured, not trusted: its
+        /// bounds are centred on the frame across the road axis, stood on the frame's
+        /// floor, and put in front of, behind or across the frame's line in depth - so
+        /// Unreal pivots, wherever they are, do not matter. highAway turns a sloped piece
+        /// so its high side (a roof ridge, an awning's wall edge) is away from the road.
+        private GameObject CanalPiece(string mesh, float distance, float lateral, int side, float height,
+            CanalAlign depthAlign, float depthOffset = 0f, bool highAway = false, string label = "Canal Piece",
+            Transform parent = null, float yaw = 0f)
+        {
+            var pack = Canal;
+            var prefab = pack?.Find(mesh, out _);
+            if (prefab == null) return null;
+            // Measured in a frame at the origin, then moved into place.
+            var frame = new GameObject(label).transform;
+            var piece = Instantiate(prefab, frame, false);
+            if (highAway && pack.HighOf(prefab).z < 0f)
+                piece.transform.localRotation = Quaternion.Euler(0f, 180f, 0f) * piece.transform.localRotation;
+            if (yaw != 0f)
+                piece.transform.localRotation = Quaternion.Euler(0f, yaw, 0f) * piece.transform.localRotation;
+            if (TryGetCombinedBounds(piece, out var b))
+            {
+                var z = depthAlign == CanalAlign.Min ? b.min.z : depthAlign == CanalAlign.Max ? b.max.z : b.center.z;
+                piece.transform.localPosition -= new Vector3(b.center.x, b.min.y, z - depthOffset);
+            }
+            frame.SetParent(parent != null ? parent : chunkRoot, false);
+            var outward = side * RoadPath.Right(distance);
+            outward.y = 0f;
+            frame.SetPositionAndRotation(RoadPath.Point(distance, lateral, height),
+                Quaternion.LookRotation(outward.sqrMagnitude > 1e-4f ? outward.normalized : Vector3.right * side));
+            return frame.gameObject;
+        }
+
+        private void BuildCanalTown()
+        {
+            Random.InitState(88321 ^ chunkSeed);
+            if (Canal == null)
+            {
+                if (canalWarned) return;
+                canalWarned = true;
+                Debug.LogWarning("CANAL TOWN needs the Asian Canal pack: export it from Unreal into Assets/AsianCanal " +
+                                 "and run Road Rage > Link Asian Canal Pack.");
+                return;
+            }
+            var street = new GameObject("Canal Street").transform;
+            street.SetParent(chunkRoot, false);
+            var water = new GameObject("Canal Water Side").transform;
+            water.SetParent(chunkRoot, false);
+
+            BuildCanalWater();
+            if (CanalHasUsableRows())
+            {
+                // The artist's own houses, exported whole from the showcase map.
+                BuildCanalRows(-1, CanalStreetFacade, 0.37f, street);
+                BuildCanalRows(1, CanalFarEdge, 0f, water);
+            }
+            else
+            {
+                BuildCanalTerrace(-1, CanalStreetFacade, true, street);
+                BuildCanalTerrace(1, CanalFarFacade, false, water);
+            }
+            BuildCanalQuay(water);
+        }
+
+        private void BuildCanalWater()
+        {
+            var half = RoadPath.HalfWidthAt(segStart);
+            // Dark, still, reflective water. The pack's MuddyCanal textures are the canal
+            // bed; its water is an Unreal shader that does not export.
+            if (canalWaterMaterial == null)
+            {
+                canalWaterMaterial = new Material(materials["Mountain Lake"]) { name = "Canal Water" };
+                canalWaterMaterial.color = new Color(0.035f, 0.06f, 0.055f);
+                if (canalWaterMaterial.HasProperty("_BaseColor"))
+                    canalWaterMaterial.SetColor("_BaseColor", new Color(0.035f, 0.06f, 0.055f));
+            }
+            var waterMaterial = canalWaterMaterial;
+            EnableProbeReflections(BuildRibbon("Canal Water", CanalQuayEdge(segStart) / half, CanalFarEdge(segStart) / half,
+                CanalWaterLevel, waterMaterial, sampleStep: 6f, relative: true));
+            // Quay walls from the water up to the street, both banks. Double-sided: a
+            // ribbon wall faces one way, and each bank is seen from the other.
+            if (canalQuayStone == null)
+            {
+                canalQuayStone = new Material(CanalMaterial("M_StoneWall_03", "Sewer Concrete")) { name = "Canal Quay Stone" };
+                canalQuayStone.SetFloat("_Cull", 0f);
+            }
+            var stone = canalQuayStone;
+            BuildWallRibbon("Canal Quay Wall Near", CanalQuayEdge(segStart), CanalWaterLevel - 0.5f, 0.12f, stone);
+            BuildWallRibbon("Canal Quay Wall Far", CanalFarEdge(segStart), CanalWaterLevel - 0.5f, 0.0f, stone);
+        }
+
+        /// How far below the water line a row's lowest point sits: the foot of its canal
+        /// wall is under water, not standing on it.
+        private const float CanalRowSink = 0.6f;
+        private static bool canalRowReported;
+
+        /// Rows of houses from the showcase map laid end to end along the road, their
+        /// canal side facing it. Rows follow each other on a fixed grid of their own
+        /// length, so a row crossing a chunk seam is built once, by the chunk holding its
+        /// middle. phase shifts the street side against the canal side so the two banks
+        /// do not mirror each other.
+        private void BuildCanalRows(int side, System.Func<float, float> facadeAt, float phase, Transform parent)
+        {
+            var pack = Canal;
+            for (var r = 0; r < pack.Rows.Length; r++)
+            {
+                if (pack.Rows[r] == null) continue;
+                // Measured once per row prefab, turned to face the road.
+                var length = CanalRowLength(r);
+                if (length < 5f) continue;
+                var start = Mathf.Floor((segStart - phase * length) / length) * length + phase * length;
+                for (var d0 = start; d0 < segEnd; d0 += length * pack.Rows.Length)
+                {
+                    var mid = d0 + length * (r + 0.5f);
+                    if (mid < segStart || mid >= segEnd) continue;
+                    PlaceCanalRow(r, mid, side, facadeAt(mid), parent);
+                }
+            }
+        }
+
+        private readonly Dictionary<int, float> canalRowLengths = new();
+
+        /// A row is one bank of houses: a few tens of metres deep. Deeper than this, the
+        /// export is the whole showcase level (both banks, the ground, the bamboo), which
+        /// cannot be repeated along the road: it overlaps itself and costs thousands of
+        /// draw calls per chunk.
+        private const float CanalRowMaxDepth = 45f;
+        /// Parts smaller than this (cups, lanterns, bamboo stems) are left out of rows:
+        /// at driving speed they are invisible and they are most of the draw calls.
+        private const float CanalRowMinPart = 1.5f;
+        /// One bank of houses is a few hundred parts at most; the showcase level has 561
+        /// objects before its foliage.
+        private const int CanalRowMaxParts = 400;
+        private static readonly string[] CanalRowProps =
+            { "bamboo", "plant", "grass", "ivy", "cloth", "rope", "cable", "wire", "cup", "bottle", "debris", "trash",
+              "leaf", "leaves", "fog", "actor", "decal", "flower", "pot" };
+        private static bool canalLevelWarned;
+
+        private bool CanalRowUsable(int r)
+        {
+            var pack = Canal;
+            return pack.Rows[r] != null && CanalRowLength(r) >= 5f;
+        }
+
+        private bool CanalHasUsableRows()
+        {
+            for (var r = 0; r < Canal.Rows.Length; r++)
+                if (CanalRowUsable(r)) return true;
+            return false;
+        }
+
+        /// Bounds of the parts still switched on (the sky and backdrop parts are off).
+        private static bool ActiveBounds(GameObject item, out Bounds bounds)
+        {
+            bounds = default;
+            var found = false;
+            foreach (var r in item.GetComponentsInChildren<Renderer>(false))
+            {
+                if (!r.enabled) continue;
+                if (!found) { bounds = r.bounds; found = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            return found;
+        }
+
+        private float CanalRowLength(int r)
+        {
+            if (canalRowLengths.TryGetValue(r, out var cached)) return cached;
+            var probe = PlaceCanalRow(r, 0f, 1, 0f, null, measureOnly: true);
+            var b = default(Bounds);
+            var length = probe != null && ActiveBounds(probe, out b) ? b.size.x : 0f;
+            // Every object of the level counts, whether or not the row would draw it.
+            var parts = Canal.Rows[r].GetComponentsInChildren<Renderer>(true).Length;
+            if (length > 0f && (b.size.z > CanalRowMaxDepth || b.size.x > 400f || parts > CanalRowMaxParts))
+            {
+                if (!canalLevelWarned)
+                {
+                    canalLevelWarned = true;
+                    Debug.LogWarning($"RR_CANAL '{Canal.Rows[r].name}' is {b.size.x:0} x {b.size.z:0} m with {parts} parts: that is the whole " +
+                                     "level, not one bank of houses, so CANAL TOWN does not repeat it. In Unreal select only " +
+                                     "the houses along ONE side of the canal (about 60-120 m long, under 40 m deep), File > " +
+                                     "Export Selected into Assets/AsianCanal/Assemblies, one file per row, and run Road Rage > " +
+                                     "Link Asian Canal Pack.");
+                }
+                length = 0f;
+            }
+            if (probe != null) DestroyImmediate(probe);
+            canalRowLengths[r] = length;
+            return length;
+        }
+
+        private GameObject PlaceCanalRow(int r, float distance, int side, float facade, Transform parent, bool measureOnly = false)
+        {
+            var pack = Canal;
+            var frame = new GameObject("Canal Row").transform;
+            var row = Instantiate(pack.Rows[r], frame, false);
+            foreach (var renderer in row.GetComponentsInChildren<Renderer>(true))
+            {
+                var size = renderer.bounds.size.magnitude;
+                var n = renderer.name.ToLowerInvariant();
+                if (System.Array.IndexOf(pack.RowSkip, renderer.name) >= 0 || size > 600f || size < CanalRowMinPart ||
+                    System.Array.Exists(CanalRowProps, n.Contains))
+                {
+                    renderer.enabled = false;
+                    continue;
+                }
+                // Only the houses themselves cast shadows; trim, signs and awnings do not.
+                if (size < 6f) renderer.shadowCastingMode = ShadowCastingMode.Off;
+            }
+            foreach (var l in row.GetComponentsInChildren<Light>(true)) l.gameObject.SetActive(false);
+            foreach (var c in row.GetComponentsInChildren<Collider>(true)) Destroy(c);
+            // Canal side towards the road (frame -z), long side along the road (frame x).
+            var front = r < pack.RowFronts.Length ? pack.RowFronts[r] : Vector3.back;
+            row.transform.localRotation = Quaternion.FromToRotation(front, Vector3.back) * row.transform.localRotation;
+            if (!ActiveBounds(row, out var b))
+            {
+                DestroyImmediate(frame.gameObject);
+                return null;
+            }
+            row.transform.localPosition -= new Vector3(b.center.x, b.min.y - (CanalWaterLevel - CanalRowSink), b.min.z);
+            if (measureOnly) return frame.gameObject;
+
+            if (!canalRowReported)
+            {
+                canalRowReported = true;
+                Debug.Log($"RR_CANAL row '{pack.Rows[r].name}' {b.size.x:0}x{b.size.y:0}x{b.size.z:0} m, front {front}");
+            }
+            frame.SetParent(parent != null ? parent : chunkRoot, false);
+            var outward = side * RoadPath.Right(distance);
+            outward.y = 0f;
+            frame.SetPositionAndRotation(RoadPath.Point(distance, side * facade, 0f),
+                Quaternion.LookRotation(outward.sqrMagnitude > 1e-4f ? outward.normalized : Vector3.right * side));
+            // The row never moves: merge its parts that share a material into a few
+            // batches, as the rest of the chunk does.
+            var parts = new List<GameObject>();
+            foreach (var renderer in row.GetComponentsInChildren<MeshRenderer>(false))
+                if (renderer.enabled && renderer.TryGetComponent<MeshFilter>(out var mf) && mf.sharedMesh != null &&
+                    mf.sharedMesh.isReadable)
+                    parts.Add(renderer.gameObject);
+            if (parts.Count > 1) StaticBatchingUtility.Combine(parts.ToArray(), frame.gameObject);
+            return frame.gameObject;
+        }
+
+        /// A terrace of houses, 3 to 6 modules each, facing the road.
+        private void BuildCanalTerrace(int side, System.Func<float, float> facadeAt, bool streetSide, Transform parent)
+        {
+            var d = Mathf.Ceil(segStart / CanalModule) * CanalModule;
+            var plaster = CanalMaterial("M_PlasterOld_01", "Kowloon Ground");
+            while (d < segEnd - CanalModule * 0.5f)
+            {
+                var modules = Mathf.Min(Random.Range(3, 7), Mathf.FloorToInt((segEnd - d) / CanalModule));
+                if (modules <= 0) break;
+                var roof = CanalRoofs[Random.Range(0, CanalRoofs.Length)];
+                var upperStyle = CanalUpperWalls[Random.Range(0, CanalUpperWalls.Length)];
+                var shops = streetSide && Random.value < 0.6f;
+                var door = Random.Range(0, modules);
+                var houseStart = d;
+                for (var m = 0; m < modules; m++, d += CanalModule)
+                {
+                    var c = d + CanalModule * 0.5f;
+                    var f = facadeAt(c);
+                    var ground = m == door ? null : CanalGroundWalls[Random.Range(0, CanalGroundWalls.Length)];
+                    if (ground != null)
+                        CanalPiece(ground, c, side * f, side, 0f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    else
+                    {
+                        CanalPiece("SM_Door1_01", c, side * f, side, 0f, CanalAlign.Min, 0f, false, "Canal Door", parent);
+                        CanalPiece("SM_WoodPanel1x2_01_RED", c, side * f, side, 3f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    }
+                    CanalPiece(Random.value < 0.75f ? upperStyle : CanalUpperWalls[Random.Range(0, CanalUpperWalls.Length)],
+                        c, side * f, side, 4f, CanalAlign.Min, 0f, false, "Canal Wall", parent);
+                    CanalPiece("SM_Beamx2_01", c, side * f, side, 3.9f, CanalAlign.Max, 0.05f, false, "Canal Beam", parent);
+                    // Pitched roof: the front slope overhangs the facade, the back slope
+                    // meets it at the ridge.
+                    var roofMesh = Canal.Find(roof, out var roofSize);
+                    CanalPiece(roof, c, side * f, side, 8f, CanalAlign.Min, -0.45f, true, "Canal Roof", parent);
+                    CanalPiece(roof, c, side * f, side, 8f, CanalAlign.Min, -0.45f + roofSize.z, false, "Canal Roof", parent,
+                        Canal.HighOf(roofMesh).z < 0f ? 0f : 180f);
+                    if (!streetSide) continue;
+
+                    if (shops && m != door && Random.value < 0.8f)
+                    {
+                        CanalPiece(CanalAwnings[Random.Range(0, CanalAwnings.Length)], c, side * f, side, 3.2f,
+                            CanalAlign.Max, 0f, true, "Canal Awning", parent);
+                        if (Random.value < 0.35f)
+                            CanalPiece("SM_Lantern_02", c, side * (f - 0.7f), side, 2.3f, CanalAlign.Center, 0f, false, "Canal Lantern", parent);
+                    }
+                    if (Random.value < 0.22f)
+                        CanalPiece(CanalLaundry[Random.Range(0, CanalLaundry.Length)], c, side * (f - 0.35f), side, 5.6f,
+                            CanalAlign.Center, 0f, false, "Canal Laundry", parent);
+                    if (Random.value < 0.08f)
+                        CanalPiece("SM_Banner_01", c, side * (f - 0.25f), side, 4.4f, CanalAlign.Center, 0f, false, "Canal Banner", parent);
+                    if (Random.value < 0.3f)
+                        CanalPiece("SM_WallBase1x2_02", c, side * f, side, 0f, CanalAlign.Max, 0f, false, "Canal Plinth", parent);
+                    if (Random.value < 0.35f)
+                        CanalPiece(CanalStreetProps[Random.Range(0, CanalStreetProps.Length)], c + Random.Range(-0.5f, 0.5f),
+                            side * (f - Random.Range(0.8f, 1.6f)), side, 0.12f, CanalAlign.Center, 0f, false, "Canal Prop", parent,
+                            Random.Range(0f, 360f));
+                }
+                // Columns at the house ends, the body behind the facade, and now and
+                // then a market stall on the pavement.
+                if (streetSide)
+                {
+                    var column = CanalColumns[Random.Range(0, CanalColumns.Length)];
+                    CanalPiece(column, houseStart, side * (facadeAt(houseStart) - 0.25f), side, 0f, CanalAlign.Center, 0f, false, "Canal Column", parent);
+                    if (Random.value < 0.18f)
+                    {
+                        var at = houseStart + modules * CanalModule * 0.5f;
+                        CanalPiece(Random.value < 0.5f ? "SM_Stand_01" : "SM_Stand_02", at, side * facadeAt(at), side, 0.12f,
+                            CanalAlign.Max, -0.2f, false, "Canal Stall", parent);
+                    }
+                }
+                var mid = houseStart + modules * CanalModule * 0.5f;
+                var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                body.name = "Canal House Body";
+                Destroy(body.GetComponent<Collider>());
+                body.GetComponent<Renderer>().sharedMaterial = plaster;
+                body.transform.SetParent(parent, false);
+                var outward = side * RoadPath.Right(mid);
+                outward.y = 0f;
+                var rot = Quaternion.LookRotation(outward.normalized);
+                body.transform.SetPositionAndRotation(RoadPath.Point(mid, side * (facadeAt(mid) + 2.1f), 4f), rot);
+                body.transform.localScale = new Vector3(modules * CanalModule - 0.05f, 8f, 3.6f);
+
+                // An alley between houses now and then.
+                if (Random.value < 0.15f) d += CanalModule;
+            }
+        }
+
+        /// The canal's edge on the street side: a low stone parapet, stone lanterns,
+        /// steps down to the water, and a lion guarding the way now and then.
+        private void BuildCanalQuay(Transform parent)
+        {
+            for (var d = Mathf.Ceil(segStart / CanalModule) * CanalModule; d < segEnd; d += CanalModule)
+            {
+                var edge = CanalQuayEdge(d);
+                var step = Mathf.RoundToInt(d / CanalModule);
+                CanalPiece("SM_StoneFence_01_Long", d, edge - 0.15f, 1, 0.12f, CanalAlign.Center, 0f, false, "Canal Parapet", parent);
+                if (step % 6 == 0)
+                    CanalPiece("SM_Toro_01", d, edge - 1.0f, 1, 0.12f, CanalAlign.Center, 0f, false, "Canal Toro", parent);
+                if (step % 97 == 13)
+                    CanalPiece("SM_LionStatue_01", d, CanalFarEdge(d) + CanalQuay * 0.5f, 1, 0f, CanalAlign.Center, 0f, false, "Canal Lion", parent, 180f);
+                // Lanterns along the far quay.
+                if (step % 8 == 3)
+                    CanalPiece("SM_Toro_01", d, CanalFarEdge(d) + 1.2f, 1, 0f, CanalAlign.Center, 0f, false, "Canal Toro", parent);
             }
         }
 
@@ -6639,8 +7136,10 @@ namespace RoadRage.UnityRemake
             GameObject model;
             if (external)
             {
-                var pool = split[1].StartsWith("y") ? ExternalYoungTrees : ExternalTrees;
-                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y')) % pool.Length] : null;
+                var pool = split[1].StartsWith("y") ? ExternalYoungTrees
+                    : split[1].StartsWith("b") ? ExternalBroadleaf
+                    : ExternalTrees;
+                var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y', 'b')) % pool.Length] : null;
                 model = prefab != null ? Adopt(Instantiate(prefab)) : null;
             }
             else
@@ -6665,6 +7164,8 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
+            if (external) ThinExternalTree(model, lateral);
+            else ThinForestPiece(model, lateral, label);
             return model;
         }
 
@@ -7078,8 +7579,16 @@ namespace RoadRage.UnityRemake
                 ? BlackForestTrees
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var entry = table[Random.Range(0, table.Length)];
-            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
-                entry = "External|" + Random.Range(0, ExternalTrees.Length);
+            // The pack's trees are film-quality meshes; past the near bands the fog hides
+            // what they add, and at 61 M triangles a frame they cost the frame rate.
+            // The far forest keeps the light Black Forest trees.
+            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0 &&
+                Mathf.Abs(lateral) < ExternalTreeReach)
+                // The northern Black Forest is spruce and fir, with beech mixed in on
+                // the lower slopes: about one tree in eight where the pack has them.
+                entry = ExternalBroadleaf.Length > 0 && Random.value < 0.12f
+                    ? "External|b" + Random.Range(0, ExternalBroadleaf.Length)
+                    : "External|" + Random.Range(0, ExternalTrees.Length);
             var tree = SpawnForestPiece(entry, distance, lateral, 0f, minHeight, maxHeight, "Forest Tree");
             if (tree == null) return null;
             // The tree's real offset, not its sign. Passed Mathf.Sign(lateral) - always
@@ -7114,6 +7623,7 @@ namespace RoadRage.UnityRemake
 
         private static GameObject[] externalTrees;
         private static GameObject[] externalYoungTrees;
+        private static GameObject[] externalBroadleaf;
 
         /// Tree prefabs from an installed pack, linked by Road Rage > Link Installed
         /// Tree Pack; empty when there is none.
@@ -7133,14 +7643,83 @@ namespace RoadRage.UnityRemake
                 externalYoungTrees = registry != null && registry.YoungTrees != null
                     ? System.Array.FindAll(registry.YoungTrees, t => t != null && RendersInThisPipeline(t))
                     : System.Array.Empty<GameObject>();
+                externalBroadleaf = registry != null && registry.Broadleaf != null
+                    ? System.Array.FindAll(registry.Broadleaf, t => t != null && RendersInThisPipeline(t))
+                    : System.Array.Empty<GameObject>();
                 if (externalTrees.Length > 0)
-                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees from {registry.Source}");
+                    Debug.Log($"RR_TREES Greenwood plants {externalTrees.Length} trees and {externalBroadleaf.Length} " +
+                              $"broadleaf from {registry.Source}");
                 if (externalTrees.Length < linked.Length)
                     Debug.LogWarning($"RR_TREES {linked.Length - externalTrees.Length} linked trees use shaders URP cannot " +
                                      "draw (they would be magenta) and are skipped. Import the pack's URP support " +
                                      "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
                 return externalTrees;
             }
+        }
+
+        /// A forest chunk holds about a thousand pieces and six chunks are built ahead,
+        /// and none of the kit meshes has LODs: every fern 800 m away was drawn, and
+        /// drawn again into each shadow cascade. Each piece now culls once it is small
+        /// on screen (ground cover sooner than trees), and only trees near the road cast
+        /// shadows - undergrowth shadows are lost in the trees' own.
+        private static void ThinForestPiece(GameObject piece, float lateral, string label)
+        {
+            if (piece.GetComponentInChildren<LODGroup>() != null) return;
+            var tree = label.StartsWith("Forest Tree") || label.StartsWith("Forest Understory");
+            var renderers = piece.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return;
+            if (!tree || Mathf.Abs(lateral) > 30f)
+                foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+            var group = piece.AddComponent<LODGroup>();
+            group.SetLODs(new[] { new LOD(tree ? 0.04f : 0.035f, renderers) });
+            group.RecalculateBounds();
+        }
+
+        /// How far from the road the pack's trees are planted, metres.
+        private const float ExternalTreeReach = 45f;
+        private static bool externalTreeReported;
+
+        /// Keeps a pack tree affordable: its lower LODs take over at twice the usual
+        /// screen size and it is culled once it is a sliver; only trees by the road cast
+        /// shadows, and only from their full-detail LOD. A pack tree without an LODGroup
+        /// gets one that culls it when small.
+        private static void ThinExternalTree(GameObject tree, float lateral)
+        {
+            var near = Mathf.Abs(lateral) < 18f;
+            var group = tree.GetComponentInChildren<LODGroup>();
+            if (group != null)
+            {
+                var lods = group.GetLODs();
+                var previous = 1f;
+                for (var i = 0; i < lods.Length; i++)
+                {
+                    var height = lods[i].screenRelativeTransitionHeight * 2f;
+                    if (i == lods.Length - 1) height = Mathf.Max(height, 0.025f);
+                    // Transitions must keep falling from one LOD to the next.
+                    previous = lods[i].screenRelativeTransitionHeight = Mathf.Min(height, previous * 0.9f);
+                    foreach (var r in lods[i].renderers)
+                        if (r != null && (i > 0 || !near)) r.shadowCastingMode = ShadowCastingMode.Off;
+                }
+                group.SetLODs(lods);
+            }
+            else
+            {
+                var renderers = tree.GetComponentsInChildren<Renderer>();
+                if (!near)
+                    foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+                group = tree.AddComponent<LODGroup>();
+                group.SetLODs(new[] { new LOD(0.03f, renderers) });
+                group.RecalculateBounds();
+            }
+
+            if (externalTreeReported) return;
+            externalTreeReported = true;
+            var triangles = 0L;
+            foreach (var f in tree.GetComponentsInChildren<MeshFilter>(true))
+                if (f.sharedMesh != null)
+                    for (var m = 0; m < f.sharedMesh.subMeshCount; m++) triangles += f.sharedMesh.GetIndexCount(m) / 3;
+            Debug.Log($"RR_TREES pack tree '{tree.name}': {triangles} triangles over all LODs, " +
+                      $"{group.lodCount} LODs, planted within {ExternalTreeReach} m of the road");
         }
 
         private static bool RendersInThisPipeline(GameObject prefab)
@@ -7153,6 +7732,16 @@ namespace RoadRage.UnityRemake
                     return false;
             }
             return true;
+        }
+
+        /// Broadleaf trees (beech, oak ...) from the pack, mixed into the conifers.
+        private static GameObject[] ExternalBroadleaf
+        {
+            get
+            {
+                if (externalTrees == null) _ = ExternalTrees;
+                return externalBroadleaf ?? System.Array.Empty<GameObject>();
+            }
         }
 
         private static GameObject[] ExternalYoungTrees
@@ -7656,8 +8245,14 @@ namespace RoadRage.UnityRemake
             if (biomeIndex == 0)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
-                if (source != null) skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
-                else Debug.LogWarning("Missing sky material Sky/M_sky_overcast; keeping solid background");
+                if (source == null)
+                    Debug.LogWarning("Missing sky material Sky/M_sky_overcast; keeping solid background");
+                // A shader that failed to compile draws the whole sky magenta; the fogged
+                // solid background is better than that.
+                else if (source.shader == null || !source.shader.isSupported)
+                    Debug.LogWarning($"Sky shader '{(source.shader != null ? source.shader.name : "none")}' cannot draw on " +
+                                     "this setup (see the red shader error in the Console); keeping solid background");
+                else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
             RenderSettings.skybox = skyMaterial;
             if (Camera.main != null) ApplySkyToCamera(Camera.main);
@@ -7776,10 +8371,13 @@ namespace RoadRage.UnityRemake
                     var from = near;
                     ScatterBand(8f, from, from + 8f, (d, l, s) => ForestTree(d, l, 18f, 32f));
                 }
+                // Behind 76 m the near bands already close the view, so the back of the
+                // stand is thinned to half: RR_BUDGET counted ~5,900 visible trees at
+                // 7.9 M triangles, the largest single cost in the frame.
                 for (var near = 76f; near < 160f; near += 12f)
                 {
                     var from = near;
-                    ScatterBand(11f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
+                    ScatterBand(22f, from, from + 12f, (d, l, s) => ForestTree(d, l, 20f, 32f));
                 }
                 // Understory: young firs between the trunks, to about 70 m. Tall firs
                 // lose their lower branches, so under their crowns the eye ran straight
