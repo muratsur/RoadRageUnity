@@ -130,7 +130,6 @@ namespace RoadRage.UnityRemake
         private float lastCrashSeverity;
         private AudioClip turboClip;
         private AudioClip nitroClip;
-        private AudioClip whooshClip;
         private bool clipsLoaded;
 
         private void LoadClips()
@@ -145,7 +144,6 @@ namespace RoadRage.UnityRemake
             crashLight = LoadReal("light") ?? LoadSet("light", 3);
             turboClip = Resources.Load<AudioClip>("Audio/VPP/turbo");
             nitroClip = Resources.Load<AudioClip>("Audio/SFX/NOS/NOSWhoosh2") ?? Resources.Load<AudioClip>("Audio/SFX/NOS/NOS");
-            whooshClip = CreatePassByWhooshClip();
         }
 
         private static AudioClip[] LoadReal(string weight)
@@ -210,13 +208,10 @@ namespace RoadRage.UnityRemake
             sfxSource.PlayOneShot(nitroClip, 0.7f);
         }
 
-        /// A near miss is the rush of air as a car goes past the window.
+        /// Near misses are silent: the nitro gain and the score popup say it, and a
+        /// whoosh on every overtake became a constant noise.
         public void PlayNearMissChirp()
         {
-            if (sfxSource == null) return;
-            LoadClips();
-            sfxSource.pitch = Random.Range(0.9f, 1.1f);
-            sfxSource.PlayOneShot(whooshClip, 0.55f);
         }
 
         private AudioClip shutterClip;
@@ -241,30 +236,6 @@ namespace RoadRage.UnityRemake
             }
             sfxSource.pitch = 1f;
             sfxSource.PlayOneShot(shutterClip, 0.8f);
-        }
-
-        /// Band-limited noise swelling and falling away: air, not a tone.
-        private static AudioClip CreatePassByWhooshClip()
-        {
-            const int sampleRate = 44100;
-            var samples = sampleRate * 6 / 10;
-            var data = new float[samples];
-            var low = 0f;
-            var band = 0f;
-            for (var i = 0; i < samples; i++)
-            {
-                var t = (float)i / samples;
-                var noise = Random.value * 2f - 1f;
-                // Two one-pole filters: a moving band, brightest as the car passes.
-                var cutoff = Mathf.Lerp(0.04f, 0.22f, Mathf.Sin(t * Mathf.PI));
-                low += (noise - low) * cutoff;
-                band += (low - band) * 0.02f;
-                var envelope = Mathf.Pow(Mathf.Sin(t * Mathf.PI), 1.6f) * (t < 0.45f ? t / 0.45f : 1f);
-                data[i] = (low - band) * envelope * 1.6f;
-            }
-            var clip = AudioClip.Create("PassByWhoosh", samples, 1, sampleRate, false);
-            clip.SetData(data, 0);
-            return clip;
         }
 
         public void SetSlowMotionFilter(bool enabled)
