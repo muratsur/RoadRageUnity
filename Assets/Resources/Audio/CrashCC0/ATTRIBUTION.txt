@@ -1,0 +1,17 @@
+Crash sounds built by Tools/Audio/build_crash_sounds.py from CC0 (public domain)
+recordings collected at https://github.com/lavenderdotpet/CC0-Public-Domain-Sounds:
+
+  Kenney - Impact Sounds (kenney.nl), CC0
+  "100 CC0 wood and metal SFX" (OpenGameArt), CC0
+  "75 CC0 breaking/falling/hit SFX" (OpenGameArt), CC0
+
+No attribution is required; this file records where they came from.
+
+Assets/Resources/Audio/CrashReal: the recorded crash from the Road Rage 3D project
+(muratsur/roadrage3d, audio/crash.wav), cut by Tools/Audio/import_crash_recording.py.
+
+Assets/Resources/Audio/SirenReal: the recorded siren from the Road Rage 3D project
+(muratsur/roadrage3d, audio/siren.mp3), made into a seamless loop.
+
+Assets/Resources/Audio/MusicRR3D: the soundtrack of the Road Rage 3D project
+(muratsur/roadrage3d, audio/music*.mp3), copied unchanged.

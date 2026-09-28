@@ -113,7 +113,6 @@ namespace RoadRage.UnityRemake
             {
                 RoadRageAudioBridge.Instance.PlayCrash(1.2f);
                 RoadRageAudioBridge.Instance.PlayTakedownStinger();
-                RoadRageAudioBridge.Instance.SetSlowMotionFilter(true);
             }
 
             // 2. Spawn Kinetic Spark & Debris Bursts
@@ -143,15 +142,13 @@ namespace RoadRage.UnityRemake
             var rb = victim.GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
 
-            // 4. Hit-Stop Impact Freeze (100ms kinetic punch)
-            Time.timeScale = 0.05f;
-            yield return new WaitForSecondsRealtime(0.09f);
+            // No hit-stop, no slow motion and no cinematic camera: the crash plays out
+            // in real time behind the player, who keeps driving. The slow-mo broke the
+            // flow on every hit, and a real crash is over in a second.
+            if (RoadRageImpactShakeDirector.Instance != null)
+                RoadRageImpactShakeDirector.Instance.TriggerMediumShake(0.7f);
 
-            // 5. Enter Slow-Motion Takedown (`0.32x`)
-            Time.timeScale = 0.32f;
-            takedownTimer = 0f;
-
-            // 6. Award Arcade Bonuses
+            // Award Arcade Bonuses
             GameState.Takedowns++;
             GameState.Cash += 5000;
             GameState.Score += 25000;
@@ -165,31 +162,9 @@ namespace RoadRage.UnityRemake
                 var controller = playerTransform.GetComponent<ArcadeCarController>();
                 if (controller != null) controller.RefillNitro();
             }
-
-            // 7. Track victim during slow-mo
-            while (takedownTimer < TakedownDuration)
-            {
-                takedownTimer += Time.unscaledDeltaTime;
-                yield return null;
-            }
-
-            // 8. Snap back to normal gameplay speed
-            var restoreTimer = 0f;
-            while (restoreTimer < 0.25f)
-            {
-                restoreTimer += Time.unscaledDeltaTime;
-                Time.timeScale = Mathf.Lerp(0.32f, 1.0f, restoreTimer / 0.25f);
-                yield return null;
-            }
-            Time.timeScale = 1.0f;
-
-            if (RoadRageAudioBridge.Instance != null)
-            {
-                RoadRageAudioBridge.Instance.SetSlowMotionFilter(false);
-            }
-
             IsTakedownActive = false;
             CurrentVictim = null;
+            yield break;
         }
 
         /// <summary>

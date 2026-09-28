@@ -395,6 +395,14 @@ namespace RoadRage.UnityRemake
                 DestroyImmediate(oldHud);
             }
 
+			// English formatting everywhere, whatever the machine's language: on a German
+			// or Turkish Windows the clock read "1:23,4", distances "3,4 km" and the
+			// thousands in scores and cash came out with dots.
+			var english = System.Globalization.CultureInfo.GetCultureInfo("en-US");
+			System.Globalization.CultureInfo.DefaultThreadCurrentCulture = english;
+			System.Globalization.CultureInfo.DefaultThreadCurrentUICulture = english;
+			System.Globalization.CultureInfo.CurrentCulture = english;
+			System.Globalization.CultureInfo.CurrentUICulture = english;
 			biomeName = ResolveBiome();
 			Time.timeScale = 1f;
             Application.targetFrameRate = 120;
@@ -498,6 +506,7 @@ namespace RoadRage.UnityRemake
                 weatherSystem.Configure(activeWeather, car, particleMaterial);
             }
             gameObject.AddComponent<RoadRageB500Stages>();
+            if (RoadRageMusic.Instance == null) gameObject.AddComponent<RoadRageMusic>();
             RollRunConditions();
 			gameObject.AddComponent<RoadRageHUD>().Initialize(car.GetComponent<ArcadeCarController>(), this);
 			if (HasCommandLineFlag("-picker"))

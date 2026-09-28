@@ -226,7 +226,11 @@ namespace RoadRage.UnityRemake
                 if (space < 1) continue;
                 if (!float.TryParse(line.Substring(0, space), System.Globalization.NumberStyles.Float,
                         System.Globalization.CultureInfo.InvariantCulture, out var distance)) continue;
-                places.Add((distance, line.Substring(space + 1).Trim()));
+                // "<Z> <local name>|<English label>": the road signs carry the local
+                // name (baked into their meshes); the game shows the English one.
+                var name = line.Substring(space + 1).Trim();
+                var bar = name.IndexOf('|');
+                places.Add((distance, bar >= 0 ? name.Substring(bar + 1).Trim() : name));
             }
             Places = places.ToArray();
         }
@@ -411,6 +415,7 @@ namespace RoadRage.UnityRemake
         {
             get
             {
+                if (Ragdolled) return ragdollExtent.x;
                 if (WreckYaw == 0f) return HalfLength;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
                 return Mathf.Abs(HalfLength * Mathf.Cos(yaw)) + Mathf.Abs(HalfWidth * Mathf.Sin(yaw));
@@ -421,6 +426,7 @@ namespace RoadRage.UnityRemake
         {
             get
             {
+                if (Ragdolled) return ragdollExtent.y;
                 if (WreckYaw == 0f) return HalfWidth;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
                 return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
@@ -434,11 +440,16 @@ namespace RoadRage.UnityRemake
         public float ContactHeight => verticalOffset;
         /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
         /// the pair meeting in the middle.
-        public float ContactMass => HalfLength * HalfWidth;
-        public bool ContactActive => isActiveAndEnabled && !Ragdolled;
+        /// A car the physics owns cannot be pushed by the pass; everything else moves
+        /// round it, as round any wreck lying in the road.
+        public float ContactMass => Ragdolled ? 1000f : HalfLength * HalfWidth;
+        /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
+        /// hole in the road that police and traffic drove straight through.
+        public bool ContactActive => isActiveAndEnabled;
 
         public void ApplyContactPush(float alongRoad, float acrossRoad)
         {
+            if (Ragdolled) return;
             RoadDistance += alongRoad;
             // Into the separation channel, never laneDrift - behaviour rewrites that
             // every frame and would throw the correction away.
@@ -818,6 +829,7 @@ namespace RoadRage.UnityRemake
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
             WreckYaw = 0f;
+            wreckYawRate = 0f;
             wreckRoll = 0f;
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
@@ -842,12 +854,71 @@ namespace RoadRage.UnityRemake
             if (Ragdolled) return;
             Ragdolled = true;
             IsWreck = true;
-            VehicleContacts.Unregister(this);
+            ragdollRestTime = 0f;
+            TrackRagdoll();
+        }
+
+        private Vector2 ragdollExtent;
+        private float ragdollRestTime;
+
+        /// While the physics throws it about, the road-space position, size and height
+        /// follow the real body - so the contact pass, the police and traffic all see the
+        /// car where it actually lies, on its roof or its side. Once it has come to rest
+        /// it is frozen as a wreck; once the player is well past, it goes back to being
+        /// an ordinary wreck, which the recycling then clears away out of sight.
+        private void TrackRagdoll()
+        {
+            var p = transform.position;
+            RoadDistance = p.z;
+            separation = 0f;
+            laneDrift = Vector3.Dot(p - RoadPath.Center(RoadDistance), RoadPath.Right(RoadDistance)) -
+                        RoadPath.LaneLateral(RoadDistance, LaneFraction);
+            var found = false;
+            var bounds = default(Bounds);
+            foreach (var r in GetComponentsInChildren<Renderer>())
+            {
+                if (!found) { bounds = r.bounds; found = true; }
+                else bounds.Encapsulate(r.bounds);
+            }
+            if (found)
+            {
+                ragdollExtent = new Vector2(bounds.extents.z, bounds.extents.x);
+                verticalOffset = Mathf.Max(0f, bounds.min.y - RoadPath.Center(RoadDistance).y - 0.3f);
+            }
+
+            var rb = GetComponent<Rigidbody>();
+            if (rb != null && !rb.isKinematic)
+            {
+                var still = rb.linearVelocity.sqrMagnitude < 0.5f && rb.angularVelocity.sqrMagnitude < 0.5f;
+                ragdollRestTime = still ? ragdollRestTime + Time.deltaTime : 0f;
+                if (ragdollRestTime > 1.5f) rb.isKinematic = true;
+            }
+
+            if (PlayerDistance - RoadDistance > 90f)
+            {
+                Ragdolled = false;
+                WreckYaw = 0f;
+                wreckYawRate = 0f;
+                wreckRoll = 0f;
+                verticalOffset = 0f;
+                currentSpeedKph = 0f;
+                visualPlaced = false;
+                if (rb != null)
+                {
+                    rb.linearVelocity = Vector3.zero;
+                    rb.angularVelocity = Vector3.zero;
+                    rb.isKinematic = true;
+                }
+            }
         }
 
         private void Update()
         {
-            if (Ragdolled) return;
+            if (Ragdolled)
+            {
+                TrackRagdoll();
+                return;
+            }
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
@@ -957,9 +1028,17 @@ namespace RoadRage.UnityRemake
             }
             else
             {
-                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 36f * Time.deltaTime);
-                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget, 8f * Time.deltaTime);
-                WreckYaw = Mathf.MoveTowards(WreckYaw, wreckYawTarget, 120f * Time.deltaTime);
+                // Sliding tyres (~0.75 g). The spin comes from the hit and dies away
+                // with the speed, so each crash ends at its own angle rather than
+                // turning to a set one; the body rocks back level after the jolt.
+                var dt = Time.deltaTime;
+                currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 26f * dt);
+                laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget,
+                    Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
+                if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
+                WreckYaw += wreckYawRate * dt;
+                wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
@@ -1121,7 +1200,7 @@ namespace RoadRage.UnityRemake
         }
 
         private float wreckSlideTarget;
-        private float wreckYawTarget;
+        private float wreckYawRate;
 
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
@@ -1135,10 +1214,10 @@ namespace RoadRage.UnityRemake
             currentSpeedKph = Mathf.Max(currentSpeedKph * 0.4f, impactSpeedKph * 0.72f);
 
             var sign = Mathf.Abs(lateralPush) < 0.01f ? (variationSeed % 2 == 0 ? 1f : -1f) : Mathf.Sign(lateralPush);
-            var variation = 55f + Mathf.Abs(variationSeed % 40);
-            wreckYawTarget = sign * variation;
-            WreckYaw = sign * variation * 0.2f;
-            wreckRoll = sign * 2.5f;
+            // Spin from the hit: harder hits spin it more, and no two the same.
+            var hit = Mathf.Clamp01((Mathf.Max(impactSpeedKph, currentSpeedKph) - 30f) / 120f);
+            wreckYawRate = sign * Mathf.Lerp(60f, 260f, hit) * (0.75f + Mathf.Abs(variationSeed % 50) / 100f);
+            wreckRoll = sign * Mathf.Lerp(3f, 8f, hit);
             // Shove smoothly onto the car's own shoulder, clear of every lane. Shoved the
             // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
             // inner lane stopped in the outer one - either way a wall that everything

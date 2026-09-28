@@ -155,15 +155,13 @@ namespace RoadRage.UnityRemake
                 playerRb.angularVelocity = initialTorque;
             }
 
-            // 3. Enter Impact Time Slow-Motion (0.22x speed)
-            Time.timeScale = 0.22f;
-            Time.fixedDeltaTime = 0.02f * Time.timeScale;
+            // 3. Real time. This used to drop to 0.22x slow motion; the wreck now
+            // tumbles at full speed, as a real crash does.
 
-            // 4. Trigger Heavy Crash Audio & Slow-Mo DSP
+            // 4. Trigger Heavy Crash Audio
             if (RoadRageAudioBridge.Instance != null)
             {
                 RoadRageAudioBridge.Instance.PlayCrash(1.6f);
-                RoadRageAudioBridge.Instance.SetSlowMotionFilter(true);
             }
 
             // 5. Attach & activate flame trail
@@ -177,6 +175,11 @@ namespace RoadRage.UnityRemake
             GameState.Show("💥 AFTERTOUCH! STEER YOUR WRECK!");
         }
 
+        /// The steering forces were tuned under 0.22x slow motion, where the physics
+        /// step was 0.02 x 0.22 s; kept at that value so the wreck handles the same now
+        /// that it runs in real time.
+        private const float ForceStep = 0.02f * 0.22f;
+
         private void FixedUpdate()
         {
             if (!GameState.IsAftertouchActive || playerRb == null) return;
@@ -189,15 +192,15 @@ namespace RoadRage.UnityRemake
             var roadHeading = RoadPath.Forward(playerController != null ? playerController.RoadDistance : 0f);
             var roadRight = Vector3.Cross(Vector3.up, roadHeading).normalized;
 
-            var steerForce = roadRight * (steer * 9500f * playerRb.mass * Time.fixedDeltaTime);
+            var steerForce = roadRight * (steer * 9500f * playerRb.mass * ForceStep);
             playerRb.AddForce(steerForce, ForceMode.Force);
 
             // Aerodynamic roll torque to keep the tumble dramatic and controllable
-            var rollTorque = roadHeading * (-steer * 4200f * playerRb.mass * Time.fixedDeltaTime);
+            var rollTorque = roadHeading * (-steer * 4200f * playerRb.mass * ForceStep);
             playerRb.AddTorque(rollTorque, ForceMode.Force);
 
             // Gentle road-surface suction so the car slides and rolls along the asphalt
-            playerRb.AddForce(Vector3.down * (45f * playerRb.mass * Time.fixedDeltaTime), ForceMode.Force);
+            playerRb.AddForce(Vector3.down * (45f * playerRb.mass * ForceStep), ForceMode.Force);
 
             // 3. Check for secondary traffic collisions during Aftertouch
             DetectTrafficPileupCollisions();

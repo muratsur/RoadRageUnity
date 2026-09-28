@@ -1,12 +1,12 @@
-600 Schwarzwaldhochstraße B500
-7136 Bühlerhöhe
-9977 Sand
-11829 Hundseck
-14168 Unterstmatt
-19058 Mummelsee
-24561 Ruhestein
-27389 Schliffkopf
-31997 Zuflucht
-34761 Alexanderschanze
-38411 Kniebis
-46647 Freudenstadt 2 km
+600 Schwarzwaldhochstraße B500|Black Forest High Road B500
+7136 Bühlerhöhe|Buhlerhohe Castle
+9977 Sand|Sand
+11829 Hundseck|Hundseck
+14168 Unterstmatt|Unterstmatt Ski Area
+19058 Mummelsee|Mummelsee Lake
+24561 Ruhestein|Ruhestein Pass
+27389 Schliffkopf|Schliffkopf Summit
+31997 Zuflucht|Zuflucht Pass
+34761 Alexanderschanze|Alexanderschanze Pass
+38411 Kniebis|Kniebis
+46647 Freudenstadt 2 km|Freudenstadt 2 km

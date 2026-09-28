@@ -535,7 +535,8 @@ def hotel():
 
 def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    places = [line.split(" ", 1)[1].strip() for line in open(PLACES, encoding="utf-8") if " " in line]
+    # "<Z> <local name>|<English label>": the signs carry the local name.
+    places = [line.split(" ", 1)[1].split("|")[0].strip() for line in open(PLACES, encoding="utf-8") if " " in line]
     build_atlas(places)
     objs = [leitpfosten(), sign_on_post("SM_sign_b500", "b500", 1.0, 0.5, 1.6), signpost_hike(),
             woodpile(), fallen_log(), stump(), hotel()]

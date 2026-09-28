@@ -120,39 +120,151 @@ namespace RoadRage.UnityRemake
             else if (!isMoving && engineSource.volume < 0.02f && engineSource.isPlaying) engineSource.Stop();
         }
 
+        // Recorded sounds. The synthesized beeps these replace - a falling sine
+        // "chirp" for nitro, turbo and near misses, and a sine chord "stinger" on every
+        // takedown - were what made a car game sound like a space shooter.
+        private AudioClip[] crashHeavy;
+        private AudioClip[] crashMedium;
+        private AudioClip[] crashLight;
+        private float lastCrashAt = -1f;
+        private float lastCrashSeverity;
+        private AudioClip turboClip;
+        private AudioClip nitroClip;
+        private AudioClip whooshClip;
+        private bool clipsLoaded;
+
+        private void LoadClips()
+        {
+            if (clipsLoaded) return;
+            clipsLoaded = true;
+            // The recorded crash from Road Rage 3D, cut to three lengths
+            // (Tools/Audio/import_crash_recording.py); the CC0 layered set is the
+            // fallback if it is missing.
+            crashHeavy = LoadReal("heavy") ?? LoadSet("heavy", 4);
+            crashMedium = LoadReal("medium") ?? LoadSet("medium", 4);
+            crashLight = LoadReal("light") ?? LoadSet("light", 3);
+            turboClip = Resources.Load<AudioClip>("Audio/VPP/turbo");
+            nitroClip = Resources.Load<AudioClip>("Audio/SFX/NOS/NOSWhoosh2") ?? Resources.Load<AudioClip>("Audio/SFX/NOS/NOS");
+            whooshClip = CreatePassByWhooshClip();
+        }
+
+        private static AudioClip[] LoadReal(string weight)
+        {
+            var clip = Resources.Load<AudioClip>($"Audio/CrashReal/crash_real_{weight}");
+            return clip != null ? new[] { clip } : null;
+        }
+
+        private static AudioClip[] LoadSet(string weight, int count)
+        {
+            var clips = new System.Collections.Generic.List<AudioClip>();
+            for (var i = 0; i < count; i++)
+            {
+                var clip = Resources.Load<AudioClip>($"Audio/CrashCC0/crash_{weight}_{i}");
+                if (clip != null) clips.Add(clip);
+            }
+            return clips.ToArray();
+        }
+
         public void PlayTurboFlutter()
         {
             if (turboSource == null) return;
-            turboSource.pitch = Random.Range(1.1f, 1.35f);
-            turboSource.PlayOneShot(CreateProceduralChirpClip(), 0.6f);
+            LoadClips();
+            if (turboClip == null) return;
+            turboSource.pitch = Random.Range(0.95f, 1.1f);
+            turboSource.PlayOneShot(turboClip, 0.55f);
         }
 
+        /// A real crash: body thump, sheet metal, glass on the big ones, debris
+        /// settling (Tools/Audio/build_crash_sounds.py). Heavier hits pick the
+        /// heavier set; the pitch varies so no two sound the same.
         public void PlayCrash(float severity = 1f)
         {
             if (crashSource == null) return;
-            crashSource.pitch = Random.Range(0.85f, 1.15f);
-            crashSource.PlayOneShot(CreateProceduralCrashClip(), Mathf.Clamp01(severity));
+            LoadClips();
+            // One hit, one crash: a takedown reports the same impact from the car and
+            // from the takedown, and two crashes on top of each other sound like two.
+            if (Time.unscaledTime - lastCrashAt < 0.25f && severity <= lastCrashSeverity) return;
+            lastCrashAt = Time.unscaledTime;
+            lastCrashSeverity = severity;
+            var set = severity >= 1f ? crashHeavy : severity >= 0.65f ? crashMedium : crashLight;
+            if (set.Length == 0) set = crashMedium.Length > 0 ? crashMedium : crashHeavy;
+            crashSource.pitch = Random.Range(0.92f, 1.06f);
+            if (set.Length > 0)
+                crashSource.PlayOneShot(set[Random.Range(0, set.Length)], Mathf.Clamp(severity, 0.35f, 1f));
+            else
+                crashSource.PlayOneShot(CreateProceduralCrashClip(), Mathf.Clamp01(severity));
         }
 
+        /// Takedowns already play the crash itself; the musical sting that went with
+        /// them is gone.
         public void PlayTakedownStinger()
         {
-            if (sfxSource == null) return;
-            sfxSource.pitch = 1.0f;
-            sfxSource.PlayOneShot(CreateProceduralStingerClip(), 0.9f);
         }
 
         public void PlayNitro()
         {
             if (sfxSource == null) return;
-            sfxSource.pitch = Random.Range(1.3f, 1.55f);
-            sfxSource.PlayOneShot(CreateProceduralChirpClip(), 0.85f);
+            LoadClips();
+            if (nitroClip == null) return;
+            sfxSource.pitch = Random.Range(0.95f, 1.08f);
+            sfxSource.PlayOneShot(nitroClip, 0.7f);
         }
 
+        /// A near miss is the rush of air as a car goes past the window.
         public void PlayNearMissChirp()
         {
             if (sfxSource == null) return;
-            sfxSource.pitch = Random.Range(1.6f, 1.9f);
-            sfxSource.PlayOneShot(CreateProceduralChirpClip(), 0.5f);
+            LoadClips();
+            sfxSource.pitch = Random.Range(0.9f, 1.1f);
+            sfxSource.PlayOneShot(whooshClip, 0.55f);
+        }
+
+        private AudioClip shutterClip;
+
+        /// A speed camera going off: the double click of a shutter.
+        public void PlayCameraShutter()
+        {
+            if (sfxSource == null) return;
+            if (shutterClip == null)
+            {
+                const int sampleRate = 44100;
+                var samples = sampleRate / 8;
+                var data = new float[samples];
+                for (var i = 0; i < samples; i++)
+                {
+                    var t = (float)i / sampleRate;
+                    var click = Mathf.Exp(-t * 900f) + 0.7f * (t > 0.06f ? Mathf.Exp(-(t - 0.06f) * 700f) : 0f);
+                    data[i] = (Random.value * 2f - 1f) * click;
+                }
+                shutterClip = AudioClip.Create("CameraShutter", samples, 1, sampleRate, false);
+                shutterClip.SetData(data, 0);
+            }
+            sfxSource.pitch = 1f;
+            sfxSource.PlayOneShot(shutterClip, 0.8f);
+        }
+
+        /// Band-limited noise swelling and falling away: air, not a tone.
+        private static AudioClip CreatePassByWhooshClip()
+        {
+            const int sampleRate = 44100;
+            var samples = sampleRate * 6 / 10;
+            var data = new float[samples];
+            var low = 0f;
+            var band = 0f;
+            for (var i = 0; i < samples; i++)
+            {
+                var t = (float)i / samples;
+                var noise = Random.value * 2f - 1f;
+                // Two one-pole filters: a moving band, brightest as the car passes.
+                var cutoff = Mathf.Lerp(0.04f, 0.22f, Mathf.Sin(t * Mathf.PI));
+                low += (noise - low) * cutoff;
+                band += (low - band) * 0.02f;
+                var envelope = Mathf.Pow(Mathf.Sin(t * Mathf.PI), 1.6f) * (t < 0.45f ? t / 0.45f : 1f);
+                data[i] = (low - band) * envelope * 1.6f;
+            }
+            var clip = AudioClip.Create("PassByWhoosh", samples, 1, sampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
         }
 
         public void SetSlowMotionFilter(bool enabled)
