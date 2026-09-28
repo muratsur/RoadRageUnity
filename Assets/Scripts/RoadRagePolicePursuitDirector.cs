@@ -747,6 +747,8 @@ namespace RoadRage.UnityRemake
         }
 
         private static bool packCruiserReported;
+        /// Height of the cruiser's origin above the road: every placement puts it here.
+        private const float RideHeight = 0.4f;
         private static readonly Dictionary<Material, Material> urpCopies = new();
 
         /// The cruiser body from Realistic Mobile Car #26, where Road Rage > Link Police
@@ -825,11 +827,13 @@ namespace RoadRage.UnityRemake
             var scale = 4.8f / Mathf.Max(0.01f, b.size.z);
             car.transform.localScale *= scale;
             b = LocalBounds(holder.transform, renderers);
-            // Centred on the hull, wheels on the road.
-            car.transform.localPosition -= new Vector3(b.center.x, b.min.y, b.center.z);
+            // Centred on the hull, wheels on the road. The cruiser's own origin rides
+            // RideHeight above the road (it is placed there every frame), so the car
+            // sits that far below it; set on the origin, it hovered 0.4 m up.
+            car.transform.localPosition -= new Vector3(b.center.x, b.min.y + RideHeight, b.center.z);
             b = LocalBounds(holder.transform, renderers);
 
-            roofHeight = b.max.y + 0.02f;
+            roofHeight = b.max.y + 0.02f;   // measured after the drop, so the bar sits on the roof
             hullHalfLength = b.size.z * 0.5f;
             hullHalfWidth = Mathf.Max(0.8f, b.size.x * 0.5f);
             // The livery measures the car the same way, so it too is laid on square.
