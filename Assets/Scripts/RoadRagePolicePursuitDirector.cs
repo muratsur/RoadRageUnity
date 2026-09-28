@@ -758,6 +758,11 @@ namespace RoadRage.UnityRemake
             var prefab = PoliceCarPack.LinkedCar;
             if (prefab == null) return false;
 
+            // Built and measured with the cruiser square to the world: it is spawned
+            // already turned to the road, and world-space bounds measured on a curve
+            // came out skewed (a 1.9 m car measured 3.6 m wide).
+            var heading = transform.rotation;
+            transform.rotation = Quaternion.identity;
             var holder = new GameObject("Police Interceptor Model");
             holder.SetActive(false);
             holder.transform.SetParent(transform, false);
@@ -778,6 +783,7 @@ namespace RoadRage.UnityRemake
             if (renderers.Length == 0)
             {
                 Destroy(holder);
+                transform.rotation = heading;
                 return false;
             }
             var painted = new Dictionary<Material, Material>();
@@ -811,13 +817,11 @@ namespace RoadRage.UnityRemake
             // the contact pass uses has to be the car you can see.
             var bodywork = System.Array.FindAll(renderers, part => !IsLightPart(part));
             if (bodywork.Length > 0) renderers = bodywork;
-            // Long side along the cruiser's z.
+            // Long side along the cruiser's z, taken from the body mesh itself: the
+            // pack's car need not sit square inside its prefab, and a car turned a
+            // few degrees drove crabwise down the road.
+            AlignLongAxis(holder.transform, car.transform, renderers);
             var b = LocalBounds(holder.transform, renderers);
-            if (b.size.x > b.size.z * 1.2f)
-            {
-                car.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
-                b = LocalBounds(holder.transform, renderers);
-            }
             var scale = 4.8f / Mathf.Max(0.01f, b.size.z);
             car.transform.localScale *= scale;
             b = LocalBounds(holder.transform, renderers);
@@ -828,7 +832,9 @@ namespace RoadRage.UnityRemake
             roofHeight = b.max.y + 0.02f;
             hullHalfLength = b.size.z * 0.5f;
             hullHalfWidth = Mathf.Max(0.8f, b.size.x * 0.5f);
+            // The livery measures the car the same way, so it too is laid on square.
             if (German) PolizeiLivery.Apply(transform, holder);
+            transform.rotation = heading;
 
             if (!packCruiserReported)
             {
@@ -841,6 +847,42 @@ namespace RoadRage.UnityRemake
                           $"Painted: {(painted.Count > 0 ? string.Join(", ", System.Linq.Enumerable.Select(painted.Values, m => m.name)) : "none (no body/paint material)")}");
             }
             return true;
+        }
+
+        /// Turns the car so the long axis of its biggest mesh (the body) runs along the
+        /// holder's z. Front and back are the pack's own: the turn is the smallest one
+        /// that squares the body up.
+        private static void AlignLongAxis(Transform holder, Transform car, Renderer[] renderers)
+        {
+            MeshFilter body = null;
+            var biggest = 0f;
+            foreach (var r in renderers)
+            {
+                if (!r.TryGetComponent<MeshFilter>(out var f) || f.sharedMesh == null) continue;
+                var size = Vector3.Scale(f.sharedMesh.bounds.size, f.transform.lossyScale);
+                var volume = Mathf.Abs(size.x * size.y * size.z);
+                if (volume > biggest) { biggest = volume; body = f; }
+            }
+            if (body == null) return;
+            var meshSize = body.sharedMesh.bounds.size;
+            // The long horizontal axis of the mesh: whichever of its three is longest
+            // once the up axis is set aside.
+            var candidates = new[] { Vector3.right, Vector3.up, Vector3.forward };
+            var best = Vector3.forward;
+            var bestLength = -1f;
+            foreach (var axis in candidates)
+            {
+                var inHolder = holder.InverseTransformDirection(body.transform.TransformDirection(axis));
+                if (Mathf.Abs(inHolder.y) > 0.7f) continue;   // that one points up
+                var length = Vector3.Scale(meshSize, axis).magnitude;
+                if (length > bestLength) { bestLength = length; best = inHolder; }
+            }
+            best.y = 0f;
+            if (best.sqrMagnitude < 1e-4f) return;
+            var yaw = Mathf.Atan2(best.x, best.z) * Mathf.Rad2Deg;
+            if (yaw > 90f) yaw -= 180f;
+            if (yaw < -90f) yaw += 180f;
+            car.localRotation = Quaternion.Euler(0f, -yaw, 0f) * car.localRotation;
         }
 
         private static bool IsLightPart(Renderer r)
