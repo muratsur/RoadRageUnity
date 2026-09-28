@@ -7713,7 +7713,11 @@ namespace RoadRage.UnityRemake
             if (!tree || Mathf.Abs(lateral) > 30f)
                 foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
             var group = piece.AddComponent<LODGroup>();
-            group.SetLODs(new[] { new LOD(tree ? 0.04f : 0.035f, renderers) });
+            // Culled later than before, and faded out rather than switched off: over
+            // real terrain a hillside is in view much further, and plants popped in.
+            group.SetLODs(new[] { new LOD(tree ? 0.025f : 0.02f, renderers) { fadeTransitionWidth = 0.3f } });
+            group.fadeMode = LODFadeMode.CrossFade;
+            group.animateCrossFading = true;
             group.RecalculateBounds();
         }
 
@@ -8346,7 +8350,11 @@ namespace RoadRage.UnityRemake
                 private void BuildForest()
         {
             Random.InitState(40621 ^ chunkSeed);
-            BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
+            // The rock-face cliffs stood in for the cuttings a mountain road runs
+            // through. Over the real terrain the real cuttings and slopes are there, and
+            // the invented faces hung in the air where the real ground falls away.
+            if (RoadPath.Route == null || !RoadPath.Route.HasTerrain)
+                BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
             // The new cliff colliders have to be in the physics scene before the forest
             // is planted on them.
             if (cliffZones.Count > 0) Physics.SyncTransforms();
