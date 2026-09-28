@@ -6661,6 +6661,7 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
+            if (external) ThinExternalTree(model, lateral);
             return model;
         }
 
@@ -7074,7 +7075,11 @@ namespace RoadRage.UnityRemake
                 ? BlackForestTrees
                 : Random.value < 0.30f ? BroadleafTrees : PineTrees;
             var entry = table[Random.Range(0, table.Length)];
-            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0)
+            // The pack's trees are film-quality meshes; past the near bands the fog hides
+            // what they add, and at 61 M triangles a frame they cost the frame rate.
+            // The far forest keeps the light Black Forest trees.
+            if (RoadPath.Route != null && table == BlackForestTrees && ExternalTrees.Length > 0 &&
+                Mathf.Abs(lateral) < ExternalTreeReach)
                 // The northern Black Forest is spruce and fir, with beech mixed in on
                 // the lower slopes: about one tree in eight where the pack has them.
                 entry = ExternalBroadleaf.Length > 0 && Random.value < 0.12f
@@ -7146,6 +7151,53 @@ namespace RoadRage.UnityRemake
                                      "package (its 'HD and URP support' folder), then Road Rage > Link Installed Tree Pack.");
                 return externalTrees;
             }
+        }
+
+        /// How far from the road the pack's trees are planted, metres.
+        private const float ExternalTreeReach = 45f;
+        private static bool externalTreeReported;
+
+        /// Keeps a pack tree affordable: its lower LODs take over at twice the usual
+        /// screen size and it is culled once it is a sliver; only trees by the road cast
+        /// shadows, and only from their full-detail LOD. A pack tree without an LODGroup
+        /// gets one that culls it when small.
+        private static void ThinExternalTree(GameObject tree, float lateral)
+        {
+            var near = Mathf.Abs(lateral) < 18f;
+            var group = tree.GetComponentInChildren<LODGroup>();
+            if (group != null)
+            {
+                var lods = group.GetLODs();
+                var previous = 1f;
+                for (var i = 0; i < lods.Length; i++)
+                {
+                    var height = lods[i].screenRelativeTransitionHeight * 2f;
+                    if (i == lods.Length - 1) height = Mathf.Max(height, 0.025f);
+                    // Transitions must keep falling from one LOD to the next.
+                    previous = lods[i].screenRelativeTransitionHeight = Mathf.Min(height, previous * 0.9f);
+                    foreach (var r in lods[i].renderers)
+                        if (r != null && (i > 0 || !near)) r.shadowCastingMode = ShadowCastingMode.Off;
+                }
+                group.SetLODs(lods);
+            }
+            else
+            {
+                var renderers = tree.GetComponentsInChildren<Renderer>();
+                if (!near)
+                    foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
+                group = tree.AddComponent<LODGroup>();
+                group.SetLODs(new[] { new LOD(0.03f, renderers) });
+                group.RecalculateBounds();
+            }
+
+            if (externalTreeReported) return;
+            externalTreeReported = true;
+            var triangles = 0L;
+            foreach (var f in tree.GetComponentsInChildren<MeshFilter>(true))
+                if (f.sharedMesh != null)
+                    for (var m = 0; m < f.sharedMesh.subMeshCount; m++) triangles += f.sharedMesh.GetIndexCount(m) / 3;
+            Debug.Log($"RR_TREES pack tree '{tree.name}': {triangles} triangles over all LODs, " +
+                      $"{group.lodCount} LODs, planted within {ExternalTreeReach} m of the road");
         }
 
         private static bool RendersInThisPipeline(GameObject prefab)
