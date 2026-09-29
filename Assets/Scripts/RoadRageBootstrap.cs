@@ -8268,8 +8268,13 @@ namespace RoadRage.UnityRemake
                 model.name = $"Test Asset {i + 1} {assets[i].name}";
                 KeepAffordableLods(model, assets[i].name);
                 model.transform.position = Vector3.zero;
-                // Its front (+Z) towards the road.
-                model.transform.rotation = Quaternion.LookRotation(-Mathf.Sign(lateral) * RoadPath.Right(distance));
+                // Its front (+Z) towards the road, turned towards the traffic coming up to
+                // it: square to the road, a driver only ever saw the side. A model that
+                // comes out facing another way names its turn: "_r90", "_r180", "_r270".
+                var toRoad = -Mathf.Sign(lateral) * RoadPath.Right(distance);
+                var toTraffic = Vector3.Slerp(toRoad, -RoadPath.Forward(distance), TestAssetTurn / 90f);
+                model.transform.rotation = Quaternion.LookRotation(toTraffic) *
+                                           Quaternion.Euler(0f, TestAssetRotation(assets[i].name), 0f);
                 if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.001f) continue;
                 model.transform.localScale *= TestAssetHeight(assets[i].name) / bounds.size.y;
                 TryGetCombinedBounds(model, out bounds);
@@ -8294,6 +8299,19 @@ namespace RoadRage.UnityRemake
                           $"{(lateral < 0f ? "left" : "right")} {Mathf.Abs(lateral):0} m, " +
                           $"{bounds.size.x:0.#} x {bounds.size.y:0.#} x {bounds.size.z:0.#} m");
             }
+        }
+
+        /// Degrees a test model turns from facing the road towards oncoming traffic.
+        private const float TestAssetTurn = 30f;
+
+        private static float TestAssetRotation(string name)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(name, @"_r(\d+)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success && float.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var degrees)
+                ? degrees
+                : 0f;
         }
 
         private static float TestAssetHeight(string name)
