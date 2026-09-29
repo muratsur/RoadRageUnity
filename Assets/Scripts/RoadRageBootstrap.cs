@@ -3153,6 +3153,22 @@ namespace RoadRage.UnityRemake
             return ribbon;
         }
 
+        /// After the chunk is planted (the next frame): how many forest pieces the
+        /// planting rays stood on the ground, how many found none, and the furthest one
+        /// was moved from where the terrain maths had it.
+        private System.Collections.IEnumerator ReportPlanting(float chunkStart)
+        {
+            yield return null;
+            if (!OverRealTerrain) yield break;
+            var colliders = 0;
+            if (chunkRoot != null)
+                foreach (var c in FindObjectsByType<MeshCollider>(FindObjectsInactive.Exclude))
+                    if (c.gameObject.layer == PlantingGroundLayer) colliders++;
+            Debug.Log($"RR_PLANT chunk at {chunkStart:0} m: {plantedOnRay} stood on the ground by ray, " +
+                      $"{plantedNoGround} found no ground (not planted), furthest moved {plantedShift:0.0} m; " +
+                      $"{colliders} ground colliders live");
+        }
+
         /// "Ignore Raycast": ordinary raycasts pass through it, the planting rays ask for
         /// it by name, and physics (a car thrown off the road) still lands on it.
         private const int PlantingGroundLayer = 2;
@@ -7495,11 +7511,17 @@ namespace RoadRage.UnityRemake
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
             if (!onCliff && OverRealTerrain)
             {
+                var placedAt = model.transform.position.y;
                 if (!RaycastGround(model.transform.position, 0.9f, out var groundY))
                 {
+                    plantedNoGround++;
                     Destroy(model);
                     return null;
                 }
+                plantedOnRay++;
+                // How far the ray moved it from where the terrain maths put it: large
+                // numbers mean the two disagree about the ground.
+                plantedShift = Mathf.Max(plantedShift, Mathf.Abs(groundY + height - placedAt));
                 StandOn(model, groundY + height);
             }
             if (external) ThinExternalTree(model, lateral);
@@ -7902,6 +7924,9 @@ namespace RoadRage.UnityRemake
             return false;
         }
 
+        private static int plantedOnRay;
+        private static int plantedNoGround;
+        private static float plantedShift;
         internal static int canopyKept;
         internal static int canopyRejected;
 
@@ -9070,6 +9095,10 @@ namespace RoadRage.UnityRemake
             // is planted on them.
             // The planting rays need this chunk's ground colliders in the physics scene.
             if (cliffZones.Count > 0 || OverRealTerrain) Physics.SyncTransforms();
+            plantedOnRay = 0;
+            plantedNoGround = 0;
+            plantedShift = 0f;
+            StartCoroutine(ReportPlanting(segStart));
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
