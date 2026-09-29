@@ -3143,8 +3143,60 @@ namespace RoadRage.UnityRemake
                     triangles[t++] = v + 1;
                 }
             }
-            return CreateMeshObject(name, vertices, triangles, uv, material, colors);
+            var ribbon = CreateMeshObject(name, vertices, triangles, uv, material, colors);
+            if (realGround)
+            {
+                // What planting rays land on (RaycastGround): the ground exactly as drawn.
+                ribbon.layer = PlantingGroundLayer;
+                ribbon.AddComponent<MeshCollider>().sharedMesh = ribbon.GetComponent<MeshFilter>().sharedMesh;
+            }
+            return ribbon;
         }
+
+        /// "Ignore Raycast": ordinary raycasts pass through it, the planting rays ask for
+        /// it by name, and physics (a car thrown off the road) still lands on it.
+        private const int PlantingGroundLayer = 2;
+
+        /// The ground straight down at a point as it is drawn - the top surface where
+        /// ground strips overlap, the mesh's own straight runs between its vertices -
+        /// taken as a trunk of this radius roots on it: its downhill side, a little
+        /// deeper the steeper the slope. False where there is no ground under the point.
+        private static bool RaycastGround(Vector3 at, float radius, out float ground)
+        {
+            ground = 0f;
+            float low = float.PositiveInfinity, high = float.NegativeInfinity;
+            for (var k = 0; k < 5; k++)
+            {
+                var offset = k switch
+                {
+                    1 => new Vector3(radius, 0f, 0f),
+                    2 => new Vector3(-radius, 0f, 0f),
+                    3 => new Vector3(0f, 0f, radius),
+                    4 => new Vector3(0f, 0f, -radius),
+                    _ => Vector3.zero,
+                };
+                var origin = new Vector3(at.x + offset.x, at.y + 400f, at.z + offset.z);
+                if (!Physics.Raycast(origin, Vector3.down, out var hit, 1200f, 1 << PlantingGroundLayer,
+                        QueryTriggerInteraction.Ignore))
+                {
+                    if (k == 0) return false;
+                    continue;
+                }
+                low = Mathf.Min(low, hit.point.y);
+                high = Mathf.Max(high, hit.point.y);
+            }
+            ground = low - 0.1f - 0.08f * (high - low);
+            return true;
+        }
+
+        /// Lowers or raises a model so the bottom of its bounds is at this height.
+        private static void StandOn(GameObject model, float y)
+        {
+            if (TryGetCombinedBounds(model, out var bounds))
+                model.transform.position += Vector3.up * (y - bounds.min.y);
+        }
+
+        private static bool OverRealTerrain => RoadPath.Route != null && RoadPath.Route.HasTerrain;
 
         private GameObject BuildWallRibbon(string name, float lateral, float bottom, float top, Material material,
             float start = float.NaN, float end = float.NaN, float sampleStep = 7f)
@@ -7441,10 +7493,14 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
-            if (!onCliff && !SettleOnRealGround(model, distance, lateral, 0.9f))
+            if (!onCliff && OverRealTerrain)
             {
-                Destroy(model);
-                return null;
+                if (!RaycastGround(model.transform.position, 0.9f, out var groundY))
+                {
+                    Destroy(model);
+                    return null;
+                }
+                StandOn(model, groundY + height);
             }
             if (external) ThinExternalTree(model, lateral);
             else ThinForestPiece(model, lateral, label);
@@ -7880,7 +7936,6 @@ namespace RoadRage.UnityRemake
             // Pushed clear of the road sideways, a tree keeps its height; on a bank that
             // climbs away from the road that buried it to the crown. It follows the
             // ground it was pushed onto instead.
-            var groundBefore = GroundHeightAt(tree.transform.position, 0.9f);
             KeepTrunkOffRoad(tree, distance, lateral);
             // Roots into the ground: the pack's trees are grounded by their bounds, which
             // reach a little below the trunk, and stood hovering.
@@ -7892,9 +7947,9 @@ namespace RoadRage.UnityRemake
                 canopyRejected++;
                 return null;
             }
-            var groundAfter = GroundHeightAt(tree.transform.position, 0.9f);
-            if (!float.IsNaN(groundBefore) && !float.IsNaN(groundAfter))
-                tree.transform.position += Vector3.up * (groundAfter - groundBefore);
+            if (OverRealTerrain && RaycastGround(tree.transform.position, 0.9f, out var treeGround))
+                // The pack's bounds reach a little below the trunk: 0.3 m into the ground.
+                StandOn(tree, treeGround - 0.3f);
             canopyKept++;
             return tree;
         }
@@ -8181,11 +8236,6 @@ namespace RoadRage.UnityRemake
         private const float TestAssetStart = 120f;
         private const float TestAssetSpacing = 40f;
         private const float TestAssetDefaultHeight = 9f;
-        /// Out from the clearance line to the model's centre, and the radius cleared of
-        /// trees around it: room for a house up to ~24 m across, its front a few metres
-        /// back from the rail.
-        private const float TestAssetSetback = 17f;
-        private const float TestAssetClearing = 16f;
         /// Half the widest a test model may be across, so it stays inside its clearing.
         private const float TestAssetMaxHalf = 12f;
         private static GameObject[] testAssets;
@@ -8204,8 +8254,11 @@ namespace RoadRage.UnityRemake
 
         private float TestAssetDistance(int index) => startDistance + TestAssetStart + index * TestAssetSpacing;
 
+        /// Out from the clearance line by the model's own size: a car just past the rail,
+        /// where it is seen, a house well back.
         private static float TestAssetLateral(int index, float distance) =>
-            (index % 2 == 0 ? -1f : 1f) * (RoadPath.ClearanceAt(distance) + TestAssetSetback);
+            (index % 2 == 0 ? -1f : 1f) *
+            (RoadPath.ClearanceAt(distance) + 3f + TestAssetHalf(TestAssets[index]));
 
         private bool InTestAssetGround(float distance, float lateral)
         {
@@ -8214,8 +8267,9 @@ namespace RoadRage.UnityRemake
             for (var i = 0; i < assets.Length; i++)
             {
                 var d = TestAssetDistance(i);
-                if (Mathf.Abs(distance - d) < TestAssetClearing &&
-                    Mathf.Abs(lateral - TestAssetLateral(i, d)) < TestAssetClearing)
+                var clearing = TestAssetHalf(assets[i]) + 4f;
+                if (Mathf.Abs(distance - d) < clearing &&
+                    Mathf.Abs(lateral - TestAssetLateral(i, d)) < clearing)
                     return true;
             }
             return false;
@@ -9014,7 +9068,8 @@ namespace RoadRage.UnityRemake
                 BuildCliffs(materials.TryGetValue("Forest Cliff", out var cliffMaterial) ? cliffMaterial : null);
             // The new cliff colliders have to be in the physics scene before the forest
             // is planted on them.
-            if (cliffZones.Count > 0) Physics.SyncTransforms();
+            // The planting rays need this chunk's ground colliders in the physics scene.
+            if (cliffZones.Count > 0 || OverRealTerrain) Physics.SyncTransforms();
 
             // The kit's ground texture is bare dirt, so the forest floor has to be made
             // of meshes: pack undergrowth densely enough that the ground barely shows.
