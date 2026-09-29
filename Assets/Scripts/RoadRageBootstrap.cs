@@ -2631,6 +2631,7 @@ namespace RoadRage.UnityRemake
 
         private void BuildRoad(int biomeIndex)
         {
+            PrepareBuildingPads();
             var groundName = GroundNameFor(biomeIndex);
             var isCity = biomeIndex == 5 || biomeIndex == 7 || biomeIndex == 8 || biomeIndex == 3 || biomeIndex == 9;
             if (biomeIndex == CanalTownIndex)
@@ -2823,7 +2824,36 @@ namespace RoadRage.UnityRemake
             if (across <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
             real = RealGroundLimit * (float)System.Math.Tanh(real / RealGroundLimit);
+            real = OnBuildingPads(distance, lateral, real);
             return real * Mathf.SmoothStep(0f, 1f, across / 6f);
+        }
+
+        /// Level ground under a building, blended into the slope around it.
+        private struct BuildingPad
+        {
+            public float Distance, Lateral, Half, Height;
+        }
+
+        private static readonly List<BuildingPad> buildingPads = new();
+        /// Metres over which a pad's level ground eases back into the real slope.
+        private const float PadBlend = 10f;
+
+        /// A building on a steep slope either hung in the air or sank into it: the
+        /// ground is levelled under it first, as it would be for a real house, cut into
+        /// the hill behind and banked up in front, and eased into the slope around it.
+        private static float OnBuildingPads(float distance, float lateral, float real)
+        {
+            for (var i = 0; i < buildingPads.Count; i++)
+            {
+                var pad = buildingPads[i];
+                var along = Mathf.Abs(distance - pad.Distance) - pad.Half;
+                var across = Mathf.Abs(lateral - pad.Lateral) - pad.Half;
+                if (along > PadBlend || across > PadBlend) continue;
+                var outside = new Vector2(Mathf.Max(0f, along), Mathf.Max(0f, across)).magnitude;
+                var weight = 1f - Mathf.SmoothStep(0f, 1f, outside / PadBlend);
+                real = Mathf.Lerp(real, pad.Height, weight);
+            }
+            return real;
         }
 
         /// The lowest real ground under a footprint of this radius, a little below it:
@@ -8065,6 +8095,72 @@ namespace RoadRage.UnityRemake
             return false;
         }
 
+        /// Clears the models loaded by an earlier run in the editor: with domain reload
+        /// off, the list survived Play and the cost report never printed again.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ResetTestAssets()
+        {
+            testAssets = null;
+            buildingPads.Clear();
+            padsFor = float.NaN;
+        }
+
+        private static float padsFor = float.NaN;
+
+        /// The level ground each test model will stand on, known before any ground is
+        /// built so the terrain mesh and everything planted on it agree.
+        private void PrepareBuildingPads()
+        {
+            if (RoadPath.Route == null || !RoadPath.Route.HasTerrain)
+            {
+                buildingPads.Clear();
+                return;
+            }
+            if (padsFor == startDistance) return;
+            padsFor = startDistance;
+            buildingPads.Clear();
+            var assets = TestAssets;
+            for (var i = 0; i < assets.Length; i++)
+            {
+                var distance = TestAssetDistance(i);
+                var lateral = TestAssetLateral(i, distance);
+                var half = TestAssetHalf(assets[i]);
+                // The mean of the real ground over the plot: as much cut as fill.
+                var sum = 0f;
+                var count = 0;
+                const int steps = 4;
+                for (var a = -steps; a <= steps; a++)
+                for (var b = -steps; b <= steps; b++)
+                {
+                    sum += RealGround(distance + half * a / steps, lateral + half * b / steps);
+                    count++;
+                }
+                buildingPads.Add(new BuildingPad
+                {
+                    Distance = distance, Lateral = lateral, Half = half + 1.5f, Height = sum / count,
+                });
+            }
+        }
+
+        /// Half the model's widest side once it stands at its height, within the clearing.
+        private static float TestAssetHalf(GameObject asset)
+        {
+            var size = NativeSize(asset);
+            if (size.y < 0.001f) return TestAssetMaxHalf;
+            var scale = TestAssetHeight(asset.name) / size.y;
+            return Mathf.Min(TestAssetMaxHalf, 0.5f * Mathf.Max(size.x, size.z) * scale);
+        }
+
+        /// From the meshes: a prefab that is not in the scene has no renderer bounds.
+        private static Vector3 NativeSize(GameObject asset)
+        {
+            var size = Vector3.zero;
+            foreach (var filter in asset.GetComponentsInChildren<MeshFilter>(true))
+                if (filter.sharedMesh != null)
+                    size = Vector3.Max(size, Vector3.Scale(filter.sharedMesh.bounds.size, filter.transform.lossyScale));
+            return size;
+        }
+
         private void PlaceTestAssets()
         {
             if (RoadPath.Route == null) return;
@@ -8088,26 +8184,18 @@ namespace RoadRage.UnityRemake
                     model.transform.localScale *= TestAssetMaxHalf / half;
                     half = TestAssetMaxHalf;
                 }
-                // On a slope a building stands on its lowest corner and is cut into the
-                // hill behind; grounded at its centre, its downhill side hung in the air.
-                var ground = RoadPath.Point(distance, lateral, LowestRealGround(distance, lateral, half * 0.9f));
+                // On its levelled plot (PrepareBuildingPads), which RealGround now returns.
+                var ground = RoadPath.Point(distance, lateral, RealGround(distance, lateral));
                 model.transform.position = ground;
                 TryGetCombinedBounds(model, out bounds);
                 // Centred on its spot and bedded 0.3 m into the ground, whatever its pivot.
                 model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.3f,
                     ground.z - bounds.center.z);
+                TryGetCombinedBounds(model, out bounds);
+                Debug.Log($"RR_TESTASSET placed #{i + 1} '{assets[i].name}' {distance - startDistance:0} m from the start, " +
+                          $"{(lateral < 0f ? "left" : "right")} {Mathf.Abs(lateral):0} m, " +
+                          $"{bounds.size.x:0.#} x {bounds.size.y:0.#} x {bounds.size.z:0.#} m");
             }
-        }
-
-        /// The lowest real ground over a square footprint, sampled every few metres.
-        private static float LowestRealGround(float distance, float lateral, float half)
-        {
-            var low = float.PositiveInfinity;
-            const int steps = 4;
-            for (var a = -steps; a <= steps; a++)
-            for (var b = -steps; b <= steps; b++)
-                low = Mathf.Min(low, RealGround(distance + half * a / steps, lateral + half * b / steps));
-            return float.IsPositiveInfinity(low) ? 0f : low;
         }
 
         private static float TestAssetHeight(string name)
@@ -8126,8 +8214,7 @@ namespace RoadRage.UnityRemake
         {
             var triangles = 0L;
             var vertices = 0L;
-            // From the meshes: a prefab that is not in the scene has no renderer bounds.
-            var size = Vector3.zero;
+            var size = NativeSize(asset);
             // With detail levels, what the full-detail one costs: summing every level
             // counts the same house three or four times.
             var group = asset.GetComponentInChildren<LODGroup>(true);
@@ -8138,7 +8225,6 @@ namespace RoadRage.UnityRemake
                 var mesh = filter.sharedMesh;
                 if (mesh == null) continue;
                 if (fullDetail != null && !fullDetail.Contains(filter.GetComponent<Renderer>())) continue;
-                size = Vector3.Max(size, Vector3.Scale(mesh.bounds.size, filter.transform.lossyScale));
                 vertices += mesh.vertexCount;
                 for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
             }
