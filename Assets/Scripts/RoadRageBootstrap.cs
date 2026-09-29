@@ -3146,6 +3146,12 @@ namespace RoadRage.UnityRemake
             var ribbon = CreateMeshObject(name, vertices, triangles, uv, material, colors);
             if (realGround)
             {
+                // Drawn from both sides. Where the strips on the inside of a bend stop
+                // short (InnerReach), the ground of the road further on covers the spot but
+                // does not quite meet them, and a view up the bank ran under that ground's
+                // edge: its underside was culled and a white line of sky showed through
+                // the forest. Now the underside is drawn, lit as ground.
+                DrawBothSides(ribbon);
                 // What planting rays land on (RaycastGround): the ground exactly as drawn.
                 ribbon.layer = PlantingGroundLayer;
                 ribbon.AddComponent<MeshCollider>().sharedMesh = ribbon.GetComponent<MeshFilter>().sharedMesh;
@@ -8300,9 +8306,18 @@ namespace RoadRage.UnityRemake
 
         /// Out from the clearance line by the model's own size: a car just past the rail,
         /// where it is seen, a house well back.
-        private static float TestAssetLateral(int index, float distance) =>
-            (index % 2 == 0 ? -1f : 1f) *
-            (RoadPath.ClearanceAt(distance) + 3f + TestAssetHalf(TestAssets[index]));
+        ///
+        /// And its whole levelled plot (the model's half plus 4 m) beyond the first 6 m
+        /// of bank, where RealGround eases the real ground back down to the road: a plot
+        /// that reached into it was only level on its outer half, and a car on the left
+        /// bank stood with its corners up to 4 m apart, tilted as far as it may go.
+        private static float TestAssetLateral(int index, float distance)
+        {
+            var half = TestAssetHalf(TestAssets[index]);
+            var clearOfEase = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + 6f + half + 4f;
+            return (index % 2 == 0 ? -1f : 1f) *
+                   Mathf.Max(RoadPath.ClearanceAt(distance) + 3f + half, clearOfEase);
+        }
 
         private bool InTestAssetGround(float distance, float lateral)
         {
@@ -8550,18 +8565,26 @@ namespace RoadRage.UnityRemake
             var points = new Vector3[4];
             var low = float.PositiveInfinity;
             var high = float.NegativeInfinity;
+            var missing = 0;
             for (var c = 0; c < 4; c++)
             {
                 var at = bottom + yaw * new Vector3((c & 1) == 0 ? -halfX : halfX, 0f, (c & 2) == 0 ? -halfZ : halfZ);
                 if (!Physics.Raycast(new Vector3(at.x, at.y + 400f, at.z), Vector3.down, out var hit, 1200f,
                         1 << PlantingGroundLayer, QueryTriggerInteraction.Ignore))
-                    return $"ground by maths (no drawn ground under corner {c})";
+                {
+                    missing++;
+                    // A car needs all four for its tilt; a building stands on the rest.
+                    if (isCar) return $"ground by maths (no drawn ground under corner {c})";
+                    continue;
+                }
                 points[c] = hit.point;
                 low = Mathf.Min(low, hit.point.y);
                 high = Mathf.Max(high, hit.point.y);
             }
+            if (missing == 4) return "ground by maths (no drawn ground under any corner)";
             var mean = (points[0].y + points[1].y + points[2].y + points[3].y) * 0.25f;
-            var report = $"drawn ground {mean - ground.y:+0.00;-0.00} m from the maths, corners {high - low:0.00} m apart";
+            var report = $"drawn ground {(isCar ? mean : low) - ground.y:+0.00;-0.00} m from the maths, " +
+                         $"corners {high - low:0.00} m apart" + (missing > 0 ? $", {missing} corner(s) with no drawn ground" : "");
             if (isCar)
             {
                 // Corners 0..3: back-left, back-right, front-left, front-right.

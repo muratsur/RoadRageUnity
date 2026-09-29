@@ -24,6 +24,8 @@ Shader "RoadRage/TerrainSplat"
         _Tint2 ("Tint 2", Color) = (1,1,1,1)
         _Smoothness ("Smoothness", Range(0,1)) = 0.18
         _NormalScale ("Normal Scale", Range(0,2)) = 1.0
+        // 2 = back faces culled; 0 = both sides (the real-terrain ground, see BuildRibbon).
+        [HideInInspector] _Cull ("Cull", Float) = 2
     }
 
     SubShader
@@ -35,6 +37,7 @@ Shader "RoadRage/TerrainSplat"
         {
             Name "ForwardLit"
             Tags { "LightMode" = "UniversalForward" }
+            Cull [_Cull]
 
             HLSLPROGRAM
             #pragma vertex vert
