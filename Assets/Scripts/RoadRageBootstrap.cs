@@ -2662,19 +2662,27 @@ namespace RoadRage.UnityRemake
                 var vergeFrom = biomeIndex == 0 ? -3f : 6f;
                 var vergeTo = biomeIndex == 0 ? 1.5f : 32f;
                 var nearEdge = biomeIndex == 0 ? 4f : 1f;
-                if (biomeIndex == 0)
+                if (OverRealTerrain)
+                {
+                    // One ground grid over the real terrain (BuildTerrainGrid).
+                    BuildTerrainGrid($"{biomeName} Real Ground", materials[groundName], vergeFrom, vergeTo);
+                }
+                else if (biomeIndex == 0)
                 {
                     BuildRibbon($"Left {biomeName} Near Ground", -nearEdge, -1.0f, -0.05f, materials[groundName],
                         sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
                     BuildRibbon($"Right {biomeName} Near Ground", 1.0f, nearEdge, -0.05f, materials[groundName],
                         sampleStep: 5f, displace: 4.5f, lateralSegments: 14, relative: true, vergeFrom: vergeFrom, vergeTo: vergeTo);
                 }
-                BuildRibbon($"Left {biomeName} Ground",
-                    -150f, -nearEdge, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
-                    vergeFrom: vergeFrom, vergeTo: vergeTo);
-                BuildRibbon($"Right {biomeName} Ground",
-                    nearEdge, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
-                    vergeFrom: vergeFrom, vergeTo: vergeTo);
+                if (!OverRealTerrain)
+                {
+                    BuildRibbon($"Left {biomeName} Ground",
+                        -150f, -nearEdge, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                        vergeFrom: vergeFrom, vergeTo: vergeTo);
+                    BuildRibbon($"Right {biomeName} Ground",
+                        nearEdge, 150f, -0.05f, materials[groundName], sampleStep: 5f, displace: 4.5f, lateralSegments: 20, relative: true,
+                        vergeFrom: vergeFrom, vergeTo: vergeTo);
+                }
             }
             // Main Asphalt Highway
             var roadMaterial = biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
@@ -2856,198 +2864,367 @@ namespace RoadRage.UnityRemake
             return real;
         }
 
-        // The Greenwood ground ribbons over real terrain (BuildRoad): a near strip from
-        // 1 to 4 half-widths out in 14 steps and the main one from 4 to 150 in 80, each
-        // with its vertices at (step / steps)^2 of the span from the road, rows every
-        // 5 m of road from 2 m before each 150 m chunk - the same grid in every chunk.
-        private const float RibbonRowStep = 5f;
-        private const float RibbonRowOffset = -2f;
+        // ------------------------------------------------------------ real-terrain ground grid
 
-        /// The ground exactly as the mesh draws it: the real ground at the four vertices
-        /// round the point, blended between them. The real ground itself curves between
-        /// the vertices while the mesh runs straight, so at the foot of every bank the
-        /// mesh stood above it and anything planted on the real curve was buried.
+        // The Greenwood ground over the real terrain is one grid in world space, not
+        // ribbons laid square to the road.
+        //
+        // The ribbons ran over a kilometre out from the road. The baked terrain is kept
+        // by road distance and offset from the real road, and the game's road is the real
+        // one fitted to what the game can drive, so ribbons from different road distances
+        // that reached the same spot carried heights from different real places: the
+        // hillside was layers folded through one another. Whichever lay on top was what
+        // rays found, something else could be what the road saw - trees and test cars
+        // floated or sank, a car's levelled plot came out 4 m out of level, and where a
+        // layer ended a line of sky showed through the forest. Stopping the ribbons short
+        // (at the inside of a bend, then at the nearest stretch of road) moved the seams
+        // about but could not remove them.
+        //
+        // The grid's rows run straight across the world at fixed Z (road distance is
+        // world Z, and the road always heads along +Z), its columns at fixed offsets in X
+        // from the road's centre on that row. No two cells can overlap and neighbouring
+        // cells share their corners, so the ground has exactly one surface and no cracks.
+        // Each corner takes the real ground of the point of road nearest to it; where two
+        // stretches of road are about equally near (the inside of a bend), the two are
+        // blended, so the seam between them is a slope, not a step.
+        //
+        // Everything planted asks GridGroundY for the height: the same corners, the same
+        // triangles, so what is planted and what is drawn cannot disagree.
+        private const float GridRowStep = 5f;
+        private const float GridRowOffset = -2f;
+        /// Across the road, 1.25 m apart out to 40 m either side (banks and cuttings are
+        /// seen close up), then spreading out to 1200 m.
+        private const float GridNearReach = 40f;
+        private const int GridNearSteps = 32;
+        private const float GridFarReach = 1200f;
+        private const int GridFarSteps = 48;
+        private static float[] gridColumns;
+        /// Per corner: world height, and the nearest point of road as (distance, lateral).
+        private static readonly Dictionary<long, Vector3> gridHeights = new();
+
+        /// Column offsets in X from the road's centre on the row, left to right.
+        private static float[] GridColumns
+        {
+            get
+            {
+                if (gridColumns != null) return gridColumns;
+                var side = new List<float>();
+                for (var k = 1; k <= GridNearSteps; k++) side.Add(GridNearReach * k / GridNearSteps);
+                for (var k = 1; k <= GridFarSteps; k++)
+                {
+                    var f = k / (float)GridFarSteps;
+                    side.Add(GridNearReach + (GridFarReach - GridNearReach) * f * f);
+                }
+                var columns = new float[side.Count * 2 + 1];
+                for (var i = 0; i < side.Count; i++)
+                {
+                    columns[side.Count - 1 - i] = -side[i];
+                    columns[side.Count + 1 + i] = side[i];
+                }
+                gridColumns = columns;
+                return columns;
+            }
+        }
+
+        private static float GridRowZ(long row) => GridRowOffset + row * GridRowStep;
+
+        /// World height of the grid corner at this row and column (cached: the planting
+        /// asks for the same corners thousands of times).
+        private static float GridCornerY(long row, int column) => GridCorner(row, column).x;
+
+        private static Vector3 GridCorner(long row, int column)
+        {
+            var key = row * 4096 + column;
+            if (gridHeights.TryGetValue(key, out var corner)) return corner;
+            if (gridHeights.Count > 400000) gridHeights.Clear();
+            var z = GridRowZ(row);
+            var point = new Vector3(RoadPath.CenterX(z) + GridColumns[column], 0f, z);
+            var y = TerrainHeightAt(point, out var distance, out var lateral);
+            corner = new Vector3(y, distance, lateral);
+            gridHeights[key] = corner;
+            return corner;
+        }
+
+        /// The ground's world height at a world position, exactly as the grid draws it.
+        private static float GridGroundY(Vector3 point)
+        {
+            var columns = GridColumns;
+            var row = (long)Mathf.Floor((point.z - GridRowOffset) / GridRowStep);
+            var t = (point.z - GridRowZ(row)) / GridRowStep;
+            // A row's columns are offsets from the road centre on that row; between two
+            // rows the cell's sides run straight from one to the other.
+            var shift = Mathf.Lerp(RoadPath.CenterX(GridRowZ(row)), RoadPath.CenterX(GridRowZ(row + 1)), t);
+            var offset = Mathf.Clamp(point.x - shift, columns[0], columns[columns.Length - 1]);
+            var lo = 0;
+            var hi = columns.Length - 2;
+            while (lo < hi)
+            {
+                var mid = (lo + hi + 1) / 2;
+                if (columns[mid] <= offset) lo = mid; else hi = mid - 1;
+            }
+            var s = Mathf.InverseLerp(columns[lo], columns[lo + 1], offset);
+            var h00 = GridCornerY(row, lo);
+            var h01 = GridCornerY(row, lo + 1);
+            var h10 = GridCornerY(row + 1, lo);
+            var h11 = GridCornerY(row + 1, lo + 1);
+            // The two triangles of the cell, split corner (row, lo) to (row + 1, lo + 1).
+            return s <= t
+                ? h00 + t * (h10 - h00) + s * (h11 - h10)
+                : h00 + s * (h01 - h00) + t * (h11 - h01);
+        }
+
+        /// Search step along the road for the nearest point of road.
+        private const float NearestRoadStep = 2f;
+        /// Two stretches of road whose distances differ by less than this are the
+        /// same stretch.
+        private const float SameStretch = 40f;
+        /// Over this much difference in how near they are, the ground blends from one
+        /// stretch's real ground to the other's.
+        private const float StretchBlend = 25f;
+
+        private static readonly List<float> nearBehind = new();
+        private static readonly List<float> nearAhead = new();
+        private static readonly List<int> nearOffsets = new();
+        /// The road's centre X at every NearestRoadStep of one pass, so the search reads
+        /// an array instead of evaluating the curve thousands of times per corner.
+        private static float[] roadXSamples;
+        private static RoadRoute roadXSamplesFor;
+
+        private static float RoadXSample(long index)
+        {
+            var route = RoadPath.Route;
+            if (roadXSamplesFor != route || roadXSamples == null)
+            {
+                roadXSamplesFor = route;
+                var count = Mathf.CeilToInt(route.Length / NearestRoadStep) + 1;
+                roadXSamples = new float[count];
+                for (var i = 0; i < count; i++) roadXSamples[i] = route.X(Mathf.Min(route.Length, i * NearestRoadStep));
+            }
+            // There and back, as RoadRoute.Fold.
+            var period = 2L * (roadXSamples.Length - 1);
+            var folded = ((index % period) + period) % period;
+            if (folded >= roadXSamples.Length) folded = period - folded;
+            return roadXSamples[folded];
+        }
+
+        /// The real ground at a world position: from the point of road nearest to it,
+        /// blended with the next nearest other stretch of road where that is almost as
+        /// near. Also returns the nearest point as (distance, lateral).
+        private static float TerrainHeightAt(Vector3 point, out float distance, out float lateral)
+        {
+            // On the lattice of road samples, from the one nearest the point's own Z.
+            var origin = (long)Mathf.Round(point.z / NearestRoadStep);
+            float Dist2(long index)
+            {
+                var dx = point.x - RoadXSample(index);
+                var dz = point.z - index * NearestRoadStep;
+                return dx * dx + dz * dz;
+            }
+            // The road heads along +Z, so a point of road k steps away along Z is at
+            // least that far away: the search runs outwards from the point's own Z until
+            // nothing further out could be the nearest, or near enough to blend with it.
+            nearBehind.Clear();
+            nearAhead.Clear();
+            nearOffsets.Clear();
+            var nearest = float.PositiveInfinity;
+            for (var k = 0; ; k++)
+            {
+                // Every sample for the first 100 m, then every fourth: far out, a stretch
+                // of road is a wide, shallow minimum, and the slide below finds its foot.
+                var offset = k <= 50 ? k : 50 + (k - 50) * 4;
+                var ahead = Dist2(origin + offset);
+                var behind = k == 0 ? ahead : Dist2(origin - offset);
+                nearOffsets.Add(offset);
+                nearAhead.Add(ahead);
+                nearBehind.Add(behind);
+                nearest = Mathf.Min(nearest, Mathf.Min(ahead, behind));
+                if (k > 1 && nearOffsets[k - 1] * NearestRoadStep > Mathf.Sqrt(nearest) + StretchBlend + NearestRoadStep) break;
+            }
+            // Local minima of the distance along the road: one for each stretch of road
+            // that passes the point. The nearest, and the nearest on another stretch.
+            var count = nearBehind.Count;
+            float Sample(int i) => i < 0 ? nearBehind[-i] : nearAhead[i];
+            float At(int i) => (origin + (i < 0 ? -nearOffsets[-i] : nearOffsets[i])) * NearestRoadStep;
+            var bestD = point.z;
+            var best = float.PositiveInfinity;
+            for (var i = -(count - 2); i <= count - 2; i++)
+            {
+                var here = Sample(i);
+                if (here > Sample(i - 1) || here > Sample(i + 1) || here >= best) continue;
+                best = here;
+                bestD = At(i);
+            }
+            var secondD = float.NaN;
+            var second = float.PositiveInfinity;
+            for (var i = -(count - 2); i <= count - 2; i++)
+            {
+                var here = Sample(i);
+                var d = At(i);
+                if (here > Sample(i - 1) || here > Sample(i + 1) || here >= second) continue;
+                if (Mathf.Abs(d - bestD) <= SameStretch) continue;
+                second = here;
+                secondD = d;
+            }
+
+            var height = GroundOfStretch(point, bestD, out distance, out lateral);
+            if (!float.IsNaN(secondD))
+            {
+                var gap = Mathf.Sqrt(second) - Mathf.Sqrt(best);
+                if (gap < StretchBlend)
+                {
+                    var other = GroundOfStretch(point, secondD, out _, out _);
+                    height = Mathf.Lerp(height, other, 0.5f * (1f - Mathf.SmoothStep(0f, 1f, gap / StretchBlend)));
+                }
+            }
+            return height;
+        }
+
+        /// The real ground at a world position as seen from one stretch of road: the
+        /// point of it square across from the position, near the road distance given.
+        private static float GroundOfStretch(Vector3 point, float near, out float distance, out float lateral)
+        {
+            // The nearest point of the stretch, within a coarse search step either side
+            // of the sample found: narrowed down by golden sections (the distance to the
+            // road has one minimum over so short a span).
+            float Dist2(float d)
+            {
+                var dx = point.x - RoadPath.CenterX(d);
+                var dz = point.z - d;
+                return dx * dx + dz * dz;
+            }
+            const float golden = 0.381966f;
+            var a = near - 4f * NearestRoadStep;
+            var b = near + 4f * NearestRoadStep;
+            var c = a + golden * (b - a);
+            var e = b - golden * (b - a);
+            var fc = Dist2(c);
+            var fe = Dist2(e);
+            for (var i = 0; i < 18; i++)
+            {
+                if (fc < fe)
+                {
+                    b = e;
+                    e = c;
+                    fe = fc;
+                    c = a + golden * (b - a);
+                    fc = Dist2(c);
+                }
+                else
+                {
+                    a = c;
+                    c = e;
+                    fc = fe;
+                    e = b - golden * (b - a);
+                    fe = Dist2(e);
+                }
+            }
+            distance = 0.5f * (a + b);
+            var flat = point - RoadPath.Center(distance);
+            flat.y = 0f;
+            lateral = Vector3.Dot(flat, RoadPath.Right(distance));
+            var y = RoadPath.CenterY(distance) + RealGround(distance, lateral);
+            if (Mathf.Abs(lateral) > RoadPath.ClearanceAt(distance) + 4f) y += LakeBasin(distance, lateral);
+            return y;
+        }
+
+        /// The ground as drawn at (distance, lateral), relative to the road there.
         private static float MeshGround(float distance, float lateral)
         {
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return 0f;
-            var row = Mathf.Floor((distance - RibbonRowOffset) / RibbonRowStep);
-            var d0 = RibbonRowOffset + row * RibbonRowStep;
-            var d1 = d0 + RibbonRowStep;
-            var along = (distance - d0) / RibbonRowStep;
-            return Mathf.Lerp(RibbonRowGround(d0, lateral), RibbonRowGround(d1, lateral), along);
+            return GridGroundY(RoadPath.Point(distance, lateral)) - RoadPath.CenterY(distance);
         }
 
-        /// Along one row of the ribbon, the ground between the two vertices either side.
-        private static float RibbonRowGround(float distance, float lateral)
-        {
-            var half = RoadPath.HalfWidthAt(distance);
-            var u = Mathf.Abs(lateral) / half;
-            if (u <= 1f || u >= 150f) return RealGround(distance, lateral);
-            float inner, span;
-            int steps;
-            if (u < 4f) { inner = 1f; span = 3f; steps = 14; }
-            else { inner = 4f; span = 146f; steps = 80; }
-            var t = Mathf.Sqrt((u - inner) / span) * steps;
-            var k = Mathf.Min(steps - 1, Mathf.FloorToInt(t));
-            var side = Mathf.Sign(lateral);
-            var reach = StripReach(distance, side);
-            float Vertex(int step)
-            {
-                var f = step / (float)steps;
-                var at = (inner + span * f * f) * half;
-                if (at > reach) at = reach;
-                var l = side * at;
-                var y = RealGround(distance, l);
-                if (at > RoadPath.ClearanceAt(distance) + 4f) y += LakeBasin(distance, l);
-                return y;
-            }
-            var a = (inner + span * (k / (float)steps) * (k / (float)steps)) * half;
-            var b = (inner + span * ((k + 1) / (float)steps) * ((k + 1) / (float)steps)) * half;
-            var w = b > a ? Mathf.Clamp01((Mathf.Abs(lateral) - a) / (b - a)) : 0f;
-            return Mathf.Lerp(Vertex(k), Vertex(k + 1), w);
-        }
-
-        /// The lowest real ground under a footprint of this radius, a little below it:
-        /// a trunk on a slope roots on its downhill side, and the ground mesh between
-        /// its vertices lies below the exact height at any one point.
+        /// The lowest drawn ground under a footprint of this radius, a little below it,
+        /// relative to the road at (distance, lateral): a trunk on a slope roots on its
+        /// downhill side.
         private static float RealGroundUnder(float distance, float lateral, float radius)
         {
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return 0f;
-            // As the mesh draws it, so the footprint only has to allow for the trunk's
-            // own width on the slope.
-            var centre = MeshGround(distance, lateral);
-            float low = centre, high = centre;
-            foreach (var (along, across) in new[] { (radius, 0f), (-radius, 0f), (0f, radius), (0f, -radius) })
+            var centre = RoadPath.Point(distance, lateral);
+            float low = float.PositiveInfinity, high = float.NegativeInfinity;
+            foreach (var (x, z) in new[] { (0f, 0f), (radius, 0f), (-radius, 0f), (0f, radius), (0f, -radius) })
             {
-                var y = MeshGround(distance + along, lateral + across);
+                var y = GridGroundY(centre + new Vector3(x, 0f, z));
                 low = Mathf.Min(low, y);
                 high = Mathf.Max(high, y);
             }
-            return low - 0.1f - 0.08f * (high - low);
+            return low - RoadPath.CenterY(distance) - 0.1f - 0.08f * (high - low);
         }
 
-        /// How far the ground strip of this road distance may reach out on this side
-        /// (+1 right, -1 left).
-        ///
-        /// The ground strips run up to 150 half widths out - over a kilometre - square to
-        /// the road. On the winding B500 the strips of other stretches of road reach the
-        /// same ground, each with the real height for its own distance and with no
-        /// levelled plot but its own: the hillside was several layers folded through
-        /// one another. Whichever lay highest was what the rays found, and what was
-        /// seen from the road could be another: trees and cars floated and sank, and a
-        /// test car's levelled plot came out 4 m out of level. Stopping only at the
-        /// inside of a bend (the old rule) left every other crossing in place.
-        ///
-        /// Now each piece of ground belongs to the stretch of road nearest to it. A
-        /// strip stops where some other point of the road becomes as near as its own
-        /// centre: for a point q of the road, along the strip's direction n from its
-        /// centre c, that is at |q - c|^2 / (2 (q - c).n). On a bend of radius R this is
-        /// R, where the old inner-bend rule stopped; on a straight it never comes. A few
-        /// metres of overlap keep neighbouring strips meeting without a crack of sky.
-        private static readonly Dictionary<int, Vector2> stripReachCache = new();
-        private const float StripOverlap = 3f;
-        private const float StripSampleStep = 5f;
-
-        private static float StripReach(float distance, float side)
-        {
-            // Asked for several times per tree planted; the road does not change, so
-            // it is kept per half metre of road.
-            var key = Mathf.RoundToInt(distance * 2f);
-            if (!stripReachCache.TryGetValue(key, out var reach))
-            {
-                if (stripReachCache.Count > 50000) stripReachCache.Clear();
-                reach = MeasureStripReach(key * 0.5f);
-                stripReachCache[key] = reach;
-            }
-            return side < 0f ? reach.x : reach.y;
-        }
-
-        /// Reach on the left (x) and right (y) of the strip at this distance.
-        private static Vector2 MeasureStripReach(float distance)
-        {
-            var half = RoadPath.HalfWidthAt(distance);
-            var extent = 150f * half;
-            var centre = new Vector2(RoadPath.CenterX(distance), distance);
-            var right3 = RoadPath.Right(distance);
-            var right = new Vector2(right3.x, right3.z);
-            float left = extent, rightReach = extent;
-            // The road runs on along +Z (world Z is road distance), so a point dz along
-            // the road is at least |dz| away and can stop a strip no nearer than |dz|/2:
-            // outwards from the centre until that is past both reaches.
-            for (var k = 1; ; k++)
-            {
-                var dz = k * StripSampleStep;
-                if (dz * 0.5f > Mathf.Max(left, rightReach)) break;
-                for (var sign = -1; sign <= 1; sign += 2)
-                {
-                    var d = distance + sign * dz;
-                    var v = new Vector2(RoadPath.CenterX(d), d) - centre;
-                    var across = Vector2.Dot(v, right);
-                    if (Mathf.Abs(across) < 1e-3f) continue;
-                    var at = v.sqrMagnitude / (2f * Mathf.Abs(across));
-                    if (across > 0f) rightReach = Mathf.Min(rightReach, at);
-                    else left = Mathf.Min(left, at);
-                }
-            }
-            // Never inside the near strip's first few metres past the rail.
-            var floor = RoadPath.ClearanceAt(distance) + 6f;
-            return new Vector2(Mathf.Max(floor, left + StripOverlap), Mathf.Max(floor, rightReach + StripOverlap));
-        }
-
-        /// The ground seen from above at a world position, over the real terrain.
-        ///
-        /// The ground ribbons run hundreds of metres out from the road, so on the inside
-        /// of a bend the strips laid from neighbouring road distances cross over one
-        /// another, each with the real height for its own distance. Whichever lies
-        /// highest is the ground that is seen there, and a tree placed by its own road
-        /// distance could land on a lower strip, floating in front of the hillside that
-        /// covered it. This finds every road distance whose strip passes through the
-        /// point and returns the top one, as (distance, lateral) on that strip.
+        /// The ground at a world position over the real terrain, as (distance, lateral)
+        /// from the point of road nearest to it.
         private static bool VisibleGround(Vector3 point, out float groundDistance, out float groundLateral)
         {
             groundDistance = point.z;
             groundLateral = 0f;
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return false;
-            var extent = 150f * RoadPath.HalfWidthAt(point.z);
-            // Right() is level and the bends are capped at 42 degrees, so a strip that
-            // reaches this point starts within extent * sin(42) of it along the road.
-            var reach = Mathf.Min(extent * 0.7f, 500f);
-            const float step = 3f;
-            var best = float.NegativeInfinity;
-            var found = false;
-            float Along(float d) => Vector3.Dot(point - RoadPath.Center(d), RoadPath.Forward(d));
-            var previousD = point.z - reach;
-            var previous = Along(previousD);
-            for (var d = previousD + step; d <= point.z + reach + 0.01f; d += step)
+            TerrainHeightAt(point, out groundDistance, out groundLateral);
+            return true;
+        }
+
+        /// This chunk's share of the grid, from 2 m before it to 2 m after (rows on the
+        /// same 5 m lattice in every chunk, so neighbours share their edge rows), with the
+        /// three-layer ground weights in its vertex colours as BuildRibbon gives them.
+        private void BuildTerrainGrid(string name, Material material, float vergeFrom, float vergeTo)
+        {
+            var columns = GridColumns;
+            var firstRow = (long)Mathf.Floor((segStart - 2f - GridRowOffset) / GridRowStep);
+            var lastRow = (long)Mathf.Ceil((segEnd + 2f - GridRowOffset) / GridRowStep);
+            var rows = (int)(lastRow - firstRow) + 1;
+            var across = columns.Length;
+            var vertices = new Vector3[rows * across];
+            var uv = new Vector2[vertices.Length];
+            var colors = new Color[vertices.Length];
+            var triangles = new int[(rows - 1) * (across - 1) * 6];
+            var t = 0;
+            for (var i = 0; i < rows; i++)
             {
-                var along = Along(d);
-                if (previous == 0f || Mathf.Sign(previous) != Mathf.Sign(along))
+                var row = firstRow + i;
+                var z = GridRowZ(row);
+                var cx = RoadPath.CenterX(z);
+                for (var j = 0; j < across; j++)
                 {
-                    var at = Mathf.Lerp(previousD, d, previous / (previous - along));
-                    var lateral = Vector3.Dot(point - RoadPath.Center(at), RoadPath.Right(at));
-                    var abs = Mathf.Abs(lateral);
-                    var half = RoadPath.HalfWidthAt(at);
-                    var built = abs <= StripReach(at, Mathf.Sign(lateral));
-                    if (built && abs >= half && abs <= 150f * half)
-                    {
-                        var y = RoadPath.CenterY(at) + RealGround(at, lateral) +
-                                (abs > RoadPath.ClearanceAt(at) + 4f ? LakeBasin(at, lateral) : 0f);
-                        if (y > best)
-                        {
-                            best = y;
-                            groundDistance = at;
-                            groundLateral = lateral;
-                            found = true;
-                        }
-                    }
+                    var p = new Vector3(cx + columns[j], 0f, z);
+                    var corner = GridCorner(row, j);
+                    var y = corner.x;
+                    var distance = corner.y;
+                    var lateral = corner.z;
+                    var v = i * across + j;
+                    // A little under the road surface, as the ribbons were.
+                    vertices[v] = new Vector3(p.x, y - 0.05f, z);
+                    uv[v] = new Vector2(p.x * 0.08f, z * 0.08f);
+                    // Layer 0 = base ground, 1 = patchy overgrowth, 2 = verge gravel.
+                    var patch = TerrainNoise(p.x, p.z, 0.010f) * 0.5f + 0.5f;
+                    var detail = TerrainNoise(p.x, p.z, 0.038f) * 0.5f + 0.5f;
+                    var verge = 1f - Mathf.SmoothStep(0f, 1f,
+                        Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + vergeFrom,
+                            RoadPath.ClearanceAt(distance) + vergeTo, Mathf.Abs(lateral)));
+                    var w1 = Mathf.Clamp01((patch - 0.42f) * 2.6f) * (1f - verge * 0.7f);
+                    var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
+                    var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
+                    var sum = w0 + w1 + w2;
+                    colors[v] = new Color(w0 / sum, w1 / sum, w2 / sum, 1f);
                 }
-                previousD = d;
-                previous = along;
+                if (i == rows - 1) continue;
+                for (var j = 0; j < across - 1; j++)
+                {
+                    // Split (row, j) to (row + 1, j + 1), as GridGroundY interpolates.
+                    var v = i * across + j;
+                    triangles[t++] = v;
+                    triangles[t++] = v + across;
+                    triangles[t++] = v + across + 1;
+                    triangles[t++] = v;
+                    triangles[t++] = v + across + 1;
+                    triangles[t++] = v + 1;
+                }
             }
-            return found;
+            var ground = CreateMeshObject(name, vertices, triangles, uv, material, colors);
+            // What planting rays land on (RaycastGround).
+            ground.layer = PlantingGroundLayer;
+            ground.AddComponent<MeshCollider>().sharedMesh = ground.GetComponent<MeshFilter>().sharedMesh;
         }
 
         /// The height of the ground seen from above at a world position over the real
@@ -3082,10 +3259,6 @@ namespace RoadRage.UnityRemake
             if (float.IsNaN(start)) start = segStart - 2f;
             if (float.IsNaN(end)) end = segEnd + 2f;
             if (displace > 0f) lateralSegments = Mathf.Max(lateralSegments, 10);
-            // The displaced ground of a route with a baked terrain table takes the real
-            // ground instead of noise, finely divided across.
-            var realGround = displace > 0f && RoadPath.Route != null && RoadPath.Route.HasTerrain;
-            if (realGround) lateralSegments = Mathf.Max(lateralSegments, Mathf.Abs(rightLateral - leftLateral) > 20f ? 80 : 14);
             var across = Mathf.Max(1, lateralSegments) + 1;
             var sampleCount = Mathf.CeilToInt((end - start) / sampleStep) + 1;
             var vertices = new Vector3[sampleCount * across];
@@ -3097,27 +3270,12 @@ namespace RoadRage.UnityRemake
             {
                 var distance = Mathf.Min(end, start + i * sampleStep);
                 var scale = relative ? RoadPath.HalfWidthAt(distance) : 1f;
-                var leftReach = realGround ? StripReach(distance, -1f) : float.PositiveInfinity;
-                var rightReach = realGround ? StripReach(distance, 1f) : float.PositiveInfinity;
                 for (var j = 0; j < across; j++)
                 {
                     var f = across == 1 ? 0f : j / (float)(across - 1);
-                    // Over real terrain the vertices crowd towards the road, where the
-                    // banks and cuttings are seen up close, and spread out towards the
-                    // valley sides.
-                    if (realGround)
-                        f = Mathf.Abs(leftLateral) < Mathf.Abs(rightLateral) ? f * f : 1f - (1f - f) * (1f - f);
                     var lateral = Mathf.Lerp(leftLateral, rightLateral, f) * scale;
-                    var sideReach = lateral < 0f ? leftReach : rightReach;
-                    if (Mathf.Abs(lateral) > sideReach) lateral = Mathf.Sign(lateral) * sideReach;
                     var lift = 0f;
-                    if (realGround)
-                    {
-                        lift = RealGround(distance, lateral);
-                        if (colors != null && Mathf.Abs(lateral) > RoadPath.ClearanceAt(distance) + 4f)
-                            lift += LakeBasin(distance, lateral);
-                    }
-                    else if (displace > 0f)
+                    if (displace > 0f)
                     {
                         var p = RoadPath.Point(distance, lateral);
                         // Fade at the strip edges so neighbouring ribbons still meet.
@@ -3166,18 +3324,6 @@ namespace RoadRage.UnityRemake
                 }
             }
             var ribbon = CreateMeshObject(name, vertices, triangles, uv, material, colors);
-            if (realGround)
-            {
-                // Drawn from both sides. Where a strip stops (StripReach) the ground of
-                // another stretch of road takes over but does not quite meet it, and a view
-                // up the bank ran under that ground's edge: its underside was culled and a
-                // white line of sky showed through the forest. Now the underside is drawn,
-                // lit as ground.
-                DrawBothSides(ribbon);
-                // What planting rays land on (RaycastGround): the ground exactly as drawn.
-                ribbon.layer = PlantingGroundLayer;
-                ribbon.AddComponent<MeshCollider>().sharedMesh = ribbon.GetComponent<MeshFilter>().sharedMesh;
-            }
             return ribbon;
         }
 
@@ -8363,7 +8509,7 @@ namespace RoadRage.UnityRemake
         {
             testAssets = null;
             twoSided.Clear();
-            stripReachCache.Clear();
+            gridHeights.Clear();
             buildingPads.Clear();
             padsFor = float.NaN;
         }
@@ -8382,6 +8528,8 @@ namespace RoadRage.UnityRemake
             if (padsFor == startDistance) return;
             padsFor = startDistance;
             buildingPads.Clear();
+            // The grid's corners carry the pads' levelled ground.
+            gridHeights.Clear();
             var assets = TestAssets;
             for (var i = 0; i < assets.Length; i++)
             {
