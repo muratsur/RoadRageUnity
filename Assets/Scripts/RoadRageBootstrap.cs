@@ -8142,6 +8142,48 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        private static Material hollowFill;
+
+        /// Generated buildings are a thin one-sided shell: through a doorway, an open
+        /// arcade or a gap in the mesh you saw straight through the empty inside to the
+        /// ground behind. A dark block just inside the walls makes every opening read as
+        /// an unlit room, the way game buildings with no interiors are usually closed.
+        private static void FillHollowShell(GameObject model)
+        {
+            // Measured square to the model, then turned back with it, so the block lines
+            // up with the walls wherever the model faces.
+            var facing = model.transform.rotation;
+            model.transform.rotation = Quaternion.identity;
+            if (!TryGetCombinedBounds(model, out var bounds))
+            {
+                model.transform.rotation = facing;
+                return;
+            }
+            if (hollowFill == null)
+            {
+                hollowFill = new Material(Shader.Find("Universal Render Pipeline/Lit")) { name = "Test Asset Interior" };
+                hollowFill.SetColor("_BaseColor", new Color(0.035f, 0.033f, 0.03f));
+                hollowFill.SetFloat("_Smoothness", 0.05f);
+                hollowFill.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                hollowFill.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            }
+            var core = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            core.name = "Interior Fill";
+            var collider = core.GetComponent<Collider>();
+            if (collider != null) Destroy(collider);
+            var renderer = core.GetComponent<Renderer>();
+            renderer.sharedMaterial = hollowFill;
+            renderer.shadowCastingMode = ShadowCastingMode.Off;
+            // In from the walls, up from below the ground to under the roof.
+            core.transform.SetParent(model.transform, true);
+            core.transform.position = new Vector3(bounds.center.x, bounds.min.y + bounds.size.y * 0.45f, bounds.center.z);
+            core.transform.rotation = Quaternion.identity;
+            var size = new Vector3(bounds.size.x * 0.86f, bounds.size.y * 0.88f, bounds.size.z * 0.86f);
+            var parentScale = model.transform.lossyScale;
+            core.transform.localScale = new Vector3(size.x / parentScale.x, size.y / parentScale.y, size.z / parentScale.z);
+            model.transform.rotation = facing;
+        }
+
         /// Half the model's widest side once it stands at its height, within the clearing.
         private static float TestAssetHalf(GameObject asset)
         {
@@ -8192,6 +8234,7 @@ namespace RoadRage.UnityRemake
                 model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.3f,
                     ground.z - bounds.center.z);
                 TryGetCombinedBounds(model, out bounds);
+                FillHollowShell(model);
                 Debug.Log($"RR_TESTASSET placed #{i + 1} '{assets[i].name}' {distance - startDistance:0} m from the start, " +
                           $"{(lateral < 0f ? "left" : "right")} {Mathf.Abs(lateral):0} m, " +
                           $"{bounds.size.x:0.#} x {bounds.size.y:0.#} x {bounds.size.z:0.#} m");
