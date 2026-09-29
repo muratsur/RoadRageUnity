@@ -7259,6 +7259,7 @@ namespace RoadRage.UnityRemake
             }
             if (!RouteAllows(label, distance, lateral)) return null;
             if (InHotelGrounds(distance, lateral)) return null;
+            if (InTestAssetGround(distance, lateral)) return null;
             var split = entry.Split('|');
             var external = split[0] == "External";
             var blackForest = external || split[0] == "BlackForest";
@@ -8009,6 +8010,126 @@ namespace RoadRage.UnityRemake
             return materials[roll < 0.5f ? "Black Forest" : roll < 0.8f ? "Black Forest Dark" : "Black Forest Fresh"];
         }
 
+        // ------------------------------------------------------------ test assets
+
+        /// Models being tried out for Greenwood (Rodin, TRELLIS...), dropped into
+        /// Assets/Resources/TestAssets/ - git-ignored, never committed. They stand beside
+        /// the road from TestAssetStart past the start of the run, one every
+        /// TestAssetSpacing metres, alternating sides and facing the road, on cleared
+        /// ground. Each is scaled to TestAssetDefaultHeight, or to the height in its name:
+        /// "farmhouse_h12" stands 12 m tall. The console lists what each one costs
+        /// (RR_TESTASSET), in the order they stand.
+        private const float TestAssetStart = 120f;
+        private const float TestAssetSpacing = 40f;
+        private const float TestAssetDefaultHeight = 9f;
+        /// Out from the clearance line to the model's centre, and the radius cleared of
+        /// trees around it: room for a house up to ~20 m across.
+        private const float TestAssetSetback = 12f;
+        private const float TestAssetClearing = 12f;
+        private static GameObject[] testAssets;
+
+        private static GameObject[] TestAssets
+        {
+            get
+            {
+                if (testAssets != null) return testAssets;
+                testAssets = Resources.LoadAll<GameObject>("TestAssets");
+                System.Array.Sort(testAssets, (a, b) => string.CompareOrdinal(a.name, b.name));
+                for (var i = 0; i < testAssets.Length; i++) ReportTestAsset(i, testAssets[i]);
+                return testAssets;
+            }
+        }
+
+        private float TestAssetDistance(int index) => startDistance + TestAssetStart + index * TestAssetSpacing;
+
+        private static float TestAssetLateral(int index, float distance) =>
+            (index % 2 == 0 ? -1f : 1f) * (RoadPath.ClearanceAt(distance) + TestAssetSetback);
+
+        private bool InTestAssetGround(float distance, float lateral)
+        {
+            if (RoadPath.Route == null) return false;
+            var assets = TestAssets;
+            for (var i = 0; i < assets.Length; i++)
+            {
+                var d = TestAssetDistance(i);
+                if (Mathf.Abs(distance - d) < TestAssetClearing &&
+                    Mathf.Abs(lateral - TestAssetLateral(i, d)) < TestAssetClearing)
+                    return true;
+            }
+            return false;
+        }
+
+        private void PlaceTestAssets()
+        {
+            if (RoadPath.Route == null) return;
+            var assets = TestAssets;
+            for (var i = 0; i < assets.Length; i++)
+            {
+                var distance = TestAssetDistance(i);
+                if (distance < segStart || distance >= segEnd) continue;
+                var lateral = TestAssetLateral(i, distance);
+                var model = Adopt(Instantiate(assets[i]));
+                model.name = $"Test Asset {i + 1} {assets[i].name}";
+                model.transform.position = Vector3.zero;
+                // Its front (+Z) towards the road.
+                model.transform.rotation = Quaternion.LookRotation(-Mathf.Sign(lateral) * RoadPath.Right(distance));
+                if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.001f) continue;
+                model.transform.localScale *= TestAssetHeight(assets[i].name) / bounds.size.y;
+                var ground = RoadPath.Point(distance, lateral, RealGroundUnder(distance, lateral, 4f));
+                model.transform.position = ground;
+                TryGetCombinedBounds(model, out bounds);
+                // Centred on its spot and bedded 0.2 m into the ground, whatever its pivot.
+                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.2f,
+                    ground.z - bounds.center.z);
+            }
+        }
+
+        private static float TestAssetHeight(string name)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(name, @"_h(\d+(\.\d+)?)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success && float.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var height) && height > 0.1f
+                ? height
+                : TestAssetDefaultHeight;
+        }
+
+        /// Triangles, materials and texture sizes: what decides whether a model can
+        /// stand in the game by the dozen.
+        private static void ReportTestAsset(int index, GameObject asset)
+        {
+            var triangles = 0L;
+            var vertices = 0L;
+            // From the meshes: a prefab that is not in the scene has no renderer bounds.
+            var size = Vector3.zero;
+            foreach (var filter in asset.GetComponentsInChildren<MeshFilter>(true))
+            {
+                var mesh = filter.sharedMesh;
+                if (mesh == null) continue;
+                size = Vector3.Max(size, Vector3.Scale(mesh.bounds.size, filter.transform.lossyScale));
+                vertices += mesh.vertexCount;
+                for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
+            }
+            var materials = new HashSet<Material>();
+            var textures = new HashSet<Texture>();
+            foreach (var renderer in asset.GetComponentsInChildren<Renderer>(true))
+            foreach (var material in renderer.sharedMaterials)
+            {
+                if (material == null || !materials.Add(material)) continue;
+                foreach (var property in material.GetTexturePropertyNames())
+                {
+                    var texture = material.GetTexture(property);
+                    if (texture != null) textures.Add(texture);
+                }
+            }
+            var largest = 0;
+            foreach (var texture in textures) largest = Mathf.Max(largest, Mathf.Max(texture.width, texture.height));
+            var verdict = triangles <= 30000 ? "OK" : triangles <= 100000 ? "HEAVY - reduce before use" : "TOO HEAVY - reduce";
+            Debug.Log($"RR_TESTASSET #{index + 1} '{asset.name}': {triangles:N0} triangles, {vertices:N0} vertices, " +
+                      $"{materials.Count} materials, {textures.Count} textures up to {largest}px, native size " +
+                      $"{size.x:0.##} x {size.y:0.##} x {size.z:0.##}, stands {TestAssetHeight(asset.name):0.#} m -> {verdict}");
+        }
+
         private static readonly string[] BlackForestTrees =
         {
             "BlackForest|SM_spruce_01", "BlackForest|SM_spruce_02", "BlackForest|SM_spruce_03",
@@ -8570,6 +8691,7 @@ namespace RoadRage.UnityRemake
             // borrowed Synthwave fence half a metre behind it.
             BuildGuardRail(materials["Forest Guard Rail"]);
             if (RoadPath.Route != null) BuildRouteProps();
+            PlaceTestAssets();
             if (RoadPath.Route != null && RoadPath.Route.HasCover)
             {
                 BuildRouteOpenGround();

@@ -102,3 +102,8 @@ Assets/Resources/Police/PoliceCarPack.asset.meta
 # URP Dynamic Weather System pack, which is not committed).
 Assets/Resources/Weather/
 Assets/Resources/Weather.meta
+
+# Models being tried out for Greenwood (Rodin, TRELLIS...), placed beside the road by
+# the test-asset spot. Local only until one is chosen and its licence checked.
+Assets/Resources/TestAssets/
+Assets/Resources/TestAssets.meta
