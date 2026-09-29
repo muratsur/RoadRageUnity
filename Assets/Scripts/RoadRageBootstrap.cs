@@ -9183,6 +9183,14 @@ namespace RoadRage.UnityRemake
                     var from = near;
                     ScatterBand(9f, from, from + 14f, (d, l, s) => Understory(d, l));
                 }
+                // The bank itself. Every tall tree near the road is pushed back until its
+                // crown clears the carriageway - on a cutting that put all of them past the
+                // top of the bank, the slope facing the road stayed bare and only their
+                // crowns showed over the crest, like trees sunk to the top in the hill.
+                // Young spruce have crowns small enough to stand on the slope itself, from
+                // just past the rail, as they do along a real cutting.
+                if (OverRealTerrain)
+                    ScatterBand(4.5f, 0f, 9f, (d, l, s) => Understory(d, l));
                 // Forestry: windthrow and cut stumps on the floor. A managed Black Forest
                 // stand is never a clean lawn under the trees.
                 ScatterBand(26f, 12f, 70f, (d, l, s) =>
