@@ -2929,6 +2929,11 @@ namespace RoadRage.UnityRemake
             return found;
         }
 
+        /// The height of the ground seen from above at a world position over the real
+        /// terrain, as a trunk of this radius roots on it; NaN without the terrain.
+        private static float GroundHeightAt(Vector3 point, float radius) =>
+            VisibleGround(point, out var d, out var l) ? RoadPath.CenterY(d) + RealGroundUnder(d, l, radius) : float.NaN;
+
         /// Moves a model placed on the real ground at (distance, lateral) onto the
         /// ground that is actually seen where it ended up. Scaling it, grounding it by
         /// its bounds and pushing it clear of the road all move it after the first
@@ -7759,6 +7764,10 @@ namespace RoadRage.UnityRemake
             // +-1 m, "inside the road" - this moved every tree, wherever it was planted,
             // onto the edge line: the whole forest stood in one row along the rail with
             // empty ground behind it.
+            // Pushed clear of the road sideways, a tree keeps its height; on a bank that
+            // climbs away from the road that buried it to the crown. It follows the
+            // ground it was pushed onto instead.
+            var groundBefore = GroundHeightAt(tree.transform.position, 0.9f);
             KeepTrunkOffRoad(tree, distance, lateral);
             // Roots into the ground: the pack's trees are grounded by their bounds, which
             // reach a little below the trunk, and stood hovering.
@@ -7770,6 +7779,9 @@ namespace RoadRage.UnityRemake
                 canopyRejected++;
                 return null;
             }
+            var groundAfter = GroundHeightAt(tree.transform.position, 0.9f);
+            if (!float.IsNaN(groundBefore) && !float.IsNaN(groundAfter))
+                tree.transform.position += Vector3.up * (groundAfter - groundBefore);
             canopyKept++;
             return tree;
         }
@@ -8180,6 +8192,10 @@ namespace RoadRage.UnityRemake
                 kept[i] = lods[first + i];
                 kept[i].screenRelativeTransitionHeight = lods[i].screenRelativeTransitionHeight;
             }
+            // The last one kept took the first one's threshold - culled while it still
+            // filled a good part of the screen, so the house popped in close up. It goes
+            // only once it is a sliver, like everything else by the road.
+            kept[kept.Length - 1].screenRelativeTransitionHeight = 0.01f;
             for (var i = 0; i < first; i++)
                 foreach (var r in lods[i].renderers)
                 {
