@@ -1376,11 +1376,14 @@ namespace RoadRage.UnityRemake
             // Black Forest vegetation (Tools/Blender/build_black_forest.py): Norway spruce,
             // silver fir and the ground cover under them, all on one atlas - bark and
             // needles in one material. Three tints so a stand is not one flat colour.
-            BiomeCutoutMaterial("Black Forest", "BlackForest", "T_blackforest_D", "T_blackforest_N", Color.white, 0.45f);
+            // All three darker than the atlas: at full white (and "fresh" above it) these
+            // spruces stood out bright green on the slopes beside the pack's trees.
+            BiomeCutoutMaterial("Black Forest", "BlackForest", "T_blackforest_D", "T_blackforest_N",
+                new Color(0.72f, 0.76f, 0.70f), 0.45f);
             BiomeCutoutMaterial("Black Forest Dark", "BlackForest", "T_blackforest_D", "T_blackforest_N",
-                new Color(0.80f, 0.84f, 0.80f), 0.45f);
+                new Color(0.58f, 0.62f, 0.57f), 0.45f);
             BiomeCutoutMaterial("Black Forest Fresh", "BlackForest", "T_blackforest_D", "T_blackforest_N",
-                new Color(1.05f, 1.10f, 1.0f), 0.45f);
+                new Color(0.80f, 0.84f, 0.74f), 0.45f);
             // B500 roadside furniture and the hotel (Tools/Blender/build_b500_props.py):
             // one opaque atlas for posts, signs, logs and the house.
             BiomeMaterial("B500 Props", "BlackForest", "T_b500props_D", "T_b500props_N", Color.white, 0f, 0.2f);
@@ -7881,7 +7884,7 @@ namespace RoadRage.UnityRemake
                     if (key.Contains("emission")) calmer = Color.black;
                     else if (key.Contains("spec")) calmer = colour * 0.3f;
                     else if (key.Contains("color") || key.Contains("colour") || key.Contains("tint"))
-                        calmer = Desaturate(colour, 0.3f) * 0.88f;
+                        calmer = Desaturate(colour, 0.35f) * 0.82f;
                     else continue;
                     calmer.a = colour.a;
                     material.SetColor(property, calmer);
@@ -8023,9 +8026,12 @@ namespace RoadRage.UnityRemake
         private const float TestAssetSpacing = 40f;
         private const float TestAssetDefaultHeight = 9f;
         /// Out from the clearance line to the model's centre, and the radius cleared of
-        /// trees around it: room for a house up to ~20 m across.
-        private const float TestAssetSetback = 12f;
-        private const float TestAssetClearing = 12f;
+        /// trees around it: room for a house up to ~24 m across, its front a few metres
+        /// back from the rail.
+        private const float TestAssetSetback = 17f;
+        private const float TestAssetClearing = 16f;
+        /// Half the widest a test model may be across, so it stays inside its clearing.
+        private const float TestAssetMaxHalf = 12f;
         private static GameObject[] testAssets;
 
         private static GameObject[] TestAssets
@@ -8075,13 +8081,33 @@ namespace RoadRage.UnityRemake
                 model.transform.rotation = Quaternion.LookRotation(-Mathf.Sign(lateral) * RoadPath.Right(distance));
                 if (!TryGetCombinedBounds(model, out var bounds) || bounds.size.y < 0.001f) continue;
                 model.transform.localScale *= TestAssetHeight(assets[i].name) / bounds.size.y;
-                var ground = RoadPath.Point(distance, lateral, RealGroundUnder(distance, lateral, 4f));
+                TryGetCombinedBounds(model, out bounds);
+                var half = Mathf.Max(bounds.extents.x, bounds.extents.z);
+                if (half > TestAssetMaxHalf)
+                {
+                    model.transform.localScale *= TestAssetMaxHalf / half;
+                    half = TestAssetMaxHalf;
+                }
+                // On a slope a building stands on its lowest corner and is cut into the
+                // hill behind; grounded at its centre, its downhill side hung in the air.
+                var ground = RoadPath.Point(distance, lateral, LowestRealGround(distance, lateral, half * 0.9f));
                 model.transform.position = ground;
                 TryGetCombinedBounds(model, out bounds);
-                // Centred on its spot and bedded 0.2 m into the ground, whatever its pivot.
-                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.2f,
+                // Centred on its spot and bedded 0.3 m into the ground, whatever its pivot.
+                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.3f,
                     ground.z - bounds.center.z);
             }
+        }
+
+        /// The lowest real ground over a square footprint, sampled every few metres.
+        private static float LowestRealGround(float distance, float lateral, float half)
+        {
+            var low = float.PositiveInfinity;
+            const int steps = 4;
+            for (var a = -steps; a <= steps; a++)
+            for (var b = -steps; b <= steps; b++)
+                low = Mathf.Min(low, RealGround(distance + half * a / steps, lateral + half * b / steps));
+            return float.IsPositiveInfinity(low) ? 0f : low;
         }
 
         private static float TestAssetHeight(string name)
