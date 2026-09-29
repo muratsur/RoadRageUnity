@@ -8506,12 +8506,78 @@ namespace RoadRage.UnityRemake
                 var bed = Mathf.Clamp(bounds.size.y * 0.05f, 0.05f, 0.8f);
                 model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - bed,
                     ground.z - bounds.center.z);
+                var settled = SettleOnDrawnGround(model, ground, bed,
+                    assets[i].name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase));
                 TryGetCombinedBounds(model, out bounds);
                 DrawBothSides(model);
                 Debug.Log($"RR_TESTASSET placed #{i + 1} '{assets[i].name}' {distance - startDistance:0} m from the start, " +
                           $"{(lateral < 0f ? "left" : "right")} {Mathf.Abs(lateral):0} m, " +
-                          $"{bounds.size.x:0.#} x {bounds.size.y:0.#} x {bounds.size.z:0.#} m");
+                          $"{bounds.size.x:0.#} x {bounds.size.y:0.#} x {bounds.size.z:0.#} m; {settled}");
             }
+        }
+
+        /// Steepest a car is tilted to lie on the ground under it.
+        private const float TestAssetMaxTilt = 20f;
+
+        /// The test model stood on the ground as it is actually drawn, found by rays at
+        /// the corners of its footprint. The maths of the levelled plot (MeshGround) and
+        /// the drawn ground part company where strips from further along the road cover
+        /// the spot - inside a bend above all - and a car set by the maths sank into the
+        /// bank on its uphill side. A car lies on the ground: tilted to the plane through
+        /// its four corners, as its wheels would take it. A building stays level, its
+        /// underside at the lowest corner, so no edge hangs in the air and the uphill
+        /// side is cut into the slope.
+        private static string SettleOnDrawnGround(GameObject model, Vector3 ground, float bed, bool isCar)
+        {
+            if (!TryGetCombinedBounds(model, out var bounds)) return "no bounds";
+            var yaw = Quaternion.Euler(0f, model.transform.eulerAngles.y, 0f);
+            // The footprint in the model's own frame, a little inside its outline: the
+            // wheels, the corners of the walls.
+            var local = Quaternion.Inverse(yaw);
+            var halfX = 0f;
+            var halfZ = 0f;
+            for (var c = 0; c < 8; c++)
+            {
+                var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
+                    (c & 1) == 0 ? -1f : 1f, (c & 2) == 0 ? -1f : 1f, (c & 4) == 0 ? -1f : 1f));
+                var inModel = local * (corner - bounds.center);
+                halfX = Mathf.Max(halfX, Mathf.Abs(inModel.x));
+                halfZ = Mathf.Max(halfZ, Mathf.Abs(inModel.z));
+            }
+            halfX *= 0.8f;
+            halfZ *= 0.8f;
+            var bottom = new Vector3(bounds.center.x, bounds.min.y + bed, bounds.center.z);
+            var points = new Vector3[4];
+            var low = float.PositiveInfinity;
+            var high = float.NegativeInfinity;
+            for (var c = 0; c < 4; c++)
+            {
+                var at = bottom + yaw * new Vector3((c & 1) == 0 ? -halfX : halfX, 0f, (c & 2) == 0 ? -halfZ : halfZ);
+                if (!Physics.Raycast(new Vector3(at.x, at.y + 400f, at.z), Vector3.down, out var hit, 1200f,
+                        1 << PlantingGroundLayer, QueryTriggerInteraction.Ignore))
+                    return $"ground by maths (no drawn ground under corner {c})";
+                points[c] = hit.point;
+                low = Mathf.Min(low, hit.point.y);
+                high = Mathf.Max(high, hit.point.y);
+            }
+            var mean = (points[0].y + points[1].y + points[2].y + points[3].y) * 0.25f;
+            var report = $"drawn ground {mean - ground.y:+0.00;-0.00} m from the maths, corners {high - low:0.00} m apart";
+            if (isCar)
+            {
+                // Corners 0..3: back-left, back-right, front-left, front-right.
+                var normal = Vector3.Cross(points[3] - points[0], points[1] - points[2]).normalized;
+                if (normal.y < 0f) normal = -normal;
+                var tilt = Vector3.Angle(Vector3.up, normal);
+                if (tilt > TestAssetMaxTilt)
+                    normal = Vector3.Slerp(Vector3.up, normal, TestAssetMaxTilt / tilt);
+                var angle = Vector3.Angle(Vector3.up, normal);
+                if (angle > 0.05f)
+                    model.transform.RotateAround(bottom, Vector3.Cross(Vector3.up, normal).normalized, angle);
+                model.transform.position += Vector3.up * (mean - bottom.y);
+                return report + $", tilted {Mathf.Min(tilt, TestAssetMaxTilt):0.#} deg";
+            }
+            model.transform.position += Vector3.up * (low - bottom.y);
+            return report + ", level on the lowest corner";
         }
 
         /// Degrees a test model turns from facing the road towards oncoming traffic.
