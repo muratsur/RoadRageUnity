@@ -2876,6 +2876,33 @@ namespace RoadRage.UnityRemake
             return low - 0.15f - 0.12f * (high - low);
         }
 
+        /// How far the ground may reach on the inside of the bend at this distance, and
+        /// which side that is (+1 right, -1 left, 0 straight).
+        ///
+        /// The ground strips run hundreds of metres out from the road, square to it. On
+        /// the inside of a bend every strip points at the bend's centre, so past the bend
+        /// radius they cross over one another, each carrying the real height for its
+        /// own road distance: a hillside folded over itself, and trees planted on one
+        /// layer were buried by the next. Stopping the strips short of the centre (the
+        /// tightest radius nearby, a little inside it) keeps them from crossing; the
+        /// ground beyond is covered by the strips of the road before and after the bend.
+        private static float InnerReach(float distance, out float innerSide)
+        {
+            var reach = float.PositiveInfinity;
+            innerSide = 0f;
+            for (var k = -4; k <= 4; k++)
+            {
+                var d = distance + k * 5f;
+                var turn = Vector3.SignedAngle(RoadPath.Forward(d - 4f), RoadPath.Forward(d + 4f), Vector3.up) * Mathf.Deg2Rad;
+                if (Mathf.Abs(turn) < 1e-4f) continue;
+                var radius = 8f / Mathf.Abs(turn);
+                if (radius * 0.9f >= reach) continue;
+                reach = radius * 0.9f;
+                innerSide = Mathf.Sign(turn);
+            }
+            return reach;
+        }
+
         /// The ground seen from above at a world position, over the real terrain.
         ///
         /// The ground ribbons run hundreds of metres out from the road, so on the inside
@@ -2910,7 +2937,9 @@ namespace RoadRage.UnityRemake
                     var lateral = Vector3.Dot(point - RoadPath.Center(at), RoadPath.Right(at));
                     var abs = Mathf.Abs(lateral);
                     var half = RoadPath.HalfWidthAt(at);
-                    if (abs >= half && abs <= 150f * half)
+                    var reach = InnerReach(at, out var innerSide);
+                    var built = innerSide == 0f || Mathf.Sign(lateral) != innerSide || abs <= reach;
+                    if (built && abs >= half && abs <= 150f * half)
                     {
                         var y = RoadPath.CenterY(at) + RealGround(at, lateral) +
                                 (abs > RoadPath.ClearanceAt(at) + 4f ? LakeBasin(at, lateral) : 0f);
@@ -2938,12 +2967,18 @@ namespace RoadRage.UnityRemake
         /// ground that is actually seen where it ended up. Scaling it, grounding it by
         /// its bounds and pushing it clear of the road all move it after the first
         /// placement, and over a slope a sideways push leaves it hanging or buried.
-        private static void SettleOnRealGround(GameObject model, float distance, float lateral, float radius)
+        /// False when the terrain has no ground at all under the model where it stands -
+        /// past the edge of the ground on the inside of a bend, nothing else covering it.
+        private static bool SettleOnRealGround(GameObject model, float distance, float lateral, float radius)
         {
-            if (model == null || !VisibleGround(model.transform.position, out var d, out var l)) return;
+            if (model == null) return true;
+            var route = RoadPath.Route;
+            if (route == null || !route.HasTerrain) return true;
+            if (!VisibleGround(model.transform.position, out var d, out var l)) return false;
             var placedOn = RoadPath.Point(distance, lateral, RealGroundUnder(distance, lateral, radius)).y;
             var ground = RoadPath.CenterY(d) + RealGroundUnder(d, l, radius);
             model.transform.position += Vector3.up * (ground - placedOn);
+            return true;
         }
 
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
@@ -2970,6 +3005,8 @@ namespace RoadRage.UnityRemake
             {
                 var distance = Mathf.Min(end, start + i * sampleStep);
                 var scale = relative ? RoadPath.HalfWidthAt(distance) : 1f;
+                var innerSide = 0f;
+                var innerReach = realGround ? InnerReach(distance, out innerSide) : float.PositiveInfinity;
                 for (var j = 0; j < across; j++)
                 {
                     var f = across == 1 ? 0f : j / (float)(across - 1);
@@ -2979,6 +3016,8 @@ namespace RoadRage.UnityRemake
                     if (realGround)
                         f = Mathf.Abs(leftLateral) < Mathf.Abs(rightLateral) ? f * f : 1f - (1f - f) * (1f - f);
                     var lateral = Mathf.Lerp(leftLateral, rightLateral, f) * scale;
+                    if (innerSide != 0f && Mathf.Sign(lateral) == innerSide && Mathf.Abs(lateral) > innerReach)
+                        lateral = innerSide * innerReach;
                     var lift = 0f;
                     if (realGround)
                     {
@@ -7332,7 +7371,11 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
-            if (!onCliff) SettleOnRealGround(model, distance, lateral, 0.9f);
+            if (!onCliff && !SettleOnRealGround(model, distance, lateral, 0.9f))
+            {
+                Destroy(model);
+                return null;
+            }
             if (external) ThinExternalTree(model, lateral);
             else ThinForestPiece(model, lateral, label);
             return model;
