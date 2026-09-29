@@ -9,6 +9,8 @@ own folder under Assets/Resources/TestAssets (git-ignored, never committed).
 The name carries the settings the game reads:
   _h<metres>  height it stands at (default 9)     e.g. _h1.5 for a hatchback
   _r<degrees> turn if it faces the wrong way      e.g. _r180
+A name starting with "car" also drives in traffic, in random colours (Set Up Rodin
+Models finds its paint; a white, silver or black car keeps its own colour).
 
 Usage (from the project folder):
   .\Tools\Rodin\add_rodin_model.ps1 "$env:USERPROFILE\Downloads\<download>.zip" car_hatch_cyan_h1.5

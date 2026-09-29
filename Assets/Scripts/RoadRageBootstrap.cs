@@ -10196,9 +10196,195 @@ namespace RoadRage.UnityRemake
             var speed = (direction > 0f ? 68f + index % 5 * 14f : 95f + index % 4 * 15f)
                         * Mathf.Lerp(1f, 1.18f, GameState.RunIntensity);
 
-            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", models[index % models.Length],
+            CreateTrafficVehicle(livingTraffic, $"Traffic Car {index + 1}", NextRodinModel() ?? models[index % models.Length],
                 Color.white, TrafficCarController.PlayerDistance + Random.Range(560f, 740f),
                 lane, speed, direction, false, 0f, offence);
+        }
+
+        // ------------------------------------------------------------ Rodin traffic
+
+        /// The Rodin cars in Assets/Resources/TestAssets (git-ignored, on the owner's PC
+        /// only) drive in traffic in place of the Synty standard cars: every test model
+        /// whose name starts with "car". Without any, traffic is the Synty set as before.
+        ///
+        /// Each is used at the first detail level inside RodinTrafficTriangleBudget - LOD4,
+        /// about 31k triangles, on the cars exported so far - with its wheels part of the
+        /// body. Road Rage > Set Up Rodin Models splits each car's paint from the rest of
+        /// its texture into <name>_paint.mat: the paint becomes grey shading and URP Lit's
+        /// detail colour, times two, over a mask, gives it its colour back. Swapping that
+        /// one 4x4 colour texture repaints the body and leaves glass, tyres, lights and
+        /// chrome as they were. A car without a paint material keeps its own colour.
+        private const long RodinTrafficTriangleBudget = 40000;
+        private const string RodinModelPrefix = "Rodin|";
+        private const float RodinDefaultLength = 4.6f;
+
+        /// Paint colours as the texture stores them. A null entry keeps the car's own.
+        private static readonly Color?[] RodinPaints =
+        {
+            null, null,
+            new Color(0.62f, 0.06f, 0.05f), new Color(0.42f, 0.05f, 0.08f),
+            new Color(0.06f, 0.16f, 0.46f), new Color(0.16f, 0.36f, 0.66f),
+            new Color(0.90f, 0.90f, 0.88f), new Color(0.66f, 0.68f, 0.70f),
+            new Color(0.30f, 0.31f, 0.33f), new Color(0.07f, 0.07f, 0.08f),
+            new Color(0.10f, 0.32f, 0.18f), new Color(0.86f, 0.62f, 0.08f),
+            new Color(0.84f, 0.34f, 0.06f), new Color(0.46f, 0.40f, 0.30f),
+        };
+
+        private sealed class RodinCar
+        {
+            public string Name;
+            public GameObject Template;
+            public Material Paint;
+            public Material[] Painted;
+        }
+
+        private List<RodinCar> rodinCars;
+        private Transform rodinTemplates;
+        private readonly List<int> rodinBag = new();
+
+        private List<RodinCar> RodinCars
+        {
+            get
+            {
+                if (rodinCars != null) return rodinCars;
+                rodinCars = new List<RodinCar>();
+                var paints = new Dictionary<string, Material>();
+                foreach (var material in Resources.LoadAll<Material>("TestAssets"))
+                    if (material.name.EndsWith("_paint")) paints[material.name] = material;
+                foreach (var asset in TestAssets)
+                {
+                    if (!asset.name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase)) continue;
+                    var template = BuildRodinTemplate(asset);
+                    if (template == null) continue;
+                    paints.TryGetValue(asset.name + "_paint", out var paint);
+                    rodinCars.Add(new RodinCar
+                    {
+                        Name = asset.name, Template = template, Paint = paint,
+                        Painted = new Material[RodinPaints.Length],
+                    });
+                }
+                if (rodinCars.Count > 0)
+                    Debug.Log($"RR_RODIN {rodinCars.Count} Rodin car(s) in traffic: " +
+                              string.Join(", ", rodinCars.ConvertAll(c => c.Name + (c.Paint != null ? "" : " (own colour)"))));
+                return rodinCars;
+            }
+        }
+
+        /// The next Rodin car for a traffic slot, from a shuffled bag so the same car does
+        /// not come round twice in a row; null when there are none.
+        private string NextRodinModel()
+        {
+            var cars = RodinCars;
+            if (cars.Count == 0) return null;
+            if (rodinBag.Count == 0)
+            {
+                for (var i = 0; i < cars.Count; i++) rodinBag.Add(i);
+                for (var i = rodinBag.Count - 1; i > 0; i--)
+                {
+                    var j = Random.Range(0, i + 1);
+                    (rodinBag[i], rodinBag[j]) = (rodinBag[j], rodinBag[i]);
+                }
+            }
+            var pick = rodinBag[rodinBag.Count - 1];
+            rodinBag.RemoveAt(rodinBag.Count - 1);
+            return RodinModelPrefix + pick;
+        }
+
+        /// One stripped copy per car, kept inactive under the bootstrap: the heavy detail
+        /// levels, colliders and scripts are removed once, not per traffic car.
+        private GameObject BuildRodinTemplate(GameObject asset)
+        {
+            if (rodinTemplates == null)
+            {
+                rodinTemplates = new GameObject("Rodin Car Templates").transform;
+                rodinTemplates.SetParent(transform, false);
+                rodinTemplates.gameObject.SetActive(false);
+            }
+            var template = Instantiate(asset, rodinTemplates);
+            template.name = asset.name;
+            var group = template.GetComponentInChildren<LODGroup>(true);
+            var lods = group != null ? group.GetLODs() : null;
+            if (lods != null && lods.Length > 0)
+            {
+                var keep = lods.Length - 1;
+                for (var i = lods.Length - 1; i >= 0; i--)
+                {
+                    var count = 0L;
+                    foreach (var r in lods[i].renderers) count += Triangles(r);
+                    if (count <= RodinTrafficTriangleBudget) keep = i;
+                }
+                var kept = new HashSet<Renderer>(lods[keep].renderers);
+                for (var i = 0; i < lods.Length; i++)
+                    foreach (var r in lods[i].renderers)
+                    {
+                        if (r == null || kept.Contains(r)) continue;
+                        if (r.gameObject != template && r.transform.childCount == 0) DestroyImmediate(r.gameObject);
+                        else r.enabled = false;
+                    }
+                // One level, dropped only once the car is a sliver on screen.
+                var renderers = new List<Renderer>();
+                foreach (var r in kept) if (r != null) renderers.Add(r);
+                group.SetLODs(new[] { new LOD(0.006f, renderers.ToArray()) });
+                group.RecalculateBounds();
+                var total = 0L;
+                foreach (var r in renderers) total += Triangles(r);
+                Debug.Log($"RR_RODIN '{asset.name}' traffic uses LOD{keep}: {total:N0} triangles");
+            }
+            foreach (var collider in template.GetComponentsInChildren<Collider>(true)) DestroyImmediate(collider);
+            foreach (var light in template.GetComponentsInChildren<Light>(true)) DestroyImmediate(light);
+            foreach (var r in template.GetComponentsInChildren<Renderer>(true))
+                r.shadowCastingMode = ShadowCastingMode.On;
+            return template;
+        }
+
+        private Material RodinPaint(RodinCar rodinCar, int paint)
+        {
+            if (rodinCar.Paint == null || RodinPaints[paint] == null) return rodinCar.Paint;
+            if (rodinCar.Painted[paint] != null) return rodinCar.Painted[paint];
+            var colour = new Texture2D(4, 4, TextureFormat.RGBA32, false) { name = $"{rodinCar.Name} paint {paint}" };
+            var pixels = new Color[16];
+            for (var i = 0; i < pixels.Length; i++) pixels[i] = RodinPaints[paint].Value;
+            colour.SetPixels(pixels);
+            colour.Apply(false, true);
+            var material = new Material(rodinCar.Paint) { name = $"{rodinCar.Paint.name} {paint}" };
+            material.SetTexture("_DetailAlbedoMap", colour);
+            rodinCar.Painted[paint] = material;
+            return material;
+        }
+
+        /// A Rodin car as a traffic car's visual: front along +Z (the "_r" turn in its
+        /// name, as at the test spot), at the height in its name or a car's length, in a
+        /// random colour, wheels on the road.
+        private bool BuildRodinVisual(Transform root, string name, string modelName)
+        {
+            if (!int.TryParse(modelName.Substring(RodinModelPrefix.Length), out var index)) return false;
+            var cars = RodinCars;
+            if (index < 0 || index >= cars.Count) return false;
+            var rodinCar = cars[index];
+            var visual = Instantiate(rodinCar.Template, root);
+            visual.name = $"{name} Visual ({rodinCar.Name})";
+            visual.SetActive(true);
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.Euler(0f, TestAssetRotation(rodinCar.Name), 0f);
+            visual.transform.localScale = rodinCar.Template.transform.localScale;
+            var paint = RodinPaint(rodinCar, Random.Range(0, RodinPaints.Length));
+            if (paint != null)
+                foreach (var renderer in visual.GetComponentsInChildren<Renderer>(true))
+                {
+                    var shared = renderer.sharedMaterials;
+                    for (var m = 0; m < shared.Length; m++) shared[m] = paint;
+                    renderer.sharedMaterials = shared;
+                }
+            if (!TryGetCombinedBounds(visual, out var bounds) || bounds.size.y < 0.001f) return true;
+            var named = System.Text.RegularExpressions.Regex.IsMatch(rodinCar.Name, @"_h\d",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var length = Mathf.Max(bounds.size.x, bounds.size.z);
+            var scale = named ? TestAssetHeight(rodinCar.Name) / bounds.size.y : RodinDefaultLength / length;
+            // A height typed for the test spot that makes a bus or a toy of it is not trusted.
+            if (length * scale < 3.2f || length * scale > 6.5f) scale = RodinDefaultLength / length;
+            visual.transform.localScale *= scale;
+            NormalizeVehicleVisual(visual, Mathf.Max(bounds.size.x, bounds.size.z) * scale);
+            return true;
         }
 
         private void BuildTraffic()
@@ -10255,6 +10441,7 @@ namespace RoadRage.UnityRemake
             var brutes = 0;
             var enforcers = 0;
             var cabs = 0;
+            var rodinSpawned = 0;
             for (var i = 0; i < Mathf.Min(distances.Length, trafficCount); i++)
             {
                 var direction = lanes[i] < 0f ? 1f : -1f;
@@ -10292,8 +10479,6 @@ namespace RoadRage.UnityRemake
                     else if (i == 8 && offence == TrafficCarController.Offence.None)
                         model = "SK_Veh_Preset_Truck_02";
                 }
-                if (model.Contains("Ute_04")) brutes++;
-                else if (model.Contains("Truck_02")) enforcers++;
 
                 // Manhattan runs cabs. An avenue without them reads as a generic
                 // six-lane whatever the buildings look like, and a yellow sedan every
@@ -10312,13 +10497,25 @@ namespace RoadRage.UnityRemake
                     cabs++;
                 }
 
+                if (!isCab && role == TrafficCarController.VehicleRole.Standard && !model.Contains("Truck"))
+                {
+                    var rodinModel = NextRodinModel();
+                    if (rodinModel != null)
+                    {
+                        model = rodinModel;
+                        rodinSpawned++;
+                    }
+                }
+                if (model.Contains("Ute_04")) brutes++;
+                else if (model.Contains("Truck_02")) enforcers++;
+
                 var spawned = CreateTrafficVehicle(trafficRoot, $"{(isCab ? "Taxi" : "Traffic Car")} {i + 1}",
                     model, tint, distances[i], lanes[i], speed, direction, false, 0f, offence, role);
                 if (isCab) AddTaxiRoofSign(spawned);
             }
 
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
-                      $"brutes={brutes} enforcers={enforcers} cabs={cabs}");
+                      $"brutes={brutes} enforcers={enforcers} cabs={cabs} rodin={rodinSpawned}");
             // Accident scenes are a road-blocking pile of wrecks. On a single-lane road
             // (Greenwood) there is no room to pass one, so it walls the player in at ~420 m
             // and ends the run almost immediately. Only place them where there is room to
@@ -10366,8 +10563,9 @@ namespace RoadRage.UnityRemake
             // and visibly from another era than the player's vehicle. These are the same
             // Synty presets the hero car uses, with the same three material slots, so
             // traffic and player finally belong to one art set.
-            var prefab = Resources.Load<GameObject>($"Vehicles/{modelName}");
-            if (prefab == null) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
+            var rodin = modelName.StartsWith(RodinModelPrefix) && BuildRodinVisual(root, name, modelName);
+            var prefab = rodin ? null : Resources.Load<GameObject>($"Vehicles/{modelName}");
+            if (prefab == null && !rodin) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
             if (prefab != null)
             {
                 // Liveries are BACK: full flat colour lost every detail and read as
