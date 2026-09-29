@@ -7795,6 +7795,7 @@ namespace RoadRage.UnityRemake
         private static void ThinForestPiece(GameObject piece, float lateral, string label)
         {
             if (piece.GetComponentInChildren<LODGroup>() != null) return;
+            SlowLodFades();
             var tree = label.StartsWith("Forest Tree") || label.StartsWith("Forest Understory");
             var renderers = piece.GetComponentsInChildren<Renderer>();
             if (renderers.Length == 0) return;
@@ -7803,10 +7804,92 @@ namespace RoadRage.UnityRemake
             var group = piece.AddComponent<LODGroup>();
             // Culled later than before, and faded out rather than switched off: over
             // real terrain a hillside is in view much further, and plants popped in.
-            group.SetLODs(new[] { new LOD(tree ? 0.025f : 0.02f, renderers) { fadeTransitionWidth = 0.3f } });
+            // Culled at a little over half the screen size it was: a knee-high fern
+            // went at ~85 m and a young spruce at ~250 m, well inside the view down the road, so
+            // bushes and trees kept appearing out of nothing ahead of the car.
+            group.SetLODs(new[] { new LOD(tree ? 0.015f : 0.013f, renderers) { fadeTransitionWidth = 0.3f } });
             group.fadeMode = LODFadeMode.CrossFade;
             group.animateCrossFading = true;
             group.RecalculateBounds();
+        }
+
+        /// A second to dissolve in or out rather than the default half second, so what
+        /// still changes in the distance does so gradually instead of blinking.
+        private static void SlowLodFades()
+        {
+            if (Mathf.Approximately(LODGroup.crossFadeAnimationDuration, 1f)) return;
+            LODGroup.crossFadeAnimationDuration = 1f;
+        }
+
+        private static readonly Dictionary<Material, Material> tamedPackMaterials = new();
+
+        /// The pack's trees were the one thing in the forest not graded like the rest:
+        /// every material the game makes is desaturated and matte, and these came in as
+        /// shipped - glossy leaves with specular highlights, reflections and strong
+        /// back-lit translucency. In the sun the canopy glared and looked over-lit.
+        /// Each material is copied once, matte and a little calmer, and shared.
+        private static void TamePackTree(GameObject tree)
+        {
+            foreach (var renderer in tree.GetComponentsInChildren<Renderer>(true))
+            {
+                var shared = renderer.sharedMaterials;
+                var changed = false;
+                for (var i = 0; i < shared.Length; i++)
+                {
+                    var source = shared[i];
+                    if (source == null) continue;
+                    if (!tamedPackMaterials.TryGetValue(source, out var tamed))
+                    {
+                        tamed = TamedPackMaterial(source);
+                        tamedPackMaterials[source] = tamed;
+                        tamedPackMaterials[tamed] = tamed;
+                    }
+                    if (tamed == source) continue;
+                    shared[i] = tamed;
+                    changed = true;
+                }
+                if (changed) renderer.sharedMaterials = shared;
+            }
+        }
+
+        private static Material TamedPackMaterial(Material source)
+        {
+            var material = new Material(source) { name = source.name + " (Road Rage)" };
+            var shader = material.shader;
+            for (var p = 0; p < shader.GetPropertyCount(); p++)
+            {
+                var property = shader.GetPropertyName(p);
+                var key = property.ToLowerInvariant();
+                var type = shader.GetPropertyType(p);
+                if (type == ShaderPropertyType.Float || type == ShaderPropertyType.Range)
+                {
+                    if (key.Contains("channel") || key.Contains("toggle")) continue;
+                    if (key.Contains("smooth") || key.Contains("gloss"))
+                        material.SetFloat(property, Mathf.Min(material.GetFloat(property), 0.12f));
+                    else if (key.Contains("metallic"))
+                        material.SetFloat(property, 0f);
+                    else if (key.Contains("translucen") || key.Contains("transmission") || key.Contains("scatter"))
+                        material.SetFloat(property, material.GetFloat(property) * 0.5f);
+                    else if (property == "_SpecularHighlights" || property == "_EnvironmentReflections")
+                        material.SetFloat(property, 0f);
+                }
+                else if (type == ShaderPropertyType.Color)
+                {
+                    var colour = material.GetColor(property);
+                    Color calmer;
+                    if (key.Contains("emission")) calmer = Color.black;
+                    else if (key.Contains("spec")) calmer = colour * 0.3f;
+                    else if (key.Contains("color") || key.Contains("colour") || key.Contains("tint"))
+                        calmer = Desaturate(colour, 0.3f) * 0.88f;
+                    else continue;
+                    calmer.a = colour.a;
+                    material.SetColor(property, calmer);
+                }
+            }
+            material.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+            material.EnableKeyword("_ENVIRONMENTREFLECTIONS_OFF");
+            material.DisableKeyword("_EMISSION");
+            return material;
         }
 
         /// How far from the road the pack's trees are planted, metres.
@@ -7819,22 +7902,36 @@ namespace RoadRage.UnityRemake
         /// gets one that culls it when small.
         private static void ThinExternalTree(GameObject tree, float lateral)
         {
+            TamePackTree(tree);
+            SlowLodFades();
             var near = Mathf.Abs(lateral) < 18f;
             var group = tree.GetComponentInChildren<LODGroup>();
             if (group != null)
             {
+                // The detail steps used to come at twice the pack's screen size, so a
+                // tree visibly swapped to a coarser model, and dropped its shadow with
+                // its full-detail LOD, a short way ahead of the car. Now a little over
+                // the pack's own sizes, cross-faded, and every model but the flat far
+                // one keeps its shadow by the road.
                 var lods = group.GetLODs();
                 var previous = 1f;
                 for (var i = 0; i < lods.Length; i++)
                 {
-                    var height = lods[i].screenRelativeTransitionHeight * 2f;
-                    if (i == lods.Length - 1) height = Mathf.Max(height, 0.025f);
+                    var last = i == lods.Length - 1;
+                    var height = lods[i].screenRelativeTransitionHeight * 1.25f;
+                    if (last) height = Mathf.Max(height, 0.012f);
                     // Transitions must keep falling from one LOD to the next.
                     previous = lods[i].screenRelativeTransitionHeight = Mathf.Min(height, previous * 0.9f);
+                    lods[i].fadeTransitionWidth = 0.25f;
                     foreach (var r in lods[i].renderers)
-                        if (r != null && (i > 0 || !near)) r.shadowCastingMode = ShadowCastingMode.Off;
+                        if (r != null && (last && i > 0 || !near)) r.shadowCastingMode = ShadowCastingMode.Off;
                 }
                 group.SetLODs(lods);
+                if (group.fadeMode == LODFadeMode.None)
+                {
+                    group.fadeMode = LODFadeMode.CrossFade;
+                    group.animateCrossFading = true;
+                }
             }
             else
             {
@@ -7842,7 +7939,9 @@ namespace RoadRage.UnityRemake
                 if (!near)
                     foreach (var r in renderers) r.shadowCastingMode = ShadowCastingMode.Off;
                 group = tree.AddComponent<LODGroup>();
-                group.SetLODs(new[] { new LOD(0.03f, renderers) });
+                group.SetLODs(new[] { new LOD(0.012f, renderers) { fadeTransitionWidth = 0.3f } });
+                group.fadeMode = LODFadeMode.CrossFade;
+                group.animateCrossFading = true;
                 group.RecalculateBounds();
             }
 
