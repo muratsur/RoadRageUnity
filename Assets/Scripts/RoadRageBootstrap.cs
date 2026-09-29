@@ -8102,10 +8102,16 @@ namespace RoadRage.UnityRemake
             var vertices = 0L;
             // From the meshes: a prefab that is not in the scene has no renderer bounds.
             var size = Vector3.zero;
+            // With detail levels, what the full-detail one costs: summing every level
+            // counts the same house three or four times.
+            var group = asset.GetComponentInChildren<LODGroup>(true);
+            var lods = group != null ? group.GetLODs() : null;
+            var fullDetail = lods != null && lods.Length > 0 ? new HashSet<Renderer>(lods[0].renderers) : null;
             foreach (var filter in asset.GetComponentsInChildren<MeshFilter>(true))
             {
                 var mesh = filter.sharedMesh;
                 if (mesh == null) continue;
+                if (fullDetail != null && !fullDetail.Contains(filter.GetComponent<Renderer>())) continue;
                 size = Vector3.Max(size, Vector3.Scale(mesh.bounds.size, filter.transform.lossyScale));
                 vertices += mesh.vertexCount;
                 for (var m = 0; m < mesh.subMeshCount; m++) triangles += mesh.GetIndexCount(m) / 3;
@@ -8125,7 +8131,8 @@ namespace RoadRage.UnityRemake
             var largest = 0;
             foreach (var texture in textures) largest = Mathf.Max(largest, Mathf.Max(texture.width, texture.height));
             var verdict = triangles <= 30000 ? "OK" : triangles <= 100000 ? "HEAVY - reduce before use" : "TOO HEAVY - reduce";
-            Debug.Log($"RR_TESTASSET #{index + 1} '{asset.name}': {triangles:N0} triangles, {vertices:N0} vertices, " +
+            var levels = lods != null ? $" (full detail of {lods.Length} LODs)" : "";
+            Debug.Log($"RR_TESTASSET #{index + 1} '{asset.name}': {triangles:N0} triangles{levels}, {vertices:N0} vertices, " +
                       $"{materials.Count} materials, {textures.Count} textures up to {largest}px, native size " +
                       $"{size.x:0.##} x {size.y:0.##} x {size.z:0.##}, stands {TestAssetHeight(asset.name):0.#} m -> {verdict}");
         }
