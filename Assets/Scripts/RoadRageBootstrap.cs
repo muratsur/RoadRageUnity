@@ -2830,12 +2830,82 @@ namespace RoadRage.UnityRemake
         {
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return 0f;
-            var y = RealGround(distance, lateral);
-            y = Mathf.Min(y, RealGround(distance + radius, lateral));
-            y = Mathf.Min(y, RealGround(distance - radius, lateral));
-            y = Mathf.Min(y, RealGround(distance, lateral + radius));
-            y = Mathf.Min(y, RealGround(distance, lateral - radius));
-            return y - 0.15f;
+            var centre = RealGround(distance, lateral);
+            float low = centre, high = centre;
+            foreach (var (along, across) in new[] { (radius, 0f), (-radius, 0f), (0f, radius), (0f, -radius) })
+            {
+                var y = RealGround(distance + along, lateral + across);
+                low = Mathf.Min(low, y);
+                high = Mathf.Max(high, y);
+            }
+            // The mesh cuts straight across between its vertices, and on a steep slope
+            // that chord can sit well below the exact ground: the steeper, the deeper.
+            return low - 0.15f - 0.25f * (high - low);
+        }
+
+        /// The ground seen from above at a world position, over the real terrain.
+        ///
+        /// The ground ribbons run hundreds of metres out from the road, so on the inside
+        /// of a bend the strips laid from neighbouring road distances cross over one
+        /// another, each with the real height for its own distance. Whichever lies
+        /// highest is the ground that is seen there, and a tree placed by its own road
+        /// distance could land on a lower strip, floating in front of the hillside that
+        /// covered it. This finds every road distance whose strip passes through the
+        /// point and returns the top one, as (distance, lateral) on that strip.
+        private static bool VisibleGround(Vector3 point, out float groundDistance, out float groundLateral)
+        {
+            groundDistance = point.z;
+            groundLateral = 0f;
+            var route = RoadPath.Route;
+            if (route == null || !route.HasTerrain) return false;
+            var extent = 150f * RoadPath.HalfWidthAt(point.z);
+            // Right() is level and the bends are capped at 42 degrees, so a strip that
+            // reaches this point starts within extent * sin(42) of it along the road.
+            var reach = Mathf.Min(extent * 0.7f, 500f);
+            const float step = 3f;
+            var best = float.NegativeInfinity;
+            var found = false;
+            float Along(float d) => Vector3.Dot(point - RoadPath.Center(d), RoadPath.Forward(d));
+            var previousD = point.z - reach;
+            var previous = Along(previousD);
+            for (var d = previousD + step; d <= point.z + reach + 0.01f; d += step)
+            {
+                var along = Along(d);
+                if (previous == 0f || Mathf.Sign(previous) != Mathf.Sign(along))
+                {
+                    var at = Mathf.Lerp(previousD, d, previous / (previous - along));
+                    var lateral = Vector3.Dot(point - RoadPath.Center(at), RoadPath.Right(at));
+                    var abs = Mathf.Abs(lateral);
+                    var half = RoadPath.HalfWidthAt(at);
+                    if (abs >= half && abs <= 150f * half)
+                    {
+                        var y = RoadPath.CenterY(at) + RealGround(at, lateral) +
+                                (abs > RoadPath.ClearanceAt(at) + 4f ? LakeBasin(at, lateral) : 0f);
+                        if (y > best)
+                        {
+                            best = y;
+                            groundDistance = at;
+                            groundLateral = lateral;
+                            found = true;
+                        }
+                    }
+                }
+                previousD = d;
+                previous = along;
+            }
+            return found;
+        }
+
+        /// Moves a model placed on the real ground at (distance, lateral) onto the
+        /// ground that is actually seen where it ended up. Scaling it, grounding it by
+        /// its bounds and pushing it clear of the road all move it after the first
+        /// placement, and over a slope a sideways push leaves it hanging or buried.
+        private static void SettleOnRealGround(GameObject model, float distance, float lateral, float radius)
+        {
+            if (model == null || !VisibleGround(model.transform.position, out var d, out var l)) return;
+            var placedOn = RoadPath.Point(distance, lateral, RealGroundUnder(distance, lateral, radius)).y;
+            var ground = RoadPath.CenterY(d) + RealGroundUnder(d, l, radius);
+            model.transform.position += Vector3.up * (ground - placedOn);
         }
 
         private GameObject BuildRibbon(string name, float leftLateral, float rightLateral, float height,
@@ -3287,6 +3357,7 @@ namespace RoadRage.UnityRemake
             model.transform.localScale = scale;
             if (enforceClearance && Mathf.Abs(lateral) > 0.01f)
                 EnsureOutsideRoad(model, distance, Mathf.Sign(lateral));
+            SettleOnRealGround(model, distance, lateral, 1.5f);
             return model;
         }
 
@@ -7113,6 +7184,7 @@ namespace RoadRage.UnityRemake
             model.transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(0f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one * Random.Range(minScale, maxScale);
             EnsureOutsideRoad(model, distance, Mathf.Sign(lateral));
+            SettleOnRealGround(model, distance, lateral, 1.5f);
             return model;
         }
 
@@ -7221,6 +7293,7 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
+            if (!onCliff) SettleOnRealGround(model, distance, lateral, 2f);
             if (external) ThinExternalTree(model, lateral);
             else ThinForestPiece(model, lateral, label);
             return model;

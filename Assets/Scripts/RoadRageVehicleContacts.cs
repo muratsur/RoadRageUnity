@@ -124,15 +124,34 @@ namespace RoadRage.UnityRemake
             if (overlapLat < overlapLong)
             {
                 var sign = deltaLat >= 0f ? 1f : -1f;
-                a.ApplyContactPush(0f, -sign * overlapLat * shareA);
-                b.ApplyContactPush(0f, sign * overlapLat * shareB);
+                var pushA = -sign * overlapLat * shareA;
+                var pushB = sign * overlapLat * shareB;
+                // Sideways only where the road has room for it. A car beside a wreck at
+                // the edge was pushed out past the kerb, the edge clamp put it straight
+                // back, and it sat inside the wreck: cars drove through a car lying on
+                // its side. Held back along the road instead, it stops against it.
+                if (FitsOnRoad(a, pushA) && FitsOnRoad(b, pushB))
+                {
+                    a.ApplyContactPush(0f, pushA);
+                    b.ApplyContactPush(0f, pushB);
+                    return;
+                }
             }
-            else
-            {
-                var sign = deltaDist >= 0f ? 1f : -1f;
-                a.ApplyContactPush(-sign * overlapLong * shareA, 0f);
-                b.ApplyContactPush(sign * overlapLong * shareB, 0f);
-            }
+            var along = deltaDist >= 0f ? 1f : -1f;
+            a.ApplyContactPush(-along * overlapLong * shareA, 0f);
+            b.ApplyContactPush(along * overlapLong * shareB, 0f);
+        }
+
+        /// Whether a sideways push leaves the hull within the carriageway and shoulder,
+        /// where every controller clamps it. Moving back towards the road always fits.
+        private static bool FitsOnRoad(IRoadVehicle vehicle, float push)
+        {
+            if (Mathf.Abs(push) < 0.001f) return true;
+            var lateral = vehicle.ContactLateral + push;
+            if (Mathf.Abs(lateral) <= Mathf.Abs(vehicle.ContactLateral)) return true;
+            var d = vehicle.ContactDistance;
+            var edge = Mathf.Max(1f, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth - vehicle.ContactHalfWidth);
+            return Mathf.Abs(lateral) <= edge + 0.02f;
         }
     }
 }

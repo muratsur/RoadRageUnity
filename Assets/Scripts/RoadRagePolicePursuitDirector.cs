@@ -1057,6 +1057,48 @@ namespace RoadRage.UnityRemake
             return Mathf.Clamp(lateral, -edge, edge);
         }
 
+        /// Cruisers held their formation slot whatever lay in it, so a car flipped on
+        /// its side in the lane was driven into and only the contact pass held them off
+        /// it. They now pick the nearer way past a wreck ahead, and brake short of one
+        /// that blocks the whole road.
+        private float SteerAroundWrecks(float targetLane, float laneLimit)
+        {
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car != null && car.IsWreck)
+                    targetLane = PastWreck(targetLane, laneLimit, car.RoadDistance, car.LaneOffset,
+                        car.LongitudinalExtent, car.LateralExtent);
+            }
+            foreach (var cop in OnRoad)
+            {
+                if (cop != null && cop != this && cop.IsWrecked)
+                    targetLane = PastWreck(targetLane, laneLimit, cop.ContactDistance, cop.ContactLateral,
+                        cop.ContactHalfLength, cop.ContactHalfWidth);
+            }
+            return targetLane;
+        }
+
+        private float PastWreck(float targetLane, float laneLimit, float wreckDistance, float wreckLateral,
+            float wreckHalfLength, float wreckHalfWidth)
+        {
+            var ahead = wreckDistance - RoadDistance;
+            var reach = hullHalfLength + wreckHalfLength;
+            if (ahead < -reach || ahead > 45f) return targetLane;
+            var clear = hullHalfWidth + wreckHalfWidth + 0.5f;
+            if (Mathf.Abs(targetLane - wreckLateral) >= clear) return targetLane;
+            var left = wreckLateral - clear;
+            var right = wreckLateral + clear;
+            var leftFits = left >= -laneLimit;
+            var rightFits = right <= laneLimit;
+            if (leftFits && (!rightFits || Mathf.Abs(left - LateralOffset) <= Mathf.Abs(right - LateralOffset)))
+                return left;
+            if (rightFits) return right;
+            if (ahead > 0f) SpeedKph = Mathf.Min(SpeedKph, Mathf.Max(0f, ahead - reach) * 4f);
+            return targetLane;
+        }
+
         private float wreckSlideDir;
         private float wreckYaw;
         private float wreckRoll;
@@ -1183,6 +1225,8 @@ namespace RoadRage.UnityRemake
             {
                 SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph + (distToTarget * 2.5f), Time.deltaTime * 28f);
             }
+
+            targetLane = SteerAroundWrecks(targetLane, laneLimit);
 
             // Steer smoothly towards assigned tactical formation lane
             LateralOffset = Mathf.MoveTowards(LateralOffset, targetLane, Time.deltaTime * 6.5f);
