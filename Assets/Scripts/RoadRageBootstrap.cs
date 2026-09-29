@@ -2873,7 +2873,7 @@ namespace RoadRage.UnityRemake
             }
             // The mesh cuts straight across between its vertices, and on a steep slope
             // that chord can sit well below the exact ground: the steeper, the deeper.
-            return low - 0.15f - 0.25f * (high - low);
+            return low - 0.15f - 0.12f * (high - low);
         }
 
         /// The ground seen from above at a world position, over the real terrain.
@@ -7314,7 +7314,7 @@ namespace RoadRage.UnityRemake
             }
             if (model == null) return null;
             model.name = label;
-            model.transform.position = RoadPath.Point(distance, lateral, height + (onCliff ? 0f : RealGroundUnder(distance, lateral, 2f)));
+            model.transform.position = RoadPath.Point(distance, lateral, height + (onCliff ? 0f : RealGroundUnder(distance, lateral, 0.9f)));
             if (onCliff)
             {
                 var p = model.transform.position;
@@ -7327,7 +7327,7 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Rotation(distance) * Quaternion.Euler(-90f, Random.Range(0f, 360f), 0f);
             model.transform.localScale = Vector3.one;
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
-            if (!onCliff) SettleOnRealGround(model, distance, lateral, 2f);
+            if (!onCliff) SettleOnRealGround(model, distance, lateral, 0.9f);
             if (external) ThinExternalTree(model, lateral);
             else ThinForestPiece(model, lateral, label);
             return model;
@@ -7762,7 +7762,8 @@ namespace RoadRage.UnityRemake
             KeepTrunkOffRoad(tree, distance, lateral);
             // Roots into the ground: the pack's trees are grounded by their bounds, which
             // reach a little below the trunk, and stood hovering.
-            if (RoadPath.Route != null) tree.transform.position += Vector3.down * 0.6f;
+            // Less now the ground under it is taken at the trunk's downhill side.
+            if (RoadPath.Route != null) tree.transform.position += Vector3.down * 0.3f;
             if (!KeepCanopyOffRoad(tree, distance, Mathf.Sign(lateral)))
             {
                 Destroy(tree);
@@ -8138,9 +8139,56 @@ namespace RoadRage.UnityRemake
                 }
                 buildingPads.Add(new BuildingPad
                 {
-                    Distance = distance, Lateral = lateral, Half = half + 1.5f, Height = sum / count,
+                    Distance = distance, Lateral = lateral, Half = half + 4f, Height = sum / count,
                 });
             }
+        }
+
+        /// Triangles the most detailed model of a test building may have.
+        private const long TestAssetTriangleBudget = 60000;
+
+        private static long Triangles(Renderer renderer)
+        {
+            var filter = renderer != null ? renderer.GetComponent<MeshFilter>() : null;
+            if (filter == null || filter.sharedMesh == null) return 0;
+            var count = 0L;
+            for (var m = 0; m < filter.sharedMesh.subMeshCount; m++) count += filter.sharedMesh.GetIndexCount(m) / 3;
+            return count;
+        }
+
+        /// Rodin's LOD export starts at whatever the slider was on - 2 M triangles for the
+        /// first house, a third of a frame's budget in one building. The detail levels
+        /// heavier than the budget are dropped and the first affordable one leads.
+        private static void KeepAffordableLods(GameObject model, string name)
+        {
+            var group = model.GetComponentInChildren<LODGroup>();
+            if (group == null) return;
+            var lods = group.GetLODs();
+            if (lods.Length < 2) return;
+            var counts = new long[lods.Length];
+            var first = lods.Length - 1;
+            for (var i = lods.Length - 1; i >= 0; i--)
+            {
+                foreach (var r in lods[i].renderers) counts[i] += Triangles(r);
+                if (counts[i] <= TestAssetTriangleBudget) first = i;
+            }
+            Debug.Log($"RR_TESTASSET '{name}' LOD triangles: {string.Join(", ", counts)} -> leading with LOD{first}");
+            if (first == 0) return;
+            var kept = new LOD[lods.Length - first];
+            for (var i = 0; i < kept.Length; i++)
+            {
+                kept[i] = lods[first + i];
+                kept[i].screenRelativeTransitionHeight = lods[i].screenRelativeTransitionHeight;
+            }
+            for (var i = 0; i < first; i++)
+                foreach (var r in lods[i].renderers)
+                {
+                    if (r == null) continue;
+                    r.enabled = false;
+                    if (r.gameObject != model && r.transform.childCount == 0) Destroy(r.gameObject);
+                }
+            group.SetLODs(kept);
+            group.RecalculateBounds();
         }
 
         private static readonly Dictionary<Material, Material> twoSided = new();
@@ -8202,6 +8250,7 @@ namespace RoadRage.UnityRemake
                 var lateral = TestAssetLateral(i, distance);
                 var model = Adopt(Instantiate(assets[i]));
                 model.name = $"Test Asset {i + 1} {assets[i].name}";
+                KeepAffordableLods(model, assets[i].name);
                 model.transform.position = Vector3.zero;
                 // Its front (+Z) towards the road.
                 model.transform.rotation = Quaternion.LookRotation(-Mathf.Sign(lateral) * RoadPath.Right(distance));
@@ -8218,8 +8267,10 @@ namespace RoadRage.UnityRemake
                 var ground = RoadPath.Point(distance, lateral, RealGround(distance, lateral));
                 model.transform.position = ground;
                 TryGetCombinedBounds(model, out bounds);
-                // Centred on its spot and bedded 0.3 m into the ground, whatever its pivot.
-                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.3f,
+                // Centred on its spot and bedded 0.8 m into the ground, whatever its pivot:
+                // the shell has no floor, and the ground mesh cuts corners between its
+                // vertices, so a shallower base showed the empty underside at the edges.
+                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.8f,
                     ground.z - bounds.center.z);
                 TryGetCombinedBounds(model, out bounds);
                 DrawBothSides(model);
