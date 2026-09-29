@@ -2891,12 +2891,12 @@ namespace RoadRage.UnityRemake
             var t = Mathf.Sqrt((u - inner) / span) * steps;
             var k = Mathf.Min(steps - 1, Mathf.FloorToInt(t));
             var side = Mathf.Sign(lateral);
-            var reach = InnerReach(distance, out var innerSide);
+            var reach = StripReach(distance, side);
             float Vertex(int step)
             {
                 var f = step / (float)steps;
                 var at = (inner + span * f * f) * half;
-                if (innerSide == side && at > reach) at = reach;
+                if (at > reach) at = reach;
                 var l = side * at;
                 var y = RealGround(distance, l);
                 if (at > RoadPath.ClearanceAt(distance) + 4f) y += LakeBasin(distance, l);
@@ -2928,49 +2928,72 @@ namespace RoadRage.UnityRemake
             return low - 0.1f - 0.08f * (high - low);
         }
 
-        /// How far the ground may reach on the inside of the bend at this distance, and
-        /// which side that is (+1 right, -1 left, 0 straight).
+        /// How far the ground strip of this road distance may reach out on this side
+        /// (+1 right, -1 left).
         ///
-        /// The ground strips run hundreds of metres out from the road, square to it. On
-        /// the inside of a bend every strip points at the bend's centre, so past the bend
-        /// radius they cross over one another, each carrying the real height for its
-        /// own road distance: a hillside folded over itself, and trees planted on one
-        /// layer were buried by the next. Stopping the strips short of the centre (the
-        /// tightest radius nearby, a little inside it) keeps them from crossing; the
-        /// ground beyond is covered by the strips of the road before and after the bend.
-        private static readonly Dictionary<int, Vector2> innerReachCache = new();
+        /// The ground strips run up to 150 half widths out - over a kilometre - square to
+        /// the road. On the winding B500 the strips of other stretches of road reach the
+        /// same ground, each with the real height for its own distance and with no
+        /// levelled plot but its own: the hillside was several layers folded through
+        /// one another. Whichever lay highest was what the rays found, and what was
+        /// seen from the road could be another: trees and cars floated and sank, and a
+        /// test car's levelled plot came out 4 m out of level. Stopping only at the
+        /// inside of a bend (the old rule) left every other crossing in place.
+        ///
+        /// Now each piece of ground belongs to the stretch of road nearest to it. A
+        /// strip stops where some other point of the road becomes as near as its own
+        /// centre: for a point q of the road, along the strip's direction n from its
+        /// centre c, that is at |q - c|^2 / (2 (q - c).n). On a bend of radius R this is
+        /// R, where the old inner-bend rule stopped; on a straight it never comes. A few
+        /// metres of overlap keep neighbouring strips meeting without a crack of sky.
+        private static readonly Dictionary<int, Vector2> stripReachCache = new();
+        private const float StripOverlap = 3f;
+        private const float StripSampleStep = 5f;
 
-        private static float InnerReach(float distance, out float innerSide)
+        private static float StripReach(float distance, float side)
         {
             // Asked for several times per tree planted; the road does not change, so
             // it is kept per half metre of road.
             var key = Mathf.RoundToInt(distance * 2f);
-            if (innerReachCache.TryGetValue(key, out var cached))
+            if (!stripReachCache.TryGetValue(key, out var reach))
             {
-                innerSide = cached.y;
-                return cached.x;
+                if (stripReachCache.Count > 50000) stripReachCache.Clear();
+                reach = MeasureStripReach(key * 0.5f);
+                stripReachCache[key] = reach;
             }
-            if (innerReachCache.Count > 50000) innerReachCache.Clear();
-            var reach = MeasureInnerReach(key * 0.5f, out innerSide);
-            innerReachCache[key] = new Vector2(reach, innerSide);
-            return reach;
+            return side < 0f ? reach.x : reach.y;
         }
 
-        private static float MeasureInnerReach(float distance, out float innerSide)
+        /// Reach on the left (x) and right (y) of the strip at this distance.
+        private static Vector2 MeasureStripReach(float distance)
         {
-            var reach = float.PositiveInfinity;
-            innerSide = 0f;
-            for (var k = -4; k <= 4; k++)
+            var half = RoadPath.HalfWidthAt(distance);
+            var extent = 150f * half;
+            var centre = new Vector2(RoadPath.CenterX(distance), distance);
+            var right3 = RoadPath.Right(distance);
+            var right = new Vector2(right3.x, right3.z);
+            float left = extent, rightReach = extent;
+            // The road runs on along +Z (world Z is road distance), so a point dz along
+            // the road is at least |dz| away and can stop a strip no nearer than |dz|/2:
+            // outwards from the centre until that is past both reaches.
+            for (var k = 1; ; k++)
             {
-                var d = distance + k * 5f;
-                var turn = Vector3.SignedAngle(RoadPath.Forward(d - 4f), RoadPath.Forward(d + 4f), Vector3.up) * Mathf.Deg2Rad;
-                if (Mathf.Abs(turn) < 1e-4f) continue;
-                var radius = 8f / Mathf.Abs(turn);
-                if (radius * 0.9f >= reach) continue;
-                reach = radius * 0.9f;
-                innerSide = Mathf.Sign(turn);
+                var dz = k * StripSampleStep;
+                if (dz * 0.5f > Mathf.Max(left, rightReach)) break;
+                for (var sign = -1; sign <= 1; sign += 2)
+                {
+                    var d = distance + sign * dz;
+                    var v = new Vector2(RoadPath.CenterX(d), d) - centre;
+                    var across = Vector2.Dot(v, right);
+                    if (Mathf.Abs(across) < 1e-3f) continue;
+                    var at = v.sqrMagnitude / (2f * Mathf.Abs(across));
+                    if (across > 0f) rightReach = Mathf.Min(rightReach, at);
+                    else left = Mathf.Min(left, at);
+                }
             }
-            return reach;
+            // Never inside the near strip's first few metres past the rail.
+            var floor = RoadPath.ClearanceAt(distance) + 6f;
+            return new Vector2(Mathf.Max(floor, left + StripOverlap), Mathf.Max(floor, rightReach + StripOverlap));
         }
 
         /// The ground seen from above at a world position, over the real terrain.
@@ -3007,8 +3030,7 @@ namespace RoadRage.UnityRemake
                     var lateral = Vector3.Dot(point - RoadPath.Center(at), RoadPath.Right(at));
                     var abs = Mathf.Abs(lateral);
                     var half = RoadPath.HalfWidthAt(at);
-                    var stripReach = InnerReach(at, out var innerSide);
-                    var built = innerSide == 0f || Mathf.Sign(lateral) != innerSide || abs <= stripReach;
+                    var built = abs <= StripReach(at, Mathf.Sign(lateral));
                     if (built && abs >= half && abs <= 150f * half)
                     {
                         var y = RoadPath.CenterY(at) + RealGround(at, lateral) +
@@ -3075,8 +3097,8 @@ namespace RoadRage.UnityRemake
             {
                 var distance = Mathf.Min(end, start + i * sampleStep);
                 var scale = relative ? RoadPath.HalfWidthAt(distance) : 1f;
-                var innerSide = 0f;
-                var innerReach = realGround ? InnerReach(distance, out innerSide) : float.PositiveInfinity;
+                var leftReach = realGround ? StripReach(distance, -1f) : float.PositiveInfinity;
+                var rightReach = realGround ? StripReach(distance, 1f) : float.PositiveInfinity;
                 for (var j = 0; j < across; j++)
                 {
                     var f = across == 1 ? 0f : j / (float)(across - 1);
@@ -3086,8 +3108,8 @@ namespace RoadRage.UnityRemake
                     if (realGround)
                         f = Mathf.Abs(leftLateral) < Mathf.Abs(rightLateral) ? f * f : 1f - (1f - f) * (1f - f);
                     var lateral = Mathf.Lerp(leftLateral, rightLateral, f) * scale;
-                    if (innerSide != 0f && Mathf.Sign(lateral) == innerSide && Mathf.Abs(lateral) > innerReach)
-                        lateral = innerSide * innerReach;
+                    var sideReach = lateral < 0f ? leftReach : rightReach;
+                    if (Mathf.Abs(lateral) > sideReach) lateral = Mathf.Sign(lateral) * sideReach;
                     var lift = 0f;
                     if (realGround)
                     {
@@ -3146,11 +3168,11 @@ namespace RoadRage.UnityRemake
             var ribbon = CreateMeshObject(name, vertices, triangles, uv, material, colors);
             if (realGround)
             {
-                // Drawn from both sides. Where the strips on the inside of a bend stop
-                // short (InnerReach), the ground of the road further on covers the spot but
-                // does not quite meet them, and a view up the bank ran under that ground's
-                // edge: its underside was culled and a white line of sky showed through
-                // the forest. Now the underside is drawn, lit as ground.
+                // Drawn from both sides. Where a strip stops (StripReach) the ground of
+                // another stretch of road takes over but does not quite meet it, and a view
+                // up the bank ran under that ground's edge: its underside was culled and a
+                // white line of sky showed through the forest. Now the underside is drawn,
+                // lit as ground.
                 DrawBothSides(ribbon);
                 // What planting rays land on (RaycastGround): the ground exactly as drawn.
                 ribbon.layer = PlantingGroundLayer;
@@ -8341,7 +8363,7 @@ namespace RoadRage.UnityRemake
         {
             testAssets = null;
             twoSided.Clear();
-            innerReachCache.Clear();
+            stripReachCache.Clear();
             buildingPads.Clear();
             padsFor = float.NaN;
         }
