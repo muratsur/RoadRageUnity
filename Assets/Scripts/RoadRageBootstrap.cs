@@ -2856,6 +2856,58 @@ namespace RoadRage.UnityRemake
             return real;
         }
 
+        // The Greenwood ground ribbons over real terrain (BuildRoad): a near strip from
+        // 1 to 4 half-widths out in 14 steps and the main one from 4 to 150 in 80, each
+        // with its vertices at (step / steps)^2 of the span from the road, rows every
+        // 5 m of road from 2 m before each 150 m chunk - the same grid in every chunk.
+        private const float RibbonRowStep = 5f;
+        private const float RibbonRowOffset = -2f;
+
+        /// The ground exactly as the mesh draws it: the real ground at the four vertices
+        /// round the point, blended between them. The real ground itself curves between
+        /// the vertices while the mesh runs straight, so at the foot of every bank the
+        /// mesh stood above it and anything planted on the real curve was buried.
+        private static float MeshGround(float distance, float lateral)
+        {
+            var route = RoadPath.Route;
+            if (route == null || !route.HasTerrain) return 0f;
+            var row = Mathf.Floor((distance - RibbonRowOffset) / RibbonRowStep);
+            var d0 = RibbonRowOffset + row * RibbonRowStep;
+            var d1 = d0 + RibbonRowStep;
+            var along = (distance - d0) / RibbonRowStep;
+            return Mathf.Lerp(RibbonRowGround(d0, lateral), RibbonRowGround(d1, lateral), along);
+        }
+
+        /// Along one row of the ribbon, the ground between the two vertices either side.
+        private static float RibbonRowGround(float distance, float lateral)
+        {
+            var half = RoadPath.HalfWidthAt(distance);
+            var u = Mathf.Abs(lateral) / half;
+            if (u <= 1f || u >= 150f) return RealGround(distance, lateral);
+            float inner, span;
+            int steps;
+            if (u < 4f) { inner = 1f; span = 3f; steps = 14; }
+            else { inner = 4f; span = 146f; steps = 80; }
+            var t = Mathf.Sqrt((u - inner) / span) * steps;
+            var k = Mathf.Min(steps - 1, Mathf.FloorToInt(t));
+            var side = Mathf.Sign(lateral);
+            var reach = InnerReach(distance, out var innerSide);
+            float Vertex(int step)
+            {
+                var f = step / (float)steps;
+                var at = (inner + span * f * f) * half;
+                if (innerSide == side && at > reach) at = reach;
+                var l = side * at;
+                var y = RealGround(distance, l);
+                if (at > RoadPath.ClearanceAt(distance) + 4f) y += LakeBasin(distance, l);
+                return y;
+            }
+            var a = (inner + span * (k / (float)steps) * (k / (float)steps)) * half;
+            var b = (inner + span * ((k + 1) / (float)steps) * ((k + 1) / (float)steps)) * half;
+            var w = b > a ? Mathf.Clamp01((Mathf.Abs(lateral) - a) / (b - a)) : 0f;
+            return Mathf.Lerp(Vertex(k), Vertex(k + 1), w);
+        }
+
         /// The lowest real ground under a footprint of this radius, a little below it:
         /// a trunk on a slope roots on its downhill side, and the ground mesh between
         /// its vertices lies below the exact height at any one point.
@@ -2863,17 +2915,17 @@ namespace RoadRage.UnityRemake
         {
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return 0f;
-            var centre = RealGround(distance, lateral);
+            // As the mesh draws it, so the footprint only has to allow for the trunk's
+            // own width on the slope.
+            var centre = MeshGround(distance, lateral);
             float low = centre, high = centre;
             foreach (var (along, across) in new[] { (radius, 0f), (-radius, 0f), (0f, radius), (0f, -radius) })
             {
-                var y = RealGround(distance + along, lateral + across);
+                var y = MeshGround(distance + along, lateral + across);
                 low = Mathf.Min(low, y);
                 high = Mathf.Max(high, y);
             }
-            // The mesh cuts straight across between its vertices, and on a steep slope
-            // that chord can sit well below the exact ground: the steeper, the deeper.
-            return low - 0.15f - 0.12f * (high - low);
+            return low - 0.1f - 0.08f * (high - low);
         }
 
         /// How far the ground may reach on the inside of the bend at this distance, and
@@ -2886,7 +2938,25 @@ namespace RoadRage.UnityRemake
         /// layer were buried by the next. Stopping the strips short of the centre (the
         /// tightest radius nearby, a little inside it) keeps them from crossing; the
         /// ground beyond is covered by the strips of the road before and after the bend.
+        private static readonly Dictionary<int, Vector2> innerReachCache = new();
+
         private static float InnerReach(float distance, out float innerSide)
+        {
+            // Asked for several times per tree planted; the road does not change, so
+            // it is kept per half metre of road.
+            var key = Mathf.RoundToInt(distance * 2f);
+            if (innerReachCache.TryGetValue(key, out var cached))
+            {
+                innerSide = cached.y;
+                return cached.x;
+            }
+            if (innerReachCache.Count > 50000) innerReachCache.Clear();
+            var reach = MeasureInnerReach(key * 0.5f, out innerSide);
+            innerReachCache[key] = new Vector2(reach, innerSide);
+            return reach;
+        }
+
+        private static float MeasureInnerReach(float distance, out float innerSide)
         {
             var reach = float.PositiveInfinity;
             innerSide = 0f;
@@ -8158,6 +8228,7 @@ namespace RoadRage.UnityRemake
         {
             testAssets = null;
             twoSided.Clear();
+            innerReachCache.Clear();
             buildingPads.Clear();
             padsFor = float.NaN;
         }
@@ -8328,7 +8399,7 @@ namespace RoadRage.UnityRemake
                     half = TestAssetMaxHalf;
                 }
                 // On its levelled plot (PrepareBuildingPads), which RealGround now returns.
-                var ground = RoadPath.Point(distance, lateral, RealGround(distance, lateral));
+                var ground = RoadPath.Point(distance, lateral, MeshGround(distance, lateral));
                 model.transform.position = ground;
                 TryGetCombinedBounds(model, out bounds);
                 // Centred on its spot and bedded 0.8 m into the ground, whatever its pivot:
