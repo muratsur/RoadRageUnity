@@ -3165,7 +3165,8 @@ namespace RoadRage.UnityRemake
                 foreach (var c in root.GetComponentsInChildren<MeshCollider>())
                     if (c.gameObject.layer == PlantingGroundLayer) colliders++;
             Debug.Log($"RR_PLANT chunk at {chunkStart:0} m: {tally.OnRay} stood on the ground by ray, " +
-                      $"{tally.NoGround} found no ground (not planted), furthest moved {tally.Shift:0.0} m; " +
+                      $"{tally.NoGround} found no ground and {tally.Ambiguous} crossed ground (not planted), " +
+                      $"furthest moved {tally.Shift:0.0} m; " +
                       $"{colliders} ground colliders in the chunk");
         }
 
@@ -7518,10 +7519,19 @@ namespace RoadRage.UnityRemake
                     Destroy(model);
                     return null;
                 }
+                // How far the ray moved it from where the terrain maths put it. Metres
+                // apart only where ground strips still cross (the top one is often a
+                // sliver seen edge-on from the road), and a piece stood there hung in
+                // the air or sank from the road's point of view: it is left out.
+                var shift = Mathf.Abs(groundY + height - placedAt);
+                if (shift > MaxPlantingShift)
+                {
+                    plantTally.Ambiguous++;
+                    Destroy(model);
+                    return null;
+                }
                 plantTally.OnRay++;
-                // How far the ray moved it from where the terrain maths put it: large
-                // numbers mean the two disagree about the ground.
-                plantTally.Shift = Mathf.Max(plantTally.Shift, Mathf.Abs(groundY + height - placedAt));
+                plantTally.Shift = Mathf.Max(plantTally.Shift, shift);
                 StandOn(model, groundY + height);
             }
             if (external) ThinExternalTree(model, lateral);
@@ -7927,9 +7937,13 @@ namespace RoadRage.UnityRemake
         /// One chunk's planting, reported the frame after (RR_PLANT).
         private sealed class PlantTally
         {
-            public int OnRay, NoGround;
+            public int OnRay, NoGround, Ambiguous;
             public float Shift;
         }
+
+        /// Metres the drawn ground may differ from the terrain maths under a forest piece
+        /// before the spot is taken as one where ground strips cross, and left bare.
+        private const float MaxPlantingShift = 6f;
 
         private static PlantTally plantTally = new();
         internal static int canopyKept;
@@ -8486,10 +8500,11 @@ namespace RoadRage.UnityRemake
                 var ground = RoadPath.Point(distance, lateral, MeshGround(distance, lateral));
                 model.transform.position = ground;
                 TryGetCombinedBounds(model, out bounds);
-                // Centred on its spot and bedded 0.8 m into the ground, whatever its pivot:
-                // the shell has no floor, and the ground mesh cuts corners between its
-                // vertices, so a shallower base showed the empty underside at the edges.
-                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - 0.8f,
+                // Centred on its spot and bedded into the ground by its size, whatever its
+                // pivot: a floorless building shell 0.8 m, so its empty underside does not
+                // show at the edges; a car a few centimetres, or it sat in the slope.
+                var bed = Mathf.Clamp(bounds.size.y * 0.05f, 0.05f, 0.8f);
+                model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - bed,
                     ground.z - bounds.center.z);
                 TryGetCombinedBounds(model, out bounds);
                 DrawBothSides(model);
