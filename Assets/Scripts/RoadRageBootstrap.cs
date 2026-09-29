@@ -2937,8 +2937,8 @@ namespace RoadRage.UnityRemake
                     var lateral = Vector3.Dot(point - RoadPath.Center(at), RoadPath.Right(at));
                     var abs = Mathf.Abs(lateral);
                     var half = RoadPath.HalfWidthAt(at);
-                    var reach = InnerReach(at, out var innerSide);
-                    var built = innerSide == 0f || Mathf.Sign(lateral) != innerSide || abs <= reach;
+                    var stripReach = InnerReach(at, out var innerSide);
+                    var built = innerSide == 0f || Mathf.Sign(lateral) != innerSide || abs <= stripReach;
                     if (built && abs >= half && abs <= 150f * half)
                     {
                         var y = RoadPath.CenterY(at) + RealGround(at, lateral) +
