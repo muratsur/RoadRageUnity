@@ -8503,19 +8503,11 @@ namespace RoadRage.UnityRemake
         private float TestAssetDistance(int index) => startDistance + TestAssetStart + index * TestAssetSpacing;
 
         /// Out from the clearance line by the model's own size: a car just past the rail,
-        /// where it is seen, a house well back.
-        ///
-        /// And its whole levelled plot (the model's half plus 4 m) beyond the first 6 m
-        /// of bank, where RealGround eases the real ground back down to the road: a plot
-        /// that reached into it was only level on its outer half, and a car on the left
-        /// bank stood with its corners up to 4 m apart, tilted as far as it may go.
-        private static float TestAssetLateral(int index, float distance)
-        {
-            var half = TestAssetHalf(TestAssets[index]);
-            var clearOfEase = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + 6f + half + 4f;
-            return (index % 2 == 0 ? -1f : 1f) *
-                   Mathf.Max(RoadPath.ClearanceAt(distance) + 3f + half, clearOfEase);
-        }
+        /// where it is seen, a house further back. Its plot is cut into the bank at road
+        /// level (PrepareBuildingPads), like a lay-by or a house on a mountain road.
+        private static float TestAssetLateral(int index, float distance) =>
+            (index % 2 == 0 ? -1f : 1f) *
+            (RoadPath.ClearanceAt(distance) + 2f + TestAssetHalf(TestAssets[index]));
 
         private bool InTestAssetGround(float distance, float lateral)
         {
@@ -8568,19 +8560,14 @@ namespace RoadRage.UnityRemake
                 var distance = TestAssetDistance(i);
                 var lateral = TestAssetLateral(i, distance);
                 var half = TestAssetHalf(assets[i]);
-                // The mean of the real ground over the plot: as much cut as fill.
-                var sum = 0f;
-                var count = 0;
-                const int steps = 4;
-                for (var a = -steps; a <= steps; a++)
-                for (var b = -steps; b <= steps; b++)
-                {
-                    sum += RealGround(distance + half * a / steps, lateral + half * b / steps);
-                    count++;
-                }
+                // At road level. The plot used to be levelled at the mean of the real
+                // ground over it, as much cut as fill - on the B500's steep banks that is
+                // metres above the road: cars stood up in the hills, and a house behind a
+                // crest of the real slope showed only its roof. Cut in at road level, it
+                // stands where the road sees it, the bank rising behind it.
                 buildingPads.Add(new BuildingPad
                 {
-                    Distance = distance, Lateral = lateral, Half = half + 4f, Height = sum / count,
+                    Distance = distance, Lateral = lateral, Half = half + 4f, Height = 0f,
                 });
             }
         }
