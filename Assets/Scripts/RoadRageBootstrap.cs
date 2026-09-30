@@ -439,6 +439,8 @@ namespace RoadRage.UnityRemake
             ApplyBiomeRoute(biomeIndex);
             ProfileChunks = HasCommandLineFlag("-profile");
             if (HasCommandLineFlag("-selftest")) gameObject.AddComponent<LoopSelfTest>();
+            // F9 / middle click names whatever is under the mouse (RR_PICK).
+            if (Application.isEditor || Debug.isDebugBuild) gameObject.AddComponent<RoadRagePicker>();
             NoCanopy = HasCommandLineFlag("-nocanopy");
             if (HasCommandLineFlag("-lowdetail")) ForceLowDetailBudget(true);
             LogSky = HasCommandLineFlag("-skylog");
@@ -4845,7 +4847,10 @@ namespace RoadRage.UnityRemake
             }
             greenwoodRoute ??= RoadRoute.Load("Biomes/Routes/b500");
             if (greenwoodRoute == null) Debug.LogWarning("Missing Biomes/Routes/b500 - Greenwood keeps the procedural road.");
-            else Debug.Log($"RR_ROUTE Greenwood follows the B500: {greenwoodRoute.Length / 1000f:0.0} km, there and back");
+            else Debug.Log($"RR_ROUTE Greenwood follows the B500: {greenwoodRoute.Length / 1000f:0.0} km, there and back; " +
+                           (greenwoodRoute.HasTerrain
+                               ? "real terrain loaded (b500_terrain)"
+                               : "NO real terrain - Biomes/Routes/b500_terrain.bytes is missing: run Road Rage > Bake B500 Terrain"));
             RoadPath.Route = greenwoodRoute;
         }
 
@@ -8276,7 +8281,14 @@ namespace RoadRage.UnityRemake
             // Culled at a little over half the screen size it was: a knee-high fern
             // went at ~85 m and a young spruce at ~250 m, well inside the view down the road, so
             // bushes and trees kept appearing out of nothing ahead of the car.
-            group.SetLODs(new[] { new LOD(tree ? 0.015f : 0.013f, renderers) { fadeTransitionWidth = 0.3f } });
+            //
+            // Still too soon: at 1.3% of the screen a knee-high fern appeared at ~50 m,
+            // in plain view on every straight - "bushes appearing on the ground as I
+            // drive". Now a fern goes at ~160 m and a young spruce at ~450 m on the rich
+            // detail budget (twice as near on the lean one), where they are a few pixels
+            // and the fog has most of them; and they dissolve in over a second.
+            var cull = RichDetailBudget ? (tree ? 0.005f : 0.004f) : (tree ? 0.009f : 0.008f);
+            group.SetLODs(new[] { new LOD(cull, renderers) { fadeTransitionWidth = 0.5f } });
             group.fadeMode = LODFadeMode.CrossFade;
             group.animateCrossFading = true;
             group.RecalculateBounds();
