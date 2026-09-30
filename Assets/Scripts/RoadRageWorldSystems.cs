@@ -1199,6 +1199,13 @@ namespace RoadRage.UnityRemake
                 wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
                 if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
                 WreckYaw += wreckYawRate * dt;
+                // A rig turned much further ends across the road with its ends over the
+                // rails; the jackknife, not the whole rig, makes the dramatic angle.
+                if (Role == VehicleRole.LogTruck && Mathf.Abs(WreckYaw) > MaxRigWreckYaw)
+                {
+                    WreckYaw = Mathf.Sign(WreckYaw) * MaxRigWreckYaw;
+                    wreckYawRate = 0f;
+                }
                 wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
@@ -1372,6 +1379,7 @@ namespace RoadRage.UnityRemake
 
         private float wreckSlideTarget;
         private float wreckYawRate;
+        private const float MaxRigWreckYaw = 35f;
         /// Where along the road the last player hit landed, for a truck's crash: a
         /// 17 m rig turns about where it was struck, not about its middle. NaN when
         /// the wreck came from something other than the player.

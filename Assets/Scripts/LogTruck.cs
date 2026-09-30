@@ -536,7 +536,42 @@ namespace RoadRage.UnityRemake
                 fold = Mathf.Sign(fold) * MaxFold;
                 foldRate = -foldRate * 0.15f;
             }
+            fold = FitBetweenRails(fold);
             Apply();
+        }
+
+        /// Half the trailer's width, and a little clearance from the rail.
+        private const float TrailerHalfWidth = 1.4f;
+
+        /// The largest fold, up to `wanted`, that keeps the trailer's tail inside the
+        /// rails. Beyond the rail the ground falls away, and a trailer swung out over
+        /// it hung in the air. Meeting the rail stops the swing dead.
+        private float FitBetweenRails(float wanted)
+        {
+            if (car == null || TailInside(wanted)) return wanted;
+            var inside = 0f;
+            var outside = wanted;
+            for (var i = 0; i < 10; i++)
+            {
+                var mid = (inside + outside) * 0.5f;
+                if (TailInside(mid)) inside = mid;
+                else outside = mid;
+            }
+            foldRate = 0f;
+            return inside;
+        }
+
+        private bool TailInside(float foldDegrees)
+        {
+            // The tail in the rig's frame, then turned by the rig's own wreck yaw.
+            var f = foldDegrees * Mathf.Deg2Rad;
+            var x = -trailerLength * Mathf.Sin(f);
+            var z = HitchZ - trailerLength * Mathf.Cos(f);
+            var yaw = car.WreckYaw * Mathf.Deg2Rad;
+            var across = x * Mathf.Cos(yaw) + z * Mathf.Sin(yaw);
+            var lateral = car.LaneOffset + car.Direction * across;
+            var edge = RoadPath.HalfWidthAt(car.RoadDistance) + RoadPath.ShoulderWidth - TrailerHalfWidth;
+            return Mathf.Abs(lateral) <= edge;
         }
 
         private void Apply()
@@ -607,7 +642,12 @@ namespace RoadRage.UnityRemake
             if (dt <= 0f) return;
             age += dt;
             var playerDistance = TrafficCarController.PlayerDistance;
-            if (age > Lifetime || playerDistance - distance > ClearBehindPlayer)
+            // Gone once driven past. The time limit only clears logs out of sight - it
+            // used to apply anywhere, and logs vanished in front of a player who had
+            // stopped to look at them.
+            var behind = playerDistance - distance;
+            var outOfSight = behind > 15f || -behind > 400f;
+            if (behind > ClearBehindPlayer || (age > Lifetime && outOfSight))
             {
                 Destroy(gameObject);
                 return;
@@ -670,8 +710,9 @@ namespace RoadRage.UnityRemake
             }
             spin += spinRate * dt;
 
-            // The barrier stops it at the road edge.
-            var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - radius;
+            // The barrier stops it at the road edge - all of it: clamped by its middle,
+            // a log lying askew ended across the rail with one end over the drop.
+            var edge = Mathf.Max(radius, RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent);
             if (Mathf.Abs(lateral) > edge)
             {
                 lateral = Mathf.Sign(lateral) * edge;
