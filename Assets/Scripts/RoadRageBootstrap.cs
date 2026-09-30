@@ -10738,66 +10738,94 @@ namespace RoadRage.UnityRemake
 
         // ------------------------------------------------------------ log truck
 
-        /// A Rodin log truck in Assets/Resources/TestAssets - any model whose name starts
-        /// with "logtruck" - replaces the primitive one. Rodin makes the truck and an empty
-        /// trailer; the logs are always the game's own, because a load baked into the
-        /// mesh could not come off in a crash. Name settings, as for the test spot:
-        ///   _h<metres>  overall height (cab to stack tops), e.g. _h4.2
-        ///   _r<degrees> turn if it drives backwards, e.g. _r180
+        /// Rodin models in Assets/Resources/TestAssets replace the primitive log truck.
+        /// Best is a pair, "logtruck_cab..." and "logtruck_trailer...", built as an
+        /// articulated rig whose trailer jackknifes in a crash. Failing that, a single
+        /// "logtruck..." model is the whole rig, rigid. Rodin makes the trailer empty
+        /// either way: the logs are the game's own, so they can come off. Name settings:
+        ///   _h<metres>  height, for the cab or a one-piece rig (to the stack tops), e.g. _h4.2
+        ///   _l<metres>  length, for the trailer (default 13)
+        ///   _r<degrees> turn if it faces backwards, e.g. _r180
         ///   _d<metres>  height of the trailer bed the logs sit on (default 1.45)
         private const float LogTruckDefaultDeck = 1.45f;
+        private const float LogCabDefaultHeight = 4.2f;
+        private const float LogCabFallbackLength = 6.8f;
+        private const float LogTrailerDefaultLength = 13f;
+        /// The fifth wheel sits this far ahead of the back of the cab's chassis, and the
+        /// trailer's kingpin this far behind the trailer's front.
+        private const float FifthWheelFromCabRear = 1.1f;
+        private const float KingpinFromTrailerFront = 0.9f;
         private GameObject logTruckTemplate;
+        private GameObject logCabTemplate;
+        private GameObject logTrailerTemplate;
         private bool logTruckSearched;
 
-        private GameObject LogTruckTemplate
+        private void FindLogTruckTemplates()
         {
-            get
+            if (logTruckSearched) return;
+            logTruckSearched = true;
+            GameObject cab = null, trailer = null, whole = null;
+            foreach (var asset in TestAssets)
             {
-                if (logTruckSearched) return logTruckTemplate;
-                logTruckSearched = true;
-                foreach (var asset in TestAssets)
-                {
-                    if (!asset.name.StartsWith("logtruck", System.StringComparison.OrdinalIgnoreCase)) continue;
-                    logTruckTemplate = BuildRodinTemplate(asset);
-                    if (logTruckTemplate != null)
-                    {
-                        Debug.Log($"RR_RODIN log truck '{asset.name}' drives in traffic");
-                        break;
-                    }
-                }
-                return logTruckTemplate;
+                var n = asset.name.ToLowerInvariant();
+                if (!n.StartsWith("logtruck")) continue;
+                if (n.StartsWith("logtruck_cab")) { if (cab == null) cab = asset; }
+                else if (n.StartsWith("logtruck_trailer")) { if (trailer == null) trailer = asset; }
+                else if (whole == null) whole = asset;
             }
+
+            if (cab != null && trailer != null)
+            {
+                logCabTemplate = BuildRodinTemplate(cab);
+                logTrailerTemplate = BuildRodinTemplate(trailer);
+                if (logCabTemplate != null && logTrailerTemplate != null)
+                {
+                    Debug.Log($"RR_RODIN log truck '{cab.name}' + '{trailer.name}' drives in traffic, articulated");
+                    if (TemplateTriangles(logCabTemplate) == TemplateTriangles(logTrailerTemplate))
+                        Debug.LogWarning($"RR_RODIN '{cab.name}' and '{trailer.name}' look like the same model " +
+                                         "(same triangle count) - the cab was probably imported from the trailer's " +
+                                         "zip. Re-import the cab from its own zip.");
+                    return;
+                }
+                logCabTemplate = null;
+                logTrailerTemplate = null;
+            }
+            else if (cab != null || trailer != null)
+            {
+                Debug.LogWarning("RR_RODIN an articulated log truck needs both a logtruck_cab and a " +
+                                 $"logtruck_trailer model; found only '{(cab != null ? cab.name : trailer.name)}'");
+            }
+
+            if (whole == null) return;
+            logTruckTemplate = BuildRodinTemplate(whole);
+            if (logTruckTemplate != null) Debug.Log($"RR_RODIN log truck '{whole.name}' drives in traffic");
         }
 
         private void BuildLogTruck(Transform root, Color tint)
         {
-            var template = LogTruckTemplate;
-            if (template == null)
+            FindLogTruckTemplates();
+            if (logCabTemplate != null && logTrailerTemplate != null)
+            {
+                BuildArticulatedLogTruck(root);
+                return;
+            }
+            if (logTruckTemplate == null)
             {
                 LogTruckBuilder.Build(root, tint,
                     materials.TryGetValue("Street Racer Glass", out var glass) ? glass : null);
                 return;
             }
 
-            var visual = Instantiate(template, root);
-            visual.name = $"{root.name} Visual ({template.name})";
-            visual.SetActive(true);
-            visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.Euler(0f, TestAssetRotation(template.name), 0f);
-            visual.transform.localScale = template.transform.localScale;
-
-            var length = LogTruckBuilder.Length;
-            if (TryGetCombinedBounds(visual, out var bounds) && bounds.size.y > 0.001f)
+            var modelName = logTruckTemplate.name;
+            var named = System.Text.RegularExpressions.Regex.IsMatch(modelName, @"_h\d",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            var visual = PlaceRodinPart(logTruckTemplate, root, named, named ? TestAssetHeight(modelName) : LogTruckBuilder.Length);
+            var length = VisualLength(visual);
+            // A height that makes a pickup or a train of it is not trusted.
+            if (length < 12f || length > 24f)
             {
-                var native = Mathf.Max(bounds.size.x, bounds.size.z);
-                var named = System.Text.RegularExpressions.Regex.IsMatch(template.name, @"_h\d",
-                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                var scale = named ? TestAssetHeight(template.name) / bounds.size.y : LogTruckBuilder.Length / native;
-                // A height that makes a pickup or a train of it is not trusted.
-                if (native * scale < 12f || native * scale > 24f) scale = LogTruckBuilder.Length / native;
-                visual.transform.localScale *= scale;
-                length = native * scale;
-                NormalizeVehicleVisual(visual, length);
+                NormalizeVehicleVisual(visual, LogTruckBuilder.Length);
+                length = LogTruckBuilder.Length;
             }
 
             // Load across the back of the rig: from just short of the rear of the trailer,
@@ -10805,8 +10833,75 @@ namespace RoadRage.UnityRemake
             var rear = -length * 0.5f;
             var logLength = Mathf.Min(10.6f, length * 0.6f);
             var centre = rear + 0.35f + logLength * 0.5f;
-            LogTruckBuilder.AddLoad(root, NamedMetres(template.name, "d", LogTruckDefaultDeck), centre, logLength);
+            LogTruckBuilder.AddLoad(root, root, NamedMetres(modelName, "d", LogTruckDefaultDeck), centre, logLength);
         }
+
+        /// Cab and trailer from two Rodin models, the trailer on a fifth wheel so it can
+        /// fold. Laid out along +Z from the cab's nose and centred on the root, which is
+        /// what the traffic hull is measured around.
+        private void BuildArticulatedLogTruck(Transform root)
+        {
+            var cabName = logCabTemplate.name;
+            var trailerName = logTrailerTemplate.name;
+            var cab = PlaceRodinPart(logCabTemplate, root, true, NamedMetres(cabName, "h", LogCabDefaultHeight));
+            var cabLength = VisualLength(cab);
+            // A height that makes a toy or a bus of the cab is not trusted.
+            if (cabLength < 4.5f || cabLength > 10f)
+            {
+                NormalizeVehicleVisual(cab, LogCabFallbackLength);
+                cabLength = LogCabFallbackLength;
+            }
+            var trailer = PlaceRodinPart(logTrailerTemplate, root, false,
+                NamedMetres(trailerName, "l", LogTrailerDefaultLength));
+            var trailerLength = VisualLength(trailer);
+
+            var overlap = FifthWheelFromCabRear + KingpinFromTrailerFront;
+            var rigLength = cabLength + trailerLength - overlap;
+            var nose = rigLength * 0.5f;
+            var cabRear = nose - cabLength;
+            var hitchZ = cabRear + FifthWheelFromCabRear;
+            var trailerRear = -rigLength * 0.5f;
+            // Both parts stand centred on the origin; slide each to its place. The root is
+            // still at the origin, unturned, so world and rig coordinates agree here.
+            cab.transform.position += new Vector3(0f, 0f, nose - cabLength * 0.5f);
+            trailer.transform.position += new Vector3(0f, 0f, trailerRear + trailerLength * 0.5f);
+
+            var trailerFrame = LogTruckBuilder.AddHitch(root, root, hitchZ, hitchZ - trailerRear);
+            trailer.transform.SetParent(trailerFrame, true);
+
+            var logLength = Mathf.Min(10.4f, trailerLength * 0.82f);
+            var centre = trailerRear + 0.35f + logLength * 0.5f;
+            LogTruckBuilder.AddLoad(root, trailerFrame, NamedMetres(trailerName, "d", LogTruckDefaultDeck), centre, logLength);
+            Debug.Log($"RR_RODIN articulated log truck: cab {cabLength:0.0} m, trailer {trailerLength:0.0} m, " +
+                      $"rig {rigLength:0.0} m, fifth wheel at {hitchZ:0.0}");
+        }
+
+        /// A Rodin part under `root`: turned by its _r, scaled to `size` metres of height
+        /// (byHeight) or of length, standing on y = 0 and centred on the origin.
+        private GameObject PlaceRodinPart(GameObject template, Transform root, bool byHeight, float size)
+        {
+            var visual = Instantiate(template, root);
+            visual.name = $"{root.name} {template.name}";
+            visual.SetActive(true);
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.Euler(0f, TestAssetRotation(template.name), 0f);
+            visual.transform.localScale = template.transform.localScale;
+            if (!TryGetCombinedBounds(visual, out var bounds) || bounds.size.y < 0.001f) return visual;
+            var native = Mathf.Max(bounds.size.x, bounds.size.z);
+            NormalizeVehicleVisual(visual, byHeight ? native * size / bounds.size.y : size);
+            return visual;
+        }
+
+        private static long TemplateTriangles(GameObject template)
+        {
+            var total = 0L;
+            foreach (var r in template.GetComponentsInChildren<Renderer>(true))
+                if (r.enabled) total += Triangles(r);
+            return total;
+        }
+
+        private static float VisualLength(GameObject visual) =>
+            TryGetCombinedBounds(visual, out var bounds) ? Mathf.Max(bounds.size.x, bounds.size.z) : 0f;
 
         /// A "_<key><metres>" setting in a model's name, e.g. "_d1.4".
         private static float NamedMetres(string name, string key, float fallback)

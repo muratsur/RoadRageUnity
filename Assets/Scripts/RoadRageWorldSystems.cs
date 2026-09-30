@@ -499,6 +499,56 @@ namespace RoadRage.UnityRemake
                 return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
             }
         }
+
+        /// How far a jackknifed trailer reaches out beyond the rig's own box, set by
+        /// its TrailerHitch. Zero for anything without a trailer. Only a first, coarse
+        /// test uses it: the box it would make round a folded rig is a V's bounding box,
+        /// most of it empty road, and counted as the rig it took hits off bare asphalt
+        /// beside the wreck. Touches() then tests the cab and the trailer as themselves.
+        public float TrailerSwing { get; set; }
+        private TrailerHitch hitch;
+        private bool hitchLooked;
+
+        /// Whether a box `halfLength` by `halfWidth` at `along`/`across` road metres
+        /// from this car touches it. For anything but a folded rig this is the plain
+        /// hull test; a folded rig is its cab and its trailer, each in its own frame.
+        public bool Touches(float along, float across, float halfLength, float halfWidth)
+        {
+            if (Mathf.Abs(along) > halfLength + LongitudinalExtent + TrailerSwing ||
+                Mathf.Abs(across) > halfWidth + LateralExtent + TrailerSwing)
+                return false;
+            if (!hitchLooked)
+            {
+                hitch = GetComponent<TrailerHitch>();
+                hitchLooked = true;
+            }
+            if (Ragdolled || hitch == null || Mathf.Abs(hitch.Fold) < 2f)
+                return Mathf.Abs(along) <= halfLength + LongitudinalExtent &&
+                       Mathf.Abs(across) <= halfWidth + LateralExtent;
+
+            // Road offsets into the rig's own frame: flip for an oncoming rig, then
+            // undo its wreck yaw (positive yaw turns +Z towards +X).
+            var x = across * Direction;
+            var z = along * Direction;
+            var yaw = WreckYaw * Mathf.Deg2Rad;
+            var lx = x * Mathf.Cos(yaw) - z * Mathf.Sin(yaw);
+            var lz = x * Mathf.Sin(yaw) + z * Mathf.Cos(yaw);
+            // The other box is taken as square to the part - near enough for a car.
+            var pad = (halfLength + halfWidth) * 0.5f;
+
+            // Cab: from just behind the fifth wheel to the nose.
+            var cabBack = hitch.HitchZ - 1.5f;
+            if (lz >= cabBack - pad && lz <= HalfLength + pad && Mathf.Abs(lx) <= HalfWidth + pad) return true;
+
+            // Trailer: turned by the fold about the fifth wheel.
+            var f = hitch.Fold * Mathf.Deg2Rad;
+            var hx = lx;
+            var hz = lz - hitch.HitchZ;
+            var tx = hx * Mathf.Cos(f) - hz * Mathf.Sin(f);
+            var tz = hx * Mathf.Sin(f) + hz * Mathf.Cos(f);
+            var tail = -HalfLength - hitch.HitchZ;
+            return tz >= tail - pad && tz <= 1f + pad && Mathf.Abs(tx) <= HalfWidth + pad;
+        }
         // --- IRoadVehicle -------------------------------------------------------
         public float ContactDistance => RoadDistance;
         public float ContactLateral => LaneOffset;
@@ -904,6 +954,8 @@ namespace RoadRage.UnityRemake
             wreckRoll = 0f;
             var cargo = Role == VehicleRole.LogTruck ? GetComponent<LogTruckCargo>() : null;
             if (cargo != null) cargo.Restock();
+            var hitch = Role == VehicleRole.LogTruck ? GetComponent<TrailerHitch>() : null;
+            if (hitch != null) hitch.Straighten();
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
             // in a live lane, and everything behind it matched zero and stopped too - the
@@ -1147,6 +1199,13 @@ namespace RoadRage.UnityRemake
                 wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
                 if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
                 WreckYaw += wreckYawRate * dt;
+                // A rig turned much further ends across the road with its ends over the
+                // rails; the jackknife, not the whole rig, makes the dramatic angle.
+                if (Role == VehicleRole.LogTruck && Mathf.Abs(WreckYaw) > MaxRigWreckYaw)
+                {
+                    WreckYaw = Mathf.Sign(WreckYaw) * MaxRigWreckYaw;
+                    wreckYawRate = 0f;
+                }
                 wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
@@ -1320,6 +1379,7 @@ namespace RoadRage.UnityRemake
 
         private float wreckSlideTarget;
         private float wreckYawRate;
+        private const float MaxRigWreckYaw = 35f;
         /// Where along the road the last player hit landed, for a truck's crash: a
         /// 17 m rig turns about where it was struck, not about its middle. NaN when
         /// the wreck came from something other than the player.
@@ -1387,6 +1447,35 @@ namespace RoadRage.UnityRemake
 
             var shoulder = push * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+
+            JackknifeTrailer(arm, push, turn, hit);
+        }
+
+        /// Folds an articulated rig's trailer on its fifth wheel. Struck on the trailer,
+        /// its tail is shoved away and the rig folds hard, the cab turning only a little;
+        /// struck on the cab, the cab turns and the trailer trails the other way.
+        private void JackknifeTrailer(float arm, float push, float turn, float hit)
+        {
+            var hitch = GetComponent<TrailerHitch>();
+            if (hitch == null) return;
+            // In the rig's own frame: along it forwards, across it to its right.
+            var armLocal = arm * Direction;
+            var pushLocal = push * Direction;
+            var fromHitch = armLocal - hitch.HitchZ;
+            if (fromHitch < 0f)
+            {
+                // Tail shoved towards pushLocal: the trailer turns the other way about
+                // the hitch - negative fold swings the tail right.
+                var reach = Mathf.Clamp01(-fromHitch / Mathf.Max(1f, HalfLength));
+                hitch.Kick(-pushLocal * Mathf.Lerp(50f, 140f, hit) * Mathf.Lerp(0.5f, 1f, reach));
+                wreckYawRate *= 0.5f;
+            }
+            else
+            {
+                // The trailer lags the cab: it folds against the cab's turn. `turn` is
+                // already in the rig's frame (see CrashTruck).
+                hitch.Kick(-turn * Mathf.Lerp(25f, 70f, hit));
+            }
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns
@@ -1467,11 +1556,8 @@ namespace RoadRage.UnityRemake
                 // the test, so contact only registered once the meshes had already
                 // interpenetrated by that much. They are compared at full size now, with
                 // a small positive skin, so the hit lands as the bumpers meet.
-                var reach = driver.HalfLength + traffic.LongitudinalExtent;
-                if (Mathf.Abs(longitudinal) > reach) continue;
                 var lateral = traffic.LaneOffset - driver.LateralOffset;
-                var lateralReach = driver.HalfWidth + traffic.LateralExtent;
-                if (Mathf.Abs(lateral) > lateralReach) continue;
+                if (!traffic.Touches(-longitudinal, -lateral, driver.HalfLength, driver.HalfWidth)) continue;
 
                 // Special Vehicle: Car Hauler ramp jump from behind
                 if (traffic.Role == VehicleRole.CarHauler && longitudinal > 0.4f && Mathf.Abs(lateral) < 1.4f && driver.SpeedKph > 35f)
