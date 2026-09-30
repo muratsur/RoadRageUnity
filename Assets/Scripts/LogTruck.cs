@@ -589,6 +589,9 @@ namespace RoadRage.UnityRemake
     {
         private const float Gravity = 13f;
         private const float Lifetime = 70f;
+        /// The drawn asphalt stands this far above the road's centre line - the height
+        /// traffic is placed at - so a log on the line sat sunk into it.
+        private const float SurfaceLift = 0.16f;
         private const float ClearBehindPlayer = 70f;
 
         private TrafficCarController source;
@@ -623,7 +626,7 @@ namespace RoadRage.UnityRemake
             distance = p.z;
             var centre = RoadPath.Center(distance);
             lateral = Vector3.Dot(p - centre, RoadPath.Right(distance));
-            height = Mathf.Max(radius, p.y - centre.y);
+            height = Mathf.Max(radius, p.y - centre.y - SurfaceLift);
             var forward = RoadPath.Forward(distance);
             var axis = transform.forward;
             axis.y = 0f;
@@ -649,6 +652,8 @@ namespace RoadRage.UnityRemake
             var outOfSight = behind > 15f || -behind > 400f;
             if (behind > ClearBehindPlayer || (age > Lifetime && outOfSight))
             {
+                Debug.Log($"RR_LOG cleared a spilled log: {(behind > ClearBehindPlayer ? "driven past" : "out of sight")}, " +
+                          $"{behind:0} m behind the player, {age:0} s old");
                 Destroy(gameObject);
                 return;
             }
@@ -669,8 +674,13 @@ namespace RoadRage.UnityRemake
             pitch += pitchRate * dt;
 
             var grounded = false;
-            // Lying flat its lowest point is its radius; tilted, the low end digs in.
-            var floor = radius + Mathf.Abs(Mathf.Sin(pitch * Mathf.Deg2Rad)) * halfLength * 0.2f;
+            // How high its middle stands with its lowest point on the road: its radius
+            // lying flat, and on a tilt the whole of its low half-length. Only a fifth of
+            // it was allowed for, so a tilted log landed with its end metres into the
+            // asphalt and sank there as it levelled out.
+            pitch = Mathf.Clamp(pitch, -75f, 75f);
+            var tilt = pitch * Mathf.Deg2Rad;
+            var floor = radius * Mathf.Abs(Mathf.Cos(tilt)) + halfLength * Mathf.Abs(Mathf.Sin(tilt));
             if (height <= floor)
             {
                 height = floor;
@@ -722,7 +732,7 @@ namespace RoadRage.UnityRemake
 
         private void Place()
         {
-            transform.position = RoadPath.Point(distance, lateral, height);
+            transform.position = RoadPath.Point(distance, lateral, height + SurfaceLift);
             transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(pitch, yaw, 0f) * Quaternion.Euler(0f, 0f, spin);
         }
 
