@@ -1320,6 +1320,10 @@ namespace RoadRage.UnityRemake
 
         private float wreckSlideTarget;
         private float wreckYawRate;
+        /// Where along the road the last player hit landed, for a truck's crash: a
+        /// 17 m rig turns about where it was struck, not about its middle. NaN when
+        /// the wreck came from something other than the player.
+        private float hitRoadDistance = float.NaN;
 
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
@@ -1329,6 +1333,7 @@ namespace RoadRage.UnityRemake
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
 
+            var speedBefore = currentSpeedKph;
             // Momentum transfer: shove victim forward and slew it away across the asphalt.
             currentSpeedKph = Mathf.Max(currentSpeedKph * 0.4f, impactSpeedKph * 0.72f);
 
@@ -1345,8 +1350,43 @@ namespace RoadRage.UnityRemake
             var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
 
+            if (Role == VehicleRole.LogTruck) CrashTruck(lateralPush, impactSpeedKph, hit, speedBefore);
+
             // After the speed transfer above, so the load leaves with the truck's momentum.
             SpillLoad(lateralPush, impactSpeedKph);
+        }
+
+        /// A car spins by whichever side it was hit from; a truck turns by where along
+        /// its length the blow landed. Shoved sideways behind its middle, the tail swings
+        /// away and the nose comes round towards the hit - struck at the back on its
+        /// left, it turns left. Shoved ahead of its middle, the nose goes with the push.
+        /// It is heavy: it keeps most of its own speed, turns a few tens of degrees
+        /// rather than spinning, and slides off to the side it was pushed towards.
+        private void CrashTruck(float lateralPush, float impactSpeedKph, float hit, float speedBefore)
+        {
+            // +1 when it was pushed to the right of the road, -1 to the left.
+            var push = Mathf.Abs(lateralPush) < 0.01f
+                ? (variationSeed % 2 == 0 ? 1f : -1f)
+                : Mathf.Sign(lateralPush);
+            // Contact point from the truck's middle, along the road. Without a known hit
+            // (a blast, a pile-up), take it as struck behind the middle - the usual way.
+            var arm = float.IsNaN(hitRoadDistance)
+                ? -HalfLength * 0.6f
+                : Mathf.Clamp(hitRoadDistance - RoadDistance, -HalfLength, HalfLength);
+            hitRoadDistance = float.NaN;
+            var lever = Mathf.Clamp01(Mathf.Abs(arm) / Mathf.Max(0.5f, HalfLength));
+            // Force across the road at a point along it: positive yaw brings the nose
+            // round to the right. The sign holds for oncoming trucks too - both the arm
+            // and the push flip in the truck's own frame, and their product does not.
+            var turn = Mathf.Sign(arm) * push;
+            wreckYawRate = turn * Mathf.Lerp(30f, 95f, hit) * Mathf.Lerp(0.35f, 1f, lever);
+            wreckRoll = push * Mathf.Lerp(1.5f, 4f, hit);
+            // A car's blow barely moves a loaded rig: it carries on at most of its own
+            // speed, not the hitter's.
+            currentSpeedKph = Mathf.Max(speedBefore * 0.8f, impactSpeedKph * 0.45f);
+
+            var shoulder = push * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
+            wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns
@@ -1468,6 +1508,10 @@ namespace RoadRage.UnityRemake
                     if (traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
                         GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
                     traffic.crashedByPlayer = true;
+                    // The player's bumper that did the hitting: the rear one when
+                    // rammed from ahead, the front one otherwise.
+                    traffic.hitRoadDistance = driver.RoadDistance +
+                                              (longitudinal >= 0f ? driver.HalfLength : -driver.HalfLength);
                     traffic.Crash(lateral, speedAtImpact);
                 }
             }
