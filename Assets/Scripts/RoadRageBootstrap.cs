@@ -7749,8 +7749,8 @@ namespace RoadRage.UnityRemake
 
         private static readonly string[] HeathPlants =
         {
-            "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass", "BlackForest|SM_moor_grass",
-            "BlackForest|SM_bilberry", "BlackForest|SM_bilberry", "BlackForest|SM_fern",
+            // Grass only: the fern and bilberry clumps read as little green bushes.
+            "BlackForest|SM_moor_grass",
         };
 
         private static readonly string[] HeathRocks =
@@ -8215,6 +8215,9 @@ namespace RoadRage.UnityRemake
 
         private GameObject ForestPlant(float distance, float lateral, float minHeight, float maxHeight, string label)
         {
+            // Greenwood has none: the knee-high ferns, bilberry and grass tufts read as
+            // little green bushes dotted over the forest floor, and were asked out.
+            if (RoadPath.Route != null) return null;
             if (RoadPath.Route == null)
                 return SpawnForestPiece(ForestPlants[Random.Range(0, ForestPlants.Length)], distance, lateral, 0.06f,
                     minHeight, maxHeight, label);
@@ -8518,6 +8521,26 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        private static GameObject[] spotAssets;
+
+        /// The test models that stand at the test spot: all but the cars and the log
+        /// truck, which drive in traffic instead (a row of them parked behind the rail
+        /// read as cars waiting off the road).
+        private static GameObject[] SpotAssets
+        {
+            get
+            {
+                if (spotAssets != null) return spotAssets;
+                var list = new List<GameObject>();
+                foreach (var asset in TestAssets)
+                    if (!asset.name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase) &&
+                        !asset.name.StartsWith("logtruck", System.StringComparison.OrdinalIgnoreCase))
+                        list.Add(asset);
+                spotAssets = list.ToArray();
+                return spotAssets;
+            }
+        }
+
         private float TestAssetDistance(int index) => startDistance + TestAssetStart + index * TestAssetSpacing;
 
         /// Out from the clearance line by the model's own size: a car just past the rail,
@@ -8525,12 +8548,12 @@ namespace RoadRage.UnityRemake
         /// level (PrepareBuildingPads), like a lay-by or a house on a mountain road.
         private static float TestAssetLateral(int index, float distance) =>
             (index % 2 == 0 ? -1f : 1f) *
-            (RoadPath.ClearanceAt(distance) + 2f + TestAssetHalf(TestAssets[index]));
+            (RoadPath.ClearanceAt(distance) + 2f + TestAssetHalf(SpotAssets[index]));
 
         private bool InTestAssetGround(float distance, float lateral)
         {
             if (RoadPath.Route == null) return false;
-            var assets = TestAssets;
+            var assets = SpotAssets;
             for (var i = 0; i < assets.Length; i++)
             {
                 var d = TestAssetDistance(i);
@@ -8548,6 +8571,7 @@ namespace RoadRage.UnityRemake
         private static void ResetTestAssets()
         {
             testAssets = null;
+            spotAssets = null;
             twoSided.Clear();
             gridHeights.Clear();
             lakeIsReal.Clear();
@@ -8572,7 +8596,7 @@ namespace RoadRage.UnityRemake
             // The grid's corners carry the pads' levelled ground.
             gridHeights.Clear();
             lakeIsReal.Clear();
-            var assets = TestAssets;
+            var assets = SpotAssets;
             for (var i = 0; i < assets.Length; i++)
             {
                 var distance = TestAssetDistance(i);
@@ -8692,7 +8716,7 @@ namespace RoadRage.UnityRemake
         private void PlaceTestAssets()
         {
             if (RoadPath.Route == null) return;
-            var assets = TestAssets;
+            var assets = SpotAssets;
             for (var i = 0; i < assets.Length; i++)
             {
                 var distance = TestAssetDistance(i);
@@ -8728,7 +8752,7 @@ namespace RoadRage.UnityRemake
                 var bed = Mathf.Clamp(bounds.size.y * 0.05f, 0.05f, 0.8f);
                 model.transform.position += new Vector3(ground.x - bounds.center.x, ground.y - bounds.min.y - bed,
                     ground.z - bounds.center.z);
-                var settled = SettleOnDrawnGround(model, ground, bed,
+                var settled = SettleOnDrawnGround(model, ground, bed, TestAssetHalf(assets[i]),
                     assets[i].name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase));
                 TryGetCombinedBounds(model, out bounds);
                 DrawBothSides(model);
@@ -8749,25 +8773,18 @@ namespace RoadRage.UnityRemake
         /// its four corners, as its wheels would take it. A building stays level, its
         /// underside at the lowest corner, so no edge hangs in the air and the uphill
         /// side is cut into the slope.
-        private static string SettleOnDrawnGround(GameObject model, Vector3 ground, float bed, bool isCar)
+        private static string SettleOnDrawnGround(GameObject model, Vector3 ground, float bed, float footprintHalf, bool isCar)
         {
             if (!TryGetCombinedBounds(model, out var bounds)) return "no bounds";
             var yaw = Quaternion.Euler(0f, model.transform.eulerAngles.y, 0f);
-            // The footprint in the model's own frame, a little inside its outline: the
-            // wheels, the corners of the walls.
-            var local = Quaternion.Inverse(yaw);
-            var halfX = 0f;
-            var halfZ = 0f;
-            for (var c = 0; c < 8; c++)
-            {
-                var corner = bounds.center + Vector3.Scale(bounds.extents, new Vector3(
-                    (c & 1) == 0 ? -1f : 1f, (c & 2) == 0 ? -1f : 1f, (c & 4) == 0 ? -1f : 1f));
-                var inModel = local * (corner - bounds.center);
-                halfX = Mathf.Max(halfX, Mathf.Abs(inModel.x));
-                halfZ = Mathf.Max(halfZ, Mathf.Abs(inModel.z));
-            }
-            halfX *= 0.8f;
-            halfZ *= 0.8f;
+            // The footprint a little inside its outline: the wheels, the corners of the
+            // walls. From the model's own half width (the one its plot was cut for), not
+            // from its world bounds turned back into its frame: those bounds are of the
+            // model turned 30 degrees, and turned back they reached 40% past the house,
+            // out of its plot and down the slope - the house sat on that lowest corner,
+            // sunk metres below the road.
+            var halfX = 0.7f * footprintHalf;
+            var halfZ = 0.7f * footprintHalf;
             var bottom = new Vector3(bounds.center.x, bounds.min.y + bed, bounds.center.z);
             var points = new Vector3[4];
             var low = float.PositiveInfinity;
