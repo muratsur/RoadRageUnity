@@ -3343,6 +3343,21 @@ namespace RoadRage.UnityRemake
             if (root != null)
                 foreach (var c in root.GetComponentsInChildren<MeshCollider>())
                     if (c.gameObject.layer == PlantingGroundLayer) colliders++;
+            // Anything long and hair-thin in the chunk: what a white line through the
+            // forest would be, if it is an object of its own.
+            if (root != null)
+                foreach (var r in root.GetComponentsInChildren<Renderer>())
+                {
+                    var size = r.bounds.size;
+                    var sorted = new[] { size.x, size.y, size.z };
+                    System.Array.Sort(sorted);
+                    if (sorted[2] < 15f || sorted[1] > 0.6f) continue;
+                    var at = r.bounds.center;
+                    Debug.Log($"RR_THIN '{r.name}' (parent '{(r.transform.parent != null ? r.transform.parent.name : "-")}') " +
+                              $"material '{(r.sharedMaterial != null ? r.sharedMaterial.name : "none")}' " +
+                              $"{size.x:0.##} x {size.y:0.##} x {size.z:0.##} m at {at.z - chunkStart:0} m into the chunk, " +
+                              $"x {at.x - RoadPath.CenterX(at.z):0.#} m from the road centre");
+                }
             Debug.Log($"RR_PLANT chunk at {chunkStart:0} m: {tally.OnRay} stood on the ground grid, " +
                       $"{tally.NoGround} found no ground and {tally.Ambiguous} crossed ground (not planted), " +
                       $"furthest moved {tally.Shift:0.0} m; " +
@@ -8000,8 +8015,10 @@ namespace RoadRage.UnityRemake
                 var d = Random.Range(segStart + 15f, segEnd - 15f);
                 var side = Random.value < 0.5f ? -1 : 1;
                 var lateral = side * (rail + Random.Range(4f, 9f));
+                // Only where the ground is level enough for it: on a steep bank the pile
+                // stood level with its downhill end hanging over the slope.
                 if (!InCliffZone(d, lateral) && route.CoverAt(d, lateral) != RoadRoute.CoverWater &&
-                    !InHotelGrounds(d, lateral))
+                    !InHotelGrounds(d, lateral) && GroundSpread(d, lateral, 2.5f) < 0.8f)
                     PlaceRouteProp("SM_woodpile", d, lateral,
                         Quaternion.LookRotation(Flat(side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-8f, 8f), 0f),
                         "B500 Woodpile", 0.1f);
@@ -8079,9 +8096,30 @@ namespace RoadRage.UnityRemake
             var model = BiomeModel("BlackForest", mesh, materials["B500 Props"]);
             if (model == null) return null;
             model.name = name;
-            model.transform.SetPositionAndRotation(RoadPath.Point(distance, lateral, -sink), rotation);
+            // On the ground where it stands. Route props were all set at road height:
+            // right by the road that is the ground, but a timber pile 4-9 m out on a bank
+            // hung in the air over the slope (or sank into it), and so could the hotel.
+            model.transform.SetPositionAndRotation(
+                RoadPath.Point(distance, lateral, RealGroundUnder(distance, lateral, 1f) - sink), rotation);
             model.transform.localScale = Vector3.one;
             return model;
+        }
+
+        /// How far the drawn ground rises and falls across a square of this half size:
+        /// a four-metre timber pile needs a level spot.
+        private static float GroundSpread(float distance, float lateral, float half)
+        {
+            if (!OverRealTerrain) return 0f;
+            var low = float.PositiveInfinity;
+            var high = float.NegativeInfinity;
+            for (var a = -1; a <= 1; a++)
+            for (var b = -1; b <= 1; b++)
+            {
+                var y = GridGroundY(RoadPath.Point(distance + a * half, lateral + b * half));
+                low = Mathf.Min(low, y);
+                high = Mathf.Max(high, y);
+            }
+            return high - low;
         }
 
         private static Vector3 Flat(Vector3 v)
