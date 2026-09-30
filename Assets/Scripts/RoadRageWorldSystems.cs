@@ -494,11 +494,15 @@ namespace RoadRage.UnityRemake
             get
             {
                 if (Ragdolled) return ragdollExtent.y;
-                if (WreckYaw == 0f) return HalfWidth;
+                if (WreckYaw == 0f) return HalfWidth + TrailerSwing;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
-                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
+                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw)) + TrailerSwing;
             }
         }
+
+        /// How far a jackknifed trailer reaches out beyond the rig's own box, set by
+        /// its TrailerHitch. Zero for anything without a trailer.
+        public float TrailerSwing { get; set; }
         // --- IRoadVehicle -------------------------------------------------------
         public float ContactDistance => RoadDistance;
         public float ContactLateral => LaneOffset;
@@ -904,6 +908,8 @@ namespace RoadRage.UnityRemake
             wreckRoll = 0f;
             var cargo = Role == VehicleRole.LogTruck ? GetComponent<LogTruckCargo>() : null;
             if (cargo != null) cargo.Restock();
+            var hitch = Role == VehicleRole.LogTruck ? GetComponent<TrailerHitch>() : null;
+            if (hitch != null) hitch.Straighten();
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
             // in a live lane, and everything behind it matched zero and stopped too - the
@@ -1387,6 +1393,35 @@ namespace RoadRage.UnityRemake
 
             var shoulder = push * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+
+            JackknifeTrailer(arm, push, turn, hit);
+        }
+
+        /// Folds an articulated rig's trailer on its fifth wheel. Struck on the trailer,
+        /// its tail is shoved away and the rig folds hard, the cab turning only a little;
+        /// struck on the cab, the cab turns and the trailer trails the other way.
+        private void JackknifeTrailer(float arm, float push, float turn, float hit)
+        {
+            var hitch = GetComponent<TrailerHitch>();
+            if (hitch == null) return;
+            // In the rig's own frame: along it forwards, across it to its right.
+            var armLocal = arm * Direction;
+            var pushLocal = push * Direction;
+            var fromHitch = armLocal - hitch.HitchZ;
+            if (fromHitch < 0f)
+            {
+                // Tail shoved towards pushLocal: the trailer turns the other way about
+                // the hitch - negative fold swings the tail right.
+                var reach = Mathf.Clamp01(-fromHitch / Mathf.Max(1f, HalfLength));
+                hitch.Kick(-pushLocal * Mathf.Lerp(50f, 140f, hit) * Mathf.Lerp(0.5f, 1f, reach));
+                wreckYawRate *= 0.5f;
+            }
+            else
+            {
+                // The trailer lags the cab: it folds against the cab's turn. `turn` is
+                // already in the rig's frame (see CrashTruck).
+                hitch.Kick(-turn * Mathf.Lerp(25f, 70f, hit));
+            }
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns

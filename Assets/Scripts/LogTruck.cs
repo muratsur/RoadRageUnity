@@ -14,8 +14,10 @@ namespace RoadRage.UnityRemake
         private const float Front = Length * 0.5f;
         private const float Rear = -Length * 0.5f;
 
-        private const float LogLength = 10.6f;
-        private const float LogCentreZ = -3.05f;
+        private const float LogLength = 10.4f;
+        private const float LogCentreZ = -3.3f;
+        /// The fifth wheel: where the trailer turns on the tractor.
+        public const float HitchZ = 1.35f;
         private const float DeckTop = 1.42f;
 
         private static readonly Dictionary<string, Material> Cache = new();
@@ -44,19 +46,42 @@ namespace RoadRage.UnityRemake
             var head = Mat("Log Truck Headlight", new Color(1f, 0.96f, 0.85f), 0f, 0.9f, emissive: 1.6f);
             if (glass == null) glass = Mat("Log Truck Glass", new Color(0.10f, 0.14f, 0.17f), 0.2f, 0.95f);
 
-            BuildTractor(body, cab, chrome, frame, tyre, amber, head, glass);
-            BuildTrailer(body, frame, chrome, tyre, tail);
-            return AddLoad(root, DeckTop, LogCentreZ, LogLength);
+            var tractor = new GameObject("Tractor").transform;
+            tractor.SetParent(body, false);
+            BuildTractor(tractor, cab, chrome, frame, tyre, amber, head, glass);
+
+            // The trailer and its load hang off the fifth wheel, so they can fold
+            // round it. Parts keep their rig coordinates under an offset child.
+            var trailer = AddHitch(root, body, HitchZ, HitchZ - Rear);
+            BuildTrailer(trailer, frame, chrome, tyre, tail);
+            return AddLoad(root, trailer, DeckTop, LogCentreZ, LogLength);
+        }
+
+        /// The trailer's pivot at `hitchZ` on the rig, under `parent`, and the hitch
+        /// that folds it when the rig is wrecked. Returns the frame everything on the
+        /// trailer goes under: it turns with the pivot, but its coordinates are the
+        /// rig's own, so parts are placed as if the trailer were not jointed.
+        public static Transform AddHitch(Transform root, Transform parent, float hitchZ, float trailerLength)
+        {
+            var pivot = new GameObject("Trailer Hitch").transform;
+            pivot.SetParent(parent, false);
+            pivot.localPosition = new Vector3(0f, 0f, hitchZ);
+            root.gameObject.AddComponent<TrailerHitch>().Bind(pivot, hitchZ, trailerLength);
+            var trailer = new GameObject("Trailer").transform;
+            trailer.SetParent(pivot, false);
+            trailer.localPosition = new Vector3(0f, 0f, -hitchZ);
+            return trailer;
         }
 
         /// Puts a strapped load of logs on a truck body built elsewhere - a Rodin model -
-        /// in the root's frame: `deckTop` is the bed's height, `centreZ` the middle of the
-        /// load along the truck, `logLength` how long the logs are.
-        public static LogTruckCargo AddLoad(Transform root, float deckTop, float centreZ, float logLength)
+        /// under `parent` (the root, or a trailer that folds), in the rig's frame:
+        /// `deckTop` is the bed's height, `centreZ` the middle of the load along the
+        /// rig, `logLength` how long the logs are.
+        public static LogTruckCargo AddLoad(Transform root, Transform parent, float deckTop, float centreZ, float logLength)
         {
             var strap = Mat("Log Truck Strap", new Color(0.92f, 0.30f, 0.08f), 0f, 0.3f);
             var cargoRoot = new GameObject("Log Load").transform;
-            cargoRoot.SetParent(root, false);
+            cargoRoot.SetParent(parent, false);
             var cargo = root.gameObject.AddComponent<LogTruckCargo>();
             BuildLoad(cargoRoot, strap, cargo, deckTop, centreZ, logLength);
             cargo.Bind(cargoRoot);
@@ -112,7 +137,8 @@ namespace RoadRage.UnityRemake
 
         private static void BuildTrailer(Transform p, Material frame, Material chrome, Material tyre, Material tail)
         {
-            const float trailerFront = 2.55f;
+            // Clear of the sleeper (its back is at 2.375), so the rack is seen.
+            const float trailerFront = 2.2f;
             var trailerLength = trailerFront - Rear;
             var centre = (trailerFront + Rear) * 0.5f;
             Box(p, "Trailer Deck", new Vector3(0f, DeckTop - 0.14f, centre), new Vector3(2.45f, 0.26f, trailerLength), frame);
@@ -454,6 +480,70 @@ namespace RoadRage.UnityRemake
         {
             Spilled = false;
             if (load != null) load.gameObject.SetActive(true);
+        }
+    }
+
+    /// A trailer folding on its fifth wheel when the rig is wrecked. The crash kicks it
+    /// one way; while the wreck still rolls the fold keeps opening, as a jackknife does,
+    /// until it meets the cab; stopped, it stays where it ended. The trailer's sideways
+    /// reach is handed to the controller, so the contact pass sees the folded trailer.
+    public sealed class TrailerHitch : MonoBehaviour
+    {
+        /// About where a trailer's front corner meets the back of the cab.
+        private const float MaxFold = 70f;
+
+        private Transform pivot;
+        private TrafficCarController car;
+        private float trailerLength;
+        private float fold;
+        private float foldRate;
+
+        /// The fifth wheel's place along the rig, in the rig's frame.
+        public float HitchZ { get; private set; }
+        public float Fold => fold;
+
+        public void Bind(Transform trailerPivot, float hitchZ, float length)
+        {
+            pivot = trailerPivot;
+            HitchZ = hitchZ;
+            trailerLength = Mathf.Max(1f, length);
+        }
+
+        /// Degrees a second; positive swings the trailer's tail to the rig's left.
+        public void Kick(float degreesPerSecond) => foldRate += degreesPerSecond;
+
+        /// A revived rig drives off straight.
+        public void Straighten()
+        {
+            fold = 0f;
+            foldRate = 0f;
+            Apply();
+        }
+
+        private void Update()
+        {
+            if (fold == 0f && foldRate == 0f) return;
+            if (car == null) car = GetComponent<TrafficCarController>();
+            var dt = Time.deltaTime;
+            var rolling = car != null ? Mathf.Clamp01(car.SpeedKph / 40f) : 0f;
+            // Rolling, the trailer's own momentum keeps the fold opening; stopped, the
+            // tyres scrub it dead.
+            foldRate += Mathf.Sign(fold) * 45f * rolling * dt;
+            foldRate = Mathf.MoveTowards(foldRate, 0f, (rolling > 0.1f ? 35f : 240f) * dt);
+            fold += foldRate * dt;
+            if (Mathf.Abs(fold) > MaxFold)
+            {
+                fold = Mathf.Sign(fold) * MaxFold;
+                foldRate = -foldRate * 0.15f;
+            }
+            Apply();
+        }
+
+        private void Apply()
+        {
+            if (pivot != null) pivot.localRotation = Quaternion.Euler(0f, fold, 0f);
+            if (car == null) car = GetComponent<TrafficCarController>();
+            if (car != null) car.TrailerSwing = 0.5f * trailerLength * Mathf.Abs(Mathf.Sin(fold * Mathf.Deg2Rad));
         }
     }
 
