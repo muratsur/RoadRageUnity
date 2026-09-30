@@ -3222,7 +3222,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             var ground = CreateMeshObject(name, vertices, triangles, uv, material, colors);
-            // What planting rays land on (RaycastGround).
+            // What a car thrown off the road lands on.
             ground.layer = PlantingGroundLayer;
             ground.AddComponent<MeshCollider>().sharedMesh = ground.GetComponent<MeshFilter>().sharedMesh;
         }
@@ -3338,7 +3338,7 @@ namespace RoadRage.UnityRemake
             if (root != null)
                 foreach (var c in root.GetComponentsInChildren<MeshCollider>())
                     if (c.gameObject.layer == PlantingGroundLayer) colliders++;
-            Debug.Log($"RR_PLANT chunk at {chunkStart:0} m: {tally.OnRay} stood on the ground by ray, " +
+            Debug.Log($"RR_PLANT chunk at {chunkStart:0} m: {tally.OnRay} stood on the ground grid, " +
                       $"{tally.NoGround} found no ground and {tally.Ambiguous} crossed ground (not planted), " +
                       $"furthest moved {tally.Shift:0.0} m; " +
                       $"{colliders} ground colliders in the chunk");
@@ -3348,33 +3348,31 @@ namespace RoadRage.UnityRemake
         /// it by name, and physics (a car thrown off the road) still lands on it.
         private const int PlantingGroundLayer = 2;
 
-        /// The ground straight down at a point as it is drawn - the top surface where
-        /// ground strips overlap, the mesh's own straight runs between its vertices -
-        /// taken as a trunk of this radius roots on it: its downhill side, a little
-        /// deeper the steeper the slope. False where there is no ground under the point.
-        private static bool RaycastGround(Vector3 at, float radius, out float ground)
+        /// The ground under a point exactly as the grid draws it (GridGroundY), taken as
+        /// a trunk of this radius roots on it: its downhill side, a little deeper the
+        /// steeper the slope. False away from the real terrain.
+        ///
+        /// This used to cast physics rays down onto the ground colliders. That found no
+        /// ground wherever the chunk that will draw it was not built yet (a tree 100 m
+        /// out on a bend stands over the next chunk's rows), and found the wrong thing
+        /// wherever any other collider on the "Ignore Raycast" layer (a prefab tree, a
+        /// test model) stood over it - the "found no ground" and "crossed ground" counts
+        /// in RR_PLANT. The grid is one height function; asking it directly, as
+        /// Terrain.SampleHeight does, cannot miss and cannot disagree with what is drawn.
+        private static bool DrawnGroundUnder(Vector3 at, float radius, out float ground)
         {
             ground = 0f;
+            if (!OverRealTerrain) return false;
             float low = float.PositiveInfinity, high = float.NegativeInfinity;
-            for (var k = 0; k < 5; k++)
+            foreach (var offset in new[]
+                     {
+                         Vector3.zero, new Vector3(radius, 0f, 0f), new Vector3(-radius, 0f, 0f),
+                         new Vector3(0f, 0f, radius), new Vector3(0f, 0f, -radius),
+                     })
             {
-                var offset = k switch
-                {
-                    1 => new Vector3(radius, 0f, 0f),
-                    2 => new Vector3(-radius, 0f, 0f),
-                    3 => new Vector3(0f, 0f, radius),
-                    4 => new Vector3(0f, 0f, -radius),
-                    _ => Vector3.zero,
-                };
-                var origin = new Vector3(at.x + offset.x, at.y + 400f, at.z + offset.z);
-                if (!Physics.Raycast(origin, Vector3.down, out var hit, 1200f, 1 << PlantingGroundLayer,
-                        QueryTriggerInteraction.Ignore))
-                {
-                    if (k == 0) return false;
-                    continue;
-                }
-                low = Mathf.Min(low, hit.point.y);
-                high = Mathf.Max(high, hit.point.y);
+                var y = GridGroundY(at + offset);
+                low = Mathf.Min(low, y);
+                high = Mathf.Max(high, y);
             }
             ground = low - 0.1f - 0.08f * (high - low);
             return true;
@@ -7686,24 +7684,23 @@ namespace RoadRage.UnityRemake
             NormalizeModelHeight(model, Random.Range(minHeight, maxHeight), height);
             if (!onCliff && OverRealTerrain)
             {
-                var placedAt = model.transform.position.y;
-                if (!RaycastGround(model.transform.position, 0.9f, out var groundY))
+                // Where its base stands now: NormalizeModelHeight may have pushed it
+                // sideways clear of the road. (The pivot was compared before, and a tall
+                // tree's pivot is metres above its base - counted as crossed ground.)
+                var placedAt = TryGetCombinedBounds(model, out var placedBounds)
+                    ? placedBounds.min.y
+                    : model.transform.position.y;
+                if (!DrawnGroundUnder(model.transform.position, 0.9f, out var groundY))
                 {
                     plantTally.NoGround++;
                     Destroy(model);
                     return null;
                 }
-                // How far the ray moved it from where the terrain maths put it. Metres
-                // apart only where ground strips still cross (the top one is often a
-                // sliver seen edge-on from the road), and a piece stood there hung in
-                // the air or sank from the road's point of view: it is left out.
+                // How far its base is from the ground under where it ended up: it was
+                // grounded before NormalizeModelHeight pushed it sideways clear of the
+                // road. It stands on the ground where it is now, whatever the shift; with
+                // one ground there is nothing to be unsure about any more.
                 var shift = Mathf.Abs(groundY + height - placedAt);
-                if (shift > MaxPlantingShift)
-                {
-                    plantTally.Ambiguous++;
-                    Destroy(model);
-                    return null;
-                }
                 plantTally.OnRay++;
                 plantTally.Shift = Mathf.Max(plantTally.Shift, shift);
                 StandOn(model, groundY + height);
@@ -7796,8 +7793,13 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        /// Distance from the centreline at which water starts on this side, or NaN.
-        private static float LakeInnerEdge(float distance, int side)
+        /// Distance from the centreline at which water starts on this side, or NaN:
+        /// where the land cover has water and the ground can hold it (LakeIsReal).
+        private static float LakeInnerEdge(float distance, int side) =>
+            LakeIsReal(distance, side) ? LakeInnerEdgeByCover(distance, side) : float.NaN;
+
+        /// Where the land cover alone puts the water's inner edge on this side, or NaN.
+        private static float LakeInnerEdgeByCover(float distance, int side)
         {
             // One probe per cover band (12-40, 40-100, 100-220 m); water starts at the
             // band's inner edge.
@@ -7866,7 +7868,39 @@ namespace RoadRage.UnityRemake
         /// The ground dips under water, so a lake has a shore rather than hills
         /// showing through it.
         private static float LakeBasin(float distance, float lateral) =>
-            RoadPath.Route != null && RoadPath.Route.CoverAt(distance, lateral) == RoadRoute.CoverWater ? -3f : 0f;
+            RoadPath.Route != null && RoadPath.Route.CoverAt(distance, lateral) == RoadRoute.CoverWater &&
+            LakeIsReal(distance, lateral < 0f ? -1 : 1)
+                ? -3f
+                : 0f;
+
+        private static readonly Dictionary<int, bool> lakeIsReal = new();
+
+        /// Whether the water the land cover puts beside the road here can really lie
+        /// there: the real ground across it within 2.5 m of the road, as it is at the
+        /// Mummelsee. Land cover is 10 m cells and marks a pond, a wet meadow or a
+        /// shadow as water too; on a bank rising well above the road such a lake was a
+        /// level sheet of water at road height cutting into the slope - a thin shining
+        /// line through the forest, the "white stripe" - with a 3 m pit dug for it.
+        private static bool LakeIsReal(float distance, int side)
+        {
+            var key = Mathf.RoundToInt(distance / 5f) * 2 + (side < 0 ? 0 : 1);
+            if (lakeIsReal.TryGetValue(key, out var real)) return real;
+            if (lakeIsReal.Count > 20000) lakeIsReal.Clear();
+            var at = Mathf.RoundToInt(distance / 5f) * 5f;
+            real = false;
+            if (RoadPath.Route != null)
+            {
+                var edge = LakeInnerEdgeByCover(at, side);
+                if (!float.IsNaN(edge))
+                {
+                    var sum = 0f;
+                    for (var k = 0; k < 3; k++) sum += RealGround(at, side * (edge + 20f * k));
+                    real = sum / 3f < 2.5f;
+                }
+            }
+            lakeIsReal[key] = real;
+            return real;
+        }
 
         private int lastPlaceIndex = -1;
 
@@ -8115,10 +8149,6 @@ namespace RoadRage.UnityRemake
             public float Shift;
         }
 
-        /// Metres the drawn ground may differ from the terrain maths under a forest piece
-        /// before the spot is taken as one where ground strips cross, and left bare.
-        private const float MaxPlantingShift = 6f;
-
         private static PlantTally plantTally = new();
         internal static int canopyKept;
         internal static int canopyRejected;
@@ -8165,7 +8195,7 @@ namespace RoadRage.UnityRemake
                 canopyRejected++;
                 return null;
             }
-            if (OverRealTerrain && RaycastGround(tree.transform.position, 0.9f, out var treeGround))
+            if (DrawnGroundUnder(tree.transform.position, 0.9f, out var treeGround))
                 // The pack's bounds reach a little below the trunk: 0.3 m into the ground.
                 StandOn(tree, treeGround - 0.3f);
             canopyKept++;
@@ -8510,6 +8540,7 @@ namespace RoadRage.UnityRemake
             testAssets = null;
             twoSided.Clear();
             gridHeights.Clear();
+            lakeIsReal.Clear();
             buildingPads.Clear();
             padsFor = float.NaN;
         }
@@ -8530,6 +8561,7 @@ namespace RoadRage.UnityRemake
             buildingPads.Clear();
             // The grid's corners carry the pads' levelled ground.
             gridHeights.Clear();
+            lakeIsReal.Clear();
             var assets = TestAssets;
             for (var i = 0; i < assets.Length; i++)
             {
@@ -8739,17 +8771,15 @@ namespace RoadRage.UnityRemake
             for (var c = 0; c < 4; c++)
             {
                 var at = bottom + yaw * new Vector3((c & 1) == 0 ? -halfX : halfX, 0f, (c & 2) == 0 ? -halfZ : halfZ);
-                if (!Physics.Raycast(new Vector3(at.x, at.y + 400f, at.z), Vector3.down, out var hit, 1200f,
-                        1 << PlantingGroundLayer, QueryTriggerInteraction.Ignore))
+                if (!OverRealTerrain)
                 {
                     missing++;
-                    // A car needs all four for its tilt; a building stands on the rest.
-                    if (isCar) return $"ground by maths (no drawn ground under corner {c})";
+                    if (isCar) return "ground by maths (no real terrain)";
                     continue;
                 }
-                points[c] = hit.point;
-                low = Mathf.Min(low, hit.point.y);
-                high = Mathf.Max(high, hit.point.y);
+                points[c] = new Vector3(at.x, GridGroundY(at), at.z);
+                low = Mathf.Min(low, points[c].y);
+                high = Mathf.Max(high, points[c].y);
             }
             if (missing == 4) return "ground by maths (no drawn ground under any corner)";
             var mean = (points[0].y + points[1].y + points[2].y + points[3].y) * 0.25f;
