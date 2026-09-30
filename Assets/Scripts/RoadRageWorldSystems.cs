@@ -384,9 +384,21 @@ namespace RoadRage.UnityRemake
         public enum Offence { None, Weaving, Speeding, WrongWay, Tailgating }
         public Offence Violation { get; private set; }
 
-        public enum VehicleRole { Standard, FuelTanker, CarHauler }
+        public enum VehicleRole { Standard, FuelTanker, CarHauler, LogTruck }
         public VehicleRole Role { get; set; } = VehicleRole.Standard;
         public bool HasDetonated { get; private set; }
+        /// Set by the player collision pass just before it wrecks this car, so a log
+        /// truck knows whose spill it is when the load comes off.
+        private bool crashedByPlayer;
+
+        private void SpillLoad(float lateralPush, float impactSpeedKph)
+        {
+            var byPlayer = crashedByPlayer;
+            crashedByPlayer = false;
+            if (Role != VehicleRole.LogTruck) return;
+            var cargo = GetComponent<LogTruckCargo>();
+            if (cargo != null) cargo.Spill(this, lateralPush, impactSpeedKph, byPlayer);
+        }
 
         public void DetonateTanker()
         {
@@ -890,6 +902,8 @@ namespace RoadRage.UnityRemake
             WreckYaw = 0f;
             wreckYawRate = 0f;
             wreckRoll = 0f;
+            var cargo = Role == VehicleRole.LogTruck ? GetComponent<LogTruckCargo>() : null;
+            if (cargo != null) cargo.Restock();
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
             // in a live lane, and everything behind it matched zero and stopped too - the
@@ -914,6 +928,9 @@ namespace RoadRage.UnityRemake
             Ragdolled = true;
             IsWreck = true;
             ragdollRestTime = 0f;
+            // Only the aftertouch blast hands traffic to physics, and that is the player.
+            crashedByPlayer = true;
+            SpillLoad(0f, 120f);
             TrackRagdoll();
         }
 
@@ -1327,6 +1344,9 @@ namespace RoadRage.UnityRemake
             sign = LaneOffset >= 0f ? 1f : -1f;
             var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+
+            // After the speed transfer above, so the load leaves with the truck's momentum.
+            SpillLoad(lateralPush, impactSpeedKph);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns
@@ -1445,6 +1465,9 @@ namespace RoadRage.UnityRemake
                 driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
                 if (!traffic.IsWreck)
                 {
+                    if (traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
+                        GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
+                    traffic.crashedByPlayer = true;
                     traffic.Crash(lateral, speedAtImpact);
                 }
             }

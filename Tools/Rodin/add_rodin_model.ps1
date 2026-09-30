@@ -11,6 +11,10 @@ The name carries the settings the game reads:
   _r<degrees> turn if it faces the wrong way      e.g. _r180
 A name starting with "car" also drives in traffic, in random colours (Set Up Rodin
 Models finds its paint; a white, silver or black car keeps its own colour).
+A name starting with "logtruck" becomes the log truck in traffic. Make it in Rodin
+with an EMPTY trailer - the game puts its own logs on, so they can spill. Also:
+  _d<metres>  height of the trailer bed the logs sit on (default 1.45)
+  e.g. logtruck_h4.2  or  logtruck_h4.2_d1.4_r180
 
 Usage (from the project folder):
   .\Tools\Rodin\add_rodin_model.ps1 "$env:USERPROFILE\Downloads\<download>.zip" car_hatch_cyan_h1.5
