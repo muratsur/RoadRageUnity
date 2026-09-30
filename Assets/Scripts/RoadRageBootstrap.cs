@@ -10745,6 +10745,14 @@ namespace RoadRage.UnityRemake
                     role = TrafficCarController.VehicleRole.CarHauler;
                     model = haulers[i % haulers.Length];
                 }
+                else if ((i == 2 || i == 14) && offence == TrafficCarController.Offence.None)
+                {
+                    // Loaded logger: slow, long, and it sheds its load across the road
+                    // when it is hit. Slot 2 runs with the player, 14 comes the other way.
+                    role = TrafficCarController.VehicleRole.LogTruck;
+                    model = "LogTruck";
+                    speed = Mathf.Min(speed, 72f);
+                }
                 else
                 {
                     // The garage roster patrols the highway too - the buyable vehicles
@@ -10767,7 +10775,9 @@ namespace RoadRage.UnityRemake
                 // third car is the single cheapest thing that says New York. Only the
                 // law-abiding standard cars become taxis: a cab that weaves, speeds or
                 // drives the wrong way is a different game.
-                var tint = palette[i % palette.Length];
+                var tint = role == TrafficCarController.VehicleRole.LogTruck
+                    ? LogTruckPaints[i % LogTruckPaints.Length]
+                    : palette[i % palette.Length];
                 var isCab = biomeName == "MANHATTAN"
                             && role == TrafficCarController.VehicleRole.Standard
                             && offence == TrafficCarController.Offence.None
@@ -10809,6 +10819,13 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        /// Working-truck colours: the forest green is the classic logger.
+        private static readonly Color[] LogTruckPaints =
+        {
+            new Color(0.16f, 0.42f, 0.20f), new Color(0.62f, 0.10f, 0.08f),
+            new Color(0.14f, 0.24f, 0.52f), new Color(0.86f, 0.86f, 0.84f),
+        };
+
         /// Cab yellow. Warmer and less green than the palette's amber, which is a car
         /// colour rather than a livery.
         private static readonly Color TaxiYellow = new Color(0.98f, 0.74f, 0.06f);
@@ -10845,9 +10862,14 @@ namespace RoadRage.UnityRemake
             // and visibly from another era than the player's vehicle. These are the same
             // Synty presets the hero car uses, with the same three material slots, so
             // traffic and player finally belong to one art set.
-            var rodin = modelName.StartsWith(RodinModelPrefix) && BuildRodinVisual(root, name, modelName);
-            var prefab = rodin ? null : Resources.Load<GameObject>($"Vehicles/{modelName}");
-            if (prefab == null && !rodin) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
+            // The log truck is built from primitives rather than loaded - no pack has one.
+            var isLogTruck = role == TrafficCarController.VehicleRole.LogTruck;
+            var rodin = !isLogTruck && modelName.StartsWith(RodinModelPrefix) && BuildRodinVisual(root, name, modelName);
+            var prefab = rodin || isLogTruck ? null : Resources.Load<GameObject>($"Vehicles/{modelName}");
+            if (isLogTruck)
+                LogTruckBuilder.Build(root, tint,
+                    materials.TryGetValue("Street Racer Glass", out var truckGlass) ? truckGlass : null);
+            else if (prefab == null && !rodin) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
             if (prefab != null)
             {
                 // Liveries are BACK: full flat colour lost every detail and read as
