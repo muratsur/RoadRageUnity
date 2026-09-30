@@ -7897,6 +7897,7 @@ namespace RoadRage.UnityRemake
                 : 0f;
 
         private static readonly Dictionary<int, bool> lakeIsReal = new();
+        private static readonly bool LakesOff = true;
 
         /// Whether the water the land cover puts beside the road here can really lie
         /// there: the real ground across it within 2.5 m of the road, as it is at the
@@ -7906,6 +7907,15 @@ namespace RoadRage.UnityRemake
         /// line through the forest, the "white stripe" - with a 3 m pit dug for it.
         private static bool LakeIsReal(float distance, int side)
         {
+            // Off. The lake was a level sheet of water at the road's lowest height, up to
+            // 260 m wide, with a 3 m pit dug under it wherever the land cover (10 m cells)
+            // said water. Wherever that sheet met a slope - which on the B500 is nearly
+            // everywhere beside the road - the water showed as a thin shining line along
+            // the bank that followed the road and hooked round where the lake ended: the
+            // white stripe. Checking the slope first only moved it about. The real lakes
+            // (Mummelsee, Wildsee) want their real surface height and outline from the
+            // terrain data, not a sheet at road height; until then there are none.
+            if (LakesOff) return false;
             var key = Mathf.RoundToInt(distance / 5f) * 2 + (side < 0 ? 0 : 1);
             if (lakeIsReal.TryGetValue(key, out var real)) return real;
             if (lakeIsReal.Count > 20000) lakeIsReal.Clear();
