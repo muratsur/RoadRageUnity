@@ -10669,6 +10669,89 @@ namespace RoadRage.UnityRemake
             return true;
         }
 
+        // ------------------------------------------------------------ log truck
+
+        /// A Rodin log truck in Assets/Resources/TestAssets - any model whose name starts
+        /// with "logtruck" - replaces the primitive one. Rodin makes the truck and an empty
+        /// trailer; the logs are always the game's own, because a load baked into the
+        /// mesh could not come off in a crash. Name settings, as for the test spot:
+        ///   _h<metres>  overall height (cab to stack tops), e.g. _h4.2
+        ///   _r<degrees> turn if it drives backwards, e.g. _r180
+        ///   _d<metres>  height of the trailer bed the logs sit on (default 1.45)
+        private const float LogTruckDefaultDeck = 1.45f;
+        private GameObject logTruckTemplate;
+        private bool logTruckSearched;
+
+        private GameObject LogTruckTemplate
+        {
+            get
+            {
+                if (logTruckSearched) return logTruckTemplate;
+                logTruckSearched = true;
+                foreach (var asset in TestAssets)
+                {
+                    if (!asset.name.StartsWith("logtruck", System.StringComparison.OrdinalIgnoreCase)) continue;
+                    logTruckTemplate = BuildRodinTemplate(asset);
+                    if (logTruckTemplate != null)
+                    {
+                        Debug.Log($"RR_RODIN log truck '{asset.name}' drives in traffic");
+                        break;
+                    }
+                }
+                return logTruckTemplate;
+            }
+        }
+
+        private void BuildLogTruck(Transform root, Color tint)
+        {
+            var template = LogTruckTemplate;
+            if (template == null)
+            {
+                LogTruckBuilder.Build(root, tint,
+                    materials.TryGetValue("Street Racer Glass", out var glass) ? glass : null);
+                return;
+            }
+
+            var visual = Instantiate(template, root);
+            visual.name = $"{root.name} Visual ({template.name})";
+            visual.SetActive(true);
+            visual.transform.localPosition = Vector3.zero;
+            visual.transform.localRotation = Quaternion.Euler(0f, TestAssetRotation(template.name), 0f);
+            visual.transform.localScale = template.transform.localScale;
+
+            var length = LogTruckBuilder.Length;
+            if (TryGetCombinedBounds(visual, out var bounds) && bounds.size.y > 0.001f)
+            {
+                var native = Mathf.Max(bounds.size.x, bounds.size.z);
+                var named = System.Text.RegularExpressions.Regex.IsMatch(template.name, @"_h\d",
+                    System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var scale = named ? TestAssetHeight(template.name) / bounds.size.y : LogTruckBuilder.Length / native;
+                // A height that makes a pickup or a train of it is not trusted.
+                if (native * scale < 12f || native * scale > 24f) scale = LogTruckBuilder.Length / native;
+                visual.transform.localScale *= scale;
+                length = native * scale;
+                NormalizeVehicleVisual(visual, length);
+            }
+
+            // Load across the back of the rig: from just short of the rear of the trailer,
+            // as long as a log load is, but never reaching the cab.
+            var rear = -length * 0.5f;
+            var logLength = Mathf.Min(10.6f, length * 0.6f);
+            var centre = rear + 0.35f + logLength * 0.5f;
+            LogTruckBuilder.AddLoad(root, NamedMetres(template.name, "d", LogTruckDefaultDeck), centre, logLength);
+        }
+
+        /// A "_<key><metres>" setting in a model's name, e.g. "_d1.4".
+        private static float NamedMetres(string name, string key, float fallback)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(name, $@"_{key}(\d+(\.\d+)?)",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            return match.Success && float.TryParse(match.Groups[1].Value, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var metres) && metres > 0.1f
+                ? metres
+                : fallback;
+        }
+
         private void BuildTraffic()
         {
             var trafficRoot = new GameObject("Living Highway Traffic").transform;
@@ -10862,13 +10945,11 @@ namespace RoadRage.UnityRemake
             // and visibly from another era than the player's vehicle. These are the same
             // Synty presets the hero car uses, with the same three material slots, so
             // traffic and player finally belong to one art set.
-            // The log truck is built from primitives rather than loaded - no pack has one.
+            // The log truck is built rather than loaded - see BuildLogTruck.
             var isLogTruck = role == TrafficCarController.VehicleRole.LogTruck;
             var rodin = !isLogTruck && modelName.StartsWith(RodinModelPrefix) && BuildRodinVisual(root, name, modelName);
             var prefab = rodin || isLogTruck ? null : Resources.Load<GameObject>($"Vehicles/{modelName}");
-            if (isLogTruck)
-                LogTruckBuilder.Build(root, tint,
-                    materials.TryGetValue("Street Racer Glass", out var truckGlass) ? truckGlass : null);
+            if (isLogTruck) BuildLogTruck(root, tint);
             else if (prefab == null && !rodin) Debug.LogWarning($"RR_TRAFFIC missing prefab Vehicles/{modelName}");
             if (prefab != null)
             {

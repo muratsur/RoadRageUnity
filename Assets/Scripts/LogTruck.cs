@@ -42,16 +42,23 @@ namespace RoadRage.UnityRemake
             var amber = Mat("Log Truck Amber", new Color(1f, 0.62f, 0.08f), 0f, 0.6f, emissive: 1.4f);
             var tail = Mat("Log Truck Tail", new Color(0.85f, 0.05f, 0.03f), 0f, 0.6f, emissive: 1.1f);
             var head = Mat("Log Truck Headlight", new Color(1f, 0.96f, 0.85f), 0f, 0.9f, emissive: 1.6f);
-            var strap = Mat("Log Truck Strap", new Color(0.92f, 0.30f, 0.08f), 0f, 0.3f);
             if (glass == null) glass = Mat("Log Truck Glass", new Color(0.10f, 0.14f, 0.17f), 0.2f, 0.95f);
 
             BuildTractor(body, cab, chrome, frame, tyre, amber, head, glass);
             BuildTrailer(body, frame, chrome, tyre, tail);
+            return AddLoad(root, DeckTop, LogCentreZ, LogLength);
+        }
 
+        /// Puts a strapped load of logs on a truck body built elsewhere - a Rodin model -
+        /// in the root's frame: `deckTop` is the bed's height, `centreZ` the middle of the
+        /// load along the truck, `logLength` how long the logs are.
+        public static LogTruckCargo AddLoad(Transform root, float deckTop, float centreZ, float logLength)
+        {
+            var strap = Mat("Log Truck Strap", new Color(0.92f, 0.30f, 0.08f), 0f, 0.3f);
             var cargoRoot = new GameObject("Log Load").transform;
-            cargoRoot.SetParent(body, false);
+            cargoRoot.SetParent(root, false);
             var cargo = root.gameObject.AddComponent<LogTruckCargo>();
-            BuildLoad(cargoRoot, strap, cargo);
+            BuildLoad(cargoRoot, strap, cargo, deckTop, centreZ, logLength);
             cargo.Bind(cargoRoot);
             return cargo;
         }
@@ -141,13 +148,14 @@ namespace RoadRage.UnityRemake
         }
 
         /// Three courses of logs, four, four and three, with straps over the top.
-        private static void BuildLoad(Transform cargoRoot, Material strap, LogTruckCargo cargo)
+        private static void BuildLoad(Transform cargoRoot, Material strap, LogTruckCargo cargo,
+            float deckTop, float centreZ, float logLength)
         {
             var bark = BarkMaterial();
             var grain = EndGrainMaterial();
             var mesh = LogMesh();
             var courses = new[] { 4, 4, 3 };
-            var y = DeckTop + 0.12f;
+            var y = deckTop + 0.12f;
             var seed = 11;
             for (var course = 0; course < courses.Length; course++)
             {
@@ -159,10 +167,10 @@ namespace RoadRage.UnityRemake
                     var jitter = ((seed >> 8) & 0xff) / 255f;
                     var r = Mathf.Lerp(0.27f, 0.33f, jitter);
                     var x = (i - (count - 1) * 0.5f) * 0.56f;
-                    var length = LogLength + Mathf.Lerp(-0.35f, 0.25f, 1f - jitter);
+                    var length = logLength + Mathf.Lerp(-0.35f, 0.25f, 1f - jitter);
                     var log = new GameObject("Log");
                     log.transform.SetParent(cargoRoot, false);
-                    log.transform.localPosition = new Vector3(x, y + radius, LogCentreZ + (jitter - 0.5f) * 0.3f);
+                    log.transform.localPosition = new Vector3(x, y + radius, centreZ + (jitter - 0.5f) * 0.3f);
                     log.transform.localRotation = Quaternion.Euler(0f, 0f, jitter * 360f);
                     log.transform.localScale = new Vector3(r, r, length);
                     log.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -175,11 +183,13 @@ namespace RoadRage.UnityRemake
             }
 
             var top = y + 0.08f;
-            foreach (var z in new[] { 0.2f, -2.3f, -4.8f, -7.0f })
+            // Four straps spread along the load, wherever the load sits.
+            foreach (var along in new[] { 0.31f, 0.07f, -0.17f, -0.37f })
             {
+                var z = centreZ + along * logLength;
                 Box(cargoRoot, "Strap", new Vector3(0f, top, z), new Vector3(2.4f, 0.03f, 0.09f), strap);
                 foreach (var x in new[] { -1.22f, 1.22f })
-                    Box(cargoRoot, "Strap", new Vector3(x, (DeckTop + top) * 0.5f, z), new Vector3(0.03f, top - DeckTop, 0.09f), strap);
+                    Box(cargoRoot, "Strap", new Vector3(x, (deckTop + top) * 0.5f, z), new Vector3(0.03f, top - deckTop, 0.09f), strap);
             }
         }
 
@@ -268,7 +278,7 @@ namespace RoadRage.UnityRemake
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = "Log Bark", wrapMode = TextureWrapMode.Repeat };
             var dark = new Color(0.22f, 0.19f, 0.16f);
             var grey = new Color(0.47f, 0.44f, 0.39f);
-            var inner = new Color(0.66f, 0.38f, 0.18f);
+            var inner = new Color(0.50f, 0.33f, 0.20f);
             var pixels = new Color[w * h];
             for (var y = 0; y < h; y++)
             for (var x = 0; x < w; x++)
@@ -280,7 +290,8 @@ namespace RoadRage.UnityRemake
                 var patch = Mathf.PerlinNoise(u * 5f + 13f, v * 7f + 3f);
                 var fine = Mathf.PerlinNoise(u * 60f, v * 30f);
                 var c = Color.Lerp(dark, grey, Mathf.SmoothStep(0.35f, 0.62f, fissure));
-                if (patch > 0.64f) c = Color.Lerp(c, inner, Mathf.Clamp01((patch - 0.64f) * 6f));
+                // Inner bark only where a strip has come away: rare, and never fully bright.
+                if (patch > 0.72f) c = Color.Lerp(c, inner, Mathf.Clamp01((patch - 0.72f) * 5f) * 0.6f);
                 c *= 0.85f + fine * 0.3f;
                 c.a = 1f;
                 pixels[y * w + x] = c;
