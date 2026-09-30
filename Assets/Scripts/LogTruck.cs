@@ -661,6 +661,7 @@ namespace RoadRage.UnityRemake
             Simulate(dt);
             HitPlayer();
             HitTraffic();
+            KeepOutOfVehicles();
             Place();
         }
 
@@ -779,6 +780,48 @@ namespace RoadRage.UnityRemake
             pitchRate += Random.Range(-90f, 90f);
             if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.35f);
         }
+
+        /// A log on the road is pushed out of any vehicle it lies in - wrecks and its own
+        /// truck included. Only live traffic was tested, and only to wreck it, so a log
+        /// came to rest through the wheels of the rig it fell off, or a crashed car
+        /// slid over one. Three points along the log are tested against each hull (a
+        /// folded rig as its cab and trailer), and the log steps out sideways, towards
+        /// whichever side leaves it on the road.
+        private void KeepOutOfVehicles()
+        {
+            // Still up at deck height it is coming off its own load, not lying in anything.
+            if (height > 1.4f) return;
+            var sin = Mathf.Sin(yaw * Mathf.Deg2Rad);
+            var cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car == null || (car == source && age < 0.5f)) continue;
+                for (var step = 0; step < 8; step++)
+                {
+                    var inside = false;
+                    var towards = 0f;
+                    foreach (var t in SamplePoints)
+                    {
+                        var along = distance + cos * t * halfLength - car.RoadDistance;
+                        var across = lateral + sin * t * halfLength - car.LaneOffset;
+                        if (!car.Touches(along, across, radius, radius)) continue;
+                        inside = true;
+                        towards += across;
+                    }
+                    if (!inside) break;
+                    var side = Mathf.Abs(towards) < 0.01f ? (lateral >= car.LaneOffset ? 1f : -1f) : Mathf.Sign(towards);
+                    var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent;
+                    if (Mathf.Abs(lateral + side * 0.5f) > edge) side = -side;
+                    lateral += side * 0.25f;
+                    if (velocity.x * side < 0f) velocity.x = -velocity.x * 0.3f;
+                    velocity.z *= 0.8f;
+                }
+            }
+        }
+
+        private static readonly float[] SamplePoints = { -0.85f, 0f, 0.85f };
 
         /// Traffic that drives into a log is wrecked by it - once per car per log.
         private void HitTraffic()
