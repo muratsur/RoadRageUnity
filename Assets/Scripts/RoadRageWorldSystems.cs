@@ -494,15 +494,61 @@ namespace RoadRage.UnityRemake
             get
             {
                 if (Ragdolled) return ragdollExtent.y;
-                if (WreckYaw == 0f) return HalfWidth + TrailerSwing;
+                if (WreckYaw == 0f) return HalfWidth;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
-                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw)) + TrailerSwing;
+                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
             }
         }
 
         /// How far a jackknifed trailer reaches out beyond the rig's own box, set by
-        /// its TrailerHitch. Zero for anything without a trailer.
+        /// its TrailerHitch. Zero for anything without a trailer. Only a first, coarse
+        /// test uses it: the box it would make round a folded rig is a V's bounding box,
+        /// most of it empty road, and counted as the rig it took hits off bare asphalt
+        /// beside the wreck. Touches() then tests the cab and the trailer as themselves.
         public float TrailerSwing { get; set; }
+        private TrailerHitch hitch;
+        private bool hitchLooked;
+
+        /// Whether a box `halfLength` by `halfWidth` at `along`/`across` road metres
+        /// from this car touches it. For anything but a folded rig this is the plain
+        /// hull test; a folded rig is its cab and its trailer, each in its own frame.
+        public bool Touches(float along, float across, float halfLength, float halfWidth)
+        {
+            if (Mathf.Abs(along) > halfLength + LongitudinalExtent + TrailerSwing ||
+                Mathf.Abs(across) > halfWidth + LateralExtent + TrailerSwing)
+                return false;
+            if (!hitchLooked)
+            {
+                hitch = GetComponent<TrailerHitch>();
+                hitchLooked = true;
+            }
+            if (Ragdolled || hitch == null || Mathf.Abs(hitch.Fold) < 2f)
+                return Mathf.Abs(along) <= halfLength + LongitudinalExtent &&
+                       Mathf.Abs(across) <= halfWidth + LateralExtent;
+
+            // Road offsets into the rig's own frame: flip for an oncoming rig, then
+            // undo its wreck yaw (positive yaw turns +Z towards +X).
+            var x = across * Direction;
+            var z = along * Direction;
+            var yaw = WreckYaw * Mathf.Deg2Rad;
+            var lx = x * Mathf.Cos(yaw) - z * Mathf.Sin(yaw);
+            var lz = x * Mathf.Sin(yaw) + z * Mathf.Cos(yaw);
+            // The other box is taken as square to the part - near enough for a car.
+            var pad = (halfLength + halfWidth) * 0.5f;
+
+            // Cab: from just behind the fifth wheel to the nose.
+            var cabBack = hitch.HitchZ - 1.5f;
+            if (lz >= cabBack - pad && lz <= HalfLength + pad && Mathf.Abs(lx) <= HalfWidth + pad) return true;
+
+            // Trailer: turned by the fold about the fifth wheel.
+            var f = hitch.Fold * Mathf.Deg2Rad;
+            var hx = lx;
+            var hz = lz - hitch.HitchZ;
+            var tx = hx * Mathf.Cos(f) - hz * Mathf.Sin(f);
+            var tz = hx * Mathf.Sin(f) + hz * Mathf.Cos(f);
+            var tail = -HalfLength - hitch.HitchZ;
+            return tz >= tail - pad && tz <= 1f + pad && Mathf.Abs(tx) <= HalfWidth + pad;
+        }
         // --- IRoadVehicle -------------------------------------------------------
         public float ContactDistance => RoadDistance;
         public float ContactLateral => LaneOffset;
@@ -1502,11 +1548,8 @@ namespace RoadRage.UnityRemake
                 // the test, so contact only registered once the meshes had already
                 // interpenetrated by that much. They are compared at full size now, with
                 // a small positive skin, so the hit lands as the bumpers meet.
-                var reach = driver.HalfLength + traffic.LongitudinalExtent;
-                if (Mathf.Abs(longitudinal) > reach) continue;
                 var lateral = traffic.LaneOffset - driver.LateralOffset;
-                var lateralReach = driver.HalfWidth + traffic.LateralExtent;
-                if (Mathf.Abs(lateral) > lateralReach) continue;
+                if (!traffic.Touches(-longitudinal, -lateral, driver.HalfLength, driver.HalfWidth)) continue;
 
                 // Special Vehicle: Car Hauler ramp jump from behind
                 if (traffic.Role == VehicleRole.CarHauler && longitudinal > 0.4f && Mathf.Abs(lateral) < 1.4f && driver.SpeedKph > 35f)

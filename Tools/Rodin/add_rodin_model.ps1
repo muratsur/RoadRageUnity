@@ -42,7 +42,21 @@ if (-not $Zip -or -not (Test-Path $Zip)) { throw "Zip not found: '$Zip'" }
 if (-not $Name) { throw "Give the model a name, e.g. car_hatch_cyan_h1.5" }
 
 $project = Resolve-Path (Join-Path $PSScriptRoot "..\..")
-$target = Join-Path $project "Assets\Resources\TestAssets\$Name"
+$assets = Join-Path $project "Assets\Resources\TestAssets"
+$target = Join-Path $assets $Name
+
+# Each import notes the zip it came from. The same zip under a second name is
+# almost always -Latest picking up the same download again: with two downloads
+# made before either import, both imports take the newer one.
+$zipName = Split-Path $Zip -Leaf
+if (Test-Path $assets) {
+    foreach ($note in Get-ChildItem $assets -Recurse -Filter source.txt) {
+        $other = $note.Directory.Name
+        if ($other -ne $Name -and (Get-Content $note.FullName -Raw).Trim() -eq $zipName) {
+            throw "$zipName is already imported as '$other'. Pass the right zip's path instead of -Latest, e.g.`n  .\Tools\Rodin\add_rodin_model.ps1 `"$env:USERPROFILE\Downloads\<the other zip>.zip`" $Name"
+        }
+    }
+}
 $work = Join-Path $env:TEMP ("rodin_" + [guid]::NewGuid().ToString("N"))
 New-Item -ItemType Directory -Force $work | Out-Null
 
@@ -66,11 +80,12 @@ try {
     if (Test-Path $target) { Remove-Item $target -Recurse -Force }
     New-Item -ItemType Directory -Force $target | Out-Null
     Copy-Item $model.FullName (Join-Path $target ($Name + $model.Extension))
+    Set-Content (Join-Path $target "source.txt") $zipName
     Get-ChildItem $model.DirectoryName -File | Where-Object { $_.Extension -match "^\.(png|jpg|jpeg|tga)$" } |
         Copy-Item -Destination $target
 
     Write-Host ""
-    Write-Host "Added $Name from $($model.Name):"
+    Write-Host "Added $Name from $zipName ($($model.Name)):"
     Get-ChildItem $target | ForEach-Object { Write-Host "  $($_.Name)" }
     Write-Host ""
     Write-Host "Next: in Unity, Road Rage > Set Up Rodin Models, then play Greenwood."

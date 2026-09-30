@@ -10743,6 +10743,10 @@ namespace RoadRage.UnityRemake
                 if (logCabTemplate != null && logTrailerTemplate != null)
                 {
                     Debug.Log($"RR_RODIN log truck '{cab.name}' + '{trailer.name}' drives in traffic, articulated");
+                    if (TemplateTriangles(logCabTemplate) == TemplateTriangles(logTrailerTemplate))
+                        Debug.LogWarning($"RR_RODIN '{cab.name}' and '{trailer.name}' look like the same model " +
+                                         "(same triangle count) - the cab was probably imported from the trailer's " +
+                                         "zip. Re-import the cab from its own zip.");
                     return;
                 }
                 logCabTemplate = null;
@@ -10848,6 +10852,14 @@ namespace RoadRage.UnityRemake
             var native = Mathf.Max(bounds.size.x, bounds.size.z);
             NormalizeVehicleVisual(visual, byHeight ? native * size / bounds.size.y : size);
             return visual;
+        }
+
+        private static long TemplateTriangles(GameObject template)
+        {
+            var total = 0L;
+            foreach (var r in template.GetComponentsInChildren<Renderer>(true))
+                if (r.enabled) total += Triangles(r);
+            return total;
         }
 
         private static float VisualLength(GameObject visual) =>
