@@ -2823,7 +2823,10 @@ namespace RoadRage.UnityRemake
         /// wider than the real one, so the real bank is taken from the real road's edge
         /// and laid from the game's, and eased in over the first 6 m so the shoulder and
         /// rail stay level with the road.
-        private static float RealGround(float distance, float lateral)
+        private static float RealGround(float distance, float lateral) => RealGround(distance, lateral, true);
+
+        /// The same without the test models' levelled plots: the land as it really is.
+        private static float RealGround(float distance, float lateral, bool withPads)
         {
             var route = RoadPath.Route;
             if (route == null || !route.HasTerrain) return 0f;
@@ -2832,7 +2835,7 @@ namespace RoadRage.UnityRemake
             if (across <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
             real = RealGroundLimit * (float)System.Math.Tanh(real / RealGroundLimit);
-            real = OnBuildingPads(distance, lateral, real);
+            if (withPads) real = OnBuildingPads(distance, lateral, real);
             return real * Mathf.SmoothStep(0f, 1f, across / 6f);
         }
 
@@ -7894,7 +7897,10 @@ namespace RoadRage.UnityRemake
                 if (!float.IsNaN(edge))
                 {
                     var sum = 0f;
-                    for (var k = 0; k < 3; k++) sum += RealGround(at, side * (edge + 20f * k));
+                    // The land itself: a test model's plot, cut in at road level, made
+                    // the bank look low enough for water, and the lake's basin was dug
+                    // into the plot - the shining line running up to the townhouse.
+                    for (var k = 0; k < 3; k++) sum += RealGround(at, side * (edge + 20f * k), false);
                     real = sum / 3f < 2.5f;
                 }
             }
