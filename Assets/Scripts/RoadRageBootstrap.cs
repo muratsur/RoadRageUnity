@@ -873,6 +873,9 @@ namespace RoadRage.UnityRemake
         private void OnApplicationQuit()
         {
             GameState.FlushDailyProgress();
+            // Leaving play mode keeps runtime edits to the pipeline asset, so a Save Project
+            // could write Greenwood's settings into it for every biome.
+            ApplyBiomeRenderCost(-1);
         }
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
@@ -1813,6 +1816,8 @@ namespace RoadRage.UnityRemake
             }
             probe.mode = ReflectionProbeMode.Realtime;
             probe.refreshMode = ReflectionProbeRefreshMode.ViaScripting;
+            // One face a frame: all six at once put a 10 ms bump in the frame four times a second.
+            probe.timeSlicingMode = ReflectionProbeTimeSlicingMode.IndividualFaces;
             // Sized for the road corridor, not the skyline: the surfaces that need a
             // reflection are asphalt, kerbs, glass and car paint within ~30 m of the player.
             probe.resolution = RichDetailBudget ? 256 : 64;
@@ -5622,6 +5627,32 @@ namespace RoadRage.UnityRemake
             {
                 Destroy(liveChunks[key]);
                 liveChunks.Remove(key);
+            }
+            if (OverRealTerrain) PrewarmGrid(centre + ChunksAhead + 1);
+        }
+
+        private const int GridPrewarmPerFrame = 64;
+        private long gridPrewarmRow = long.MaxValue;
+        private int gridPrewarmColumn;
+
+        /// Fills the height cache for the next chunk a few corners a frame, so the chunk's
+        /// BuildTerrainGrid finds them there: 5,000 misses cost 40 ms in one frame, every 150 m.
+        private void PrewarmGrid(int chunk)
+        {
+            var firstRow = (long)Mathf.Floor((chunk * ChunkLength - 2f - GridRowOffset) / GridRowStep);
+            var lastRow = (long)Mathf.Ceil(((chunk + 1) * ChunkLength + 2f - GridRowOffset) / GridRowStep);
+            if (gridPrewarmRow < firstRow || gridPrewarmRow > lastRow + 1)
+            {
+                gridPrewarmRow = firstRow;
+                gridPrewarmColumn = 0;
+            }
+            var across = GridColumns.Length;
+            for (var n = 0; n < GridPrewarmPerFrame && gridPrewarmRow <= lastRow; n++)
+            {
+                GridCorner(gridPrewarmRow, gridPrewarmColumn);
+                if (++gridPrewarmColumn < across) continue;
+                gridPrewarmColumn = 0;
+                gridPrewarmRow++;
             }
         }
 
