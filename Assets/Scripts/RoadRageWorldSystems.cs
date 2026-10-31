@@ -509,6 +509,27 @@ namespace RoadRage.UnityRemake
         private TrailerHitch hitch;
         private bool hitchLooked;
 
+        /// A rig whose trailer is folded: the contact pass then takes this body as the
+        /// cab alone, and the trailer, a contact body of its own (TrailerHitch), as
+        /// the rest. As one straight box the rig blocked road where the trailer no
+        /// longer was, and traffic drove through the trailer where it was.
+        private bool FoldedRig
+        {
+            get
+            {
+                if (!hitchLooked)
+                {
+                    hitch = GetComponent<TrailerHitch>();
+                    hitchLooked = true;
+                }
+                return !Ragdolled && hitch != null && Mathf.Abs(hitch.Fold) >= 2f;
+            }
+        }
+
+        /// The cab's part of a folded rig: from just behind the fifth wheel to the nose.
+        private float CabCentre => (HalfLength + hitch.HitchZ - 1.5f) * 0.5f;
+        private float CabHalfLength => (HalfLength - hitch.HitchZ + 1.5f) * 0.5f;
+
         /// Whether a box `halfLength` by `halfWidth` at `along`/`across` road metres
         /// from this car touches it. For anything but a folded rig this is the plain
         /// hull test; a folded rig is its cab and its trailer, each in its own frame.
@@ -517,12 +538,7 @@ namespace RoadRage.UnityRemake
             if (Mathf.Abs(along) > halfLength + LongitudinalExtent + TrailerSwing ||
                 Mathf.Abs(across) > halfWidth + LateralExtent + TrailerSwing)
                 return false;
-            if (!hitchLooked)
-            {
-                hitch = GetComponent<TrailerHitch>();
-                hitchLooked = true;
-            }
-            if (Ragdolled || hitch == null || Mathf.Abs(hitch.Fold) < 2f)
+            if (!FoldedRig)
                 return Mathf.Abs(along) <= halfLength + LongitudinalExtent &&
                        Mathf.Abs(across) <= halfWidth + LateralExtent;
 
@@ -550,16 +566,29 @@ namespace RoadRage.UnityRemake
             return tz >= tail - pad && tz <= 1f + pad && Mathf.Abs(tx) <= HalfWidth + pad;
         }
         // --- IRoadVehicle -------------------------------------------------------
-        public float ContactDistance => RoadDistance;
-        public float ContactLateral => LaneOffset;
-        public float ContactHalfLength => LongitudinalExtent;
-        public float ContactHalfWidth => LateralExtent;
+        public float ContactDistance => FoldedRig
+            ? RoadDistance + Direction * CabCentre * Mathf.Cos(WreckYaw * Mathf.Deg2Rad)
+            : RoadDistance;
+        public float ContactLateral => FoldedRig
+            ? LaneOffset + Direction * CabCentre * Mathf.Sin(WreckYaw * Mathf.Deg2Rad)
+            : LaneOffset;
+        public float ContactHalfLength => FoldedRig
+            ? Mathf.Abs(CabHalfLength * Mathf.Cos(WreckYaw * Mathf.Deg2Rad)) + Mathf.Abs(HalfWidth * Mathf.Sin(WreckYaw * Mathf.Deg2Rad))
+            : LongitudinalExtent;
+        public float ContactHalfWidth => FoldedRig
+            ? Mathf.Abs(CabHalfLength * Mathf.Sin(WreckYaw * Mathf.Deg2Rad)) + Mathf.Abs(HalfWidth * Mathf.Cos(WreckYaw * Mathf.Deg2Rad))
+            : LateralExtent;
         public float ContactHeight => verticalOffset;
         /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
         /// the pair meeting in the middle.
         /// A car the physics owns cannot be pushed by the pass; everything else moves
         /// round it, as round any wreck lying in the road.
-        public float ContactMass => Ragdolled ? 1000f : HalfLength * HalfWidth;
+        public float ContactMass => Ragdolled ? 1000f
+            // A loaded rig is not shoved about by a car, and a wrecked one not at all:
+            // at plain footprint mass the player's pickup slid a wrecked truck aside
+            // and opened the road.
+            : Role == VehicleRole.LogTruck ? HalfLength * HalfWidth * (IsWreck ? 60f : 6f)
+            : HalfLength * HalfWidth;
         /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
         /// hole in the road that police and traffic drove straight through.
         public bool ContactActive => isActiveAndEnabled;

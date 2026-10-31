@@ -487,7 +487,7 @@ namespace RoadRage.UnityRemake
     /// one way; while the wreck still rolls the fold keeps opening, as a jackknife does,
     /// until it meets the cab; stopped, it stays where it ended. The trailer's sideways
     /// reach is handed to the controller, so the contact pass sees the folded trailer.
-    public sealed class TrailerHitch : MonoBehaviour
+    public sealed class TrailerHitch : MonoBehaviour, IRoadVehicle
     {
         /// About where a trailer's front corner meets the back of the cab.
         private const float MaxFold = 70f;
@@ -511,6 +511,44 @@ namespace RoadRage.UnityRemake
 
         /// Degrees a second; positive swings the trailer's tail to the rig's left.
         public void Kick(float degreesPerSecond) => foldRate += degreesPerSecond;
+
+        // --- IRoadVehicle: the folded trailer as a body of its own -------------------
+        // Active only while the rig is a folded wreck; the rig's own contact box is then
+        // its cab alone. Straight, the rig's box covers the trailer as it always did.
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+
+        public bool ContactActive
+        {
+            get
+            {
+                if (car == null) car = GetComponent<TrafficCarController>();
+                return isActiveAndEnabled && car != null && car.IsWreck && !car.Ragdolled && Mathf.Abs(fold) >= 2f;
+            }
+        }
+
+        /// The trailer's middle in the rig's frame, turned by the rig's wreck yaw.
+        private Vector2 TrailerCentre()
+        {
+            var f = fold * Mathf.Deg2Rad;
+            var x = -trailerLength * 0.5f * Mathf.Sin(f);
+            var z = HitchZ - trailerLength * 0.5f * Mathf.Cos(f);
+            var y = car.WreckYaw * Mathf.Deg2Rad;
+            return new Vector2(x * Mathf.Cos(y) + z * Mathf.Sin(y), -x * Mathf.Sin(y) + z * Mathf.Cos(y));
+        }
+
+        private float TrailerTurn => (car.WreckYaw + fold) * Mathf.Deg2Rad;
+        public float ContactDistance => car.RoadDistance + car.Direction * TrailerCentre().y;
+        public float ContactLateral => car.LaneOffset + car.Direction * TrailerCentre().x;
+        public float ContactHalfLength =>
+            Mathf.Abs(trailerLength * 0.5f * Mathf.Cos(TrailerTurn)) + Mathf.Abs(car.HalfWidth * Mathf.Sin(TrailerTurn));
+        public float ContactHalfWidth =>
+            Mathf.Abs(trailerLength * 0.5f * Mathf.Sin(TrailerTurn)) + Mathf.Abs(car.HalfWidth * Mathf.Cos(TrailerTurn));
+        public float ContactHeight => 0f;
+        /// A wrecked trailer on its side of the road is not pushed by anything.
+        public float ContactMass => 1000f;
+        public void ApplyContactPush(float alongRoad, float acrossRoad) { }
 
         /// A revived rig drives off straight.
         public void Straighten()

@@ -84,7 +84,6 @@ Shader "RoadRage/TerrainSplat"
                 float4 tangentWS  : TEXCOORD2;
                 float4 color      : TEXCOORD3;
                 float  fogCoord   : TEXCOORD4;
-                float4 shadowCoord: TEXCOORD5;
             };
 
             Varyings vert (Attributes input)
@@ -98,7 +97,6 @@ Shader "RoadRage/TerrainSplat"
                 o.tangentWS = float4(n.tangentWS, input.tangentOS.w * GetOddNegativeScale());
                 o.color = input.color;
                 o.fogCoord = ComputeFogFactor(p.positionCS.z);
-                o.shadowCoord = GetShadowCoord(p);
                 return o;
             }
 
@@ -130,7 +128,13 @@ Shader "RoadRage/TerrainSplat"
                 inputData.positionWS = input.positionWS;
                 inputData.normalWS = normalize(mul(normalTS, tbn));
                 inputData.viewDirectionWS = GetWorldSpaceNormalizeViewDir(input.positionWS);
-                inputData.shadowCoord = input.shadowCoord;
+                // Per pixel, as URP Lit does with cascades. Taken per vertex and
+                // interpolated, a ground triangle across the boundary between the two
+                // shadow cascades (36 m from the camera) blended coordinates from two
+                // different shadow maps and sampled nonsense between them: a thin bright
+                // line along the ground at that distance - "the white stripe through the
+                // trees", which kept its place on screen because it moves with the camera.
+                inputData.shadowCoord = TransformWorldToShadowCoord(input.positionWS);
                 inputData.fogCoord = input.fogCoord;
                 inputData.bakedGI = SampleSH(inputData.normalWS);
                 inputData.normalizedScreenSpaceUV = GetNormalizedScreenSpaceUV(input.positionCS);
