@@ -8426,7 +8426,8 @@ namespace RoadRage.UnityRemake
         }
 
         /// How far from the road the pack's trees are planted, metres.
-        private const float ExternalTreeReach = 45f;
+        /// 25, down from 45: those 20 m cost about 7 ms of the frame at 1440p.
+        private const float ExternalTreeReach = 25f;
         private static bool externalTreeReported;
 
         /// Keeps a pack tree affordable: its lower LODs take over at twice the usual
@@ -9395,12 +9396,8 @@ namespace RoadRage.UnityRemake
 
         private Material skyMaterial;
 
-        /// Greenwood gets a baked overcast panorama as its skybox (Tools/Sky/build_sky.py);
-        /// the other biomes keep the fogged solid-colour background they were tuned for.
-        /// A copy of the material is used because the horizon colour is updated every
-        /// frame, and writing to the asset loaded from Resources would edit it on disk
-        /// when playing in the editor.
         private static int pipelineMsaa;
+        private static float pipelineLodBias;
 
         /// Greenwood is fill-bound (7 ms per megapixel), and 4x MSAA does little for alpha-tested
         /// leaves: off plus 0.85 render scale took 1440p from 43 ms to 24 ms with the 1.0 density.
@@ -9409,11 +9406,22 @@ namespace RoadRage.UnityRemake
         {
             var pipeline = UniversalRenderPipeline.asset;
             if (pipeline == null || !RichDetailBudget) return;
-            if (pipelineMsaa == 0) pipelineMsaa = pipeline.msaaSampleCount;
+            if (pipelineMsaa == 0)
+            {
+                pipelineMsaa = pipeline.msaaSampleCount;
+                pipelineLodBias = QualitySettings.lodBias;
+            }
             pipeline.msaaSampleCount = biomeIndex == 0 ? 1 : pipelineMsaa;
+            // The quality level's bias of 2 held the pack trees' full-detail LODs twice as far out.
+            QualitySettings.lodBias = biomeIndex == 0 ? 1f : pipelineLodBias;
             pipeline.renderScale = biomeIndex == 0 ? 0.85f : 1f;
         }
 
+        /// Greenwood gets a baked overcast panorama as its skybox (Tools/Sky/build_sky.py);
+        /// the other biomes keep the fogged solid-colour background they were tuned for.
+        /// A copy of the material is used because the horizon colour is updated every
+        /// frame, and writing to the asset loaded from Resources would edit it on disk
+        /// when playing in the editor.
         private void ApplyBiomeSky(int biomeIndex)
         {
             ApplyBiomeRenderCost(biomeIndex);
