@@ -7490,7 +7490,8 @@ namespace RoadRage.UnityRemake
             // untouched - that 0.34 is the figure Gate A arrived at after measuring the
             // device at under 1 fps, and screen coverage of alpha-tested foliage is still
             // what has to come down there.
-            : 1.45f;
+            // Greenwood on real terrain is back at 1.0: 1.45 cost 6 ms of a 43 ms frame at 1440p.
+            : biomeName == Biomes[0] ? 1f : 1.45f;
 
         /// Scatters a prop along a lateral band beside the road. Biomes read as real when
         /// props sit in overlapping depth bands (verge / near / mid / far) rather than as a
@@ -9399,8 +9400,23 @@ namespace RoadRage.UnityRemake
         /// A copy of the material is used because the horizon colour is updated every
         /// frame, and writing to the asset loaded from Resources would edit it on disk
         /// when playing in the editor.
+        private static int pipelineMsaa;
+
+        /// Greenwood is fill-bound (7 ms per megapixel), and 4x MSAA does little for alpha-tested
+        /// leaves: off plus 0.85 render scale took 1440p from 43 ms to 24 ms with the 1.0 density.
+        /// shortcut: remembers one asset's MSAA, upgrade if a tier ever changes mid-session.
+        private void ApplyBiomeRenderCost(int biomeIndex)
+        {
+            var pipeline = UniversalRenderPipeline.asset;
+            if (pipeline == null || !RichDetailBudget) return;
+            if (pipelineMsaa == 0) pipelineMsaa = pipeline.msaaSampleCount;
+            pipeline.msaaSampleCount = biomeIndex == 0 ? 1 : pipelineMsaa;
+            pipeline.renderScale = biomeIndex == 0 ? 0.85f : 1f;
+        }
+
         private void ApplyBiomeSky(int biomeIndex)
         {
+            ApplyBiomeRenderCost(biomeIndex);
             if (skyMaterial != null) Destroy(skyMaterial);
             skyMaterial = null;
             if (biomeIndex == 0)
