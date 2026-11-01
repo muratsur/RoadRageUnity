@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fa2df60784cc4a5792e36ae3204cd641, type: 3}
+  m_Name: MoselVegetation
+  m_EditorClassIdentifier: Assembly-CSharp::RoadRage.UnityRemake.ExternalVegetation
+  Trees:
+  - {fileID: 8185793832496569501, guid: 3bcf6e78553a7f54c8bf39912b4124e3, type: 3}
+  - {fileID: 8185793832496569501, guid: 632cb5ba8e6554c4d895ced6ffb22702, type: 3}
+  - {fileID: 8185793832496569501, guid: 189457b8a8df4454e955c74118b57a4d, type: 3}
+  - {fileID: 8185793832496569501, guid: 35e42d18fc5193b42b806528fbefddeb, type: 3}
+  - {fileID: 8185793832496569501, guid: 396e4e2bcb4c3374c90c240769020c51, type: 3}
+  - {fileID: 8185793832496569501, guid: 209b15dd421b315458b25e6457874d89, type: 3}
+  - {fileID: 1991462268964490261, guid: 733e0985fe2f8674981f217143ec930a, type: 3}
+  - {fileID: 1991462268964490261, guid: 39460f06c7d6a25459bdfcf49f99a801, type: 3}
+  - {fileID: 1991462268964490261, guid: 48c03ef913cc61846a12cb8f6dc7ff8e, type: 3}
+  - {fileID: 1991462268964490261, guid: ea00aff9c9f90504daf5192b2b6f6527, type: 3}
+  - {fileID: 1991462268964490261, guid: 0a37a79028ba9924a819af7ab8357711, type: 3}
+  - {fileID: 1991462268964490261, guid: 43d33c55046b8e6498be1b030c29b239, type: 3}
+  YoungTrees:
+  - {fileID: 6313178463543892440, guid: 00504f464b42d1d45a2dc24ba9eade1e, type: 3}
+  - {fileID: 6313178463543892440, guid: 0bd944d7ec2d7e14d897ddb1e56c4d88, type: 3}
+  - {fileID: 6313178463543892440, guid: cbf47b70bd6ac6645b3d0a0a21175184, type: 3}
+  - {fileID: 6313178463543892440, guid: b7188c4920b915d41a1c3a5cdf968f12, type: 3}
+  Broadleaf: []
+  Source: Mosel Valley (Assets\Realistic Tree\Prefabs\URP)

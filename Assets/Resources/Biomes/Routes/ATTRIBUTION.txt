@@ -8,3 +8,11 @@ Baden-Baden to Freudenstadt. Built by Tools/Terrain/build_b500_road.py from:
 - Road centreline: a Google My Maps directions export (Tools/Terrain/b500.kml).
   For prototyping only: rebuild from an OpenStreetMap export (ODbL, needs
   "(c) OpenStreetMap contributors" in the credits) before release.
+
+The Mosel Valley's road and roadside follow the B53, Piesport to Zell. Built by
+Tools/Terrain/build_b53.py from:
+
+- Road centreline: (c) OpenStreetMap contributors, ODbL.
+- Terrain: (c) GeoBasis-DE / LVermGeoRP, dl-de/by-2-0, www.lvermgeo.rlp.de [Daten
+  bearbeitet].
+- Land cover and elevation: ESA WorldCover and AWS Terrain Tiles, as above.

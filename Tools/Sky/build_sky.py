@@ -53,7 +53,23 @@ PRESETS = {
         haze=(0.74, 0.75, 0.77), haze_distance=26000.0,
         sun_glow=(1.0, 0.97, 0.92), sun_glow_strength=0.10,
     ),
+    # Fair-weather cumulus over the Mosel: blue sky, broken white cloud, warm sun.
+    "mosel": dict(
+        seed=53,
+        altitude=1500.0,
+        scale=4200.0,
+        billow_scale=800.0,
+        coverage=0.44,
+        thickness=1.9,
+        sun_azimuth=150.0,
+        sun_elevation=48.0,
+        sky_zenith=(0.16, 0.33, 0.62), sky_horizon=(0.52, 0.64, 0.78),
+        cloud_lit=(0.86, 0.85, 0.82), cloud_base=(0.48, 0.51, 0.58),
+        haze=(0.58, 0.67, 0.78), haze_distance=30000.0,
+        sun_glow=(1.0, 0.95, 0.84), sun_glow_strength=0.18,
+    ),
 }
+
 
 
 # ---------------------------------------------------------------- noise

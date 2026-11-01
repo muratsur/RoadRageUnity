@@ -295,13 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
-            "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST"
+            "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
+            "MOSEL VALLEY"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -585,6 +586,7 @@ namespace RoadRage.UnityRemake
             pickerSeen = true;
             var value = requested.ToLowerInvariant();
 
+            if (value.Contains("mosel")) return Biomes[MoselIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -854,7 +856,7 @@ namespace RoadRage.UnityRemake
 			}
 
 			// Number keys 1-0 for instant biome hot-switching
-			for (var i = 0; i < ActiveBiomes.Length; i++)
+			for (var i = 0; i < Mathf.Min(10, ActiveBiomes.Length); i++)
 			{
 				var digit = (i + 1) % 10;
 				if (GameInput.GetNumberKey(digit))
@@ -1417,6 +1419,10 @@ namespace RoadRage.UnityRemake
             // The Mummelsee: a small, deep, dark lake in a spruce hollow. Near black,
             // glossy, so it shows the sky and the treeline through the probe.
             MakeMaterial("Mountain Lake", new Color(0.03f, 0.045f, 0.045f), 0f, 0.94f);
+            BiomeMaterial("Mosel Water", "MoselVillage", "", "T_water_N", new Color(0.035f, 0.085f, 0.085f), 0f, 0.86f);
+            BiomeMaterial("Mosel House", "MoselVillage", "T_fachwerk_D", "", Color.white, 0f, 0.15f);
+            BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
+            BiomeMaterial("Mosel Vine", "MoselVillage", "T_vine_D", "", Color.white, 0f, 0.1f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
                 new Color(0.56f, 0.57f, 0.54f), 0f, 0.2f), "ForestVillage", "T_rock_02_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Mountain", "ForestVillage", "T_mountain_D", "T_mountain_N",
@@ -2405,6 +2411,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
+            MoselIndex => new BiomeMood // MOSEL VALLEY - clear warm light down a deep river valley
+            {
+                FogDensity = 0.0016f, Fog = new Color(0.74f, 0.80f, 0.86f),
+                Sky = new Color(0.46f, 0.66f, 0.92f), Equator = new Color(0.62f, 0.66f, 0.62f),
+                Ground = new Color(0.26f, 0.24f, 0.18f), SunColor = new Color(1f, 0.93f, 0.78f),
+                SunIntensity = 1.35f, PostExposure = 0.05f, BloomIntensity = 0.15f, BloomThreshold = 4f,
+                AmbientIntensity = 1.1f, Saturation = 8f
+            },
             CanalTownIndex => new BiomeMood // CANAL TOWN - old quarter, warm haze over the water
             {
                 FogDensity = 0.0055f, Fog = new Color(0.56f, 0.47f, 0.38f),
@@ -2470,6 +2484,7 @@ namespace RoadRage.UnityRemake
             8 => "Cyber Ground",
             9 => "Hills Ground",
             CanalTownIndex => "Kowloon Ground",
+            MoselIndex => "Mosel Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2513,6 +2528,14 @@ namespace RoadRage.UnityRemake
             {
                 ("T_forest_litter", 0.5f, new Color(1.1f, 1.08f, 1.05f)),
                 ("T_forest_humus", 0.37f, new Color(1.15f, 1.12f, 1.1f)),
+                ("T_forest_verge", 0.62f, Color.white),
+            }, 0.1f);
+
+            // Mosel: green grass between the vines, dark slate earth in patches, road-edge gravel.
+            Splat("Mosel Ground", "ForestFloor", new[]
+            {
+                ("T_forest_humus", 0.5f, new Color(1.6f, 2.5f, 1.05f)),
+                ("T_forest_litter", 0.37f, new Color(1.2f, 1.12f, 1f)),
                 ("T_forest_verge", 0.62f, Color.white),
             }, 0.1f);
 
@@ -2695,7 +2718,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
+            var roadMaterial = biomeIndex == 0 || biomeIndex == MoselIndex ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
 
             // Road Edge & Terrain Integration per Biome Type:
@@ -2746,7 +2769,7 @@ namespace RoadRage.UnityRemake
                 BuildRibbon("Left Alien Verge", -1.70f, -1.0f, 0.03f, materials["Alien Floor"], relative: true);
                 BuildRibbon("Right Alien Verge", 1.0f, 1.70f, 0.03f, materials["Alien Floor"], relative: true);
             }
-            else if (biomeIndex == 0) // Greenwood Forest
+            else if (biomeIndex == 0 || biomeIndex == MoselIndex) // Greenwood Forest, Mosel Valley
             {
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
@@ -2766,7 +2789,7 @@ namespace RoadRage.UnityRemake
             // that has to be explained is worse than paint that does not.
             //
             // Greenwood is an unmarked single-lane forest road: no paint at all.
-            if (biomeIndex != 0)
+            if (biomeIndex != 0 && biomeIndex != MoselIndex)
             {
                 BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
                 BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
@@ -2775,7 +2798,7 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (biomeIndex == 0)
+            if (biomeIndex == 0 || biomeIndex == MoselIndex)
             {
                 // Two lanes each way, German markings: a double solid white centre line
                 // and 6 m dashes with 12 m gaps between the lanes. No edge or yellow
@@ -2827,6 +2850,8 @@ namespace RoadRage.UnityRemake
         /// Real heights beyond this are eased in (a 200 m valley side stays big but does
         /// not tower over the horizon ring the rest of the sky was tuned against).
         private const float RealGroundLimit = 90f;
+        /// The Mosel valley sides are the view: they keep nearly their full 300 m.
+        private const float MoselGroundLimit = 260f;
 
         /// The real ground beside the B500 (Road Rage > Bake B500 Terrain, from the LGL
         /// DGM1), relative to the road; 0 without the table. The game's carriageway is
@@ -2844,7 +2869,8 @@ namespace RoadRage.UnityRemake
             var across = Mathf.Abs(lateral) - edge;
             if (across <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
-            real = RealGroundLimit * (float)System.Math.Tanh(real / RealGroundLimit);
+            var limit = route == moselRoute ? MoselGroundLimit : RealGroundLimit;
+            real = limit * (float)System.Math.Tanh(real / limit);
             if (withPads) real = OnBuildingPads(distance, lateral, real);
             return real * Mathf.SmoothStep(0f, 1f, across / 6f);
         }
@@ -4828,7 +4854,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9 };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -4849,12 +4875,13 @@ namespace RoadRage.UnityRemake
         ///
         /// Greenwood was the last single-lane road, and a truck in the only lane each way
         /// could not be got past: it now has two each way (18 m of carriageway).
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2 : 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex || biomeIndex == MoselIndex ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
 
         private static RoadRoute greenwoodRoute;
+        private static RoadRoute moselRoute;
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -4863,6 +4890,14 @@ namespace RoadRage.UnityRemake
         /// road reads its shape through RoadPath.
         private static void ApplyBiomeRoute(int biomeIndex)
         {
+            if (biomeIndex == MoselIndex)
+            {
+                moselRoute ??= RoadRoute.Load("Biomes/Routes/b53");
+                if (moselRoute == null) Debug.LogWarning("Missing Biomes/Routes/b53 - the Mosel Valley keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE Mosel Valley follows the B53: {moselRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = moselRoute;
+                return;
+            }
             if (biomeIndex != 0)
             {
                 RoadPath.Route = null;
@@ -5618,6 +5653,9 @@ namespace RoadRage.UnityRemake
         /// stay at a fixed distance ahead and never enter or leave view. Real mountains
         private void UpdateStreaming(float playerDistance)
         {
+            // The Mosel flows: its ripples drift along the valley.
+            if (RoadPath.Route != null && RoadPath.Route == moselRoute)
+                materials["Mosel Water"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.035f));
             var centre = Mathf.FloorToInt(playerDistance / ChunkLength);
 
             for (var i = centre - ChunksBehind; i <= centre + ChunksAhead; i++)
@@ -5676,7 +5714,271 @@ namespace RoadRage.UnityRemake
 				case 8: BuildManhattanPhotorealPass(); break;
 				case 9: BuildHollywoodPhotorealPass(); break;
                 case CanalTownIndex: BuildCanalTown(); break;
+                case MoselIndex: BuildMoselValley(); break;
                 default: BuildForest(); break;
+            }
+        }
+
+        // ------------------------------------------------------------ MOSEL VALLEY
+
+        /// The real B53, Piesport to Zell (Tools/Terrain/build_b53.py): the river in the
+        /// valley floor, vine rows up the open slopes, half-timbered villages where the
+        /// land cover says built-up, broadleaf woods on the tops and a castle above
+        /// Bernkastel and Traben-Trarbach.
+        private const int MoselIndex = 14;
+        private const float MoselVineTop = 110f;
+        private static ExternalVegetation moselVegetation;
+        private static ExternalVegetation MoselVegetation =>
+            moselVegetation != null ? moselVegetation : moselVegetation = Resources.Load<ExternalVegetation>("Biomes/MoselVegetation");
+
+        /// Above the vines, or forest on the land cover where no parcel of vines stands.
+        private static bool MoselWood(float distance, float lateral)
+        {
+            if (RealGroundUnder(distance, lateral, 1f) > MoselVineTop) return true;
+            if (RoadPath.Route.CoverAt(distance, lateral) != RoadRoute.CoverForest) return false;
+            var at = RoadPath.Point(distance, lateral);
+            return TerrainNoise(at.x, at.z, 0.006f) <= 0f;
+        }
+
+        private static readonly string[] MoselHouses = { "SM_fachwerk_1", "SM_fachwerk_2", "SM_fachwerk_3", "SM_fachwerk_4" };
+
+        private void BuildMoselValley()
+        {
+            Random.InitState(53053 ^ chunkSeed);
+            Physics.SyncTransforms();
+            plantTally = new PlantTally();
+            StartCoroutine(ReportPlanting(segStart, plantTally, chunkRoot));
+            var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+
+            BuildMoselRiver();
+            BuildMoselVines(rail);
+            BuildMoselVillages(rail);
+            BuildGuardRail(materials["Forest Guard Rail"]);
+            for (var d = Mathf.Ceil(segStart / 50f) * 50f; d < segEnd; d += 50f)
+            for (var side = -1; side <= 1; side += 2)
+                PlaceRouteProp("SM_leitpfosten", d, side * (RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + 0.45f),
+                    FacingOncoming(d), "B500 Leitpfosten");
+            BuildTrafficSigns(rail);
+            // Woods on the land cover's forest and over the tops, above the vines.
+            for (var near = 30f; near < 420f; near += 40f)
+            {
+                var from = near;
+                ScatterBand(8f, from, from + 40f, (d, l, s) => MoselWood(d, l)
+                    ? SpawnForestPiece($"Mosel|{Random.Range(0, 12)}", d, l, 0f, 13f, 22f, "Forest Tree")
+                    : null);
+            }
+
+            BuildMoselRiverside(rail);
+
+            var places = RoadPath.Route.Places;
+            foreach (var i in new[] { 2, 6 })
+            {
+                if (i >= places.Length) continue;
+                foreach (var d in PassesOf(places[i].Distance, places[i].Distance))
+                {
+                    var side = RealGroundUnder(d, 170f, 1f) >= RealGroundUnder(d, -170f, 1f) ? 1 : -1;
+                    PlaceBiomeModelOnRoad("MoselVillage", "SM_burg", materials["Mosel Burg"], d, side * 170f, 0f,
+                        new Vector3(0f, 25f, 0f), Vector3.one, "Mosel Burg", false);
+                }
+            }
+        }
+
+        /// Willow and birch along the bank, and now and then a white excursion boat.
+        private void BuildMoselRiverside(float rail)
+        {
+            for (var d = Mathf.Ceil(segStart / 11f) * 11f; d < segEnd; d += 11f)
+            {
+                var row = (long)Mathf.Round((d - GridRowOffset) / GridRowStep);
+                var level = RiverLevel(row);
+                if (float.IsNaN(level)) continue;
+                for (var side = -1; side <= 1; side += 2)
+                for (var l = rail + 3f; l < 320f; l += 7f)
+                {
+                    var h = GridGroundY(RoadPath.Point(d, side * l)) - level;
+                    if (h < 0f)
+                    {
+                        // On the water: the boat keeps well out in the stream.
+                        if (Random.value < 0.004f)
+                        {
+                            var at = RoadPath.Point(d, side * (l + 45f));
+                            if (GridGroundY(at) < level - 0.1f)
+                            {
+                                var boat = BiomeModel("MoselVillage", "SM_boat", materials["Mosel House"]);
+                                if (boat != null)
+                                {
+                                    boat.name = "Mosel Boat";
+                                    boat.transform.SetPositionAndRotation(new Vector3(at.x, level, at.z),
+                                        Quaternion.LookRotation(Flat(RoadPath.Forward(d))));
+                                }
+                            }
+                        }
+                        break;
+                    }
+                    if (h < 3f && Random.value < 0.3f)
+                        SpawnForestPiece($"Mosel|y{Random.Range(0, 8)}", d, side * l, 0f, 9f, 15f, "Forest Tree");
+                }
+            }
+        }
+
+        /// The valley's lowest ground on a grid row where the land cover has water, a
+        /// little above it: DGM1 has the river as a flat surface, so a sheet at this level
+        /// shows only where the river really is and meets each bank where the bank rises
+        /// out of it. NaN where there is no river beside the road. Averaged over nearby
+        /// rows so the surface runs on smoothly along the valley.
+        private static float RiverLevel(long row)
+        {
+            var sum = 0f;
+            var count = 0;
+            var columns = GridColumns;
+            for (var r = row - 4; r <= row + 4; r++)
+            {
+                var low = float.PositiveInfinity;
+                var water = false;
+                for (var c = 0; c < columns.Length; c++)
+                {
+                    if (Mathf.Abs(columns[c]) > 600f) continue;
+                    var corner = GridCorner(r, c);
+                    low = Mathf.Min(low, corner.x);
+                    water |= RoadPath.Route.CoverAt(corner.y, corner.z) == RoadRoute.CoverWater;
+                }
+                if (!water) continue;
+                sum += low;
+                count++;
+            }
+            return count == 0 ? float.NaN : sum / count + 0.5f;
+        }
+
+        private void BuildMoselRiver()
+        {
+            var columns = GridColumns;
+            var firstRow = (long)Mathf.Floor((segStart - 2f - GridRowOffset) / GridRowStep);
+            var lastRow = (long)Mathf.Ceil((segEnd + 2f - GridRowOffset) / GridRowStep);
+            var vertices = new List<Vector3>();
+            var uv = new List<Vector2>();
+            var triangles = new List<int>();
+            for (var row = firstRow; row < lastRow; row++)
+            {
+                var levelA = RiverLevel(row);
+                var levelB = RiverLevel(row + 1);
+                if (float.IsNaN(levelA) || float.IsNaN(levelB)) continue;
+                var zA = GridRowZ(row);
+                var zB = GridRowZ(row + 1);
+                var cxA = RoadPath.CenterX(zA);
+                var cxB = RoadPath.CenterX(zB);
+                for (var c = 0; c + 1 < columns.Length; c++)
+                {
+                    var low = Mathf.Min(Mathf.Min(GridCornerY(row, c), GridCornerY(row, c + 1)),
+                        Mathf.Min(GridCornerY(row + 1, c), GridCornerY(row + 1, c + 1)));
+                    if (low >= Mathf.Max(levelA, levelB)) continue;
+                    var v = vertices.Count;
+                    vertices.Add(new Vector3(cxA + columns[c], levelA, zA));
+                    vertices.Add(new Vector3(cxB + columns[c], levelB, zB));
+                    vertices.Add(new Vector3(cxB + columns[c + 1], levelB, zB));
+                    vertices.Add(new Vector3(cxA + columns[c + 1], levelA, zA));
+                    for (var k = 0; k < 4; k++) uv.Add(new Vector2(vertices[v + k].x * 0.16f, vertices[v + k].z * 0.16f));
+                    triangles.Add(v); triangles.Add(v + 1); triangles.Add(v + 2);
+                    triangles.Add(v); triangles.Add(v + 2); triangles.Add(v + 3);
+                }
+            }
+            // "Ground" so ClearRoadCorridor leaves it where it is.
+            if (triangles.Count > 0)
+            {
+                var river = CreateMeshObject("Mosel River Ground", vertices.ToArray(), triangles.ToArray(),
+                    uv.ToArray(), materials["Mosel Water"]);
+                // Tangents for the ripple normal map.
+                river.GetComponent<MeshFilter>().sharedMesh.RecalculateTangents();
+            }
+        }
+
+        /// Rows of trained vines running straight up the open slopes, one mesh per batch:
+        /// a low green hedge standing on the drawn ground, in parcels with gaps between.
+        private void BuildMoselVines(float rail)
+        {
+            const float rowGap = 2.5f, segment = 2.5f, half = 0.38f, height = 1.5f;
+            var vertices = new List<Vector3>();
+            var uv = new List<Vector2>();
+            var triangles = new List<int>();
+            var covers = new int[5];
+            var placed = 0;
+            void Flush()
+            {
+                if (triangles.Count > 0)
+                    CreateMeshObject("Mosel Vines Ground", vertices.ToArray(), triangles.ToArray(), uv.ToArray(), materials["Mosel Vine"]);
+                vertices.Clear(); uv.Clear(); triangles.Clear();
+            }
+            void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            {
+                // Both sides with their own vertices: sharing them cancels the normals to black.
+                var v = vertices.Count;
+                vertices.Add(a); vertices.Add(b); vertices.Add(c); vertices.Add(d);
+                vertices.Add(a); vertices.Add(b); vertices.Add(c); vertices.Add(d);
+                // Each row its own part of the leaf texture, so rows do not match.
+                var u = Random.value;
+                for (var k = 0; k < 2; k++)
+                {
+                    uv.Add(new Vector2(u, 0f)); uv.Add(new Vector2(u + 0.5f, 0f)); uv.Add(new Vector2(u + 0.5f, 0.4f)); uv.Add(new Vector2(u, 0.4f));
+                }
+                triangles.Add(v); triangles.Add(v + 1); triangles.Add(v + 2);
+                triangles.Add(v); triangles.Add(v + 2); triangles.Add(v + 3);
+                triangles.Add(v + 4); triangles.Add(v + 6); triangles.Add(v + 5);
+                triangles.Add(v + 4); triangles.Add(v + 7); triangles.Add(v + 6);
+            }
+            for (var d = Mathf.Ceil(segStart / rowGap) * rowGap; d < segEnd; d += rowGap)
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var along = RoadPath.Forward(d) * half;
+                var a = RoadPath.Point(d, side * (rail + 3f));
+                a.y = GridGroundY(a);
+                for (var l = rail + 3f + segment; l < 260f; l += segment)
+                {
+                    var b = RoadPath.Point(d, side * l);
+                    b.y = GridGroundY(b);
+                    var cover = RoadPath.Route.CoverAt(d, side * l);
+                    covers[cover]++;
+                    var open = cover != RoadRoute.CoverWater && cover != RoadRoute.CoverBuilt &&
+                               (cover == RoadRoute.CoverOpen || TerrainNoise(b.x, b.z, 0.006f) > 0f) &&
+                               RealGroundUnder(d, side * l, 1f) < MoselVineTop;
+                    var slope = Mathf.Abs(b.y - a.y) / segment;
+                    // A gap between parcels now and then, and terraces of different size.
+                    var parcel = TerrainNoise(b.x, b.z, 0.03f) > -0.3f;
+                    if (open && parcel && slope > 0.1f)
+                    {
+                        // Narrower at the top and uneven along it: a trained vine, not a wall.
+                        var ua = Vector3.up * (height * (0.82f + 0.18f * Mathf.PerlinNoise(a.x * 0.7f, a.z * 0.7f)));
+                        var ub = Vector3.up * (height * (0.82f + 0.18f * Mathf.PerlinNoise(b.x * 0.7f, b.z * 0.7f)));
+                        var top = along * 0.45f;
+                        Face(a - along, b - along, b - top + ub, a - top + ua);
+                        Face(a + along, b + along, b + top + ub, a + top + ua);
+                        Face(a - top + ua, b - top + ub, b + top + ub, a + top + ua);
+                        placed++;
+                        if (vertices.Count > 60000) Flush();
+                    }
+                    a = b;
+                }
+            }
+            Flush();
+            Debug.Log($"RR_MOSEL vines at {segStart:0} m: {placed} segments; cover forest {covers[1]} open {covers[2]} built {covers[3]} water {covers[4]}");
+        }
+
+        private void BuildMoselVillages(float rail)
+        {
+            for (var d = Mathf.Ceil(segStart / 13f) * 13f; d < segEnd; d += 13f)
+            for (var side = -1; side <= 1; side += 2)
+            foreach (var setback in new[] { 10f, 26f })
+            {
+                var lateral = side * (rail + setback + Random.Range(-1.5f, 1.5f));
+                if (RoadPath.Route.CoverAt(d, lateral) != RoadRoute.CoverBuilt || Random.value > 0.55f) continue;
+                if (GroundSpread(d, lateral, 4f) > 3f) continue;
+                var at = RoadPath.Point(d, lateral);
+                // Clusters with lanes and gardens between, not one unbroken terrace.
+                if (TerrainNoise(at.x, at.z, 0.035f) < -0.15f) continue;
+                var ground = GridGroundY(at);
+                var house = BiomeModel("MoselVillage", MoselHouses[Random.Range(0, MoselHouses.Length)], materials["Mosel House"]);
+                if (house == null) continue;
+                house.name = "Mosel House";
+                house.transform.localScale = Vector3.one * Random.Range(0.72f, 0.92f);
+                house.transform.SetPositionAndRotation(new Vector3(at.x, ground, at.z),
+                    Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-4f, 4f), 0f));
             }
         }
 
@@ -7708,16 +8010,26 @@ namespace RoadRage.UnityRemake
             if (InHotelGrounds(distance, lateral)) return null;
             if (InTestAssetGround(distance, lateral)) return null;
             var split = entry.Split('|');
-            var external = split[0] == "External";
+            var external = split[0] == "External" || split[0] == "Mosel";
             var blackForest = external || split[0] == "BlackForest";
             GameObject model;
             if (external)
             {
-                var pool = split[1].StartsWith("y") ? ExternalYoungTrees
+                var pool = split[0] == "Mosel" ? (split[1].StartsWith("y") ? MoselVegetation.YoungTrees : MoselVegetation.Trees)
+                    : split[1].StartsWith("y") ? ExternalYoungTrees
                     : split[1].StartsWith("b") ? ExternalBroadleaf
                     : ExternalTrees;
                 var prefab = pool.Length > 0 ? pool[int.Parse(split[1].TrimStart('y', 'b')) % pool.Length] : null;
                 model = prefab != null ? Adopt(Instantiate(prefab)) : null;
+                // The broadleaf prefabs carry a falling-leaves effect, whose huge bounds
+                // would have the tree scaled down to nothing below.
+                if (model != null)
+                    foreach (var leaves in model.GetComponentsInChildren<ParticleSystem>(true))
+                    {
+                        var leafRenderer = leaves.GetComponent<ParticleSystemRenderer>();
+                        DestroyImmediate(leaves);
+                        if (leafRenderer != null) DestroyImmediate(leafRenderer);
+                    }
             }
             else
             {
@@ -9473,6 +9785,16 @@ namespace RoadRage.UnityRemake
                     Debug.LogWarning($"Sky shader '{(source.shader != null ? source.shader.name : "none")}' cannot draw on " +
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
+            }
+            else if (biomeIndex == MoselIndex)
+            {
+                var source = Resources.Load<Material>("Sky/M_sky_overcast");
+                var clouds = Resources.Load<Texture2D>("Sky/Textures/T_sky_mosel");
+                if (source != null && source.shader != null && source.shader.isSupported && clouds != null)
+                {
+                    skyMaterial = new Material(source) { name = "Mosel Fair Sky" };
+                    skyMaterial.mainTexture = clouds;
+                }
             }
             RenderSettings.skybox = skyMaterial;
             if (Camera.main != null) ApplySkyToCamera(Camera.main);
