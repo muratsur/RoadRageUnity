@@ -1602,7 +1602,7 @@ namespace RoadRage.UnityRemake
 
                 // Anti-penetration is handled by the shared vehicle pass; only the
                 // gameplay consequences of the contact are decided here.
-                if (longitudinal > 0f && !traffic.IsWreck)
+                if (longitudinal > 0f && !traffic.IsWreck && traffic.Role != VehicleRole.LogTruck)
                 {
                     // Momentum transfer: the car you rear-end is carried along rather
                     // than standing still while you drive into it. A wreck is excluded -
@@ -1610,6 +1610,8 @@ namespace RoadRage.UnityRemake
                     // behind a fresh wreck pumps it back up to 95% of the player's speed
                     // every frame, overriding the braking and driving it (worst on the
                     // heavy log truck, which keeps 80% of its speed) off up the road.
+                    // The log truck is excluded too: this ran just before its Crash, which
+                    // then kept 80% of the player's speed and left the logs behind.
                     traffic.currentSpeedKph = Mathf.Max(traffic.currentSpeedKph, driver.SpeedKph * 0.95f);
                 }
 
