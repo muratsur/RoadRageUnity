@@ -433,6 +433,9 @@ namespace RoadRage.UnityRemake
             // through the rest of the order rather than looping this one.
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder,
                 Mathf.Max(0, System.Array.IndexOf(Biomes, biomeName))));
+            // The scene's starter cube and slab stood on the road at the world origin.
+            foreach (var go in UnityEngine.SceneManagement.SceneManager.GetActiveScene().GetRootGameObjects())
+                if (go.name is "Player" or "Ground" or "PlayerMovement") go.SetActive(false);
             RoadPath.HalfWidthProvider = HalfWidthAtDistance;
             RoadPath.CurveScaleProvider = CurveScaleAtDistance;
             RoadPath.ElevationScaleProvider = ElevationScaleAtDistance;
@@ -5543,7 +5546,8 @@ namespace RoadRage.UnityRemake
                 var n = child.name;
                 if (n.Contains("Ground") || n.Contains("Road") || n.Contains("Ribbon") ||
                     n.Contains("Asphalt") || n.Contains("Shoulder") || n.Contains("Dash") ||
-                    n.Contains("Paint") || n.Contains("Verge") || n.Contains("Walkway") ||
+                    n.Contains("Paint") || n.Contains(" Line") || n.Contains("Center Yellow") ||
+                    n.Contains("Verge") || n.Contains("Walkway") ||
                     n.Contains("Sidewalk") || n.Contains("Gateway") || n.Contains("Portal") ||
                     n.Contains("Tunnel") || n.Contains("Ceiling") || n.Contains("Overpass") ||
                     n.Contains("Bridge") || n.Contains("Wire") || n.Contains("Floor") || n.Contains("Terrain"))
