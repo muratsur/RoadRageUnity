@@ -1,0 +1,4 @@
+0 Seljalandsfoss|Seljalandsfoss
+24671 Skógafoss|Skogafoss
+30951 Sólheimajökull|Solheimajokull Glacier
+56601 Vík|Vik

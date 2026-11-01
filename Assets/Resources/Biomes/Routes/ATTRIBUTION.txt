@@ -16,3 +16,11 @@ Tools/Terrain/build_b53.py from:
 - Terrain: (c) GeoBasis-DE / LVermGeoRP, dl-de/by-2-0, www.lvermgeo.rlp.de [Daten
   bearbeitet].
 - Land cover and elevation: ESA WorldCover and AWS Terrain Tiles, as above.
+
+The Iceland Coast's road follows Route 1, below Seljalandsfoss to Vik. Built by
+Tools/Terrain/build_r1.py from:
+
+- Road centreline: (c) OpenStreetMap contributors, ODbL.
+- Terrain: Copernicus DEM GLO-30 (ESA). Confirm the required credit wording before
+  release.
+- Land cover and elevation: ESA WorldCover and AWS Terrain Tiles, as above.

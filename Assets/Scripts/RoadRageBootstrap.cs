@@ -295,14 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
             "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
-            "MOSEL VALLEY"
+            "MOSEL VALLEY", "ICELAND COAST"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -587,6 +587,7 @@ namespace RoadRage.UnityRemake
             var value = requested.ToLowerInvariant();
 
             if (value.Contains("mosel")) return Biomes[MoselIndex];
+            if (value.Contains("iceland")) return Biomes[IcelandIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -1419,6 +1420,12 @@ namespace RoadRage.UnityRemake
             // The Mummelsee: a small, deep, dark lake in a spruce hollow. Near black,
             // glossy, so it shows the sky and the treeline through the probe.
             MakeMaterial("Mountain Lake", new Color(0.03f, 0.045f, 0.045f), 0f, 0.94f);
+            BiomeMaterial("Iceland House", "Iceland", "T_iceland_D", "", Color.white, 0f, 0.2f);
+            BiomeMaterial("Iceland Falls", "Iceland", "T_falls_D", "", Color.white, 0f, 0.6f);
+            BiomeMaterial("Iceland Basalt", "ForestVillage", "T_rock_02_D", "T_rock_02_N", new Color(0.26f, 0.26f, 0.29f), 0f, 0.18f);
+            MakeMaterial("Iceland Moss", new Color(0.30f, 0.40f, 0.15f), 0f, 0.03f);
+            BiomeMaterial("Iceland Cliff", "Iceland", "T_cliff_D", "", Color.white, 0f, 0.12f);
+            BiomeMaterial("Iceland Lupine", "Iceland", "T_lupine_D", "", Color.white, 0f, 0.05f);
             BiomeMaterial("Mosel Water", "MoselVillage", "", "T_water_N", new Color(0.035f, 0.085f, 0.085f), 0f, 0.86f);
             BiomeMaterial("Mosel House", "MoselVillage", "T_fachwerk_D", "", Color.white, 0f, 0.15f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
@@ -2411,6 +2418,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
+            IcelandIndex => new BiomeMood // ICELAND COAST - cold, even light under low cloud
+            {
+                FogDensity = 0.0011f, Fog = new Color(0.60f, 0.66f, 0.72f),
+                Sky = new Color(0.50f, 0.58f, 0.68f), Equator = new Color(0.52f, 0.57f, 0.60f),
+                Ground = new Color(0.16f, 0.17f, 0.17f), SunColor = new Color(0.90f, 0.94f, 1f),
+                SunIntensity = 1.0f, PostExposure = 0.05f, BloomIntensity = 0.1f, BloomThreshold = 4f,
+                AmbientIntensity = 1.2f, Saturation = 2f
+            },
             MoselIndex => new BiomeMood // MOSEL VALLEY - clear warm light down a deep river valley
             {
                 FogDensity = 0.0016f, Fog = new Color(0.74f, 0.80f, 0.86f),
@@ -2485,6 +2500,7 @@ namespace RoadRage.UnityRemake
             9 => "Hills Ground",
             CanalTownIndex => "Kowloon Ground",
             MoselIndex => "Mosel Ground",
+            IcelandIndex => "Iceland Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2530,6 +2546,14 @@ namespace RoadRage.UnityRemake
                 ("T_forest_humus", 0.37f, new Color(1.15f, 1.12f, 1.1f)),
                 ("T_forest_verge", 0.62f, Color.white),
             }, 0.1f);
+
+            // Iceland: black volcanic sand, bright moss in patches, dark gravel at the road edge.
+            Splat("Iceland Ground", "ForestFloor", new[]
+            {
+                ("T_forest_humus", 0.5f, new Color(0.85f, 0.92f, 1.15f)),
+                ("T_forest_litter", 0.37f, new Color(1.0f, 1.45f, 0.62f)),
+                ("T_forest_verge", 0.62f, new Color(0.55f, 0.55f, 0.58f)),
+            }, 0.08f);
 
             // Mosel: green grass between the vines, dark slate earth in patches, road-edge gravel.
             Splat("Mosel Ground", "ForestFloor", new[]
@@ -2718,7 +2742,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == 0 || biomeIndex == MoselIndex ? materials["Forest Road"] : materials["Road"];
+            var roadMaterial = biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
 
             // Road Edge & Terrain Integration per Biome Type:
@@ -2789,7 +2813,7 @@ namespace RoadRage.UnityRemake
             // that has to be explained is worse than paint that does not.
             //
             // Greenwood is an unmarked single-lane forest road: no paint at all.
-            if (biomeIndex != 0 && biomeIndex != MoselIndex)
+            if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex)
             {
                 BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
                 BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
@@ -2798,7 +2822,7 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (biomeIndex == 0 || biomeIndex == MoselIndex)
+            if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == IcelandIndex)
             {
                 // Two lanes each way, German markings: a double solid white centre line
                 // and 6 m dashes with 12 m gaps between the lanes. No edge or yellow
@@ -2869,7 +2893,7 @@ namespace RoadRage.UnityRemake
             var across = Mathf.Abs(lateral) - edge;
             if (across <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
-            var limit = route == moselRoute ? MoselGroundLimit : RealGroundLimit;
+            var limit = route == moselRoute || route == icelandRoute ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             if (withPads) real = OnBuildingPads(distance, lateral, real);
             return real * Mathf.SmoothStep(0f, 1f, across / 6f);
@@ -3238,6 +3262,11 @@ namespace RoadRage.UnityRemake
                     // Layer 0 = base ground, 1 = patchy overgrowth, 2 = verge gravel.
                     var patch = TerrainNoise(p.x, p.z, 0.010f) * 0.5f + 0.5f;
                     var detail = TerrainNoise(p.x, p.z, 0.038f) * 0.5f + 0.5f;
+                    // Iceland: moss breaks up in small drifts over the black sand, not in
+                    // big smooth blobs, and is sparse right beside the road.
+                    if (RoadPath.Route == icelandRoute)
+                        patch = 0.42f + (patch - 0.5f) * 0.45f + (detail - 0.5f) * 0.55f +
+                                (TerrainNoise(p.x, p.z, 0.11f) * 0.5f) * 0.3f;
                     var verge = 1f - Mathf.SmoothStep(0f, 1f,
                         Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + vergeFrom,
                             RoadPath.ClearanceAt(distance) + vergeTo, Mathf.Abs(lateral)));
@@ -4854,7 +4883,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -4875,13 +4904,14 @@ namespace RoadRage.UnityRemake
         ///
         /// Greenwood was the last single-lane road, and a truck in the only lane each way
         /// could not be got past: it now has two each way (18 m of carriageway).
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex || biomeIndex == MoselIndex ? 2 : 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex || biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? 2 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
 
         private static RoadRoute greenwoodRoute;
         private static RoadRoute moselRoute;
+        private static RoadRoute icelandRoute;
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -4890,6 +4920,14 @@ namespace RoadRage.UnityRemake
         /// road reads its shape through RoadPath.
         private static void ApplyBiomeRoute(int biomeIndex)
         {
+            if (biomeIndex == IcelandIndex)
+            {
+                icelandRoute ??= RoadRoute.Load("Biomes/Routes/r1");
+                if (icelandRoute == null) Debug.LogWarning("Missing Biomes/Routes/r1 - Iceland keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE Iceland follows Route 1: {icelandRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = icelandRoute;
+                return;
+            }
             if (biomeIndex == MoselIndex)
             {
                 moselRoute ??= RoadRoute.Load("Biomes/Routes/b53");
@@ -5654,8 +5692,10 @@ namespace RoadRage.UnityRemake
         private void UpdateStreaming(float playerDistance)
         {
             // The Mosel flows: its ripples drift along the valley.
-            if (RoadPath.Route != null && RoadPath.Route == moselRoute)
+            if (RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == icelandRoute))
                 materials["Mosel Water"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.035f));
+            if (RoadPath.Route != null && RoadPath.Route == icelandRoute)
+                materials["Iceland Falls"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.55f));
             var centre = Mathf.FloorToInt(playerDistance / ChunkLength);
 
             for (var i = centre - ChunksBehind; i <= centre + ChunksAhead; i++)
@@ -5715,8 +5755,242 @@ namespace RoadRage.UnityRemake
 				case 9: BuildHollywoodPhotorealPass(); break;
                 case CanalTownIndex: BuildCanalTown(); break;
                 case MoselIndex: BuildMoselValley(); break;
+                case IcelandIndex: BuildIcelandCoast(); break;
                 default: BuildForest(); break;
             }
+        }
+
+        // ------------------------------------------------------------ ICELAND COAST
+
+        /// The real Route 1, below Seljalandsfoss to Vik (Tools/Terrain/build_r1.py): black
+        /// sand and moss on the real slopes under the Eyjafjoll cliffs, basalt, moss-grown
+        /// lava lumps, reflector posts instead of guard rail, a farm now and then, the
+        /// falls on the cliffs and Vik's church. No trees: there are none here.
+        private const int IcelandIndex = 15;
+
+        private void BuildIcelandCoast()
+        {
+            Random.InitState(63419 ^ chunkSeed);
+            Physics.SyncTransforms();
+            plantTally = new PlantTally();
+            StartCoroutine(ReportPlanting(segStart, plantTally, chunkRoot));
+            var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+
+            BuildMoselRiver();
+            for (var d = Mathf.Ceil(segStart / 50f) * 50f; d < segEnd; d += 50f)
+            for (var side = -1; side <= 1; side += 2)
+                PlaceRouteProp("SM_leitpfosten", d, side * (rail + 0.45f), FacingOncoming(d), "B500 Leitpfosten");
+            BuildTrafficSigns(rail);
+
+            // Moss-grown lava lumps in fields, with bare black sand between them.
+            ScatterBand(1.8f, rail + 3f, 110f, (d, l, s) =>
+            {
+                var at = RoadPath.Point(d, l);
+                if (TerrainNoise(at.x, at.z, 0.012f) < 0.05f) return null;
+                return PlaceBiomeModelOnRoad("ForestVillage", $"Rocks/SM_rock_0{Random.Range(1, 4)}", materials["Iceland Moss"], d, l, -0.5f,
+                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(2f, 5f), "Iceland Moss Lump", false);
+            });
+            // Basalt blocks fallen from the cliffs, anywhere and further out.
+            ScatterBand(16f, rail + 4f, 320f, (d, l, s) =>
+                PlaceBiomeModelOnRoad("ForestVillage", $"Rocks/SM_rock_0{Random.Range(1, 4)}", materials["Iceland Basalt"], d, l, -0.6f,
+                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(1.5f, 6f), "Iceland Basalt", false));
+
+            // Tufts of grass near the road, and lupine in drifts.
+            ScatterBand(2.4f, rail + 1f, 34f, (d, l, s) =>
+                SpawnForestPiece("BlackForest|SM_moor_grass", d, l, 0f, 0.5f, 1.0f, "Heath Grass"));
+            ScatterBand(1.3f, rail + 2f, 70f, (d, l, s) =>
+            {
+                var at = RoadPath.Point(d, l);
+                if (TerrainNoise(at.x, at.z, 0.018f) < 0.25f) return null;
+                return PlaceBiomeModelOnRoad("Iceland", "SM_lupine", materials["Iceland Lupine"], d, l, -0.05f,
+                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(0.45f, 0.85f), "Iceland Lupine", false);
+            });
+            // Farm fence along stretches of the road, with sheep on the grass behind it.
+            for (var d = Mathf.Ceil(segStart / 24f) * 24f; d < segEnd; d += 24f)
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var at = RoadPath.Point(d, side * (rail + 16f));
+                if (TerrainNoise(at.x * 0.3f, at.z * 0.3f + side * 40f, 0.01f) < 0f) continue;
+                var fence = BiomeModel("Iceland", "SM_fence", materials["Iceland House"]);
+                if (fence != null)
+                {
+                    fence.name = "Iceland Fence";
+                    fence.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at), at.z),
+                        Quaternion.LookRotation(Flat(RoadPath.Right(d))));
+                }
+                if (Random.value < 0.35f)
+                {
+                    var lateral = side * (rail + Random.Range(22f, 70f));
+                    var spot = RoadPath.Point(d + Random.Range(-10f, 10f), lateral);
+                    var sheep = BiomeModel("Iceland", "SM_sheep", materials["Iceland House"]);
+                    if (sheep != null)
+                    {
+                        sheep.name = "Iceland Sheep";
+                        sheep.transform.SetPositionAndRotation(new Vector3(spot.x, GridGroundY(spot), spot.z),
+                            Quaternion.Euler(0f, Random.Range(0f, 360f), 0f));
+                    }
+                }
+            }
+
+            // A lone farm on the flat, with its barn.
+            if (Random.value < 0.14f)
+            {
+                var d = Random.Range(segStart + 15f, segEnd - 15f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                var lateral = side * Random.Range(55f, 170f);
+                if (RoadPath.Route.CoverAt(d, lateral) != RoadRoute.CoverWater && GroundSpread(d, lateral, 12f) < 3f)
+                {
+                    IcelandBuilding("SM_farm", d, lateral, side, "Iceland Farm");
+                    IcelandBuilding("SM_barn", d + 22f, lateral + side * 10f, side, "Iceland Barn");
+                }
+            }
+            // Vik, where the land cover has it built up.
+            for (var d = Mathf.Ceil(segStart / 24f) * 24f; d < segEnd; d += 24f)
+            for (var side = -1; side <= 1; side += 2)
+            {
+                var lateral = side * (rail + Random.Range(10f, 40f));
+                if (RoadPath.Route.CoverAt(d, lateral) == RoadRoute.CoverBuilt && Random.value < 0.5f && GroundSpread(d, lateral, 5f) < 3f)
+                    IcelandBuilding("SM_farm", d, lateral, side, "Iceland House");
+            }
+
+            var places = RoadPath.Route.Places;
+            foreach (var i in new[] { 0, 1 })
+                if (i < places.Length)
+                {
+                    var cliff = IcelandCliffNear(places[i].Distance);
+                    foreach (var d in PassesOf(cliff, cliff))
+                        BuildIcelandFalls(d);
+                }
+            // Vik's church at the turnaround: one distance, so one church on both passes.
+            var vik = RoadPath.Route.Length;
+            foreach (var d in PassesOf(vik, vik))
+            {
+                var side = RealGroundUnder(d, 70f, 1f) >= RealGroundUnder(d, -70f, 1f) ? 1 : -1;
+                IcelandBuilding("SM_church", d, side * 70f, side, "Iceland Church");
+            }
+        }
+
+        private void IcelandBuilding(string mesh, float distance, float lateral, int side, string name)
+        {
+            var at = RoadPath.Point(distance, lateral);
+            var model = BiomeModel("Iceland", mesh, materials["Iceland House"]);
+            if (model == null) return;
+            model.name = name;
+            model.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at), at.z),
+                Quaternion.LookRotation(Flat(-side * RoadPath.Right(distance))) * Quaternion.Euler(0f, Random.Range(-10f, 10f), 0f));
+        }
+
+        /// The steepest piece of cliff at this road distance, weighed so a cliff near the
+        /// road beats a slightly taller one far off. Returns its score.
+        private static float IcelandCliff(float distance, out int side, out float foot)
+        {
+            side = 1;
+            foot = 0f;
+            var best = 0f;
+            for (var s = -1; s <= 1; s += 2)
+            for (var l = 40f; l < 700f; l += 10f)
+            {
+                var drop = RealGroundUnder(distance, s * (l + 50f), 1f) - RealGroundUnder(distance, s * l, 1f);
+                var score = drop / (1f + l / 300f);
+                if (score <= best) continue;
+                best = score;
+                side = s;
+                foot = l;
+            }
+            return best;
+        }
+
+        private static readonly Dictionary<float, float> icelandCliffs = new();
+
+        /// Where the falls go for a place: the best cliff within 1.5 km along the road.
+        /// The real falls stand beyond what this terrain table holds, or near its edge,
+        /// so this is the real cliff line near the real place, not the exact spot.
+        private static float IcelandCliffNear(float place)
+        {
+            if (icelandCliffs.TryGetValue(place, out var known)) return known;
+            var best = 0f;
+            var at = place;
+            for (var d = Mathf.Max(100f, place - 1500f); d <= place + 1500f; d += 50f)
+            {
+                var score = IcelandCliff(d, out var cliffSide, out _);
+                // Where the ground at the cliff's foot is low enough not to bury the pool.
+                if (RealGroundUnder(d, cliffSide * 90f, 1f) > 14f) continue;
+                if (score <= best) continue;
+                best = score;
+                at = d;
+            }
+            return icelandCliffs[place] = at;
+        }
+
+        private void BuildIcelandFalls(float distance)
+        {
+            IcelandCliff(distance, out var side, out _);
+            const float bowl = 46f, height = 72f;
+            // Low on the slope, close enough to read from the road, and turned to meet
+            // the driver coming towards it.
+            var lateralAt = 90f;
+            while (lateralAt > 62f && RealGroundUnder(distance, side * lateralAt, 1f) > 14f) lateralAt -= 4f;
+            var at = RoadPath.Point(distance, side * lateralAt);
+            at.y = GridGroundY(at);
+            var facing = Quaternion.LookRotation(Flat(-side * RoadPath.Right(distance))) * Quaternion.Euler(0f, -side * 38f, 0f);
+            var cliff = BiomeModel("Iceland", "SM_cliff", materials["Iceland Cliff"]);
+            if (cliff == null) return;
+            cliff.name = "Iceland Cliff";
+            cliff.transform.SetPositionAndRotation(at, facing);
+
+            // The fall, from the lip into the pool at the foot of the bowl.
+            Vector3 Local(float x, float y, float z) => at + facing * new Vector3(x, y, z);
+            var width = 9f;
+            var v = new[]
+            {
+                Local(-width, -1f, -bowl + 12f), Local(width, -1f, -bowl + 12f),
+                Local(width * 0.72f, height, -bowl + 3f), Local(-width * 0.72f, height, -bowl + 3f),
+            };
+            var uv = new[] { new Vector2(0f, 0f), new Vector2(1f, 0f), new Vector2(1f, 2.4f), new Vector2(0f, 2.4f) };
+            CreateMeshObject("Iceland Falls Ground", v, new[] { 0, 2, 1, 0, 3, 2, 0, 1, 2, 0, 2, 3 }, uv, materials["Iceland Falls"]);
+
+            // The plunge pool.
+            const int rim = 20;
+            var pool = new Vector3[rim + 1];
+            var poolUv = new Vector2[rim + 1];
+            var poolTriangles = new int[rim * 3];
+            var poolAt = Local(0f, 0.25f, -bowl + 20f);
+            pool[0] = poolAt;
+            poolUv[0] = Vector2.zero;
+            for (var i = 0; i < rim; i++)
+            {
+                var a = i / (float)rim * Mathf.PI * 2f;
+                var r = 21f + 3f * Mathf.Sin(a * 5f);
+                pool[i + 1] = poolAt + new Vector3(r * Mathf.Sin(a), 0f, r * Mathf.Cos(a));
+                poolUv[i + 1] = new Vector2(pool[i + 1].x * 0.16f, pool[i + 1].z * 0.16f);
+                poolTriangles[i * 3] = 0;
+                poolTriangles[i * 3 + 1] = i + 1;
+                poolTriangles[i * 3 + 2] = (i + 1) % rim + 1;
+            }
+            var water = CreateMeshObject("Iceland Pool Ground", pool, poolTriangles, poolUv, materials["Mosel Water"]);
+            water.GetComponent<MeshFilter>().sharedMesh.RecalculateTangents();
+
+            // Spray rising where it lands.
+            var sprayMaterial = Resources.Load<Material>("WeatherParticle");
+            if (sprayMaterial != null)
+            {
+                var spray = Adopt(new GameObject("Iceland Falls Spray"));
+                spray.transform.position = Local(0f, 3f, -bowl + 14f);
+                var system = spray.AddComponent<ParticleSystem>();
+                var main = system.main;
+                main.startLifetime = 3.5f;
+                main.startSpeed = 2.5f;
+                main.startSize = new ParticleSystem.MinMaxCurve(7f, 16f);
+                main.startColor = new Color(0.9f, 0.94f, 0.97f, 0.16f);
+                main.maxParticles = 60;
+                var emission = system.emission;
+                emission.rateOverTime = 14f;
+                var shape = system.shape;
+                shape.shapeType = ParticleSystemShapeType.Sphere;
+                shape.radius = 7f;
+                spray.GetComponent<ParticleSystemRenderer>().sharedMaterial = sprayMaterial;
+            }
+            Debug.Log($"RR_ICELAND falls at {distance:0} m, {side * lateralAt:0} m from the road");
         }
 
         // ------------------------------------------------------------ MOSEL VALLEY
@@ -9786,13 +10060,13 @@ namespace RoadRage.UnityRemake
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
-            else if (biomeIndex == MoselIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
-                var clouds = Resources.Load<Texture2D>("Sky/Textures/T_sky_mosel");
+                var clouds = Resources.Load<Texture2D>(biomeIndex == MoselIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
                 if (source != null && source.shader != null && source.shader.isSupported && clouds != null)
                 {
-                    skyMaterial = new Material(source) { name = "Mosel Fair Sky" };
+                    skyMaterial = new Material(source) { name = "Real Road Sky" };
                     skyMaterial.mainTexture = clouds;
                 }
             }
