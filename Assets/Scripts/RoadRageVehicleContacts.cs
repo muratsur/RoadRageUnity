@@ -103,6 +103,7 @@ namespace RoadRage.UnityRemake
         private static void Separate(IRoadVehicle a, IRoadVehicle b)
         {
             if (!a.ContactActive || !b.ContactActive) return;
+            if (SameRig(a, b) || PlayerGoesThrough(a, b)) return;
             if (Mathf.Abs(a.ContactHeight - b.ContactHeight) > ClearanceHeight) return;
 
             var deltaDist = b.ContactDistance - a.ContactDistance;
@@ -141,6 +142,23 @@ namespace RoadRage.UnityRemake
             a.ApplyContactPush(-along * overlapLong * shareA, 0f);
             b.ApplyContactPush(along * overlapLong * shareB, 0f);
         }
+
+        /// A folded rig's cab and trailer are two bodies, and they overlap at the hitch.
+        /// The trailer takes no push and follows the cab, so separating them shoved the
+        /// cab up the road every frame, for ever: a wrecked truck shot off at thousands
+        /// of km/h, leaving its logs behind.
+        private static bool SameRig(IRoadVehicle a, IRoadVehicle b) =>
+            (a is TrailerHitch ha && ReferenceEquals(ha.Rig, b)) ||
+            (b is TrailerHitch hb && ReferenceEquals(hb.Rig, a));
+
+        /// A wreck the player has been stuck against no longer blocks the player.
+        private static bool PlayerGoesThrough(IRoadVehicle a, IRoadVehicle b) =>
+            (a is ArcadeCarController && WreckLetsPlayerThrough(b)) ||
+            (b is ArcadeCarController && WreckLetsPlayerThrough(a));
+
+        private static bool WreckLetsPlayerThrough(IRoadVehicle vehicle) =>
+            vehicle is TrailerHitch hitch ? hitch.Rig != null && hitch.Rig.PlayerPassing
+            : vehicle is TrafficCarController car && car.PlayerPassing;
 
         /// Whether a sideways push leaves the hull within the carriageway and shoulder,
         /// where every controller clamps it. Moving back towards the road always fits.

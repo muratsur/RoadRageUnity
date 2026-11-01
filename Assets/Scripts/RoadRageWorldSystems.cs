@@ -978,6 +978,8 @@ namespace RoadRage.UnityRemake
             // A wreck recycled into fresh road should drive again, otherwise the player
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
+            PlayerPassing = false;
+            playerTouchedAt = -1f;
             WreckYaw = 0f;
             wreckYawRate = 0f;
             wreckRoll = 0f;
@@ -1230,7 +1232,7 @@ namespace RoadRage.UnityRemake
                 WreckYaw += wreckYawRate * dt;
                 // A rig turned much further ends across the road with its ends over the
                 // rails; the jackknife, not the whole rig, makes the dramatic angle.
-                if (Role == VehicleRole.LogTruck && Mathf.Abs(WreckYaw) > MaxRigWreckYaw)
+                if ((Role == VehicleRole.LogTruck || HalfLength > 3.5f) && Mathf.Abs(WreckYaw) > MaxRigWreckYaw)
                 {
                     WreckYaw = Mathf.Sign(WreckYaw) * MaxRigWreckYaw;
                     wreckYawRate = 0f;
@@ -1451,6 +1453,12 @@ namespace RoadRage.UnityRemake
         /// left, it turns left. Shoved ahead of its middle, the nose goes with the push.
         /// It is heavy: it keeps most of its own speed, turns a few tens of degrees
         /// rather than spinning, and slides off to the side it was pushed towards.
+        private const float WreckedRigSpeedKph = 20f;
+        private const float WreckHoldsPlayerSeconds = 0.4f;
+        private float playerTouchedAt = -1f;
+        /// This wreck has stopped blocking the player, who was stuck against it.
+        public bool PlayerPassing { get; private set; }
+
         private void CrashTruck(float lateralPush, float impactSpeedKph, float hit, float speedBefore)
         {
             // +1 when it was pushed to the right of the road, -1 to the left.
@@ -1470,9 +1478,9 @@ namespace RoadRage.UnityRemake
             var turn = Mathf.Sign(arm) * push;
             wreckYawRate = turn * Mathf.Lerp(30f, 95f, hit) * Mathf.Lerp(0.35f, 1f, lever);
             wreckRoll = push * Mathf.Lerp(1.5f, 4f, hit);
-            // A car's blow barely moves a loaded rig: it carries on at most of its own
-            // speed, not the hitter's.
-            currentSpeedKph = Mathf.Max(speedBefore * 0.8f, impactSpeedKph * 0.45f);
+            // The rig digs in and stops almost dead, beside the load it has just shed.
+            // Keeping 80% of its speed drove it off up the road and left the logs behind.
+            currentSpeedKph = Mathf.Min(WreckedRigSpeedKph, Mathf.Max(speedBefore, impactSpeedKph * 0.45f));
 
             var shoulder = push * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
@@ -1632,6 +1640,19 @@ namespace RoadRage.UnityRemake
                     // rammed from ahead, the front one otherwise.
                     traffic.hitRoadDistance = driver.RoadDistance +
                                               (longitudinal >= 0f ? driver.HalfLength : -driver.HalfLength);
+                }
+                else
+                {
+                    // One real hit, then a moment against it. On a road this narrow a
+                    // wreck can fill the lane, and being held against it, hit again every
+                    // 0.35 s, left the player crawling and stuck behind it.
+                    if (traffic.PlayerPassing) continue;
+                    if (traffic.playerTouchedAt < 0f) traffic.playerTouchedAt = Time.time;
+                    else if (Time.time - traffic.playerTouchedAt > WreckHoldsPlayerSeconds)
+                    {
+                        traffic.PlayerPassing = true;
+                        continue;
+                    }
                 }
                 driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
                 if (!wasWreck && traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)

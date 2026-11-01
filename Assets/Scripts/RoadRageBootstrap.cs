@@ -1428,7 +1428,11 @@ namespace RoadRage.UnityRemake
             BiomeMaterial("Iceland Lupine", "Iceland", "T_lupine_D", "", Color.white, 0f, 0.05f);
             BiomeMaterial("Mosel Water", "MoselVillage", "", "T_water_N", new Color(0.035f, 0.085f, 0.085f), 0f, 0.86f);
             BiomeMaterial("Mosel House", "MoselVillage", "T_fachwerk_D", "", Color.white, 0f, 0.15f);
+            for (var house = 1; house <= 3; house++)
+                BiomeMaterial($"Mosel House {house}", "MoselVillage", $"T_rodin_house_{house}_D", $"T_rodin_house_{house}_N", Color.white, 0f, 0.12f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
+            BiomeMaterial("Mosel Lawn", "ForestFloor", "T_forest_humus_D", "T_forest_humus_N", new Color(1.15f, 1.7f, 0.72f), 0f, 0.06f);
+            BiomeMaterial("Mosel Yard", "ForestFloor", "T_forest_verge_D", "T_forest_verge_N", new Color(1.25f, 1.2f, 1.1f), 0f, 0.08f);
             BiomeMaterial("Mosel Vine", "MoselVillage", "T_vine_D", "", Color.white, 0f, 0.1f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
                 new Color(0.56f, 0.57f, 0.54f), 0f, 0.2f), "ForestVillage", "T_rock_02_MSO", 0.6f);
@@ -6049,7 +6053,7 @@ namespace RoadRage.UnityRemake
             return TerrainNoise(at.x, at.z, 0.006f) <= 0f;
         }
 
-        private static readonly string[] MoselHouses = { "SM_fachwerk_1", "SM_fachwerk_2", "SM_fachwerk_3", "SM_fachwerk_4" };
+        private const int MoselHouseModels = 3;
 
         private void BuildMoselValley()
         {
@@ -6271,23 +6275,160 @@ namespace RoadRage.UnityRemake
 
         private void BuildMoselVillages(float rail)
         {
-            for (var d = Mathf.Ceil(segStart / 13f) * 13f; d < segEnd; d += 13f)
+            var mesh = new VillageMesh();
+            CountrySurface("Sidewalk", "Mosel Pavement", new Color(0.42f, 0.41f, 0.39f));
+            var plot = MoselPlotLength;
+            for (var d = Mathf.Ceil(segStart / plot) * plot; d < segEnd; d += plot)
             for (var side = -1; side <= 1; side += 2)
-            foreach (var setback in new[] { 10f, 26f })
             {
-                var lateral = side * (rail + setback + Random.Range(-1.5f, 1.5f));
-                if (RoadPath.Route.CoverAt(d, lateral) != RoadRoute.CoverBuilt || Random.value > 0.55f) continue;
-                if (GroundSpread(d, lateral, 4f) > 3f) continue;
-                var at = RoadPath.Point(d, lateral);
-                // Clusters with lanes and gardens between, not one unbroken terrace.
-                if (TerrainNoise(at.x, at.z, 0.035f) < -0.15f) continue;
-                var ground = GridGroundY(at);
-                var house = BiomeModel("MoselVillage", MoselHouses[Random.Range(0, MoselHouses.Length)], materials["Mosel House"]);
+                if (!MoselVillageAt(d, side)) continue;
+                // Pavement along the front of the village, where the rail stops.
+                mesh.Lay("Mosel Pavement", d - plot * 0.5f, d + plot * 0.5f, side * (rail - 1.5f), side * (rail + 1.2f), 0.1f);
+
+                var houseAt = rail + 18f;
+                var at = RoadPath.Point(d, side * houseAt);
+                // A lane or a bit of open ground now and then, and no house on a steep bank.
+                if (TerrainNoise(at.x, at.z, 0.035f) < -0.25f || GroundSpread(d, side * houseAt, 7f) > 2.5f) continue;
+                var kind = Random.Range(1, MoselHouseModels + 1);
+                var house = BiomeModel("MoselVillage", $"SM_rodin_house_{kind}", materials[$"Mosel House {kind}"]);
                 if (house == null) continue;
                 house.name = "Mosel House";
-                house.transform.localScale = Vector3.one * Random.Range(0.72f, 0.92f);
-                house.transform.SetPositionAndRotation(new Vector3(at.x, ground, at.z),
-                    Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-4f, 4f), 0f));
+                house.transform.localScale = Vector3.one * Random.Range(0.92f, 1.08f);
+                // A little into the ground, so the downhill side does not stand on air.
+                house.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.6f, at.z),
+                    Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-3f, 3f), 0f));
+
+                // The plot: garden, a drive and a footpath from the pavement, a stone wall
+                // with gaps for them along the front, hedges down the sides and across the back.
+                const float half = 9f;
+                float front = rail + 1.2f, back = rail + 30f;
+                var driveFrom = d + 5f;
+                mesh.Lay("Mosel Lawn", d - half, d + half, side * front, side * back, 0.05f);
+                mesh.Lay("Mosel Yard", driveFrom - 1.5f, driveFrom + 1.5f, side * front, side * (houseAt - 3f), 0.1f);
+                mesh.Lay("Mosel Yard", driveFrom - 3.5f, driveFrom + 3.5f, side * (houseAt - 9f), side * (houseAt - 3f), 0.09f);
+                mesh.Lay("Mosel Pavement", d - 2.2f, d - 1f, side * front, side * (houseAt - 5f), 0.1f);
+                mesh.Wall("Mosel Burg", d - half, side * (front + 0.3f), d - 2.4f, side * (front + 0.3f), 0.8f, 0.3f);
+                mesh.Wall("Mosel Burg", d - 0.8f, side * (front + 0.3f), driveFrom - 1.7f, side * (front + 0.3f), 0.8f, 0.3f);
+                mesh.Wall("Mosel Burg", driveFrom + 1.7f, side * (front + 0.3f), d + half, side * (front + 0.3f), 0.8f, 0.3f);
+                mesh.Wall("Mosel Vine", d - half, side * front, d - half, side * back, 1.5f, 0.6f);
+                mesh.Wall("Mosel Vine", d + half, side * front, d + half, side * back, 1.5f, 0.6f);
+                mesh.Wall("Mosel Vine", d - half, side * back, d + half, side * back, 1.8f, 0.6f);
+                // A fruit tree and shrubs in the front garden.
+                SpawnForestPiece($"Mosel|{Random.Range(0, 12)}", d - 6f, side * (rail + 7f), 0f, 4.5f, 6.5f, "Garden Tree");
+                for (var b = 0; b < 2; b++)
+                    SpawnForestPiece($"Mosel|{Random.Range(0, 12)}", d + Random.Range(-7f, -3f), side * (rail + Random.Range(3f, 11f)), 0f, 1.5f, 2.4f, "Garden Shrub");
+            }
+            mesh.Build(this);
+        }
+
+        private const float MoselPlotLength = 20f;
+
+        /// Whether the plot this distance falls in is village: land the cover has built-up.
+        private static bool MoselVillageAt(float distance, int side)
+        {
+            var plot = Mathf.Round(distance / MoselPlotLength) * MoselPlotLength;
+            return RoadPath.Route.CoverAt(plot, side * 30f) == RoadRoute.CoverBuilt;
+        }
+
+        /// Ground pieces and low walls lying on the drawn ground, batched per material.
+        private sealed class VillageMesh
+        {
+            private sealed class Part
+            {
+                public readonly List<Vector3> Vertices = new();
+                public readonly List<Vector2> Uv = new();
+                public readonly List<int> Triangles = new();
+            }
+
+            private readonly Dictionary<string, Part> parts = new();
+
+            private Part For(string material)
+            {
+                if (!parts.TryGetValue(material, out var part)) parts[material] = part = new Part();
+                return part;
+            }
+
+            private static void Quad(Part part, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            {
+                var v = part.Vertices.Count;
+                part.Vertices.Add(a); part.Vertices.Add(b); part.Vertices.Add(c); part.Vertices.Add(d);
+                var run = Vector3.Distance(a, b) * 0.25f;
+                var up = Vector3.Distance(b, c) * 0.25f;
+                part.Uv.Add(new Vector2(a.x * 0.25f, a.z * 0.25f + a.y * 0.25f));
+                part.Uv.Add(new Vector2(a.x * 0.25f + run, a.z * 0.25f + a.y * 0.25f));
+                part.Uv.Add(new Vector2(a.x * 0.25f + run, a.z * 0.25f + a.y * 0.25f + up));
+                part.Uv.Add(new Vector2(a.x * 0.25f, a.z * 0.25f + a.y * 0.25f + up));
+                part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
+                part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3);
+            }
+
+            private static Vector3 Ground(float distance, float lateral, float lift)
+            {
+                var p = RoadPath.Point(distance, lateral);
+                p.y = GridGroundY(p) + lift;
+                return p;
+            }
+
+            /// A flat piece following the ground, in steps of about 2 m, facing up.
+            public void Lay(string material, float d0, float d1, float l0, float l1, float lift)
+            {
+                var part = For(material);
+                var stepsD = Mathf.Max(1, Mathf.CeilToInt(Mathf.Abs(d1 - d0) / 2f));
+                var stepsL = Mathf.Max(1, Mathf.CeilToInt(Mathf.Abs(l1 - l0) / 2f));
+                for (var i = 0; i < stepsD; i++)
+                for (var j = 0; j < stepsL; j++)
+                {
+                    var da = Mathf.Lerp(d0, d1, i / (float)stepsD);
+                    var db = Mathf.Lerp(d0, d1, (i + 1) / (float)stepsD);
+                    var la = Mathf.Lerp(l0, l1, j / (float)stepsL);
+                    var lb = Mathf.Lerp(l0, l1, (j + 1) / (float)stepsL);
+                    var a = Ground(da, la, lift);
+                    var b = Ground(da, lb, lift);
+                    var c = Ground(db, lb, lift);
+                    var d = Ground(db, la, lift);
+                    if (Vector3.Cross(b - a, c - a).y > 0f) Quad(part, a, b, c, d);
+                    else Quad(part, a, d, c, b);
+                }
+            }
+
+            /// A low wall or hedge following the ground: two sides and a top.
+            public void Wall(string material, float d0, float l0, float d1, float l1, float height, float thick)
+            {
+                var part = For(material);
+                var length = Mathf.Abs(d1 - d0) + Mathf.Abs(l1 - l0);
+                var steps = Mathf.Max(1, Mathf.CeilToInt(length / 2f));
+                var acrossRoad = Mathf.Abs(l1 - l0) > Mathf.Abs(d1 - d0);
+                var half = thick * 0.5f;
+                for (var i = 0; i < steps; i++)
+                {
+                    var t0 = i / (float)steps;
+                    var t1 = (i + 1) / (float)steps;
+                    var da = Mathf.Lerp(d0, d1, t0);
+                    var db = Mathf.Lerp(d0, d1, t1);
+                    var la = Mathf.Lerp(l0, l1, t0);
+                    var lb = Mathf.Lerp(l0, l1, t1);
+                    var offD = acrossRoad ? half : 0f;
+                    var offL = acrossRoad ? 0f : half;
+                    var a0 = Ground(da - offD, la - offL, -0.3f);
+                    var a1 = Ground(da + offD, la + offL, -0.3f);
+                    var b0 = Ground(db - offD, lb - offL, -0.3f);
+                    var b1 = Ground(db + offD, lb + offL, -0.3f);
+                    var up = Vector3.up * (height + 0.3f);
+                    Quad(part, a0, b0, b0 + up, a0 + up);
+                    Quad(part, b0, a0, a0 + up, b0 + up);
+                    Quad(part, a1, b1, b1 + up, a1 + up);
+                    Quad(part, b1, a1, a1 + up, b1 + up);
+                    if (Vector3.Cross(b0 - a0, a1 - a0).y > 0f) Quad(part, a0 + up, b0 + up, b1 + up, a1 + up);
+                    else Quad(part, a0 + up, a1 + up, b1 + up, b0 + up);
+                }
+            }
+
+            public void Build(RoadRageBootstrap owner)
+            {
+                foreach (var pair in parts)
+                    // "Ground" so ClearRoadCorridor leaves it where it is.
+                    owner.CreateMeshObject($"Mosel Village Ground {pair.Key}", pair.Value.Vertices.ToArray(),
+                        pair.Value.Triangles.ToArray(), pair.Value.Uv.ToArray(), owner.materials[pair.Key]);
             }
         }
 
@@ -10352,6 +10493,8 @@ namespace RoadRage.UnityRemake
             RoadPath.Point(distance, side * (RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + GuardRailOffset));
 
         private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material) =>
+            // No rail along a village front: the drives and paths reach the road there.
+            !(RoadPath.Route != null && RoadPath.Route == moselRoute && MoselVillageAt(midDistance, side)) &&
             PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,
                 "Forest Guard Rail") != null;
 

@@ -472,7 +472,7 @@ namespace RoadRage.UnityRemake
                 if (RoadRageImpactShakeDirector.Instance != null)
                     RoadRageImpactShakeDirector.Instance.TriggerLightShake(0.6f);
             }
-            Debug.Log($"RR_EVENT logspill at {truck.RoadDistance:0}m logs={slots.Count} byPlayer={byPlayer}");
+            Debug.Log($"RR_EVENT logspill at {truck.RoadDistance:0}m logs={slots.Count} byPlayer={byPlayer} truckKph={truck.SpeedKph:0}");
         }
 
         /// A wreck revived up the road drives again with a fresh load.
@@ -511,6 +511,9 @@ namespace RoadRage.UnityRemake
 
         /// Degrees a second; positive swings the trailer's tail to the rig's left.
         public void Kick(float degreesPerSecond) => foldRate += degreesPerSecond;
+
+        /// The truck this trailer belongs to.
+        public TrafficCarController Rig => car;
 
         // --- IRoadVehicle: the folded trailer as a body of its own -------------------
         // Active only while the rig is a folded wreck; the rig's own contact box is then
