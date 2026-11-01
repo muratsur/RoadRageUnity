@@ -2742,7 +2742,9 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? materials["Forest Road"] : materials["Road"];
+            var roadMaterial = biomeIndex == MoselIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+                : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
+                : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
 
             // Road Edge & Terrain Integration per Biome Type:
@@ -2793,6 +2795,13 @@ namespace RoadRage.UnityRemake
                 BuildRibbon("Left Alien Verge", -1.70f, -1.0f, 0.03f, materials["Alien Floor"], relative: true);
                 BuildRibbon("Right Alien Verge", 1.0f, 1.70f, 0.03f, materials["Alien Floor"], relative: true);
             }
+            else if (biomeIndex == IcelandIndex)
+            {
+                // Pale gravel shoulders, with no dark strip beside the seal.
+                var gravel = CountrySurface("Forest Verge Dirt", "Iceland Gravel", new Color(1.9f, 1.8f, 1.65f));
+                BuildRibbon("Left Iceland Verge", -1.3f, -1.0f, 0.02f, gravel, relative: true);
+                BuildRibbon("Right Iceland Verge", 1.0f, 1.3f, 0.02f, gravel, relative: true);
+            }
             else if (biomeIndex == 0 || biomeIndex == MoselIndex) // Greenwood Forest, Mosel Valley
             {
                 // Forest Litter & Dirt Verge
@@ -2822,7 +2831,19 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == IcelandIndex)
+            if (biomeIndex == IcelandIndex)
+            {
+                // Route 1: one broken white centre line, nothing at the edges.
+                BuildDashedRibbon("Center Dashes", 0f, 0.13f, 3f, 12f, materials["White Paint"], relative: true);
+            }
+            else if (biomeIndex == MoselIndex)
+            {
+                // A German Bundesstrasse: broken centre line, solid white at both edges.
+                BuildDashedRibbon("Center Dashes", 0f, 0.13f, 4f, 12f, materials["White Paint"], relative: true);
+                BuildRibbon("Left Edge Line", -0.97f, -0.945f, 0.038f, materials["White Paint"], relative: true);
+                BuildRibbon("Right Edge Line", 0.945f, 0.97f, 0.038f, materials["White Paint"], relative: true);
+            }
+            else if (biomeIndex == 0)
             {
                 // Two lanes each way, German markings: a double solid white centre line
                 // and 6 m dashes with 12 m gaps between the lanes. No edge or yellow
@@ -2846,6 +2867,15 @@ namespace RoadRage.UnityRemake
                 BuildDashedRibbon("Right Lane Dashes Inner", 1f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
                 BuildDashedRibbon("Right Lane Dashes Outer", 2f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
             }
+        }
+
+        /// A road surface in this country's tone, from a material the biomes share.
+        private Material CountrySurface(string source, string name, Color tint)
+        {
+            if (materials.TryGetValue(name, out var made)) return made;
+            made = new Material(materials[source]) { name = name, color = tint };
+            if (made.HasProperty("_BaseColor")) made.SetColor("_BaseColor", tint);
+            return materials[name] = made;
         }
 
         private static void EnableProbeReflections(GameObject item)
@@ -4828,9 +4858,10 @@ namespace RoadRage.UnityRemake
             }
 
             var visual = Instantiate(prefab, showroomStage);
-            SmoothVehicleMeshes(visual);
+            var heroTruck = spec.Mesh == HeroTruckMesh;
+            if (!heroTruck) SmoothVehicleMeshes(visual);
             visual.transform.localPosition = Vector3.zero;
-            visual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+            visual.transform.localRotation = heroTruck ? Quaternion.identity : Quaternion.Euler(0f, 0f, 90f);
             foreach (var r in visual.GetComponentsInChildren<Renderer>(true))
             {
                 var src = r.sharedMaterials;
@@ -4838,14 +4869,15 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < assigned.Length; i++)
                 {
                     var slot = src[i] != null ? src[i].name.ToLowerInvariant() : string.Empty;
-                    assigned[i] = slot.Contains("glass") ? materials["Street Racer Glass"]
+                    assigned[i] = heroTruck ? HeroTruckMaterial
+                        : slot.Contains("glass") ? materials["Street Racer Glass"]
                         : slot.Contains("livery") ? paint
                         : showroomChassis;
                 }
                 r.sharedMaterials = assigned;
             }
             // Wheels last: the slot pass above would overwrite their rubber/rim pair.
-            ReplaceWheelMeshes(visual);
+            if (!heroTruck) ReplaceWheelMeshes(visual);
             foreach (var c in visual.GetComponentsInChildren<Collider>()) Destroy(c);
             // Frame every vehicle the same: bikes and semis differ by 4x in length.
             if (TryGetCombinedBounds(visual, out var b) && b.size.magnitude > 0.01f)
@@ -4904,7 +4936,9 @@ namespace RoadRage.UnityRemake
         ///
         /// Greenwood was the last single-lane road, and a truck in the only lane each way
         /// could not be got past: it now has two each way (18 m of carriageway).
-        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex || biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? 2 : 3;
+        private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2
+            // One lane each way, as the real B53 and Route 1 are.
+            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4920,6 +4954,7 @@ namespace RoadRage.UnityRemake
         /// road reads its shape through RoadPath.
         private static void ApplyBiomeRoute(int biomeIndex)
         {
+            PolizeiLivery.Sheet = biomeIndex == IcelandIndex ? "Police/T_logreglan" : "Police/T_polizei";
             if (biomeIndex == IcelandIndex)
             {
                 icelandRoute ??= RoadRoute.Load("Biomes/Routes/r1");
@@ -11001,10 +11036,11 @@ namespace RoadRage.UnityRemake
 				foreach (var renderer in car.GetComponentsInChildren<Renderer>()) renderer.enabled = false;
 				var racerVisual = Instantiate(racerPrefab, car);
 				racerVisual.name = $"Synty {selected.Name} Visual";
-				SmoothVehicleMeshes(racerVisual);
+				var heroTruck = selected.Mesh == HeroTruckMesh;
+				if (!heroTruck) SmoothVehicleMeshes(racerVisual);
 				racerVisual.transform.localPosition = new Vector3(0f, -0.48f, 0f);
 				// The source FBX uses Z-up; Unity otherwise imports the complete preset on its side.
-				racerVisual.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+				racerVisual.transform.localRotation = heroTruck ? Quaternion.identity : Quaternion.Euler(0f, 0f, 90f);
 				racerVisual.transform.localScale = Vector3.one;
 				// Collision radius must match the mesh: fixed 4.3 m / 2.05 m radii were
 				// sized for a small car, so a 7.2 m truck overlapped a 5.0 m car by ~1.8 m
@@ -11019,14 +11055,15 @@ namespace RoadRage.UnityRemake
 					for (var i = 0; i < assigned.Length; i++)
 					{
 						var slot = source[i] != null ? source[i].name.ToLowerInvariant() : string.Empty;
-						assigned[i] = slot.Contains("glass") ? materials["Street Racer Glass"]
+						assigned[i] = heroTruck ? HeroTruckMaterial
+							: slot.Contains("glass") ? materials["Street Racer Glass"]
 							: slot.Contains("livery") ? materials["Street Racer Atlas"]
 							: materials["Street Racer Chassis"];
 					}
                     renderer.sharedMaterials = assigned;
                 }
                 // Wheels last: the slot pass above would overwrite their rubber/rim pair.
-                ReplaceWheelMeshes(racerVisual);
+                if (!heroTruck) ReplaceWheelMeshes(racerVisual);
                 foreach (var l in racerVisual.GetComponentsInChildren<Light>(true)) DestroyImmediate(l.gameObject == racerVisual ? l : l.gameObject);
                 foreach (var b in racerVisual.GetComponentsInChildren<Behaviour>(true))
                 {
@@ -11036,7 +11073,8 @@ namespace RoadRage.UnityRemake
                         DestroyImmediate(b);
                 }
             }
-            BuildDriver(car);
+            // The hero truck's tinted glass needs no figure floating behind it.
+            if (GameState.CurrentCar.Mesh != HeroTruckMesh) BuildDriver(car);
             foreach (var collider in car.GetComponentsInChildren<Collider>()) Destroy(collider);
             var carCollider = car.gameObject.AddComponent<BoxCollider>();
             carCollider.size = new Vector3(2.15f, 1.2f, 4.4f);
@@ -11062,6 +11100,39 @@ namespace RoadRage.UnityRemake
                 carCollider.size = new Vector3(arcadeController.HalfWidth * 2f, 1.2f, arcadeController.HalfLength * 2f);
             }
             car.gameObject.AddComponent<RoadRageAudioAndVFX>();
+        }
+
+        private const string HeroTruckMesh = "SM_hero_truck";
+        private Material heroTruckMaterial;
+
+        /// The hero truck's own textures (Tools/Rodin/build_hero_truck_asset.py): colour,
+        /// normal, and metallic with smoothness in alpha, as URP Lit reads them.
+        private Material HeroTruckMaterial
+        {
+            get
+            {
+                if (heroTruckMaterial != null) return heroTruckMaterial;
+                var material = MakeMaterial("Hero Truck", Color.white, 1f, 1f);
+                var colour = Resources.Load<Texture2D>("Vehicles/T_hero_truck_D");
+                if (colour != null)
+                {
+                    material.mainTexture = colour;
+                    if (material.HasProperty("_BaseMap")) material.SetTexture("_BaseMap", colour);
+                }
+                var normal = Resources.Load<Texture2D>("Vehicles/T_hero_truck_N");
+                if (normal != null)
+                {
+                    material.SetTexture("_BumpMap", normal);
+                    material.EnableKeyword("_NORMALMAP");
+                }
+                var surface = Resources.Load<Texture2D>("Vehicles/T_hero_truck_MS");
+                if (surface != null)
+                {
+                    material.SetTexture("_MetallicGlossMap", surface);
+                    material.EnableKeyword("_METALLICSPECGLOSSMAP");
+                }
+                return heroTruckMaterial = material;
+            }
         }
 
         private void BuildDriver(Transform vehicle)

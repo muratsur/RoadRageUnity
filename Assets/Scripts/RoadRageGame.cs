@@ -36,7 +36,7 @@ namespace RoadRage.UnityRemake
         /// resistance; speed/acceleration multiply the car's handling.
         public static readonly CarSpec[] Cars =
         {
-            new() { Name = "RUSTY UTE",  Mesh = "SK_Veh_Preset_Ute_01",    Price = 0,     Speed = 1.00f, Acceleration = 1.00f, Armour = 1.15f, Description = "Workhorse pickup. Free, and already hits harder than a car.", Livery = "PolygonStreetRacer_Veh_Tex_24_Rust"},
+            new() { Name = "ROAD HAMMER", Mesh = "SM_hero_truck", Price = 0,     Speed = 1.00f, Acceleration = 1.00f, Armour = 1.15f, Description = "Armoured crew-cab pickup with a steel bull bar. Built to ram.", Livery = "PolygonStreetRacer_Veh_Tex_24_Rust"},
             new() { Name = "STREET BIKE",Mesh = "SK_Veh_Preset_Motorbike_01", Price = 1500, Speed = 1.28f, Acceleration = 1.34f, Armour = 0.55f, Description = "Fast and fragile. Every hit hurts — for players who dodge.", Livery = "PolygonStreetRacer_Veh_Tex_07_Race_Yellow"},
             new() { Name = "STREET UTE", Mesh = "SK_Veh_Preset_Ute_02",    Price = 2500,  Speed = 1.12f, Acceleration = 1.12f, Armour = 1.10f, Description = "Car-bodied ute. Quick, low, still has a tray.", Livery = "PolygonStreetRacer_Veh_Tex_RR_Orange"},
             new() { Name = "TRAIL 4X4",  Mesh = "SK_Veh_Preset_Ute_03",    Price = 4200,  Speed = 1.04f, Acceleration = 0.98f, Armour = 1.45f, Description = "Lifted pickup with a light bar. Built for shoving.", Livery = "PolygonStreetRacer_Veh_Tex_07_Race_Yellow"},
