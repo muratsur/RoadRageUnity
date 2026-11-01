@@ -1623,18 +1623,20 @@ namespace RoadRage.UnityRemake
 
                 // 2. Trigger gameplay impact & damage/score events
                 var speedAtImpact = driver.SpeedKph;
-                driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
-                if (!traffic.IsWreck)
+                var wasWreck = traffic.IsWreck;
+                if (!wasWreck)
                 {
-                    if (traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
-                        GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
+                    // Set before the impact: from 60 km/h its takedown wrecks the car itself.
                     traffic.crashedByPlayer = true;
                     // The player's bumper that did the hitting: the rear one when
                     // rammed from ahead, the front one otherwise.
                     traffic.hitRoadDistance = driver.RoadDistance +
                                               (longitudinal >= 0f ? driver.HalfLength : -driver.HalfLength);
-                    traffic.Crash(lateral, speedAtImpact);
                 }
+                driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
+                if (!wasWreck && traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
+                    GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
+                if (!traffic.IsWreck) traffic.Crash(lateral, speedAtImpact);
             }
         }
     }
