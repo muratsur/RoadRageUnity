@@ -11336,7 +11336,10 @@ namespace RoadRage.UnityRemake
                 var paints = new Dictionary<string, Material>();
                 foreach (var material in Resources.LoadAll<Material>("TestAssets"))
                     if (material.name.EndsWith("_paint")) paints[material.name] = material;
-                foreach (var asset in TestAssets)
+                var candidates = new List<GameObject>(TestAssets);
+                // Committed cars for one country, named car_<kind>_<country>_h<height>.
+                candidates.AddRange(Resources.LoadAll<GameObject>("CountryCars"));
+                foreach (var asset in candidates)
                 {
                     if (!asset.name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase)) continue;
                     var template = BuildRodinTemplate(asset);
@@ -11357,13 +11360,32 @@ namespace RoadRage.UnityRemake
 
         /// The next Rodin car for a traffic slot, from a shuffled bag so the same car does
         /// not come round twice in a row; null when there are none.
+        private string rodinBagCountry;
+
+        /// The country whose cars this biome's traffic drives, or null for the rest.
+        private static string TrafficCountry(int biomeIndex) =>
+            biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_" : null;
+
         private string NextRodinModel()
         {
             var cars = RodinCars;
             if (cars.Count == 0) return null;
+            // That country's cars where it has any; a country's cars never appear elsewhere.
+            var country = TrafficCountry(BiomeIndexAt(TrafficCarController.PlayerDistance));
+            if (country != rodinBagCountry)
+            {
+                rodinBag.Clear();
+                rodinBagCountry = country;
+            }
             if (rodinBag.Count == 0)
             {
-                for (var i = 0; i < cars.Count; i++) rodinBag.Add(i);
+                var hasOwn = country != null && cars.Exists(c => c.Name.Contains(country));
+                for (var i = 0; i < cars.Count; i++)
+                {
+                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_");
+                    if (hasOwn ? cars[i].Name.Contains(country) : !own) rodinBag.Add(i);
+                }
+                if (rodinBag.Count == 0) return null;
                 for (var i = rodinBag.Count - 1; i > 0; i--)
                 {
                     var j = Random.Range(0, i + 1);

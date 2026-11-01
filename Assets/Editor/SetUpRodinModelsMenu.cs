@@ -17,24 +17,23 @@ using UnityEngine;
 /// at it. Safe to run again after adding more models.
 public static class SetUpRodinModelsMenu
 {
-    private const string Root = "Assets/Resources/TestAssets";
+    private static readonly string[] Roots = { "Assets/Resources/TestAssets", "Assets/Resources/CountryCars" };
 
     [MenuItem("Road Rage/Set Up Rodin Models")]
     public static void SetUp()
     {
-        if (!AssetDatabase.IsValidFolder(Root))
-        {
-            Debug.LogError($"Set Up Rodin Models: no {Root} folder.");
-            return;
-        }
         var done = 0;
-        foreach (var diffusePath in Directory.GetFiles(Root, "texture_diffuse.png", SearchOption.AllDirectories))
+        foreach (var root in Roots)
         {
-            var folder = Path.GetDirectoryName(diffusePath).Replace('\\', '/');
-            if (SetUpFolder(folder)) done++;
+            if (!AssetDatabase.IsValidFolder(root)) continue;
+            foreach (var diffusePath in Directory.GetFiles(root, "texture_diffuse.png", SearchOption.AllDirectories))
+            {
+                var folder = Path.GetDirectoryName(diffusePath).Replace('\\', '/');
+                if (SetUpFolder(folder)) done++;
+            }
         }
         AssetDatabase.SaveAssets();
-        Debug.Log($"Set Up Rodin Models: {done} model folder(s) set up under {Root}.");
+        Debug.Log($"Set Up Rodin Models: {done} model folder(s) set up.");
     }
 
     private static bool SetUpFolder(string folder)
