@@ -23,6 +23,10 @@ source, folder, *rest = sys.argv[sys.argv.index("--") + 1:]
 # Per car: lowest height of the glass (share of the car), steepest-to-flat limit.
 MIN_HEIGHT = float(rest[0]) if rest else 0.56
 MAX_UP = float(rest[1]) if len(rest) > 1 else 0.92
+# A bus or fire engine's windscreen is nearly upright: set MIN_UP=0.02 for those.
+MIN_UP = float(os.environ.get("MIN_UP", 0.3))
+# A van's high roof leans like a windscreen: MAX_HEIGHT keeps the paint off it.
+MAX_HEIGHT = float(os.environ.get("MAX_HEIGHT", 1.1))
 PREVIEW = rest[2] if len(rest) > 2 else None
 GLASS = (0.035, 0.045, 0.055)
 GUTTER_PIXELS = 10
@@ -47,7 +51,7 @@ for p in me.polygons:
     across = abs(c.x - (lo.x + hi.x) / 2) / (size.x / 2)
     along = (c.y - lo.y) / size.y
     # Forward and up, raked at 25-65 degrees, above the bonnet and between the pillars.
-    if n.y < -0.4 and 0.3 < n.z < MAX_UP and height > MIN_HEIGHT and across < 0.8 and along < 0.62:
+    if n.y < -0.4 and MIN_UP < n.z < MAX_UP and MIN_HEIGHT < height < MAX_HEIGHT and across < 0.8 and along < 0.62:
         glass.add(p.index)
 found = len(glass)
 
@@ -76,7 +80,8 @@ dropped = set().union(*[q for q in parts if len(q) < biggest * 0.15], set())
 glass -= dropped
 
 # A face with glass on two or more sides is glass whatever way it happens to lean.
-for _ in range(3):
+# Rough meshes leave ragged edges: GROW=15 closes them.
+for _ in range(int(os.environ.get("GROW", 3))):
     grown = set()
     for p in me.polygons:
         if p.index not in glass and sum(any(o != p.index and o in glass for o in by_edge[k]) for k in p.edge_keys) >= 2:

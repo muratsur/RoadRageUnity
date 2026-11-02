@@ -384,7 +384,12 @@ namespace RoadRage.UnityRemake
         public enum Offence { None, Weaving, Speeding, WrongWay, Tailgating }
         public Offence Violation { get; private set; }
 
-        public enum VehicleRole { Standard, FuelTanker, CarHauler, LogTruck }
+        public enum VehicleRole { Standard, FuelTanker, CarHauler, LogTruck, PostVan, Bus, Ambulance, FireTruck }
+        /// Too heavy for a car to shift: it lurches and drives on.
+        public bool IsHeavy => Role == VehicleRole.LogTruck || Role == VehicleRole.Bus || Role == VehicleRole.FireTruck;
+        public bool IsEmergency => Role == VehicleRole.Ambulance || Role == VehicleRole.FireTruck;
+        /// Working vehicles never break the rules, however often they are recycled.
+        private bool Law => Role >= VehicleRole.PostVan;
         public VehicleRole Role { get; set; } = VehicleRole.Standard;
         public bool HasDetonated { get; private set; }
         /// Set by the player collision pass just before it wrecks this car, so a log
@@ -587,7 +592,7 @@ namespace RoadRage.UnityRemake
             // A loaded rig is not shoved about by a car, and a wrecked one not at all:
             // at plain footprint mass the player's pickup slid a wrecked truck aside
             // and opened the road.
-            : Role == VehicleRole.LogTruck ? HalfLength * HalfWidth * 60f
+            : IsHeavy ? HalfLength * HalfWidth * 60f
             : HalfLength * HalfWidth;
         /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
         /// hole in the road that police and traffic drove straight through.
@@ -954,6 +959,8 @@ namespace RoadRage.UnityRemake
                 relocated = true;
             }
 
+            if (relocated) RollCall();
+
             // Everything below belongs to the recycle EVENT. Recycle() runs every
             // frame: without the relocated gate, wrecks un-wrecked instantly and the
             // allegiance reroll flickered violator, fleeing and hit-and-run flags off
@@ -969,7 +976,7 @@ namespace RoadRage.UnityRemake
             if (!IsWreck)
             {
                 var offences = NarrowRoad ? NarrowRoadOffences : RecycleOffences;
-                Violation = Random.value < 0.45f
+                Violation = !Law && Random.value < 0.45f
                     ? offences[Random.Range(0, offences.Length)]
                     : Offence.None;
                 IsHitAndRunner = false;
@@ -982,6 +989,7 @@ namespace RoadRage.UnityRemake
             PlayerPassing = false;
             Shoved = false;
             Knocked = false;
+            playerHitOnce = false;
             rolled = false;
             var damaged = GetComponent<CarCrashDamage>();
             if (damaged != null) damaged.Repair();
@@ -1220,6 +1228,7 @@ namespace RoadRage.UnityRemake
                         ? Mathf.Min(desiredSpeed, runSpeed)
                         : Mathf.Max(desiredSpeed, runSpeed);
                 }
+                desiredSpeed = ForWorkingVehicles(desiredSpeed);
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, desiredSpeed, acceleration * Time.deltaTime);
                 var step = ClampToStopLine(RoadDistance, Direction * currentSpeedKph / 3.6f * Time.deltaTime);
                 RoadDistance = RoadPath.Wrap(RoadDistance + step);
@@ -1276,6 +1285,70 @@ namespace RoadRage.UnityRemake
                 ReactToContacts();
             }
             PlaceOnRoad();
+        }
+
+        /// Most of the time an ambulance or fire engine is just driving somewhere. A call,
+        /// with lights and horn, is an event: one at a time, and minutes apart.
+        private const float CallGapSeconds = 150f;
+        private const float CallChance = 0.5f;
+        private const float OffDutyKph = 72f;
+        private const float AmbulanceCallKph = 125f;
+        private const float FireCallKph = 95f;
+        private static TrafficCarController onCallNow;
+        private static float nextCallAt = CallGapSeconds * 0.3f;
+        public bool OnCall { get; private set; }
+
+        /// Decided each time it comes round again out of sight, so nothing changes in view.
+        private void RollCall()
+        {
+            if (!IsEmergency) return;
+            if (onCallNow == this) onCallNow = null;
+            OnCall = onCallNow == null && Time.time >= nextCallAt && Random.value < CallChance;
+            if (OnCall)
+            {
+                onCallNow = this;
+                nextCallAt = Time.time + CallGapSeconds;
+            }
+            cruiseSpeedKph = !OnCall ? OffDutyKph : Role == VehicleRole.Ambulance ? AmbulanceCallKph : FireCallKph;
+            Debug.Log($"RR_CALL {name} onCall={OnCall} at {Time.time:0}s");
+        }
+
+        private const float BusStopSeconds = 6f;
+        private const float BusStopReach = 15f;
+        private const float YieldBehindMetres = 90f;
+        private const float YieldSpeedShare = 0.6f;
+        private const float YieldMetresPerSecond = 7f;
+        private int lastBusStop = -1;
+        private float busStoppedUntil;
+
+        /// A bus halts at each town on the route; anything with an emergency vehicle coming
+        /// up behind it slows and pulls over to its own edge of the road.
+        private float ForWorkingVehicles(float desiredSpeed)
+        {
+            if (Role == VehicleRole.Bus && RoadPath.Route != null)
+            {
+                var fold = RoadPath.Route.Fold(RoadDistance);
+                var places = RoadPath.Route.Places;
+                for (var i = 0; i < places.Length; i++)
+                    if (i != lastBusStop && Mathf.Abs(fold - places[i].Distance) < BusStopReach)
+                    {
+                        lastBusStop = i;
+                        busStoppedUntil = Time.time + BusStopSeconds;
+                    }
+                if (Time.time < busStoppedUntil) return 0f;
+            }
+            if (IsEmergency) return desiredSpeed;
+            for (var i = 0; i < ActiveCars.Count; i++)
+            {
+                var other = ActiveCars[i];
+                if (other == null || !other.OnCall || other.IsWreck || other.Direction != Direction) continue;
+                var behind = RoadPath.ForwardGap(other.RoadDistance, RoadDistance, Direction);
+                if (behind <= 0f || behind > YieldBehindMetres) continue;
+                separation = Mathf.Clamp(separation + (LaneOffset >= 0f ? 1f : -1f) * YieldMetresPerSecond * Time.deltaTime,
+                    -MaxSeparation, MaxSeparation);
+                return desiredSpeed * YieldSpeedShare;
+            }
+            return desiredSpeed;
         }
 
         private void OnEnable() => VehicleContacts.Register(this);
@@ -1426,7 +1499,7 @@ namespace RoadRage.UnityRemake
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
             if (IsWreck) return;
-            if (Role == VehicleRole.LogTruck)
+            if (IsHeavy)
             {
                 TakeHitAsRig(lateralPush);
                 return;
@@ -1504,12 +1577,14 @@ namespace RoadRage.UnityRemake
         /// Where the next Crash lands, in the world; the car's nose if not set.
         public Vector3? HitPointNext { get; set; }
         /// A head-on wreck stands where it stopped this long, however hard it is pushed.
-        private const float HeadOnStaysSeconds = 3f;
+        private const float HeadOnStaysSeconds = 0.8f;
         private float shoveNotBefore;
         private bool rolled;
         private float rollLift;
-        private const float RigHitIntervalSeconds = 1f;
-        private float nextRigHit;
+        /// Out of touch this long and the next touch is a new hit.
+        private const float NewContactSeconds = 1.5f;
+        private float lastPlayerTouch = -10f;
+        private bool playerHitOnce;
 
         /// Forty tonnes does not care about a car: the rig stays upright, keeps driving and
         /// keeps its load. It only lurches. Folding and stopping it on a road this narrow
@@ -1651,7 +1726,7 @@ namespace RoadRage.UnityRemake
 
                 // Anti-penetration is handled by the shared vehicle pass; only the
                 // gameplay consequences of the contact are decided here.
-                if (longitudinal > 0f && !traffic.IsWreck && traffic.Role != VehicleRole.LogTruck)
+                if (longitudinal > 0f && !traffic.IsWreck && !traffic.IsHeavy)
                 {
                     // Momentum transfer: the car you rear-end is carried along rather
                     // than standing still while you drive into it. A wreck is excluded -
@@ -1670,6 +1745,15 @@ namespace RoadRage.UnityRemake
                     traffic.DetonateTanker();
                 }
 
+                // One contact is one hit. Staying against a car hit it again every 0.35 s, with
+                // a crash sound and sparks each time; a wreck is only ever hit once.
+                var fresh = Time.time - traffic.lastPlayerTouch > NewContactSeconds;
+                traffic.lastPlayerTouch = Time.time;
+                if (traffic.IsWreck) traffic.PlayerPressing(driver.LateralOffset);
+                if (!fresh || (traffic.IsWreck && traffic.playerHitOnce)) continue;
+                traffic.playerHitOnce = true;
+                Debug.Log($"RR_EVENT playerhit {traffic.name} wreck={traffic.IsWreck} kph={driver.SpeedKph:0}");
+
                 // 2. Trigger gameplay impact & damage/score events
                 var speedAtImpact = driver.SpeedKph;
                 var wasWreck = traffic.IsWreck;
@@ -1684,12 +1768,6 @@ namespace RoadRage.UnityRemake
                     // wreck can fill the lane, and being held against it, hit again every
                     // 0.35 s, left the player crawling and stuck behind it.
                     if (traffic.PlayerPassing) continue;
-                }
-                // A rig is not wrecked by the hit, so the contact lasts: it counts once.
-                if (traffic.Role == VehicleRole.LogTruck && !wasWreck)
-                {
-                    if (Time.time < traffic.nextRigHit) continue;
-                    traffic.nextRigHit = Time.time + RigHitIntervalSeconds;
                 }
                 driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
                 if (!traffic.IsWreck) traffic.Crash(lateral, speedAtImpact);

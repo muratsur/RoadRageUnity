@@ -307,6 +307,7 @@ namespace RoadRage.UnityRemake
         }
 
         private const float OneHitKeepsSpeed = 0.7f;
+        private const int EmergencyHitPenalty = 1000;
 
         private static bool sideSwipeAt(float lateralGap, float longitudinalGap) =>
             Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
@@ -318,7 +319,7 @@ namespace RoadRage.UnityRemake
             if (Time.time < nextImpactTime) return false;
             nextImpactTime = Time.time + 0.35f;
             var wasWreck = traffic.IsWreck;
-            var solidHit = wasWreck || traffic.Role == TrafficCarController.VehicleRole.LogTruck;
+            var solidHit = wasWreck || traffic.IsHeavy;
             var headOn = !wasWreck && !sideSwipeAt(lateralGap, longitudinalGap) && traffic.Direction < 0f;
             if (!wasWreck)
             {
@@ -343,12 +344,19 @@ namespace RoadRage.UnityRemake
                 GameState.Combo = 0;
                 GameState.Show("WRECKAGE");
             }
-            else if (traffic.Role == TrafficCarController.VehicleRole.LogTruck)
+            else if (traffic.IsEmergency)
+            {
+                GameState.Combo = 0;
+                GameState.Score = Mathf.Max(0, GameState.Score - EmergencyHitPenalty);
+                GameState.Show($"EMERGENCY VEHICLE  -{EmergencyHitPenalty}");
+                if (traffic.IsHeavy) SpeedKph *= RigHitKeepsSpeed;
+            }
+            else if (traffic.IsHeavy)
             {
                 // Like hitting a wall that drives: the car bounces. The player is the hitter
                 // and is never hurt by traffic.
                 GameState.Combo = 0;
-                GameState.Show("LOG TRUCK!");
+                GameState.Show(traffic.Role == TrafficCarController.VehicleRole.Bus ? "BUS!" : "LOG TRUCK!");
                 SpeedKph *= RigHitKeepsSpeed;
             }
             else if (traffic.IsViolator)
@@ -417,7 +425,7 @@ namespace RoadRage.UnityRemake
             if (traffic.IsViolator || SpeedKph >= 60f)
             {
                 if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck &&
-                    traffic.Role != TrafficCarController.VehicleRole.LogTruck)
+                    !traffic.IsHeavy)
                 {
                     var impactNormal = (traffic.transform.position - transform.position).normalized;
                     RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);

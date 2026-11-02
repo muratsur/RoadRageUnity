@@ -11895,7 +11895,8 @@ namespace RoadRage.UnityRemake
                 candidates.AddRange(Resources.LoadAll<GameObject>("CountryCars"));
                 foreach (var asset in candidates)
                 {
-                    if (!asset.name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!asset.name.StartsWith("car", System.StringComparison.OrdinalIgnoreCase) &&
+                        !asset.name.StartsWith(SpecialVehiclePrefix)) continue;
                     var template = BuildRodinTemplate(asset);
                     if (template == null) continue;
                     paints.TryGetValue(asset.name + "_paint", out var paint);
@@ -11936,6 +11937,7 @@ namespace RoadRage.UnityRemake
                 var hasOwn = country != null && cars.Exists(c => c.Name.Contains(country));
                 for (var i = 0; i < cars.Count; i++)
                 {
+                    if (cars[i].Name.StartsWith(SpecialVehiclePrefix)) continue;
                     var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_");
                     if (hasOwn ? cars[i].Name.Contains(country) : !own) rodinBag.Add(i);
                 }
@@ -12042,7 +12044,8 @@ namespace RoadRage.UnityRemake
             var length = Mathf.Max(bounds.size.x, bounds.size.z);
             var scale = named ? TestAssetHeight(rodinCar.Name) / bounds.size.y : RodinDefaultLength / length;
             // A height typed for the test spot that makes a bus or a toy of it is not trusted.
-            if (length * scale < 3.2f || length * scale > 6.5f) scale = RodinDefaultLength / length;
+            if (!rodinCar.Name.StartsWith(SpecialVehiclePrefix) && (length * scale < 3.2f || length * scale > 6.5f))
+                scale = RodinDefaultLength / length;
             visual.transform.localScale *= scale;
             NormalizeVehicleVisual(visual, Mathf.Max(bounds.size.x, bounds.size.z) * scale);
             return true;
@@ -12363,6 +12366,7 @@ namespace RoadRage.UnityRemake
                 if (isCab) AddTaxiRoofSign(spawned);
             }
 
+            if (TrafficCountry(BiomeIndexAt(startDistance)) == "_de_") AddGermanWorkingVehicles(trafficRoot, startDistance);
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
                       $"brutes={brutes} enforcers={enforcers} cabs={cabs} rodin={rodinSpawned}");
             // Accident scenes are a road-blocking pile of wrecks. On a single-lane road
@@ -12374,6 +12378,56 @@ namespace RoadRage.UnityRemake
                 BuildAccidentScene(trafficRoot, startDistance + 420f, -1f, models[1], models[3]);
                 BuildAccidentScene(trafficRoot, startDistance + 820f, 1f, models[0], models[4]);
             }
+        }
+
+        private const string SpecialVehiclePrefix = "special_";
+
+        /// The post van and bus hold everyone up; the ambulance and fire engine run with blue
+        /// lights and a horn.
+        private void AddGermanWorkingVehicles(Transform parent, float start)
+        {
+            void Add(string kind, TrafficCarController.VehicleRole role, float ahead, float lane, float speed, float direction)
+            {
+                var index = RodinCars.FindIndex(c => c.Name.StartsWith($"{SpecialVehiclePrefix}{kind}_"));
+                if (index < 0)
+                {
+                    Debug.LogWarning($"RR_TRAFFIC missing {SpecialVehiclePrefix}{kind}");
+                    return;
+                }
+                var vehicle = CreateTrafficVehicle(parent, $"Working {kind}", RodinModelPrefix + index, Color.white,
+                    start + ahead, lane, speed, direction, false, 0f, TrafficCarController.Offence.None, role);
+                if (vehicle.IsEmergency) AddBlueLights(vehicle);
+            }
+            Add("post", TrafficCarController.VehicleRole.PostVan, 620f, -0.5f, 55f, 1f);
+            Add("bus", TrafficCarController.VehicleRole.Bus, 1000f, -0.5f, 50f, 1f);
+            Add("ambulance", TrafficCarController.VehicleRole.Ambulance, 800f, 0.5f, 72f, -1f);
+            Add("fire", TrafficCarController.VehicleRole.FireTruck, 1500f, -0.5f, 72f, 1f);
+        }
+
+        private void AddBlueLights(TrafficCarController vehicle)
+        {
+            if (!materials.TryGetValue("Emergency Blue", out var blue))
+            {
+                blue = MakeMaterial("Emergency Blue", new Color(0.1f, 0.2f, 1f), 0f, 0.6f);
+                blue.EnableKeyword("_EMISSION");
+                blue.SetColor("_EmissionColor", new Color(0.4f, 0.8f, 6f));
+            }
+            if (!TryGetCombinedBounds(vehicle.gameObject, out var bounds)) return;
+            var lights = new Renderer[2];
+            for (var s = 0; s < 2; s++)
+            {
+                var beacon = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Destroy(beacon.GetComponent<Collider>());
+                beacon.name = "Blue Light";
+                beacon.transform.SetParent(vehicle.transform, false);
+                beacon.transform.position = bounds.center + Vector3.up * (bounds.extents.y + 0.05f)
+                    + vehicle.transform.right * (s == 0 ? -0.5f : 0.5f) + vehicle.transform.forward * (vehicle.HalfLength * 0.7f);
+                beacon.transform.localScale = new Vector3(0.45f, 0.18f, 0.25f);
+                var renderer = beacon.GetComponent<Renderer>();
+                renderer.sharedMaterial = blue;
+                lights[s] = renderer;
+            }
+            vehicle.gameObject.AddComponent<EmergencyVehicle>().Bind(vehicle, lights);
         }
 
         /// Working-truck colours: the forest green is the classic logger.

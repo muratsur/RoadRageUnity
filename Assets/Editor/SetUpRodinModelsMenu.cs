@@ -89,6 +89,8 @@ public static class SetUpRodinModelsMenu
             var path = fbx.Replace('\\', '/');
             if (!(AssetImporter.GetAtPath(path) is ModelImporter model)) continue;
             model.materialImportMode = ModelImporterMaterialImportMode.ImportStandard;
+            // Crashes crush the mesh at runtime (CarCrashDamage).
+            model.isReadable = true;
             foreach (var asset in AssetDatabase.LoadAllAssetRepresentationsAtPath(path))
                 if (asset is Material embedded)
                     model.AddRemap(new AssetImporter.SourceAssetIdentifier(typeof(Material), embedded.name), material);
