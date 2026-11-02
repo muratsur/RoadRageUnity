@@ -126,6 +126,9 @@ namespace RoadRage.UnityRemake
             var totalMass = Mathf.Max(0.01f, a.ContactMass + b.ContactMass);
             var shareA = b.ContactMass / totalMass;
             var shareB = a.ContactMass / totalMass;
+            // The player ploughs a wreck aside: it takes all of the correction.
+            if (a is ArcadeCarController && b is TrafficCarController wreckB && wreckB.PlayerShoves) { shareA = 0f; shareB = 1f; }
+            else if (b is ArcadeCarController && a is TrafficCarController wreckA && wreckA.PlayerShoves) { shareA = 1f; shareB = 0f; }
 
             if (overlapLat < overlapLong)
             {
@@ -140,6 +143,14 @@ namespace RoadRage.UnityRemake
                 {
                     a.ApplyContactPush(0f, pushA);
                     b.ApplyContactPush(0f, pushB);
+                    return;
+                }
+                // A wreck already against the rail: the player slides off it instead of
+                // ploughing it along the road for ever.
+                if (shareA == 0f || shareB == 0f)
+                {
+                    if (shareA == 0f) a.ApplyContactPush(0f, -sign * overlapLat);
+                    else b.ApplyContactPush(0f, sign * overlapLat);
                     return;
                 }
             }

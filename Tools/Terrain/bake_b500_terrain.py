@@ -52,6 +52,11 @@ PREVIEW = os.path.join(os.path.dirname(os.path.abspath(DGM)), "b500_terrain_prev
 
 Z_STEP = 4.0            # m of road distance between rows, as b500.bytes
 ROAD_HALF = 3.0         # m either side of the centre averaged for the road's own height
+# Optional (z, heights) -> heights: bare-earth data has a canyon's floor under a bridge, so
+# a route with bridges replaces the road's height there with its deck's.
+ROAD_HEIGHTS = None
+# Optional (z, offsets, absolute ground, road height) -> the relative table to store.
+GROUND_TABLE = None
 
 
 def offsets():
@@ -169,6 +174,7 @@ def main():
     # Right of the road, as the game sees it: (dir_north, -dir_east).
     re_, rn = dn, -de
     rel = np.empty((len(z), len(offs)))
+    road_heights = np.empty(len(z))
     batch = 400
     for start in range(0, len(z), batch):
         sl = slice(start, min(len(z), start + batch))
@@ -180,8 +186,16 @@ def main():
         er = e0 + re_[sl][:, None] * across[None, :]
         nr = n0 + rn[sl][:, None] * across[None, :]
         road = np.nanmean(dgm.height(er.ravel(), nr.ravel()).reshape(er.shape), axis=1)
+        road_heights[sl] = road
         rel[sl] = ground - road[:, None]
         print(f"  {min(len(z), start + batch)}/{len(z)} road samples", flush=True)
+
+    if ROAD_HEIGHTS is not None:
+        fixed = ROAD_HEIGHTS(z, road_heights)
+        rel += (road_heights - fixed)[:, None]
+        road_heights = fixed
+    if GROUND_TABLE is not None:
+        rel = GROUND_TABLE(z, offs, rel + road_heights[:, None], road_heights)
 
     holes = int(np.isnan(rel).sum())
     if holes:

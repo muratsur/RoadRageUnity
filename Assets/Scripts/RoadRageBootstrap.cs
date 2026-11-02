@@ -295,14 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
             "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
-            "MOSEL VALLEY", "ICELAND COAST"
+            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -588,6 +588,7 @@ namespace RoadRage.UnityRemake
 
             if (value.Contains("mosel")) return Biomes[MoselIndex];
             if (value.Contains("iceland")) return Biomes[IcelandIndex];
+            if (value.Contains("sur") || value.Contains("california")) return Biomes[BigSurIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -1432,6 +1433,8 @@ namespace RoadRage.UnityRemake
                 BiomeMaterial($"Mosel House {house}", "MoselVillage", $"T_rodin_house_{house}_D", $"T_rodin_house_{house}_N", Color.white, 0f, 0.12f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
             MakeMaterial("Mosel Bridge", new Color(0.56f, 0.55f, 0.52f), 0f, 0.12f);
+            foreach (var kind in new[] { "cabin", "coasthouse", "store", "lighthouse" })
+                BiomeMaterial($"Sur {kind}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", Color.white, 0f, 0.12f);
             MakeMaterial("Mosel Steel", new Color(0.16f, 0.18f, 0.19f), 0.6f, 0.35f);
             MakeMaterial("Mosel Paint", new Color(0.85f, 0.85f, 0.82f), 0f, 0.2f);
             MoselLamps.Bind(MakeMaterial("Mosel Lamp", new Color(0.9f, 0.86f, 0.74f), 0f, 0.5f));
@@ -2431,6 +2434,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.40f, PostExposure = 0.20f, BloomIntensity = 0f, BloomThreshold = 5f,
                 RoadWetness = 0.08f, AmbientIntensity = 1.25f, Saturation = -24f
             },
+            BigSurIndex => new BiomeMood // BIG SUR - bright Pacific light, a little sea haze
+            {
+                FogDensity = 0.0012f, Fog = new Color(0.78f, 0.84f, 0.90f),
+                Sky = new Color(0.50f, 0.68f, 0.92f), Equator = new Color(0.68f, 0.68f, 0.60f),
+                Ground = new Color(0.30f, 0.26f, 0.18f), SunColor = new Color(1f, 0.95f, 0.82f),
+                SunIntensity = 1.3f, PostExposure = 0.02f, BloomIntensity = 0.15f, BloomThreshold = 4f,
+                AmbientIntensity = 1.1f, Saturation = 0f
+            },
             IcelandIndex => new BiomeMood // ICELAND COAST - cold, even light under low cloud
             {
                 FogDensity = 0.0011f, Fog = new Color(0.60f, 0.66f, 0.72f),
@@ -2514,6 +2525,7 @@ namespace RoadRage.UnityRemake
             CanalTownIndex => "Kowloon Ground",
             MoselIndex => "Mosel Ground",
             IcelandIndex => "Iceland Ground",
+            BigSurIndex => "Big Sur Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2559,6 +2571,16 @@ namespace RoadRage.UnityRemake
                 ("T_forest_humus", 0.37f, new Color(1.15f, 1.12f, 1.1f)),
                 ("T_forest_verge", 0.62f, Color.white),
             }, 0.1f);
+
+            // Big Sur: summer-dry golden grass, bare rock in patches, a gravel verge. Poly Haven, CC0.
+            Splat("Big Sur Ground", "BigSur", new[]
+            {
+                ("T_sur_grass", 0.1f, new Color(1f, 1.15f, 1.9f)),
+                ("T_sur_rock", 0.05f, new Color(0.95f, 0.88f, 0.8f)),
+                ("T_sur_grass", 0.14f, new Color(0.9f, 1f, 1.5f)),
+            }, 0.08f);
+            materials["Big Sur Ground"].SetFloat("_Macro", 1f);
+            materials["Big Sur Ground"].SetFloat("_MacroMean", 0.052f);
 
             // Iceland: black volcanic sand, bright moss in patches, dark gravel at the road edge.
             Splat("Iceland Ground", "ForestFloor", new[]
@@ -2758,7 +2780,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == MoselIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
                 : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
                 : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
@@ -2818,7 +2840,7 @@ namespace RoadRage.UnityRemake
                 BuildRibbon("Left Iceland Verge", -1.3f, -1.0f, 0.02f, gravel, relative: true);
                 BuildRibbon("Right Iceland Verge", 1.0f, 1.3f, 0.02f, gravel, relative: true);
             }
-            else if (biomeIndex == 0 || biomeIndex == MoselIndex) // Greenwood Forest, Mosel Valley
+            else if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == BigSurIndex) // Greenwood Forest, Mosel Valley, Big Sur
             {
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
@@ -2847,7 +2869,11 @@ namespace RoadRage.UnityRemake
             }
 
             var lanes = LaneCountFor(biomeIndex);
-            if (biomeIndex == IcelandIndex)
+            if (biomeIndex == BigSurIndex)
+            {
+                // Double yellow and white edges, drawn above: nothing more.
+            }
+            else if (biomeIndex == IcelandIndex)
             {
                 // Route 1: one broken white centre line, nothing at the edges.
                 BuildDashedRibbon("Center Dashes", 0f, 0.13f, 3f, 12f, materials["White Paint"], relative: true);
@@ -2937,10 +2963,10 @@ namespace RoadRage.UnityRemake
             if (route == null || !route.HasTerrain) return 0f;
             var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth;
             var across = Mathf.Abs(lateral) - edge;
-            var deck = route == moselRoute ? MoselDeckWeight(distance) : 0f;
+            var deck = route == moselRoute || route == bigSurRoute ? MoselDeckWeight(distance) : 0f;
             if (across <= 0f && deck <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
-            var limit = route == moselRoute || route == icelandRoute ? MoselGroundLimit : RealGroundLimit;
+            var limit = route == moselRoute || route == icelandRoute || route == bigSurRoute ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             // Under a bridge the ground falls away from the road instead of meeting it.
             var below = Mathf.Min(real, -MoselDeckClearance);
@@ -3321,6 +3347,12 @@ namespace RoadRage.UnityRemake
                         Mathf.InverseLerp(RoadPath.ClearanceAt(distance) + vergeFrom,
                             RoadPath.ClearanceAt(distance) + vergeTo, Mathf.Abs(lateral)));
                     var w1 = Mathf.Clamp01((patch - 0.42f) * 2.6f) * (1f - verge * 0.7f);
+                    // Big Sur: bare rock where it is steep, not in random patches.
+                    if (RoadPath.Route == bigSurRoute && j > 0 && j + 1 < across)
+                    {
+                        var slope = Mathf.Abs(GridCornerY(row, j + 1) - GridCornerY(row, j - 1)) / (columns[j + 1] - columns[j - 1]);
+                        w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, slope)) + (patch - 0.85f) * 3f) * (1f - verge);
+                    }
                     var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
                     var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
                     var sum = w0 + w1 + w2;
@@ -4935,7 +4967,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -4958,7 +4990,7 @@ namespace RoadRage.UnityRemake
         /// could not be got past: it now has two each way (18 m of carriageway).
         private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2
             // One lane each way, as the real B53 and Route 1 are.
-            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex ? 1 : 3;
+            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -4966,6 +4998,7 @@ namespace RoadRage.UnityRemake
         private static RoadRoute greenwoodRoute;
         private static RoadRoute moselRoute;
         private static RoadRoute icelandRoute;
+        private static RoadRoute bigSurRoute;
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -4974,7 +5007,16 @@ namespace RoadRage.UnityRemake
         /// road reads its shape through RoadPath.
         private static void ApplyBiomeRoute(int biomeIndex)
         {
-            PolizeiLivery.Sheet = biomeIndex == IcelandIndex ? "Police/T_logreglan" : "Police/T_polizei";
+            PolizeiLivery.Sheet = biomeIndex == IcelandIndex ? "Police/T_logreglan"
+                : biomeIndex == BigSurIndex ? "Police/T_us_police" : "Police/T_polizei";
+            if (biomeIndex == BigSurIndex)
+            {
+                bigSurRoute ??= RoadRoute.Load("Biomes/Routes/sr1");
+                if (bigSurRoute == null) Debug.LogWarning("Missing Biomes/Routes/sr1 - Big Sur keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE Big Sur follows Highway 1: {bigSurRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = bigSurRoute;
+                return;
+            }
             if (biomeIndex == IcelandIndex)
             {
                 icelandRoute ??= RoadRoute.Load("Biomes/Routes/r1");
@@ -5747,7 +5789,7 @@ namespace RoadRage.UnityRemake
         private void UpdateStreaming(float playerDistance)
         {
             // The Mosel flows: its ripples drift along the valley.
-            if (RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == icelandRoute))
+            if (RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == icelandRoute || RoadPath.Route == bigSurRoute))
                 materials["Mosel Water"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.035f));
             if (RoadPath.Route != null && RoadPath.Route == icelandRoute)
                 materials["Iceland Falls"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.55f));
@@ -5811,6 +5853,7 @@ namespace RoadRage.UnityRemake
                 case CanalTownIndex: BuildCanalTown(); break;
                 case MoselIndex: BuildMoselValley(); break;
                 case IcelandIndex: BuildIcelandCoast(); break;
+                case BigSurIndex: BuildBigSur(); break;
                 default: BuildForest(); break;
             }
         }
@@ -6084,6 +6127,9 @@ namespace RoadRage.UnityRemake
         private const float MoselDeckEase = 10f;
         private const float MoselDeckDepth = 1.4f;
         private const float MoselParapet = 0.9f;
+        private const float MoselRailTop = 0.72f;
+        private const float MoselWallRamp = 10f;
+        private const float MoselWallThick = 0.35f;
         private const float MoselPierSpacing = 24f;
         private const float MoselSideHalfWidth = 5f;
         private const float MoselSideArch = 6f;
@@ -6102,13 +6148,17 @@ namespace RoadRage.UnityRemake
         private const int MoselInlandMetres = 90;
         private const int MoselFlatTop = 3;
         private static List<Vector2> moselDecks;
+        private static RoadRoute structuresRoute;
+        private static float bigSurSeaLevel = float.NaN;
         private static readonly List<MoselCrossing> moselCrossings = new();
 
         private static void LoadMoselStructures()
         {
-            if (moselDecks != null) return;
+            if (moselDecks != null && structuresRoute == RoadPath.Route) return;
+            structuresRoute = RoadPath.Route;
             moselDecks = new List<Vector2>();
-            var asset = Resources.Load<TextAsset>("Biomes/Routes/b53_structures");
+            moselCrossings.Clear();
+            var asset = Resources.Load<TextAsset>(RoadPath.Route == bigSurRoute ? "Biomes/Routes/sr1_structures" : "Biomes/Routes/b53_structures");
             if (asset == null)
             {
                 Debug.LogWarning("Missing Biomes/Routes/b53_structures - the Mosel Valley has no bridges.");
@@ -6124,10 +6174,20 @@ namespace RoadRage.UnityRemake
             {
                 var f = line.Trim().Split(' ');
                 if (f[0] == "deck") moselDecks.Add(new Vector2(Number(f[1]), Number(f[2])));
+                else if (f[0] == "sea") bigSurSeaLevel = Number(f[1]);
                 else if (f[0] == "side") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Points = Line(f[2]) });
                 else if (f[0] == "high") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Height = Number(f[2]), Points = Line(f[3]) });
             }
             Debug.Log($"RR_MOSEL structures: {moselDecks.Count} road bridges, {moselCrossings.Count} crossings");
+        }
+
+        /// Metres along the road to the nearer end of the bridge at this distance.
+        private static float MoselDeckEndDistance(float distance)
+        {
+            var f = RoadPath.Route.Fold(distance);
+            foreach (var span in moselDecks)
+                if (f >= span.x && f <= span.y) return Mathf.Min(f - span.x, span.y - f);
+            return 0f;
         }
 
         private static bool OnMoselDeck(float distance)
@@ -6143,12 +6203,13 @@ namespace RoadRage.UnityRemake
         private static float MoselDeckWeight(float distance)
         {
             LoadMoselStructures();
-            var f = moselRoute.Fold(distance);
+            var f = RoadPath.Route.Fold(distance);
             var weight = 0f;
             foreach (var span in moselDecks)
             {
-                var outside = Mathf.Max(span.x - f, f - span.y);
-                if (outside < MoselDeckEase) weight = Mathf.Max(weight, 1f - Mathf.SmoothStep(0f, 1f, outside / MoselDeckEase));
+                // Inside the span only: the ground meets the road right up to the bridge's end.
+                var inside = Mathf.Min(f - span.x, span.y - f);
+                if (inside > 0f) weight = Mathf.Max(weight, Mathf.SmoothStep(0f, 1f, inside / MoselDeckEase));
             }
             return weight;
         }
@@ -6187,18 +6248,31 @@ namespace RoadRage.UnityRemake
             {
                 var next = d + step;
                 if (!OnMoselDeck(d) || !OnMoselDeck(next)) continue;
-                var w = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + 0.7f;
-                var wn = RoadPath.HalfWidthAt(next) + RoadPath.ShoulderWidth + 0.7f;
+                // The wall's inner face runs on from the guard rail's line.
+                var w = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + GuardRailOffset + MoselWallThick;
+                var wn = RoadPath.HalfWidthAt(next) + RoadPath.ShoulderWidth + GuardRailOffset + MoselWallThick;
+                // Rising from the rail's height, so wall and rail read as one line.
+                var top = Mathf.Lerp(MoselRailTop, MoselParapet, MoselDeckEndDistance(d) / MoselWallRamp);
+                var topn = Mathf.Lerp(MoselRailTop, MoselParapet, MoselDeckEndDistance(next) / MoselWallRamp);
+                var firstStep = !OnMoselDeck(d - step);
+                var lastStep = !OnMoselDeck(next + step);
                 Vector3 At(float distance, float lateral, float y) => RoadPath.Point(distance, lateral, y);
                 mesh.Face("Mosel Bridge", At(d, -w, -MoselDeckDepth), At(d, w, -MoselDeckDepth), At(next, wn, -MoselDeckDepth), At(next, -wn, -MoselDeckDepth));
                 for (var side = -1; side <= 1; side += 2)
                 {
-                    mesh.Face("Mosel Bridge", At(d, side * w, -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, MoselParapet), At(d, side * w, MoselParapet));
-                    var inner = 0.35f;
-                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), 0f), At(next, side * (wn - inner), 0f), At(next, side * (wn - inner), MoselParapet), At(d, side * (w - inner), MoselParapet));
-                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), MoselParapet), At(next, side * (wn - inner), MoselParapet), At(next, side * wn, MoselParapet), At(d, side * w, MoselParapet));
+                    mesh.Face("Mosel Bridge", At(d, side * w, -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(d, side * w, top));
+                    var inner = MoselWallThick;
+                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), 0f), At(next, side * (wn - inner), 0f), At(next, side * (wn - inner), topn), At(d, side * (w - inner), top));
+                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), top), At(next, side * (wn - inner), topn), At(next, side * wn, topn), At(d, side * w, top));
+                    if (firstStep) mesh.Face("Mosel Bridge", At(d, side * (w - inner), -MoselDeckDepth), At(d, side * w, -MoselDeckDepth), At(d, side * w, top), At(d, side * (w - inner), top));
+                    if (lastStep) mesh.Face("Mosel Bridge", At(next, side * (wn - inner), -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(next, side * (wn - inner), topn));
                 }
+                // Road surface out to the parapet: below it the deck was an open trench.
+                for (var side = -1; side <= 1; side += 2)
+                    mesh.Face("Mosel Road", At(d, side * RoadPath.HalfWidthAt(d), 0.05f), At(next, side * RoadPath.HalfWidthAt(next), 0.05f),
+                        At(next, side * wn, 0.05f), At(d, side * w, 0.05f));
                 var fold = RoadPath.Route.Fold(d);
+                ArchUnderDeck(mesh, d, next, fold, w);
                 if (Mathf.FloorToInt(fold / MoselPierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / MoselPierSpacing))
                     mesh.Pier("Mosel Bridge", RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f);
             }
@@ -6384,6 +6458,126 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        // ------------------------------------------------------------ BIG SUR
+
+        /// The real California Highway 1, Carmel to Lucia (Tools/Terrain/build_sr1.py): golden
+        /// grass and bare rock on the real cliffs over the Pacific, redwoods in the canyons
+        /// the land cover has as forest, cabins and houses here and there, the road's real
+        /// bridges with concrete arches on the long ones, and the light station at Point Sur.
+        private const int BigSurIndex = 16;
+        private const float BigSurHouseEvery = 180f;
+        private const float BigSurHouseFromRail = 20f;
+        /// Nothing grows or stands on the sea bed or the wet edge of the shore.
+        private const float AboveSeaMetres = 3f;
+        private const float ArchMinSpan = 120f;
+        private const float ArchMaxRise = 70f;
+        private const float ArchBelowDeck = 3f;
+        private static readonly string[] BigSurHouses = { "cabin", "coasthouse", "store", "cabin", "coasthouse" };
+
+        private void BuildBigSur()
+        {
+            Random.InitState(36372 ^ chunkSeed);
+            Physics.SyncTransforms();
+            plantTally = new PlantTally();
+            StartCoroutine(ReportPlanting(segStart, plantTally, chunkRoot));
+            var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
+
+            BuildMoselRiver();
+            BuildGuardRail(materials["Forest Guard Rail"]);
+            BuildMoselBridges();
+            var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
+            bool OnLand(float d, float l) =>
+                float.IsNaN(seaLevel) || GridGroundY(RoadPath.Point(d, l)) > seaLevel + AboveSeaMetres;
+            // Redwoods: tall conifers, only where the land cover has forest.
+            for (var near = 25f; near < 420f; near += 40f)
+            {
+                var from = near;
+                ScatterBand(11f, from, from + 40f, (d, l, s) =>
+                {
+                    if (RoadPath.Route.CoverAt(d, l) != RoadRoute.CoverForest || !OnLand(d, l)) return null;
+                    // Stands with clearings between them, in a mix of kinds and ages.
+                    var at = RoadPath.Point(d, l);
+                    if (TerrainNoise(at.x, at.z, 0.02f) < -0.1f) return null;
+                    var kind = Random.value;
+                    return kind < 0.5f ? SpawnForestPiece($"External|{Random.Range(0, 12)}", d, l, 0f, 26f, 48f, "Forest Tree")
+                        : kind < 0.75f ? SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 9f, 18f, "Forest Tree")
+                        : SpawnForestPiece($"External|y{Random.Range(0, 8)}", d, l, 0f, 6f, 14f, "Forest Tree");
+                });
+            }
+            ScatterBand(1.6f, rail + 1f, 60f, (d, l, s) => !OnLand(d, l) ? null :
+                SpawnForestPiece("BlackForest|SM_moor_grass", d, l, 0f, 0.4f, 0.9f, "Heath Grass"));
+            // Coastal scrub on the open slopes.
+            ScatterBand(9f, rail + 2f, 130f, (d, l, s) =>
+            {
+                if (!OnLand(d, l) || RoadPath.Route.CoverAt(d, l) == RoadRoute.CoverForest) return null;
+                var at = RoadPath.Point(d, l);
+                return TerrainNoise(at.x, at.z, 0.03f) < 0.05f ? null
+                    : SpawnForestPiece($"Mosel|y{Random.Range(0, 8)}", d, l, 0f, 1.6f, 3.2f, "Garden Shrub");
+            });
+            ScatterBand(14f, rail + 3f, 200f, (d, l, s) => !OnLand(d, l) ? null :
+                PlaceBiomeModelOnRoad("ForestVillage", $"Rocks/SM_rock_0{Random.Range(1, 4)}", materials["Forest Boulder"], d, l, -0.5f,
+                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(0.8f, 2.6f), "Big Sur Rock", false));
+
+            var mesh = new VillageMesh();
+            for (var d = Mathf.Ceil(segStart / BigSurHouseEvery) * BigSurHouseEvery; d < segEnd; d += BigSurHouseEvery)
+            {
+                var side = RealGroundUnder(d, 40f, 1f) >= RealGroundUnder(d, -40f, 1f) ? 1 : -1;
+                var l = rail + BigSurHouseFromRail;
+                var at = RoadPath.Point(d, side * l);
+                if (!OnLand(d, side * l) || TerrainNoise(at.x, at.z, 0.004f) < 0f || GroundSpread(d, side * l, 7f) > 3f ||
+                    RoadPath.Route.CoverAt(d, side * l) == RoadRoute.CoverWater) continue;
+                var kind = BigSurHouses[Mathf.Abs(Mathf.RoundToInt(d / BigSurHouseEvery)) % BigSurHouses.Length];
+                var house = BiomeModel("BigSur", $"SM_{kind}", materials[$"Sur {kind}"]);
+                if (house == null) continue;
+                house.name = "Big Sur House";
+                house.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.4f, at.z),
+                    Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))));
+                mesh.Lay("Mosel Yard", d - 1.5f, d + 1.5f, side * (rail - 1f), side * (l - 4f), 0.08f);
+            }
+            mesh.Build(this);
+
+            foreach (var d in PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
+            {
+                var side = RealGroundUnder(d, 150f, 1f) <= RealGroundUnder(d, -150f, 1f) ? 1 : -1;
+                var light = BiomeModel("BigSur", "SM_lighthouse", materials["Sur lighthouse"]);
+                if (light == null) continue;
+                light.name = "Point Sur Light";
+                var at = RoadPath.Point(d, side * 150f);
+                light.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.5f, at.z), Quaternion.LookRotation(Flat(RoadPath.Forward(d))));
+            }
+        }
+
+        /// Twin concrete arch ribs under a long deck, springing from each side of the canyon.
+        private static void ArchUnderDeck(VillageMesh mesh, float d, float next, float fold, float halfWidth)
+        {
+            if (RoadPath.Route != bigSurRoute) return;
+            foreach (var span in moselDecks)
+            {
+                var length = span.y - span.x;
+                if (length < ArchMinSpan || fold < span.x || fold > span.y) continue;
+                var outward = Mathf.Repeat(d, 2f * RoadPath.Route.Length) <= RoadPath.Route.Length;
+                var middle = d + ((span.x + span.y) * 0.5f - fold) * (outward ? 1f : -1f);
+                var rise = Mathf.Min(ArchMaxRise, RoadPath.CenterY(middle) - GridGroundY(RoadPath.Point(middle, 0f)) - ArchBelowDeck);
+                if (rise <= 0f) return;
+                Vector3 Rib(float at, float lateral)
+                {
+                    var t = Mathf.Clamp01((RoadPath.Route.Fold(at) - span.x) / length);
+                    return RoadPath.Point(at, lateral, -ArchBelowDeck - rise * (2f * t - 1f) * (2f * t - 1f));
+                }
+                for (var side = -1; side <= 1; side += 2)
+                {
+                    var inner = side * halfWidth * 0.4f;
+                    var outer = side * halfWidth * 0.75f;
+                    var depth = Vector3.down * 2f;
+                    mesh.Face("Mosel Bridge", Rib(d, inner), Rib(d, outer), Rib(next, outer), Rib(next, inner));
+                    mesh.Face("Mosel Bridge", Rib(d, inner) + depth, Rib(d, outer) + depth, Rib(next, outer) + depth, Rib(next, inner) + depth);
+                    mesh.Face("Mosel Bridge", Rib(d, outer), Rib(next, outer), Rib(next, outer) + depth, Rib(d, outer) + depth);
+                    mesh.Face("Mosel Bridge", Rib(d, inner), Rib(next, inner), Rib(next, inner) + depth, Rib(d, inner) + depth);
+                }
+                return;
+            }
+        }
+
         private const int MoselHouseModels = 9;
         /// The last of them: too big to stand in a row, so one now and then.
         private const int MoselChurch = 9;
@@ -6478,6 +6672,12 @@ namespace RoadRage.UnityRemake
         /// rows so the surface runs on smoothly along the valley.
         private static float RiverLevel(long row)
         {
+            // The Pacific is one flat level, baked with the ground (Tools/Terrain/build_sr1.py).
+            if (RoadPath.Route == bigSurRoute)
+            {
+                LoadMoselStructures();
+                return bigSurSeaLevel;
+            }
             var sum = 0f;
             var count = 0;
             var columns = GridColumns;
@@ -8934,6 +9134,14 @@ namespace RoadRage.UnityRemake
                 plantTally.OnRay++;
                 plantTally.Shift = Mathf.Max(plantTally.Shift, shift);
                 StandOn(model, groundY + height);
+                // These trees' origin is the foot of the trunk. Their bounds reach metres
+                // lower, and more the taller they are scaled: standing by the bounds left
+                // a big tree's trunk hanging in the air.
+                if (external)
+                {
+                    var foot = model.transform.position;
+                    model.transform.position = new Vector3(foot.x, groundY + height, foot.z);
+                }
             }
             if (external) ThinExternalTree(model, lateral);
             else ThinForestPiece(model, lateral, label);
@@ -10645,10 +10853,10 @@ namespace RoadRage.UnityRemake
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
-                var clouds = Resources.Load<Texture2D>(biomeIndex == MoselIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
+                var clouds = Resources.Load<Texture2D>(biomeIndex != IcelandIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
                 if (source != null && source.shader != null && source.shader.isSupported && clouds != null)
                 {
                     skyMaterial = new Material(source) { name = "Real Road Sky" };
@@ -10904,6 +11112,8 @@ namespace RoadRage.UnityRemake
         private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material) =>
             // No rail along a village front: the drives and paths reach the road there.
             !(RoadPath.Route != null && RoadPath.Route == moselRoute && MoselVillageAt(midDistance, side)) &&
+            // A bridge has its own parapet.
+            !(RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == bigSurRoute) && OnMoselDeck(midDistance)) &&
             PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,
                 "Forest Guard Rail") != null;
 
@@ -11888,8 +12098,9 @@ namespace RoadRage.UnityRemake
                 if (rodinCars != null) return rodinCars;
                 rodinCars = new List<RodinCar>();
                 var paints = new Dictionary<string, Material>();
-                foreach (var material in Resources.LoadAll<Material>("TestAssets"))
-                    if (material.name.EndsWith("_paint")) paints[material.name] = material;
+                foreach (var folder in new[] { "TestAssets", "CountryCars" })
+                    foreach (var material in Resources.LoadAll<Material>(folder))
+                        if (material.name.EndsWith("_paint")) paints[material.name] = material;
                 var candidates = new List<GameObject>(TestAssets);
                 // Committed cars for one country, named car_<kind>_<country>_h<height>.
                 candidates.AddRange(Resources.LoadAll<GameObject>("CountryCars"));
@@ -11919,7 +12130,8 @@ namespace RoadRage.UnityRemake
 
         /// The country whose cars this biome's traffic drives, or null for the rest.
         private static string TrafficCountry(int biomeIndex) =>
-            biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_" : null;
+            biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_"
+            : biomeIndex == BigSurIndex ? "_us_" : null;
 
         private string NextRodinModel()
         {
@@ -11938,7 +12150,7 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < cars.Count; i++)
                 {
                     if (cars[i].Name.StartsWith(SpecialVehiclePrefix)) continue;
-                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_");
+                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_") || cars[i].Name.Contains("_us_");
                     if (hasOwn ? cars[i].Name.Contains(country) : !own) rodinBag.Add(i);
                 }
                 if (rodinBag.Count == 0) return null;
@@ -12367,6 +12579,21 @@ namespace RoadRage.UnityRemake
             }
 
             if (TrafficCountry(BiomeIndexAt(startDistance)) == "_de_") AddGermanWorkingVehicles(trafficRoot, startDistance);
+            if (TrafficCountry(BiomeIndexAt(startDistance)) == "_us_")
+            {
+                AddWorkingVehicle(trafficRoot, startDistance, "schoolbus", TrafficCarController.VehicleRole.Bus, 900f, -0.5f, 50f, 1f);
+                AddWorkingVehicle(trafficRoot, startDistance, "rv", TrafficCarController.VehicleRole.PostVan, 1200f, 0.5f, 68f, -1f);
+                // One lane each way carries few cars, and those came from only part of the
+                // list: enough more that every kind of car is on the road at once.
+                for (var extra = 0; extra < UsExtraCars; extra++)
+                {
+                    var model = NextRodinModel();
+                    if (model == null) break;
+                    var way = extra % 2 == 0 ? 1f : -1f;
+                    CreateTrafficVehicle(trafficRoot, $"Traffic Extra {extra + 1}", model, Color.white,
+                        startDistance + 330f + extra * 230f, way > 0f ? -0.5f : 0.5f, 66f + extra * 7f, way, false, 0f);
+                }
+            }
             Debug.Log($"RR_TRAFFIC spawned={trafficRoot.childCount} models={models.Length} " +
                       $"brutes={brutes} enforcers={enforcers} cabs={cabs} rodin={rodinSpawned}");
             // Accident scenes are a road-blocking pile of wrecks. On a single-lane road
@@ -12381,27 +12608,32 @@ namespace RoadRage.UnityRemake
         }
 
         private const string SpecialVehiclePrefix = "special_";
+        private const int UsExtraCars = 4;
 
         /// The post van and bus hold everyone up; the ambulance and fire engine run with blue
         /// lights and a horn.
         private void AddGermanWorkingVehicles(Transform parent, float start)
         {
-            void Add(string kind, TrafficCarController.VehicleRole role, float ahead, float lane, float speed, float direction)
-            {
-                var index = RodinCars.FindIndex(c => c.Name.StartsWith($"{SpecialVehiclePrefix}{kind}_"));
-                if (index < 0)
-                {
-                    Debug.LogWarning($"RR_TRAFFIC missing {SpecialVehiclePrefix}{kind}");
-                    return;
-                }
-                var vehicle = CreateTrafficVehicle(parent, $"Working {kind}", RodinModelPrefix + index, Color.white,
-                    start + ahead, lane, speed, direction, false, 0f, TrafficCarController.Offence.None, role);
-                if (vehicle.IsEmergency) AddBlueLights(vehicle);
-            }
+            void Add(string kind, TrafficCarController.VehicleRole role, float ahead, float lane, float speed, float direction) =>
+                AddWorkingVehicle(parent, start, kind, role, ahead, lane, speed, direction);
             Add("post", TrafficCarController.VehicleRole.PostVan, 620f, -0.5f, 55f, 1f);
             Add("bus", TrafficCarController.VehicleRole.Bus, 1000f, -0.5f, 50f, 1f);
             Add("ambulance", TrafficCarController.VehicleRole.Ambulance, 800f, 0.5f, 72f, -1f);
             Add("fire", TrafficCarController.VehicleRole.FireTruck, 1500f, -0.5f, 72f, 1f);
+        }
+
+        private void AddWorkingVehicle(Transform parent, float start, string kind, TrafficCarController.VehicleRole role,
+            float ahead, float lane, float speed, float direction)
+        {
+            var index = RodinCars.FindIndex(c => c.Name.StartsWith($"{SpecialVehiclePrefix}{kind}_"));
+            if (index < 0)
+            {
+                Debug.LogWarning($"RR_TRAFFIC missing {SpecialVehiclePrefix}{kind}");
+                return;
+            }
+            var vehicle = CreateTrafficVehicle(parent, $"Working {kind}", RodinModelPrefix + index, Color.white,
+                start + ahead, lane, speed, direction, false, 0f, TrafficCarController.Offence.None, role);
+            if (vehicle.IsEmergency) AddBlueLights(vehicle);
         }
 
         private void AddBlueLights(TrafficCarController vehicle)

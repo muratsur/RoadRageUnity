@@ -1,6 +1,8 @@
 """Writes where the Mosel Valley road's real bridges are, for the game.
 
-    python Tools/Terrain/export_b53_structures.py
+    python Tools/Terrain/export_b53_structures.py [sr1]
+
+With sr1: the same for Big Sur's Highway 1, its own bridges only.
 
 Inputs, both from OpenStreetMap ((c) OpenStreetMap contributors, ODbL):
   D:/Projects/RoadRageData/rlp/b53_osm.json: the B53's own ways.
@@ -17,6 +19,7 @@ import csv
 import json
 import os
 import re
+import sys
 
 import numpy as np
 
@@ -34,7 +37,14 @@ HIGH_MAX_GAP = 60.0
 # The Hochmoselbruecke stands 158 m over the river, and the road runs a little above that.
 HIGH_HEIGHT = 150.0
 
-rows = np.array([[float(x) for x in r] for r in list(csv.reader(open(os.path.join(HERE, "b53_realmap.csv"))))[1:]])
+if sys.argv[1:] == ["sr1"]:
+    import build_sr1  # noqa: F401 - points the map projection at California
+    NAME, DATA, CROSSINGS = "sr1", build_sr1.DATA, None
+else:
+    NAME, CROSSINGS = "b53", f"{DATA}/b53_crossings_osm.json"
+OUT = os.path.join(HERE, "..", "..", "Assets", "Resources", "Biomes", "Routes", f"{NAME}_structures.txt")
+
+rows = np.array([[float(x) for x in r] for r in list(csv.reader(open(os.path.join(HERE, f"{NAME}_realmap.csv"))))[1:]])
 z, east, north, dir_e, dir_n = rows.T
 
 
@@ -73,7 +83,7 @@ def relative(e, n, i):
 
 lines = []
 spans = []
-for way in json.load(open(f"{DATA}/b53_osm.json"))["elements"]:
+for way in json.load(open(f"{DATA}/{NAME}_osm.json"))["elements"]:
     if "bridge" not in (way.get("tags") or {}) or not way.get("geometry"):
         continue
     e, n = points(way)
@@ -92,7 +102,7 @@ for a, b in merged:
         lines.append(f"deck {a:.0f} {b:.0f}")
 
 seen = []
-for way in json.load(open(f"{DATA}/b53_crossings_osm.json"))["elements"]:
+for way in (json.load(open(CROSSINGS))["elements"] if CROSSINGS else []):
     t = way.get("tags") or {}
     if "bridge" not in t or "highway" not in t or re.search(r"B ?53\b", t.get("ref", "")):
         continue

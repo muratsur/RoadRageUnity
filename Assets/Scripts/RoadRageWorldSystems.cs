@@ -592,7 +592,8 @@ namespace RoadRage.UnityRemake
             // A loaded rig is not shoved about by a car, and a wrecked one not at all:
             // at plain footprint mass the player's pickup slid a wrecked truck aside
             // and opened the road.
-            : IsHeavy ? HalfLength * HalfWidth * 60f
+            // Nor is traffic able to shove any wreck: it stops against it or drives round.
+            : IsHeavy || IsWreck ? HalfLength * HalfWidth * 60f
             : HalfLength * HalfWidth;
         /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
         /// hole in the road that police and traffic drove straight through.
@@ -1411,6 +1412,11 @@ namespace RoadRage.UnityRemake
             {
                 currentSpeedKph = Mathf.Min(currentSpeedKph, other.currentSpeedKph);
             }
+            // The pair is visited once, either way round: the car behind may be the other.
+            else if (deltaDist * other.Direction < 0f)
+            {
+                other.currentSpeedKph = Mathf.Min(other.currentSpeedKph, currentSpeedKph);
+            }
         }
 
         // --- Airborne -----------------------------------------------------------
@@ -1507,10 +1513,10 @@ namespace RoadRage.UnityRemake
             IsWreck = true;
             var headOn = HeadOnNext;
             HeadOnNext = false;
-            // One hit from behind or the side and it is out of the way, no longer blocking the
-            // player. Head on, it stays where it stopped until pushed aside.
+            // One hit from behind or the side and it is thrown out of the way. Head on, it
+            // stays where it stopped until pushed aside.
             var knockedByPlayer = crashedByPlayer && !headOn;
-            if (knockedByPlayer) { Knocked = true; PlayerPassing = true; }
+            if (knockedByPlayer) Knocked = true;
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
@@ -1607,6 +1613,8 @@ namespace RoadRage.UnityRemake
         private const float KnockSlideSpeed = 16f;
         /// Hit by the player and thrown to the road edge.
         public bool Knocked { get; private set; }
+        /// A wreck the player's car bulldozes rather than drives through or stops against.
+        public bool PlayerShoves => IsWreck && !IsHeavy && !Ragdolled && Time.time >= shoveNotBefore;
         /// Being shoved to the road edge by the player.
         public bool Shoved { get; private set; }
         /// A physics-owned wreck cannot be shoved, so that one lets the player by.
