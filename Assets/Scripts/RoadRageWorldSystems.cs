@@ -882,6 +882,7 @@ namespace RoadRage.UnityRemake
             var closing = currentSpeedKph + other.currentSpeedKph;
             var side = Mathf.Sign(LaneOffset - other.LaneOffset);
             if (Mathf.Abs(side) < 0.01f) side = 1f;
+            HeadOnNext = other.HeadOnNext = true;
             Crash(side, closing * 0.5f);
             other.Crash(-side, closing * 0.5f);
             Debug.Log($"RR_EVENT headon at {RoadDistance:0}m closing={closing:0}kph");
@@ -980,6 +981,10 @@ namespace RoadRage.UnityRemake
             IsWreck = false;
             PlayerPassing = false;
             Shoved = false;
+            Knocked = false;
+            rolled = false;
+            var damaged = GetComponent<CarCrashDamage>();
+            if (damaged != null) damaged.Repair();
             pressStartedAt = lastPressedAt = -1f;
             WreckYaw = 0f;
             wreckYawRate = 0f;
@@ -1227,7 +1232,7 @@ namespace RoadRage.UnityRemake
                 var dt = Time.deltaTime;
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 26f * dt);
                 laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget,
-                    Shoved ? ShoveSlideSpeed * dt : Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                    Knocked ? KnockSlideSpeed * dt : Shoved ? ShoveSlideSpeed * dt : Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
                 if (Shoved && HalfLength > 3.5f) WreckYaw = Mathf.MoveTowards(WreckYaw, 0f, ShoveTurnSpeed * dt);
                 wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
                 if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
@@ -1239,7 +1244,9 @@ namespace RoadRage.UnityRemake
                     WreckYaw = Mathf.Sign(WreckYaw) * MaxRigWreckYaw;
                     wreckYawRate = 0f;
                 }
-                wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
+                wreckRoll = rolled
+                    ? Mathf.MoveTowards(wreckRoll, Mathf.Sign(wreckRoll) * 180f, RollDegreesPerSecond * dt)
+                    : Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
@@ -1396,7 +1403,9 @@ namespace RoadRage.UnityRemake
             if (delta > 0f)
                 visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed,
                     Mathf.Lerp(0.12f, 0.45f, still), 30f, delta);
-            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
+            // Rolled about its base, the car needs lifting by its own height to lie on its roof.
+            var rollHeight = rolled ? rollLift * Mathf.InverseLerp(0f, 180f, Mathf.Abs(wreckRoll)) : 0f;
+            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset + rollHeight);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
             var forward = Mathf.Max(3f, currentSpeedKph / 3.6f);
@@ -1423,6 +1432,12 @@ namespace RoadRage.UnityRemake
                 return;
             }
             IsWreck = true;
+            var headOn = HeadOnNext;
+            HeadOnNext = false;
+            // One hit from behind or the side and it is out of the way, no longer blocking the
+            // player. Head on, it stays where it stopped until pushed aside.
+            var knockedByPlayer = crashedByPlayer && !headOn;
+            if (knockedByPlayer) { Knocked = true; PlayerPassing = true; }
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
@@ -1439,13 +1454,60 @@ namespace RoadRage.UnityRemake
             // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
             // inner lane stopped in the outer one - either way a wall that everything
             // behind it piled into.
-            sign = LaneOffset >= 0f ? 1f : -1f;
+            var damage = gameObject.GetComponent<CarCrashDamage>();
+            if (damage == null) damage = gameObject.AddComponent<CarCrashDamage>();
+            var hitAt = HitPointNext ?? transform.position + transform.forward * HalfLength + Vector3.up * 0.6f;
+            HitPointNext = null;
+            damage.Apply(hitAt, hit);
+
+            sign = knockedByPlayer && Mathf.Abs(lateralPush) >= 0.01f ? Mathf.Sign(lateralPush) : LaneOffset >= 0f ? 1f : -1f;
             var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+            if (headOn)
+            {
+                // Two cars meeting head on stop where they meet.
+                currentSpeedKph = 0f;
+                shoveNotBefore = Time.time + HeadOnStaysSeconds;
+                wreckSlideTarget = laneDrift;
+                wreckYawRate *= 0.08f;
+            }
+            else if (knockedByPlayer)
+            {
+                currentSpeedKph = Mathf.Min(currentSpeedKph, KnockedSpeedKph);
+                if (impactSpeedKph >= RollOverKph && Random.value < RollOverChance)
+                {
+                    rolled = true;
+                    rollLift = HalfWidth * 1.1f;
+                    wreckRoll = Mathf.Abs(wreckRoll) * sign;
+                    var bounds = default(Bounds);
+                    var first = true;
+                    foreach (var r in GetComponentsInChildren<MeshRenderer>())
+                    {
+                        if (first) bounds = r.bounds; else bounds.Encapsulate(r.bounds);
+                        first = false;
+                    }
+                    if (!first) rollLift = bounds.size.y;
+                }
+            }
 
         }
 
         private const float RigLurchMetres = 0.25f;
+        /// A hit this hard from the player may roll the car onto its roof.
+        private const float RollOverKph = 110f;
+        private const float RollOverChance = 0.35f;
+        private const float RollDegreesPerSecond = 300f;
+        /// A car hit by the player is scrubbed down to this at once, and stops within a second.
+        private const float KnockedSpeedKph = 28f;
+        /// The next Crash is a head-on: both stop dead where they met.
+        public bool HeadOnNext { get; set; }
+        /// Where the next Crash lands, in the world; the car's nose if not set.
+        public Vector3? HitPointNext { get; set; }
+        /// A head-on wreck stands where it stopped this long, however hard it is pushed.
+        private const float HeadOnStaysSeconds = 3f;
+        private float shoveNotBefore;
+        private bool rolled;
+        private float rollLift;
         private const float RigHitIntervalSeconds = 1f;
         private float nextRigHit;
 
@@ -1467,6 +1529,9 @@ namespace RoadRage.UnityRemake
         private const float PressBreakSeconds = 0.25f;
         private float pressStartedAt = -1f;
         private float lastPressedAt = -1f;
+        private const float KnockSlideSpeed = 16f;
+        /// Hit by the player and thrown to the road edge.
+        public bool Knocked { get; private set; }
         /// Being shoved to the road edge by the player.
         public bool Shoved { get; private set; }
         /// A physics-owned wreck cannot be shoved, so that one lets the player by.
@@ -1477,7 +1542,7 @@ namespace RoadRage.UnityRemake
         /// this narrow a wreck can fill it, and driving through one looked broken.
         public void PlayerPressing(float playerLateral)
         {
-            if (!IsWreck || PlayerPassing || Shoved) return;
+            if (!IsWreck || PlayerPassing || Shoved || Time.time < shoveNotBefore) return;
             if (Time.time - lastPressedAt > PressBreakSeconds) pressStartedAt = Time.time;
             lastPressedAt = Time.time;
             if (Time.time - pressStartedAt <= WreckHoldsPlayerSeconds) return;

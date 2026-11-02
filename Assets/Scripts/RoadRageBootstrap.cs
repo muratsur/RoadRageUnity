@@ -1431,6 +1431,11 @@ namespace RoadRage.UnityRemake
             for (var house = 1; house <= MoselHouseModels; house++)
                 BiomeMaterial($"Mosel House {house}", "MoselVillage", $"T_rodin_house_{house}_D", $"T_rodin_house_{house}_N", Color.white, 0f, 0.12f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
+            MakeMaterial("Mosel Bridge", new Color(0.56f, 0.55f, 0.52f), 0f, 0.12f);
+            MakeMaterial("Mosel Steel", new Color(0.16f, 0.18f, 0.19f), 0.6f, 0.35f);
+            MakeMaterial("Mosel Paint", new Color(0.85f, 0.85f, 0.82f), 0f, 0.2f);
+            MoselLamps.Bind(MakeMaterial("Mosel Lamp", new Color(0.9f, 0.86f, 0.74f), 0f, 0.5f));
+            if (GetComponent<MoselLamps>() == null) gameObject.AddComponent<MoselLamps>();
             BiomeMaterial("Mosel Lawn", "ForestFloor", "T_forest_humus_D", "T_forest_humus_N", new Color(1.15f, 1.7f, 0.72f), 0f, 0.06f);
             BiomeMaterial("Mosel Yard", "ForestFloor", "T_forest_verge_D", "T_forest_verge_N", new Color(1.25f, 1.2f, 1.1f), 0f, 0.08f);
             BiomeCutoutMaterial("Mosel Vine", "MoselVillage", "T_vine_row_D", "", new Color(1.3f, 1.3f, 1.2f), 0.4f)
@@ -2254,6 +2259,7 @@ namespace RoadRage.UnityRemake
                 _ => Color.white,
             };
             SetHeadlights(dayTime == DayTime.Dusk || activeWeather == WeatherKind.Fog);
+            MoselLamps.Dark = dayTime == DayTime.Dusk || dayTime == DayTime.Evening || activeWeather == WeatherKind.Fog;
             Debug.Log($"RR_EVENT conditions daytime={dayTime} weather={activeWeather}");
             StartCoroutine(ReportSceneBudgetSoon(++budgetRun));
         }
@@ -2931,12 +2937,16 @@ namespace RoadRage.UnityRemake
             if (route == null || !route.HasTerrain) return 0f;
             var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth;
             var across = Mathf.Abs(lateral) - edge;
-            if (across <= 0f) return 0f;
-            var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + across));
+            var deck = route == moselRoute ? MoselDeckWeight(distance) : 0f;
+            if (across <= 0f && deck <= 0f) return 0f;
+            var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
             var limit = route == moselRoute || route == icelandRoute ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
+            // Under a bridge the ground falls away from the road instead of meeting it.
+            var below = Mathf.Min(real, -MoselDeckClearance);
             if (withPads) real = OnBuildingPads(distance, lateral, real);
-            return real * Mathf.SmoothStep(0f, 1f, across / 6f);
+            var ground = across <= 0f ? 0f : real * Mathf.SmoothStep(0f, 1f, across / 6f);
+            return Mathf.Lerp(ground, below, deck);
         }
 
         /// Level ground under a building, blended into the slope around it.
@@ -6059,6 +6069,321 @@ namespace RoadRage.UnityRemake
             return TerrainNoise(at.x, at.z, 0.006f) <= 0f;
         }
 
+        // ------------------------------------------------------------ real bridges
+
+        /// From Tools/Terrain/export_b53_structures.py: where the real road runs on a
+        /// bridge, the real bridges leaving it across the river, and the Hochmoselbruecke.
+        private sealed class MoselCrossing
+        {
+            public float Anchor;
+            public float Height;
+            public Vector2[] Points;
+        }
+
+        private const float MoselDeckClearance = 6f;
+        private const float MoselDeckEase = 10f;
+        private const float MoselDeckDepth = 1.4f;
+        private const float MoselParapet = 0.9f;
+        private const float MoselPierSpacing = 24f;
+        private const float MoselSideHalfWidth = 5f;
+        private const float MoselSideArch = 6f;
+        private const float MoselSidePierSpacing = 48f;
+        private const float MoselHighHalfWidth = 7f;
+        private const float MoselHighPierSpacing = 210f;
+        private const float MoselCurb = 0.3f;
+        private const float MoselRailHeight = 1.1f;
+        private const float MoselLampSpacing = 36f;
+        private const int MoselFarRoadMetres = 150;
+        private const float MoselOnBank = 1.2f;
+        /// The overpass: its deck over the main road, leaving room under its girder for a
+        /// truck; how far out the mapped bridge takes over; how far it runs on inland.
+        private const float MoselOverHeight = 7.6f;
+        private const float MoselOverStart = 12f;
+        private const int MoselInlandMetres = 90;
+        private const int MoselFlatTop = 3;
+        private static List<Vector2> moselDecks;
+        private static readonly List<MoselCrossing> moselCrossings = new();
+
+        private static void LoadMoselStructures()
+        {
+            if (moselDecks != null) return;
+            moselDecks = new List<Vector2>();
+            var asset = Resources.Load<TextAsset>("Biomes/Routes/b53_structures");
+            if (asset == null)
+            {
+                Debug.LogWarning("Missing Biomes/Routes/b53_structures - the Mosel Valley has no bridges.");
+                return;
+            }
+            float Number(string text) => float.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
+            Vector2[] Line(string text) => System.Array.ConvertAll(text.Split(';'), p =>
+            {
+                var pair = p.Split(',');
+                return new Vector2(Number(pair[0]), Number(pair[1]));
+            });
+            foreach (var line in asset.text.Split('\n'))
+            {
+                var f = line.Trim().Split(' ');
+                if (f[0] == "deck") moselDecks.Add(new Vector2(Number(f[1]), Number(f[2])));
+                else if (f[0] == "side") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Points = Line(f[2]) });
+                else if (f[0] == "high") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Height = Number(f[2]), Points = Line(f[3]) });
+            }
+            Debug.Log($"RR_MOSEL structures: {moselDecks.Count} road bridges, {moselCrossings.Count} crossings");
+        }
+
+        private static bool OnMoselDeck(float distance)
+        {
+            LoadMoselStructures();
+            var f = RoadPath.Route.Fold(distance);
+            foreach (var span in moselDecks)
+                if (f >= span.x && f <= span.y) return true;
+            return false;
+        }
+
+        /// 1 on a bridge, easing to 0 just beyond its ends.
+        private static float MoselDeckWeight(float distance)
+        {
+            LoadMoselStructures();
+            var f = moselRoute.Fold(distance);
+            var weight = 0f;
+            foreach (var span in moselDecks)
+            {
+                var outside = Mathf.Max(span.x - f, f - span.y);
+                if (outside < MoselDeckEase) weight = Mathf.Max(weight, 1f - Mathf.SmoothStep(0f, 1f, outside / MoselDeckEase));
+            }
+            return weight;
+        }
+
+        private void BuildMoselBridges()
+        {
+            LoadMoselStructures();
+            CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f));
+            var mesh = new VillageMesh();
+            BuildMoselDecks(mesh);
+            foreach (var crossing in moselCrossings)
+            {
+                // Built with the chunk at its furthest end up the road, so it does not vanish
+                // with the chunk it meets the road in while still in front of the player.
+                var minAlong = float.PositiveInfinity;
+                var maxAlong = float.NegativeInfinity;
+                foreach (var p in crossing.Points)
+                {
+                    minAlong = Mathf.Min(minAlong, p.x);
+                    maxAlong = Mathf.Max(maxAlong, p.x);
+                }
+                foreach (var d in PassesOf(crossing.Anchor + maxAlong, crossing.Anchor + minAlong))
+                {
+                    // The return pass is the outward one mirrored along the road.
+                    var outward = Mathf.Repeat(d, 2f * RoadPath.Route.Length) <= RoadPath.Route.Length;
+                    BuildMoselCrossing(mesh, crossing, outward ? d - maxAlong : d + minAlong, outward ? 1f : -1f);
+                }
+            }
+            mesh.Build(this);
+        }
+
+        private void BuildMoselDecks(VillageMesh mesh)
+        {
+            const float step = 4f;
+            for (var d = Mathf.Floor(segStart / step) * step; d < segEnd; d += step)
+            {
+                var next = d + step;
+                if (!OnMoselDeck(d) || !OnMoselDeck(next)) continue;
+                var w = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + 0.7f;
+                var wn = RoadPath.HalfWidthAt(next) + RoadPath.ShoulderWidth + 0.7f;
+                Vector3 At(float distance, float lateral, float y) => RoadPath.Point(distance, lateral, y);
+                mesh.Face("Mosel Bridge", At(d, -w, -MoselDeckDepth), At(d, w, -MoselDeckDepth), At(next, wn, -MoselDeckDepth), At(next, -wn, -MoselDeckDepth));
+                for (var side = -1; side <= 1; side += 2)
+                {
+                    mesh.Face("Mosel Bridge", At(d, side * w, -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, MoselParapet), At(d, side * w, MoselParapet));
+                    var inner = 0.35f;
+                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), 0f), At(next, side * (wn - inner), 0f), At(next, side * (wn - inner), MoselParapet), At(d, side * (w - inner), MoselParapet));
+                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), MoselParapet), At(next, side * (wn - inner), MoselParapet), At(next, side * wn, MoselParapet), At(d, side * w, MoselParapet));
+                }
+                var fold = RoadPath.Route.Fold(d);
+                if (Mathf.FloorToInt(fold / MoselPierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / MoselPierSpacing))
+                    mesh.Pier("Mosel Bridge", RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f);
+            }
+        }
+
+        /// A bridge across the river from the road, or the viaduct over it, built as the
+        /// real ones are: a slim concrete girder, thickening over slender round piers, with
+        /// a steel railing, lamps and road markings. A river bridge meets the road at a
+        /// junction and runs on as a road on the far bank. Built whole with the chunk of road
+        /// it meets, so it appears when that chunk does.
+        /// shortcut: scenery only, the player cannot turn onto it; upgrade if they should.
+        private void BuildMoselCrossing(VillageMesh mesh, MoselCrossing crossing, float d, float sign)
+        {
+            var high = crossing.Height > 0f;
+            var half = high ? MoselHighHalfWidth : MoselSideHalfWidth;
+            var spacing = high ? MoselHighPierSpacing : MoselSidePierSpacing;
+            var road = RoadPath.Center(d);
+            var forward = RoadPath.Forward(d);
+            var right = RoadPath.Right(d);
+            var edge = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth - 0.2f;
+            var farSide = Mathf.Sign(crossing.Points[crossing.Points.Length - 1].y);
+            var line = new List<Vector3>();
+            for (var i = 0; i + 1 < crossing.Points.Length; i++)
+            {
+                var a = crossing.Points[i];
+                var b = crossing.Points[i + 1];
+                var steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(a, b) / (high ? 20f : 6f)));
+                for (var k = 0; k <= steps; k++)
+                {
+                    if (k == steps && i + 2 < crossing.Points.Length) continue;
+                    var p = Vector2.Lerp(a, b, k / (float)steps);
+                    // The road itself keeps its own surface: the deck starts at its shoulder, on
+                    // the bridge's side. The mapped line can begin across the road.
+                    if (!high && (Mathf.Abs(p.y) < edge || Mathf.Sign(p.y) != farSide)) continue;
+                    line.Add(road + forward * (p.x * sign) + right * p.y);
+                }
+            }
+            if (line.Count < 2) return;
+            // A river bridge carries on over the main road as an overpass and lands on the
+            // inland side, so it never needs a junction. It ends where a hill rises to meet it.
+            var overAt = 0;
+            if (!high)
+            {
+                line.RemoveAll(q => Mathf.Abs(Vector3.Dot(q - road, right)) < edge + MoselOverStart);
+                if (line.Count < 2) return;
+                var back = line[0] - line[1];
+                back.y = 0f;
+                back = back.normalized;
+                var start = line[0];
+                for (var k = 1; k <= MoselInlandMetres / 6; k++)
+                {
+                    var q = start + back * (k * 6f);
+                    var lateral = Vector3.Dot(q - road, right);
+                    if (lateral * farSide < -(edge + 8f) && GridGroundY(q) > road.y + MoselOverHeight) break;
+                    line.Insert(0, q);
+                    if (lateral * farSide > 0f) overAt = line.Count - 1;
+                }
+                overAt = line.FindLastIndex(q => Vector3.Dot(q - road, right) * farSide <= 0f);
+                if (overAt < 0) overAt = 0;
+            }
+
+            var deckEnd = line.Count;
+            var endY = high ? 0f : GridGroundY(line[line.Count - 1]) + 0.3f;
+            var startY = high ? 0f : GridGroundY(line[0]) + 0.3f;
+            for (var i = 0; i < deckEnd; i++)
+            {
+                var t = i / (float)(deckEnd - 1);
+                var p = line[i];
+                // Rising from the ground inland to clear the main road, then falling across
+                // the river to the far bank, never sunk in a bank.
+                if (high) p.y = road.y + crossing.Height;
+                else
+                {
+                    var top = road.y + MoselOverHeight;
+                    var y = i <= overAt
+                        ? Mathf.Lerp(startY, top, Mathf.SmoothStep(0f, 1f, Mathf.Min(1f, i / Mathf.Max(1f, overAt - MoselFlatTop))))
+                        : Mathf.Lerp(top, endY, Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(overAt + MoselFlatTop, deckEnd - 1, i)));
+                    p.y = Mathf.Max(y, GridGroundY(p) + 0.15f);
+                }
+                line[i] = p;
+            }
+            // The road carries on across the far bank, on the ground.
+            if (!high)
+            {
+                var ahead = (line[deckEnd - 1] - line[deckEnd - 2]);
+                ahead.y = 0f;
+                ahead = ahead.normalized;
+                for (var k = 1; k <= MoselFarRoadMetres / 6; k++)
+                {
+                    var p = line[deckEnd - 1] + ahead * (k * 6f);
+                    p.y = GridGroundY(p) + 0.3f;
+                    line.Add(p);
+                }
+            }
+
+            // Where the piers stand, and from that the girder's depth along the line.
+            var runs = new float[deckEnd];
+            for (var i = 1; i < deckEnd; i++) runs[i] = runs[i - 1] + Vector3.Distance(line[i - 1], line[i]);
+            var bays = Mathf.Max(1, Mathf.RoundToInt(runs[deckEnd - 1] / spacing));
+            var bay = runs[deckEnd - 1] / bays;
+            float Girder(int i)
+            {
+                var fromPier = Mathf.Abs(Mathf.Repeat(runs[i] + bay * 0.5f, bay) - bay * 0.5f) / (bay * 0.5f);
+                var heavy = 1f - fromPier;
+                return (high ? 3f : 1.1f) + (high ? 4f : 1.5f) * heavy * heavy;
+            }
+
+            var lastPier = 0;
+            var lamp = 0f;
+            for (var i = 0; i + 1 < line.Count; i++)
+            {
+                var a = line[i];
+                var b = line[i + 1];
+                var across = Vector3.Cross(Vector3.up, b - a).normalized;
+                var w = across * half;
+                mesh.Face("Mosel Road", a - w, a + w, b + w, b - w);
+                if (i % 2 == 0) mesh.Strip("Mosel Paint", a, b, Vector3.zero, 0.07f);
+                mesh.Strip("Mosel Paint", a, b, across * (half - 0.5f), 0.07f);
+                mesh.Strip("Mosel Paint", a, b, -across * (half - 0.5f), 0.07f);
+                if (i + 1 >= deckEnd) continue;
+                // Where it rests on the ground: plain road. Above that the structure is never
+                // deeper than the gap under it, so it grows out of the bank instead of starting
+                // as a block.
+                var clearA = a.y - GridGroundY(a);
+                var clearB = b.y - GridGroundY(b);
+                if (clearA < MoselOnBank && clearB < MoselOnBank) continue;
+
+                // Thin slab, and a narrower girder under it.
+                var slab = Vector3.down * 0.4f;
+                var core = across * (half * 0.6f);
+                var da = Vector3.down * Mathf.Min(Girder(i), Mathf.Max(0f, clearA));
+                var db = Vector3.down * Mathf.Min(Girder(i + 1), Mathf.Max(0f, clearB));
+                mesh.Face("Mosel Bridge", a - w + slab, a + w + slab, b + w + slab, b - w + slab);
+                mesh.Face("Mosel Bridge", a - core + da, a + core + da, b + core + db, b - core + db);
+                for (var side = -1; side <= 1; side += 2)
+                {
+                    var o = w * side;
+                    mesh.Face("Mosel Bridge", a + o + slab, b + o + slab, b + o + Vector3.up * MoselCurb, a + o + Vector3.up * MoselCurb);
+                    mesh.Face("Mosel Bridge", a + core * side + da, b + core * side + db, b + core * side, a + core * side);
+                    // Steel railing: top bar and posts.
+                    var rail = Vector3.up * MoselRailHeight;
+                    mesh.Face("Mosel Steel", a + o + rail, b + o + rail, b + o + rail + Vector3.up * 0.08f, a + o + rail + Vector3.up * 0.08f);
+                    mesh.Face("Mosel Steel", a + o + rail * 0.55f, b + o + rail * 0.55f, b + o + rail * 0.55f + Vector3.up * 0.04f, a + o + rail * 0.55f + Vector3.up * 0.04f);
+                    var post = (b - a).normalized * 0.04f;
+                    mesh.Face("Mosel Steel", a + o - post, a + o + post, a + o + post + rail, a + o - post + rail);
+                }
+
+                lamp += Vector3.Distance(a, b);
+                if (lamp >= MoselLampSpacing)
+                {
+                    lamp = 0f;
+                    var side = (i / 6) % 2 == 0 ? 1f : -1f;
+                    var foot = a + w * side;
+                    mesh.StreetLamp(foot, -across * side);
+                }
+
+                // Piers each side of the main road, carrying the overpass across it.
+                if (!high)
+                {
+                    var la = Mathf.Abs(Vector3.Dot(a - road, right));
+                    var lb = Mathf.Abs(Vector3.Dot(b - road, right));
+                    var flank = edge + 3f;
+                    if ((la - flank) * (lb - flank) <= 0f)
+                    {
+                        mesh.Column("Mosel Bridge", b + across * (half * 0.5f) + db, 0.85f);
+                        mesh.Column("Mosel Bridge", b - across * (half * 0.5f) + db, 0.85f);
+                    }
+                }
+                var pierBay = Mathf.FloorToInt(runs[i + 1] / bay);
+                if (pierBay == lastPier) continue;
+                lastPier = pierBay;
+                // Nothing stands in the road: piers have no collision.
+                if (Mathf.Abs(b.x - RoadPath.CenterX(b.z)) < edge + 6f) continue;
+                var radius = high ? 2.6f : 0.85f;
+                var capDepth = Vector3.down * (Girder(i + 1) + (high ? 2f : 0.8f));
+                var capAlong = (b - a).normalized * (radius + 0.2f);
+                var cap = across * (half * 0.8f);
+                mesh.Face("Mosel Bridge", b - cap + db, b + cap + db, b + cap + capDepth, b - cap + capDepth);
+                mesh.Face("Mosel Bridge", b - cap + db + capAlong, b + cap + db + capAlong, b + cap + capDepth + capAlong, b - cap + capDepth + capAlong);
+                mesh.Face("Mosel Bridge", b - cap + capDepth, b + cap + capDepth, b + cap + capDepth + capAlong, b - cap + capDepth + capAlong);
+                mesh.Column("Mosel Bridge", b + across * (half * 0.5f) + capDepth, radius);
+                mesh.Column("Mosel Bridge", b - across * (half * 0.5f) + capDepth, radius);
+            }
+        }
+
         private const int MoselHouseModels = 9;
         /// The last of them: too big to stand in a row, so one now and then.
         private const int MoselChurch = 9;
@@ -6092,6 +6417,7 @@ namespace RoadRage.UnityRemake
             }
 
             BuildMoselRiverside(rail);
+            BuildMoselBridges();
             ScatterBand(1.6f, rail + 1f, 45f, (d, l, s) =>
                 SpawnForestPiece("BlackForest|SM_moor_grass", d, l, 0f, 0.4f, 0.9f, "Heath Grass"));
 
@@ -6313,6 +6639,10 @@ namespace RoadRage.UnityRemake
                 house.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.6f, at.z),
                     Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))) * Quaternion.Euler(0f, Random.Range(-3f, 3f), 0f));
 
+                // A street lamp on every other plot, on the back of the pavement.
+                if (Mathf.RoundToInt(d / plot) % 2 == 0)
+                    mesh.StreetLamp(RoadPath.Point(d - 7f, side * (rail + 0.8f), 0f) + Vector3.up * (GridGroundY(RoadPath.Point(d - 7f, side * (rail + 0.8f))) - RoadPath.Point(d - 7f, side * (rail + 0.8f)).y), -side * Flat(RoadPath.Right(d - 7f)));
+
                 // The plot: garden, a drive and a footpath from the pavement, a stone wall
                 // with gaps for them along the front, hedges down the sides and across the back.
                 const float half = 9f;
@@ -6403,6 +6733,70 @@ namespace RoadRage.UnityRemake
                     var d = Ground(db, la, lift);
                     if (Vector3.Cross(b - a, c - a).y > 0f) Quad(part, a, b, c, d);
                     else Quad(part, a, d, c, b);
+                }
+            }
+
+            /// A surface seen from both sides.
+            public void Face(string material, Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            {
+                var part = For(material);
+                Quad(part, a, b, c, d);
+                Quad(part, d, c, b, a);
+            }
+
+            /// A lamp post from `foot`, its arm and glowing head reaching towards `towards`.
+            public void StreetLamp(Vector3 foot, Vector3 towards)
+            {
+                const float height = 8f, arm = 2.2f, thick = 0.08f;
+                towards.y = 0f;
+                towards = towards.normalized;
+                var side = Vector3.Cross(Vector3.up, towards) * thick;
+                var top = foot + Vector3.up * height;
+                Face("Mosel Steel", foot - side, foot + side, top + side, top - side);
+                Face("Mosel Steel", foot - towards * thick, foot + towards * thick, top + towards * thick, top - towards * thick);
+                var end = top + towards * arm;
+                Face("Mosel Steel", top - side, top + side, end + side, end - side);
+                var wide = side * 2.5f;
+                var low = Vector3.down * 0.1f;
+                Face("Mosel Lamp", end - towards * 0.6f - wide + low, end - towards * 0.6f + wide + low, end + wide + low, end - wide + low);
+                MoselLamps.Add(end + low);
+            }
+
+            /// A thin flat line on a road surface, running from a to b.
+            public void Strip(string material, Vector3 a, Vector3 b, Vector3 offset, float halfWidth)
+            {
+                var side = Vector3.Cross(Vector3.up, b - a).normalized * halfWidth;
+                var lift = Vector3.up * 0.03f;
+                Face(material, a + offset - side + lift, a + offset + side + lift, b + offset + side + lift, b + offset - side + lift);
+            }
+
+            /// A round pier from `top` down into the ground, widening a little as it goes.
+            public void Column(string material, Vector3 top, float radius)
+            {
+                var drop = GridGroundY(top) - 1f - top.y;
+                if (drop >= 0f) return;
+                const int sides = 10;
+                var foot = radius * 1.25f;
+                for (var i = 0; i < sides; i++)
+                {
+                    var a = i * Mathf.PI * 2f / sides;
+                    var b = (i + 1) * Mathf.PI * 2f / sides;
+                    var ua = new Vector3(Mathf.Cos(a), 0f, Mathf.Sin(a));
+                    var ub = new Vector3(Mathf.Cos(b), 0f, Mathf.Sin(b));
+                    var down = Vector3.up * drop;
+                    Face(material, top + ua * radius, top + ub * radius, top + ub * foot + down, top + ua * foot + down);
+                }
+            }
+
+            /// A pier from `top` down into the ground: `across` and `along` are half-sizes.
+            public void Pier(string material, Vector3 top, Vector3 across, Vector3 along)
+            {
+                var foot = Vector3.up * (GridGroundY(top) - 1f - top.y);
+                if (foot.y >= 0f) return;
+                for (var s = -1; s <= 1; s += 2)
+                {
+                    Face(material, top + across * s - along, top + across * s + along, top + across * s + along + foot, top + across * s - along + foot);
+                    Face(material, top + along * s - across, top + along * s + across, top + along * s + across + foot, top + along * s - across + foot);
                 }
             }
 
