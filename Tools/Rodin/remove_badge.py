@@ -17,13 +17,11 @@ from mathutils import Vector
 source, out_fbx, path, *patches = sys.argv[sys.argv.index("--") + 1:]
 AROUND = 1.4
 END_DEPTH = 0.25
-SHELL = 0.02
 
 bpy.ops.import_scene.fbx(filepath=source)
 ob = max((o for o in bpy.data.objects if o.type == "MESH"), key=lambda o: len(o.data.polygons))
 me = ob.data
 world = ob.matrix_world
-rotation = world.to_3x3().normalized()
 verts = np.array([(world @ v.co)[:] for v in me.vertices])
 lo, hi = verts.min(0), verts.max(0)
 size = hi - lo
@@ -48,9 +46,7 @@ for patch in patches:
     inside = np.zeros((h, w), bool)
     ring = np.zeros((h, w), bool)
     for p in me.polygons:
-        normal = (rotation @ p.normal).normalized()
-        if normal.y * sign < 0.2:
-            continue
+        # Any facing: a badge's own edges and faces lean every way.
         ids = list(p.vertices)
         along = (verts[ids, 1].mean() - lo[1]) / size[1]
         if (along if sign < 0 else 1 - along) > END_DEPTH:
@@ -91,10 +87,11 @@ for patch in patches:
     pz = np.abs((verts[:, 2] - lo[2]) / size[2] - height)
     chosen = np.nonzero(at_end & (px < half_w) & (pz < half_h))[0]
     if len(chosen):
-        # Only the shell: moving what lies behind it pulled spikes through the surface.
+        # Whatever stands proud of the surface goes back onto it. Moving what lies behind
+        # it as well pulled spikes through the surface.
         plane = np.median(verts[chosen, 1])
         for i in chosen:
-            if abs(verts[i, 1] - plane) > SHELL * size[1]:
+            if (verts[i, 1] - plane) * sign <= 0:
                 continue
             verts[i, 1] = plane
             me.vertices[i].co = to_local @ Vector(verts[i])
