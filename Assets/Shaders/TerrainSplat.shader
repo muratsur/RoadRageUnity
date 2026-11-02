@@ -24,6 +24,9 @@ Shader "RoadRage/TerrainSplat"
         _Tint2 ("Tint 2", Color) = (1,1,1,1)
         _Smoothness ("Smoothness", Range(0,1)) = 0.18
         _NormalScale ("Normal Scale", Range(0,2)) = 1.0
+        // Breaks up the repeat: the base layer again, seven times larger, tints the blend.
+        _Macro ("Large-scale variation", Range(0,1)) = 0
+        _MacroMean ("Base layer's mean luminance", Float) = 0.2
         // 2 = back faces culled; 0 = both sides (the real-terrain ground, see BuildRibbon).
         [HideInInspector] _Cull ("Cull", Float) = 2
     }
@@ -64,7 +67,7 @@ Shader "RoadRage/TerrainSplat"
             CBUFFER_START(UnityPerMaterial)
                 float _Tile0, _Tile1, _Tile2;
                 float4 _Tint0, _Tint1, _Tint2;
-                float _Smoothness, _NormalScale;
+                float _Smoothness, _NormalScale, _Macro, _MacroMean;
             CBUFFER_END
 
             struct Attributes
@@ -114,6 +117,8 @@ Shader "RoadRage/TerrainSplat"
                 float4 a1 = SAMPLE_TEXTURE2D(_Splat1, sampler_Splat1, uv * _Tile1) * _Tint1;
                 float4 a2 = SAMPLE_TEXTURE2D(_Splat2, sampler_Splat2, uv * _Tile2) * _Tint2;
                 half3 albedo = a0.rgb * w.r + a1.rgb * w.g + a2.rgb * w.b;
+                float3 macro = SAMPLE_TEXTURE2D(_Splat0, sampler_Splat0, uv * _Tile0 * 0.137).rgb;
+                albedo *= lerp(1.0, clamp(dot(macro, float3(0.2126, 0.7152, 0.0722)) / _MacroMean, 0.6, 1.4), _Macro);
 
                 half3 n0 = UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal0, sampler_Normal0, uv * _Tile0), _NormalScale);
                 half3 n1 = UnpackNormalScale(SAMPLE_TEXTURE2D(_Normal1, sampler_Normal1, uv * _Tile1), _NormalScale);

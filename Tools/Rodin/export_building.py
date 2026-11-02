@@ -8,6 +8,7 @@ import sys
 import bpy
 from mathutils import Vector
 
+MAX_FOOTPRINT = 16.0
 args = sys.argv[sys.argv.index("--") + 1:]
 for source, target, height in zip(args[0::3], args[1::3], args[2::3]):
     for o in list(bpy.data.objects):
@@ -24,6 +25,8 @@ for source, target, height in zip(args[0::3], args[1::3], args[2::3]):
     lo = Vector(min(c[i] for c in corners) for i in range(3))
     hi = Vector(max(c[i] for c in corners) for i in range(3))
     k = float(height) / (hi.z - lo.z)
+    # Must stand inside a village plot, hedge to hedge.
+    k = min(k, MAX_FOOTPRINT / max(hi.x - lo.x, hi.y - lo.y))
     for v in ob.data.vertices:
         v.co = Vector(((v.co.x - (lo.x + hi.x) / 2) * k, (v.co.y - (lo.y + hi.y) / 2) * k, (v.co.z - lo.z) * k))
     ob.data.update()

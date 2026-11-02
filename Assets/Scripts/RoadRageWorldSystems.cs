@@ -1459,6 +1459,14 @@ namespace RoadRage.UnityRemake
         /// This wreck has stopped blocking the player, who was stuck against it.
         public bool PlayerPassing { get; private set; }
 
+        /// The player is up against this wreck: after a moment it stops blocking them.
+        public void PlayerPressing()
+        {
+            if (!IsWreck || PlayerPassing) return;
+            if (playerTouchedAt < 0f) playerTouchedAt = Time.time;
+            else if (Time.time - playerTouchedAt > WreckHoldsPlayerSeconds) PlayerPassing = true;
+        }
+
         private void CrashTruck(float lateralPush, float impactSpeedKph, float hit, float speedBefore)
         {
             // +1 when it was pushed to the right of the road, -1 to the left.
@@ -1646,13 +1654,8 @@ namespace RoadRage.UnityRemake
                     // One real hit, then a moment against it. On a road this narrow a
                     // wreck can fill the lane, and being held against it, hit again every
                     // 0.35 s, left the player crawling and stuck behind it.
+                    traffic.PlayerPressing();
                     if (traffic.PlayerPassing) continue;
-                    if (traffic.playerTouchedAt < 0f) traffic.playerTouchedAt = Time.time;
-                    else if (Time.time - traffic.playerTouchedAt > WreckHoldsPlayerSeconds)
-                    {
-                        traffic.PlayerPassing = true;
-                        continue;
-                    }
                 }
                 driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
                 if (!wasWreck && traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)

@@ -712,10 +712,90 @@ namespace RoadRage.UnityRemake
             }
 
             Simulate(dt);
+            LieAgainstOtherLogs(dt);
             HitPlayer();
             HitTraffic();
             KeepOutOfVehicles();
             Place();
+        }
+
+        private static readonly List<FallenLog> Spilled = new();
+        /// Still coming off the load, where the logs start out touching.
+        private const float LeavingLoadSeconds = 0.4f;
+
+        private void OnEnable() => Spilled.Add(this);
+        private void OnDisable() => Spilled.Remove(this);
+
+        /// Each pair once a frame, as circles-round-a-line seen from above. Logs that cross
+        /// lie one on the other; logs side by side or end to side are pushed apart.
+        private void LieAgainstOtherLogs(float dt)
+        {
+            if (age < LeavingLoadSeconds) return;
+            for (var i = Spilled.IndexOf(this) + 1; i < Spilled.Count; i++)
+            {
+                var other = Spilled[i];
+                if (other.age < LeavingLoadSeconds) continue;
+                var reach = radius + other.radius;
+                if (Mathf.Abs(height - other.height) >= reach) continue;
+                var gap = Closest(other, out var crossing);
+                var apart = gap.magnitude;
+                if (!crossing && apart >= reach) continue;
+                if (crossing)
+                {
+                    var upper = height >= other.height ? this : other;
+                    var lower = upper == this ? other : this;
+                    upper.height = lower.height + reach;
+                    upper.velocity.y = Mathf.Max(0f, upper.velocity.y);
+                    upper.velocity.x *= Mathf.Exp(-dt * 3f);
+                    upper.velocity.z *= Mathf.Exp(-dt * 3f);
+                    upper.yawRate *= Mathf.Exp(-dt * 3f);
+                    upper.pitch = Mathf.Lerp(upper.pitch, 0f, dt * 6f);
+                    continue;
+                }
+                // gap: from this log to the other, x across the road, y along it.
+                var away = apart > 0.001f ? gap / apart : Vector2.right;
+                var push = (reach - apart) * 0.5f;
+                lateral -= away.x * push;
+                distance -= away.y * push;
+                other.lateral += away.x * push;
+                other.distance += away.y * push;
+                var closing = Vector2.Dot(new Vector2(velocity.x - other.velocity.x, velocity.z - other.velocity.z), away);
+                if (closing <= 0f) continue;
+                var knock = away * (closing * 0.65f);
+                velocity.x -= knock.x; velocity.z -= knock.y;
+                other.velocity.x += knock.x; other.velocity.z += knock.y;
+            }
+        }
+
+        private Vector2 Middle => new(lateral, distance);
+        private Vector2 Along => new(Mathf.Sin(yaw * Mathf.Deg2Rad), Mathf.Cos(yaw * Mathf.Deg2Rad));
+
+        /// The shortest line from this log's axis to the other's, seen from above.
+        private Vector2 Closest(FallenLog other, out bool crossing)
+        {
+            Vector2 a = Middle, b = other.Middle, u = Along, v = other.Along, w = b - a;
+            var cross = u.x * v.y - u.y * v.x;
+            crossing = false;
+            if (Mathf.Abs(cross) > 0.001f)
+            {
+                var s = (w.x * v.y - w.y * v.x) / cross;
+                var t = (w.x * u.y - w.y * u.x) / cross;
+                crossing = Mathf.Abs(s) <= halfLength && Mathf.Abs(t) <= other.halfLength;
+                if (crossing) return Vector2.zero;
+            }
+            // Not crossing: the closest pair has an end of one log in it.
+            var best = w;
+            void Try(Vector2 from, Vector2 onto, Vector2 dir, float half, float sign)
+            {
+                var along = Mathf.Clamp(Vector2.Dot(from - onto, dir), -half, half);
+                var line = (from - (onto + dir * along)) * sign;
+                if (line.sqrMagnitude < best.sqrMagnitude) best = line;
+            }
+            Try(a + u * halfLength, b, v, other.halfLength, -1f);
+            Try(a - u * halfLength, b, v, other.halfLength, -1f);
+            Try(b + v * other.halfLength, a, u, halfLength, 1f);
+            Try(b - v * other.halfLength, a, u, halfLength, 1f);
+            return best;
         }
 
         private void Simulate(float dt)
@@ -850,9 +930,10 @@ namespace RoadRage.UnityRemake
         /// A log on the road is pushed out of any vehicle it lies in - wrecks and its own
         /// truck included. Only live traffic was tested, and only to wreck it, so a log
         /// came to rest through the wheels of the rig it fell off, or a crashed car
-        /// slid over one. Three points along the log are tested against each hull (a
-        /// folded rig as its cab and trailer), and the log steps out sideways, towards
-        /// whichever side leaves it on the road.
+        /// slid over one. Points a metre apart along the log are tested against each hull
+        /// (a folded rig as its cab and trailer): three along a 12 m log left room for a
+        /// whole cab between them. The log steps out across its own length: sideways if
+        /// it lies along the road, up or down the road if it lies across it.
         private void KeepOutOfVehicles()
         {
             // Still up at deck height it is coming off its own load, not lying in anything.
@@ -860,23 +941,35 @@ namespace RoadRage.UnityRemake
             var sin = Mathf.Sin(yaw * Mathf.Deg2Rad);
             var cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
             var cars = TrafficCarController.All;
+            var points = Mathf.Max(1, Mathf.CeilToInt(halfLength));
             for (var i = 0; i < cars.Count; i++)
             {
                 var car = cars[i];
                 if (car == null || (car == source && age < 0.5f)) continue;
-                for (var step = 0; step < 8; step++)
+                for (var step = 0; step < 16; step++)
                 {
                     var inside = false;
                     var towards = 0f;
-                    foreach (var t in SamplePoints)
+                    var ahead = 0f;
+                    for (var k = -points; k <= points; k++)
                     {
+                        var t = (float)k / points;
                         var along = distance + cos * t * halfLength - car.RoadDistance;
                         var across = lateral + sin * t * halfLength - car.LaneOffset;
                         if (!car.Touches(along, across, radius, radius)) continue;
                         inside = true;
                         towards += across;
+                        ahead += along;
                     }
                     if (!inside) break;
+                    if (Mathf.Abs(sin) > 0.7f)
+                    {
+                        var way = Mathf.Abs(ahead) < 0.01f ? 1f : Mathf.Sign(ahead);
+                        distance += way * 0.25f;
+                        if (velocity.z * way < 0f) velocity.z = -velocity.z * 0.3f;
+                        velocity.x *= 0.8f;
+                        continue;
+                    }
                     var side = Mathf.Abs(towards) < 0.01f ? (lateral >= car.LaneOffset ? 1f : -1f) : Mathf.Sign(towards);
                     var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent;
                     if (Mathf.Abs(lateral + side * 0.5f) > edge) side = -side;
@@ -886,8 +979,6 @@ namespace RoadRage.UnityRemake
                 }
             }
         }
-
-        private static readonly float[] SamplePoints = { -0.85f, 0f, 0.85f };
 
         /// Traffic that drives into a log is wrecked by it - once per car per log.
         private void HitTraffic()

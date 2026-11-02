@@ -1428,12 +1428,15 @@ namespace RoadRage.UnityRemake
             BiomeMaterial("Iceland Lupine", "Iceland", "T_lupine_D", "", Color.white, 0f, 0.05f);
             BiomeMaterial("Mosel Water", "MoselVillage", "", "T_water_N", new Color(0.035f, 0.085f, 0.085f), 0f, 0.86f);
             BiomeMaterial("Mosel House", "MoselVillage", "T_fachwerk_D", "", Color.white, 0f, 0.15f);
-            for (var house = 1; house <= 3; house++)
+            for (var house = 1; house <= MoselHouseModels; house++)
                 BiomeMaterial($"Mosel House {house}", "MoselVillage", $"T_rodin_house_{house}_D", $"T_rodin_house_{house}_N", Color.white, 0f, 0.12f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
             BiomeMaterial("Mosel Lawn", "ForestFloor", "T_forest_humus_D", "T_forest_humus_N", new Color(1.15f, 1.7f, 0.72f), 0f, 0.06f);
             BiomeMaterial("Mosel Yard", "ForestFloor", "T_forest_verge_D", "T_forest_verge_N", new Color(1.25f, 1.2f, 1.1f), 0f, 0.08f);
-            BiomeMaterial("Mosel Vine", "MoselVillage", "T_vine_D", "", Color.white, 0f, 0.1f);
+            BiomeCutoutMaterial("Mosel Vine", "MoselVillage", "T_vine_row_D", "", new Color(1.3f, 1.3f, 1.2f), 0.4f)
+                // Soft leaf edges under MSAA; hard-cut ones shimmer as the camera moves.
+                .SetFloat("_AlphaToMask", 1f);
+            BiomeMaterial("Mosel Hedge", "MoselVillage", "T_hedge_D", "", Color.white, 0f, 0.08f);
             BiomeSurface(BiomeMaterial("Forest Boulder B", "ForestVillage", "T_rock_02_D", "T_rock_02_N",
                 new Color(0.56f, 0.57f, 0.54f), 0f, 0.2f), "ForestVillage", "T_rock_02_MSO", 0.6f);
             BiomeSurface(BiomeMaterial("Forest Mountain", "ForestVillage", "T_mountain_D", "T_mountain_N",
@@ -2436,7 +2439,7 @@ namespace RoadRage.UnityRemake
                 Sky = new Color(0.46f, 0.66f, 0.92f), Equator = new Color(0.62f, 0.66f, 0.62f),
                 Ground = new Color(0.26f, 0.24f, 0.18f), SunColor = new Color(1f, 0.93f, 0.78f),
                 SunIntensity = 1.35f, PostExposure = 0.05f, BloomIntensity = 0.15f, BloomThreshold = 4f,
-                AmbientIntensity = 1.1f, Saturation = 8f
+                AmbientIntensity = 1.1f, Saturation = 0f
             },
             CanalTownIndex => new BiomeMood // CANAL TOWN - old quarter, warm haze over the water
             {
@@ -2559,13 +2562,16 @@ namespace RoadRage.UnityRemake
                 ("T_forest_verge", 0.62f, new Color(0.55f, 0.55f, 0.58f)),
             }, 0.08f);
 
-            // Mosel: green grass between the vines, dark slate earth in patches, road-edge gravel.
-            Splat("Mosel Ground", "ForestFloor", new[]
+            // Mosel: meadow at two scales, stony earth at the road edge. Poly Haven, CC0.
+            // Kept dark: this light takes an albedo of about 0.3 to white.
+            Splat("Mosel Ground", "MoselVillage", new[]
             {
-                ("T_forest_humus", 0.5f, new Color(1.6f, 2.5f, 1.05f)),
-                ("T_forest_litter", 0.37f, new Color(1.2f, 1.12f, 1f)),
-                ("T_forest_verge", 0.62f, Color.white),
-            }, 0.1f);
+                ("T_mosel_meadow", 0.12f, new Color(0.55f, 0.72f, 0.62f)),
+                ("T_mosel_meadow", 0.085f, new Color(0.62f, 0.74f, 0.55f)),
+                ("T_mosel_slate", 0.2f, new Color(0.3f, 0.29f, 0.27f)),
+            }, 0.08f);
+            materials["Mosel Ground"].SetFloat("_Macro", 1f);
+            materials["Mosel Ground"].SetFloat("_MacroMean", 0.074f);
 
             // Red Canyon: sand floor, rocky ground in patches, loose stones at the verge.
             Splat("Canyon Sand", "RedCanyon", new[]
@@ -6053,7 +6059,11 @@ namespace RoadRage.UnityRemake
             return TerrainNoise(at.x, at.z, 0.006f) <= 0f;
         }
 
-        private const int MoselHouseModels = 3;
+        private const int MoselHouseModels = 9;
+        /// The last of them: too big to stand in a row, so one now and then.
+        private const int MoselChurch = 9;
+        private const float MoselChurchChance = 0.06f;
+        private int moselLastHouse;
 
         private void BuildMoselValley()
         {
@@ -6082,6 +6092,8 @@ namespace RoadRage.UnityRemake
             }
 
             BuildMoselRiverside(rail);
+            ScatterBand(1.6f, rail + 1f, 45f, (d, l, s) =>
+                SpawnForestPiece("BlackForest|SM_moor_grass", d, l, 0f, 0.4f, 0.9f, "Heath Grass"));
 
             var places = RoadPath.Route.Places;
             foreach (var i in new[] { 2, 6 })
@@ -6207,7 +6219,7 @@ namespace RoadRage.UnityRemake
         /// a low green hedge standing on the drawn ground, in parcels with gaps between.
         private void BuildMoselVines(float rail)
         {
-            const float rowGap = 2.5f, segment = 2.5f, half = 0.38f, height = 1.5f;
+            const float rowGap = 2.5f, segment = 2.5f, half = 0.2f, height = 1.6f;
             var vertices = new List<Vector3>();
             var uv = new List<Vector2>();
             var triangles = new List<int>();
@@ -6219,7 +6231,7 @@ namespace RoadRage.UnityRemake
                     CreateMeshObject("Mosel Vines Ground", vertices.ToArray(), triangles.ToArray(), uv.ToArray(), materials["Mosel Vine"]);
                 vertices.Clear(); uv.Clear(); triangles.Clear();
             }
-            void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d)
+            void Face(Vector3 a, Vector3 b, Vector3 c, Vector3 d, float vLow = 0f)
             {
                 // Both sides with their own vertices: sharing them cancels the normals to black.
                 var v = vertices.Count;
@@ -6229,7 +6241,7 @@ namespace RoadRage.UnityRemake
                 var u = Random.value;
                 for (var k = 0; k < 2; k++)
                 {
-                    uv.Add(new Vector2(u, 0f)); uv.Add(new Vector2(u + 0.5f, 0f)); uv.Add(new Vector2(u + 0.5f, 0.4f)); uv.Add(new Vector2(u, 0.4f));
+                    uv.Add(new Vector2(u, vLow)); uv.Add(new Vector2(u + 0.5f, vLow)); uv.Add(new Vector2(u + 0.5f, 1f)); uv.Add(new Vector2(u, 1f));
                 }
                 triangles.Add(v); triangles.Add(v + 1); triangles.Add(v + 2);
                 triangles.Add(v); triangles.Add(v + 2); triangles.Add(v + 3);
@@ -6262,7 +6274,7 @@ namespace RoadRage.UnityRemake
                         var top = along * 0.45f;
                         Face(a - along, b - along, b - top + ub, a - top + ua);
                         Face(a + along, b + along, b + top + ub, a + top + ua);
-                        Face(a - top + ua, b - top + ub, b + top + ub, a + top + ua);
+                        Face(a - top + ua, b - top + ub, b + top + ub, a + top + ua, 0.55f);
                         placed++;
                         if (vertices.Count > 60000) Flush();
                     }
@@ -6289,7 +6301,10 @@ namespace RoadRage.UnityRemake
                 var at = RoadPath.Point(d, side * houseAt);
                 // A lane or a bit of open ground now and then, and no house on a steep bank.
                 if (TerrainNoise(at.x, at.z, 0.035f) < -0.25f || GroundSpread(d, side * houseAt, 7f) > 2.5f) continue;
-                var kind = Random.Range(1, MoselHouseModels + 1);
+                // Never the same house twice running.
+                var kind = moselLastHouse;
+                while (kind == moselLastHouse) kind = Random.value < MoselChurchChance ? MoselChurch : Random.Range(1, MoselChurch);
+                moselLastHouse = kind;
                 var house = BiomeModel("MoselVillage", $"SM_rodin_house_{kind}", materials[$"Mosel House {kind}"]);
                 if (house == null) continue;
                 house.name = "Mosel House";
@@ -6310,9 +6325,9 @@ namespace RoadRage.UnityRemake
                 mesh.Wall("Mosel Burg", d - half, side * (front + 0.3f), d - 2.4f, side * (front + 0.3f), 0.8f, 0.3f);
                 mesh.Wall("Mosel Burg", d - 0.8f, side * (front + 0.3f), driveFrom - 1.7f, side * (front + 0.3f), 0.8f, 0.3f);
                 mesh.Wall("Mosel Burg", driveFrom + 1.7f, side * (front + 0.3f), d + half, side * (front + 0.3f), 0.8f, 0.3f);
-                mesh.Wall("Mosel Vine", d - half, side * front, d - half, side * back, 1.5f, 0.6f);
-                mesh.Wall("Mosel Vine", d + half, side * front, d + half, side * back, 1.5f, 0.6f);
-                mesh.Wall("Mosel Vine", d - half, side * back, d + half, side * back, 1.8f, 0.6f);
+                mesh.Wall("Mosel Hedge", d - half, side * front, d - half, side * back, 1.5f, 0.6f);
+                mesh.Wall("Mosel Hedge", d + half, side * front, d + half, side * back, 1.5f, 0.6f);
+                mesh.Wall("Mosel Hedge", d - half, side * back, d + half, side * back, 1.8f, 0.6f);
                 // A fruit tree and shrubs in the front garden.
                 SpawnForestPiece($"Mosel|{Random.Range(0, 12)}", d - 6f, side * (rail + 7f), 0f, 4.5f, 6.5f, "Garden Tree");
                 for (var b = 0; b < 2; b++)
@@ -11224,6 +11239,8 @@ namespace RoadRage.UnityRemake
             carCollider.center = new Vector3(0f, 0.25f, 0f);
             var arcadeController = car.gameObject.AddComponent<ArcadeCarController>();
             arcadeController.RoadDistance = spawn;
+            if (GameState.CurrentCar.Mesh == HeroTruckMesh)
+                car.gameObject.AddComponent<HeroTruckWheels>().Bind(car, arcadeController);
             // LateralOffset defaults to -2.25 (the right-lane launch); without syncing it
             // here, the countdown-phase Update() re-snaps the car to that default every
             // frame, undoing the centred spawn just chosen above for single-lane biomes.

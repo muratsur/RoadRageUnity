@@ -114,6 +114,11 @@ namespace RoadRage.UnityRemake
             var latReach = a.ContactHalfWidth + b.ContactHalfWidth + ContactSkin;
             if (Mathf.Abs(deltaLat) > latReach) return;
 
+            // Noted here, not in the gameplay test: a folded trailer's box here is wider
+            // than its true shape there, so the player could be held by this one forever.
+            if (a is ArcadeCarController) NotePlayerAgainst(b);
+            else if (b is ArcadeCarController) NotePlayerAgainst(a);
+
             var overlapLong = reach - Mathf.Abs(deltaDist);
             var overlapLat = latReach - Mathf.Abs(deltaLat);
 
@@ -159,6 +164,12 @@ namespace RoadRage.UnityRemake
         private static bool WreckLetsPlayerThrough(IRoadVehicle vehicle) =>
             vehicle is TrailerHitch hitch ? hitch.Rig != null && hitch.Rig.PlayerPassing
             : vehicle is TrafficCarController car && car.PlayerPassing;
+
+        private static void NotePlayerAgainst(IRoadVehicle vehicle)
+        {
+            if (vehicle is TrailerHitch hitch) hitch.Rig?.PlayerPressing();
+            else if (vehicle is TrafficCarController car) car.PlayerPressing();
+        }
 
         /// Whether a sideways push leaves the hull within the carriageway and shoulder,
         /// where every controller clamps it. Moving back towards the road always fits.
