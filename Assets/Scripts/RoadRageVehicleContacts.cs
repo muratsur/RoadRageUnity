@@ -116,8 +116,8 @@ namespace RoadRage.UnityRemake
 
             // Noted here, not in the gameplay test: a folded trailer's box here is wider
             // than its true shape there, so the player could be held by this one forever.
-            if (a is ArcadeCarController) NotePlayerAgainst(b);
-            else if (b is ArcadeCarController) NotePlayerAgainst(a);
+            if (a is ArcadeCarController playerA) NotePlayerAgainst(b, playerA.LateralOffset);
+            else if (b is ArcadeCarController playerB) NotePlayerAgainst(a, playerB.LateralOffset);
 
             var overlapLong = reach - Mathf.Abs(deltaDist);
             var overlapLat = latReach - Mathf.Abs(deltaLat);
@@ -165,10 +165,10 @@ namespace RoadRage.UnityRemake
             vehicle is TrailerHitch hitch ? hitch.Rig != null && hitch.Rig.PlayerPassing
             : vehicle is TrafficCarController car && car.PlayerPassing;
 
-        private static void NotePlayerAgainst(IRoadVehicle vehicle)
+        private static void NotePlayerAgainst(IRoadVehicle vehicle, float playerLateral)
         {
-            if (vehicle is TrailerHitch hitch) hitch.Rig?.PlayerPressing();
-            else if (vehicle is TrafficCarController car) car.PlayerPressing();
+            if (vehicle is TrailerHitch hitch) hitch.Rig?.PlayerPressing(playerLateral);
+            else if (vehicle is TrafficCarController car) car.PlayerPressing(playerLateral);
         }
 
         /// Whether a sideways push leaves the hull within the carriageway and shoulder,

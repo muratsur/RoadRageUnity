@@ -491,6 +491,7 @@ namespace RoadRage.UnityRemake
     {
         /// About where a trailer's front corner meets the back of the cab.
         private const float MaxFold = 70f;
+        private const float ShovedUnfoldSpeed = 60f;
 
         private Transform pivot;
         private TrafficCarController car;
@@ -565,6 +566,14 @@ namespace RoadRage.UnityRemake
         {
             if (fold == 0f && foldRate == 0f) return;
             if (car == null) car = GetComponent<TrafficCarController>();
+            if (car != null && car.Shoved)
+            {
+                // Dragged along the rail, the trailer swings back in line with the cab.
+                foldRate = 0f;
+                fold = Mathf.MoveTowards(fold, 0f, ShovedUnfoldSpeed * Time.deltaTime);
+                Apply();
+                return;
+            }
             var dt = Time.deltaTime;
             var rolling = car != null ? Mathf.Clamp01(car.SpeedKph / 40f) : 0f;
             // Rolling, the trailer's own momentum keeps the fold opening; stopped, the
@@ -722,12 +731,15 @@ namespace RoadRage.UnityRemake
         private static readonly List<FallenLog> Spilled = new();
         /// Still coming off the load, where the logs start out touching.
         private const float LeavingLoadSeconds = 0.4f;
+        /// Degrees a second: quick, so crossed logs are not seen through each other for long.
+        private const float AlignSpeed = 300f;
 
         private void OnEnable() => Spilled.Add(this);
         private void OnDisable() => Spilled.Remove(this);
 
-        /// Each pair once a frame, as circles-round-a-line seen from above. Logs that cross
-        /// lie one on the other; logs side by side or end to side are pushed apart.
+        /// Each pair once a frame, seen from above. Logs that cross turn to lie along the
+        /// road, as a spill ends up; logs side by side or end to side are pushed apart.
+        /// Stacking them instead built piles that hung in the air over the player's car.
         private void LieAgainstOtherLogs(float dt)
         {
             if (age < LeavingLoadSeconds) return;
@@ -742,14 +754,9 @@ namespace RoadRage.UnityRemake
                 if (!crossing && apart >= reach) continue;
                 if (crossing)
                 {
-                    var upper = height >= other.height ? this : other;
-                    var lower = upper == this ? other : this;
-                    upper.height = lower.height + reach;
-                    upper.velocity.y = Mathf.Max(0f, upper.velocity.y);
-                    upper.velocity.x *= Mathf.Exp(-dt * 3f);
-                    upper.velocity.z *= Mathf.Exp(-dt * 3f);
-                    upper.yawRate *= Mathf.Exp(-dt * 3f);
-                    upper.pitch = Mathf.Lerp(upper.pitch, 0f, dt * 6f);
+                    yaw = Mathf.MoveTowards(yaw, Mathf.Round(yaw / 180f) * 180f, AlignSpeed * dt);
+                    other.yaw = Mathf.MoveTowards(other.yaw, Mathf.Round(other.yaw / 180f) * 180f, AlignSpeed * dt);
+                    yawRate = other.yawRate = 0f;
                     continue;
                 }
                 // gap: from this log to the other, x across the road, y along it.
@@ -936,47 +943,57 @@ namespace RoadRage.UnityRemake
         /// it lies along the road, up or down the road if it lies across it.
         private void KeepOutOfVehicles()
         {
-            // Still up at deck height it is coming off its own load, not lying in anything.
-            if (height > 1.4f) return;
-            var sin = Mathf.Sin(yaw * Mathf.Deg2Rad);
-            var cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
+            // Up at deck height just after the crash it is coming off its own load.
+            if (height > 1.4f && age < 1f) return;
             var cars = TrafficCarController.All;
-            var points = Mathf.Max(1, Mathf.CeilToInt(halfLength));
             for (var i = 0; i < cars.Count; i++)
             {
                 var car = cars[i];
                 if (car == null || (car == source && age < 0.5f)) continue;
-                for (var step = 0; step < 16; step++)
+                StepOutOf(car.RoadDistance, car.LaneOffset, (along, across) => car.Touches(along, across, radius, radius));
+            }
+            // And the player's car, unless it is in the air going over the log.
+            if (player != null && player.isActiveAndEnabled && player.ContactHeight < 0.5f)
+                StepOutOf(player.RoadDistance, player.LateralOffset, (along, across) =>
+                    Mathf.Abs(along) <= player.HalfLength + radius && Mathf.Abs(across) <= player.HalfWidth + radius);
+        }
+
+        private void StepOutOf(float hullDistance, float hullLateral, System.Func<float, float, bool> touches)
+        {
+            var sin = Mathf.Sin(yaw * Mathf.Deg2Rad);
+            var cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
+            var points = Mathf.Max(1, Mathf.CeilToInt(halfLength));
+            for (var step = 0; step < 16; step++)
+            {
+                var inside = false;
+                var towards = 0f;
+                var ahead = 0f;
+                for (var k = -points; k <= points; k++)
                 {
-                    var inside = false;
-                    var towards = 0f;
-                    var ahead = 0f;
-                    for (var k = -points; k <= points; k++)
-                    {
-                        var t = (float)k / points;
-                        var along = distance + cos * t * halfLength - car.RoadDistance;
-                        var across = lateral + sin * t * halfLength - car.LaneOffset;
-                        if (!car.Touches(along, across, radius, radius)) continue;
-                        inside = true;
-                        towards += across;
-                        ahead += along;
-                    }
-                    if (!inside) break;
-                    if (Mathf.Abs(sin) > 0.7f)
-                    {
-                        var way = Mathf.Abs(ahead) < 0.01f ? 1f : Mathf.Sign(ahead);
-                        distance += way * 0.25f;
-                        if (velocity.z * way < 0f) velocity.z = -velocity.z * 0.3f;
-                        velocity.x *= 0.8f;
-                        continue;
-                    }
-                    var side = Mathf.Abs(towards) < 0.01f ? (lateral >= car.LaneOffset ? 1f : -1f) : Mathf.Sign(towards);
-                    var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent;
-                    if (Mathf.Abs(lateral + side * 0.5f) > edge) side = -side;
-                    lateral += side * 0.25f;
-                    if (velocity.x * side < 0f) velocity.x = -velocity.x * 0.3f;
-                    velocity.z *= 0.8f;
+                    var t = (float)k / points;
+                    var along = distance + cos * t * halfLength - hullDistance;
+                    var across = lateral + sin * t * halfLength - hullLateral;
+                    if (!touches(along, across)) continue;
+                    inside = true;
+                    towards += across;
+                    ahead += along;
                 }
+                if (!inside) break;
+                var side = Mathf.Abs(towards) < 0.01f ? (lateral >= hullLateral ? 1f : -1f) : Mathf.Sign(towards);
+                var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent;
+                // No room beside the hull: going back the other way only put it inside
+                // again, every frame, and it lay there through the wheels.
+                if (Mathf.Abs(sin) > 0.7f || Mathf.Abs(lateral + side * 0.5f) > edge)
+                {
+                    var way = Mathf.Abs(ahead) < 0.01f ? 1f : Mathf.Sign(ahead);
+                    distance += way * 0.25f;
+                    if (velocity.z * way < 0f) velocity.z = -velocity.z * 0.3f;
+                    velocity.x *= 0.8f;
+                    continue;
+                }
+                lateral += side * 0.25f;
+                if (velocity.x * side < 0f) velocity.x = -velocity.x * 0.3f;
+                velocity.z *= 0.8f;
             }
         }
 

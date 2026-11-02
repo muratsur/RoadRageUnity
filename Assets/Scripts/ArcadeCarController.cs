@@ -306,6 +306,10 @@ namespace RoadRage.UnityRemake
             SpeedKph = Mathf.Min(SpeedKph + 25f, 220f);
         }
 
+        private const float RigHitMinDamage = 8f;
+        private const float RigHitMaxDamage = 30f;
+        private const float RigHitKeepsSpeed = 0.6f;
+
         public bool ApplyTrafficImpact(TrafficCarController traffic, float longitudinalGap, float lateralGap)
         {
             if (Time.time < nextImpactTime) return false;
@@ -333,6 +337,14 @@ namespace RoadRage.UnityRemake
                 GameState.Combo = 0;
                 GameState.Show("WRECKAGE");
                 GameState.ApplyDamage(6f * absorb);
+            }
+            else if (traffic.Role == TrafficCarController.VehicleRole.LogTruck)
+            {
+                // Like hitting a wall that drives: the harder, the worse, and the car bounces.
+                GameState.Combo = 0;
+                GameState.Show("LOG TRUCK!");
+                GameState.ApplyDamage(Mathf.Lerp(RigHitMinDamage, RigHitMaxDamage, SpeedKph / 180f) * absorb);
+                SpeedKph *= RigHitKeepsSpeed;
             }
             else if (traffic.IsViolator)
             {
@@ -401,7 +413,8 @@ namespace RoadRage.UnityRemake
 
             if (traffic.IsViolator || SpeedKph >= 60f)
             {
-                if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
+                if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck &&
+                    traffic.Role != TrafficCarController.VehicleRole.LogTruck)
                 {
                     var impactNormal = (traffic.transform.position - transform.position).normalized;
                     RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);

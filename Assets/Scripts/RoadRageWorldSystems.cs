@@ -587,7 +587,7 @@ namespace RoadRage.UnityRemake
             // A loaded rig is not shoved about by a car, and a wrecked one not at all:
             // at plain footprint mass the player's pickup slid a wrecked truck aside
             // and opened the road.
-            : Role == VehicleRole.LogTruck ? HalfLength * HalfWidth * (IsWreck ? 60f : 6f)
+            : Role == VehicleRole.LogTruck ? HalfLength * HalfWidth * 60f
             : HalfLength * HalfWidth;
         /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
         /// hole in the road that police and traffic drove straight through.
@@ -979,7 +979,8 @@ namespace RoadRage.UnityRemake
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
             PlayerPassing = false;
-            playerTouchedAt = -1f;
+            Shoved = false;
+            pressStartedAt = lastPressedAt = -1f;
             WreckYaw = 0f;
             wreckYawRate = 0f;
             wreckRoll = 0f;
@@ -1226,7 +1227,8 @@ namespace RoadRage.UnityRemake
                 var dt = Time.deltaTime;
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 26f * dt);
                 laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget,
-                    Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                    Shoved ? ShoveSlideSpeed * dt : Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                if (Shoved && HalfLength > 3.5f) WreckYaw = Mathf.MoveTowards(WreckYaw, 0f, ShoveTurnSpeed * dt);
                 wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
                 if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
                 WreckYaw += wreckYawRate * dt;
@@ -1411,20 +1413,20 @@ namespace RoadRage.UnityRemake
         private float wreckSlideTarget;
         private float wreckYawRate;
         private const float MaxRigWreckYaw = 35f;
-        /// Where along the road the last player hit landed, for a truck's crash: a
-        /// 17 m rig turns about where it was struck, not about its middle. NaN when
-        /// the wreck came from something other than the player.
-        private float hitRoadDistance = float.NaN;
 
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
             if (IsWreck) return;
+            if (Role == VehicleRole.LogTruck)
+            {
+                TakeHitAsRig(lateralPush);
+                return;
+            }
             IsWreck = true;
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
 
-            var speedBefore = currentSpeedKph;
             // Momentum transfer: shove victim forward and slew it away across the asphalt.
             currentSpeedKph = Mathf.Max(currentSpeedKph * 0.4f, impactSpeedKph * 0.72f);
 
@@ -1441,86 +1443,52 @@ namespace RoadRage.UnityRemake
             var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
 
-            if (Role == VehicleRole.LogTruck) CrashTruck(lateralPush, impactSpeedKph, hit, speedBefore);
-
-            // After the speed transfer above, so the load leaves with the truck's momentum.
-            SpillLoad(lateralPush, impactSpeedKph);
         }
 
-        /// A car spins by whichever side it was hit from; a truck turns by where along
-        /// its length the blow landed. Shoved sideways behind its middle, the tail swings
-        /// away and the nose comes round towards the hit - struck at the back on its
-        /// left, it turns left. Shoved ahead of its middle, the nose goes with the push.
-        /// It is heavy: it keeps most of its own speed, turns a few tens of degrees
-        /// rather than spinning, and slides off to the side it was pushed towards.
-        private const float WreckedRigSpeedKph = 20f;
-        private const float WreckHoldsPlayerSeconds = 0.4f;
-        private float playerTouchedAt = -1f;
-        /// This wreck has stopped blocking the player, who was stuck against it.
+        private const float RigLurchMetres = 0.25f;
+        private const float RigHitIntervalSeconds = 1f;
+        private float nextRigHit;
+
+        /// Forty tonnes does not care about a car: the rig stays upright, keeps driving and
+        /// keeps its load. It only lurches. Folding and stopping it on a road this narrow
+        /// left a wall the player could neither pass nor shift.
+        private void TakeHitAsRig(float lateralPush)
+        {
+            separation = Mathf.Clamp(separation + Mathf.Sign(lateralPush) * RigLurchMetres, -MaxSeparation, MaxSeparation);
+            crashedByPlayer = false;
+        }
+
+        private const float WreckHoldsPlayerSeconds = 0.6f;
+        /// How fast a shoved wreck scrapes across the road, in m/s and degrees/s.
+        private const float ShoveSlideSpeed = 6f;
+        private const float ShoveTurnSpeed = 45f;
+        private const float ShoveCarriedKph = 25f;
+        /// Longer away than this and the player has driven off, not stayed against it.
+        private const float PressBreakSeconds = 0.25f;
+        private float pressStartedAt = -1f;
+        private float lastPressedAt = -1f;
+        /// Being shoved to the road edge by the player.
+        public bool Shoved { get; private set; }
+        /// A physics-owned wreck cannot be shoved, so that one lets the player by.
         public bool PlayerPassing { get; private set; }
 
-        /// The player is up against this wreck: after a moment it stops blocking them.
-        public void PlayerPressing()
+        /// The player is up against this wreck. Held there, it is shoved to the edge of the
+        /// road furthest from them, a long rig swinging straight against the rail: on a road
+        /// this narrow a wreck can fill it, and driving through one looked broken.
+        public void PlayerPressing(float playerLateral)
         {
-            if (!IsWreck || PlayerPassing) return;
-            if (playerTouchedAt < 0f) playerTouchedAt = Time.time;
-            else if (Time.time - playerTouchedAt > WreckHoldsPlayerSeconds) PlayerPassing = true;
-        }
-
-        private void CrashTruck(float lateralPush, float impactSpeedKph, float hit, float speedBefore)
-        {
-            // +1 when it was pushed to the right of the road, -1 to the left.
-            var push = Mathf.Abs(lateralPush) < 0.01f
-                ? (variationSeed % 2 == 0 ? 1f : -1f)
-                : Mathf.Sign(lateralPush);
-            // Contact point from the truck's middle, along the road. Without a known hit
-            // (a blast, a pile-up), take it as struck behind the middle - the usual way.
-            var arm = float.IsNaN(hitRoadDistance)
-                ? -HalfLength * 0.6f
-                : Mathf.Clamp(hitRoadDistance - RoadDistance, -HalfLength, HalfLength);
-            hitRoadDistance = float.NaN;
-            var lever = Mathf.Clamp01(Mathf.Abs(arm) / Mathf.Max(0.5f, HalfLength));
-            // Force across the road at a point along it: positive yaw brings the nose
-            // round to the right. The sign holds for oncoming trucks too - both the arm
-            // and the push flip in the truck's own frame, and their product does not.
-            var turn = Mathf.Sign(arm) * push;
-            wreckYawRate = turn * Mathf.Lerp(30f, 95f, hit) * Mathf.Lerp(0.35f, 1f, lever);
-            wreckRoll = push * Mathf.Lerp(1.5f, 4f, hit);
-            // The rig digs in and stops almost dead, beside the load it has just shed.
-            // Keeping 80% of its speed drove it off up the road and left the logs behind.
-            currentSpeedKph = Mathf.Min(WreckedRigSpeedKph, Mathf.Max(speedBefore, impactSpeedKph * 0.45f));
-
-            var shoulder = push * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
-            wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
-
-            JackknifeTrailer(arm, push, turn, hit);
-        }
-
-        /// Folds an articulated rig's trailer on its fifth wheel. Struck on the trailer,
-        /// its tail is shoved away and the rig folds hard, the cab turning only a little;
-        /// struck on the cab, the cab turns and the trailer trails the other way.
-        private void JackknifeTrailer(float arm, float push, float turn, float hit)
-        {
-            var hitch = GetComponent<TrailerHitch>();
-            if (hitch == null) return;
-            // In the rig's own frame: along it forwards, across it to its right.
-            var armLocal = arm * Direction;
-            var pushLocal = push * Direction;
-            var fromHitch = armLocal - hitch.HitchZ;
-            if (fromHitch < 0f)
-            {
-                // Tail shoved towards pushLocal: the trailer turns the other way about
-                // the hitch - negative fold swings the tail right.
-                var reach = Mathf.Clamp01(-fromHitch / Mathf.Max(1f, HalfLength));
-                hitch.Kick(-pushLocal * Mathf.Lerp(50f, 140f, hit) * Mathf.Lerp(0.5f, 1f, reach));
-                wreckYawRate *= 0.5f;
-            }
-            else
-            {
-                // The trailer lags the cab: it folds against the cab's turn. `turn` is
-                // already in the rig's frame (see CrashTruck).
-                hitch.Kick(-turn * Mathf.Lerp(25f, 70f, hit));
-            }
+            if (!IsWreck || PlayerPassing || Shoved) return;
+            if (Time.time - lastPressedAt > PressBreakSeconds) pressStartedAt = Time.time;
+            lastPressedAt = Time.time;
+            if (Time.time - pressStartedAt <= WreckHoldsPlayerSeconds) return;
+            if (Ragdolled) { PlayerPassing = true; return; }
+            Shoved = true;
+            var side = Mathf.Abs(playerLateral) > 0.3f ? -Mathf.Sign(playerLateral) : LaneOffset >= 0f ? 1f : -1f;
+            var edge = side * Mathf.Max(0f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - HalfWidth);
+            wreckSlideTarget = Mathf.Clamp(edge - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+            currentSpeedKph = Mathf.Max(currentSpeedKph, ShoveCarriedKph);
+            wreckYawRate = 0f;
+            if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.6f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns
@@ -1644,22 +1612,21 @@ namespace RoadRage.UnityRemake
                 {
                     // Set before the impact: from 60 km/h its takedown wrecks the car itself.
                     traffic.crashedByPlayer = true;
-                    // The player's bumper that did the hitting: the rear one when
-                    // rammed from ahead, the front one otherwise.
-                    traffic.hitRoadDistance = driver.RoadDistance +
-                                              (longitudinal >= 0f ? driver.HalfLength : -driver.HalfLength);
                 }
                 else
                 {
                     // One real hit, then a moment against it. On a road this narrow a
                     // wreck can fill the lane, and being held against it, hit again every
                     // 0.35 s, left the player crawling and stuck behind it.
-                    traffic.PlayerPressing();
                     if (traffic.PlayerPassing) continue;
                 }
+                // A rig is not wrecked by the hit, so the contact lasts: it counts once.
+                if (traffic.Role == VehicleRole.LogTruck && !wasWreck)
+                {
+                    if (Time.time < traffic.nextRigHit) continue;
+                    traffic.nextRigHit = Time.time + RigHitIntervalSeconds;
+                }
                 driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
-                if (!wasWreck && traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
-                    GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
                 if (!traffic.IsWreck) traffic.Crash(lateral, speedAtImpact);
             }
         }
