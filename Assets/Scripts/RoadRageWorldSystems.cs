@@ -499,9 +499,11 @@ namespace RoadRage.UnityRemake
             get
             {
                 if (Ragdolled) return ragdollExtent.y;
-                if (WreckYaw == 0f) return HalfWidth;
+                // On its side a car is as wide as it was tall.
+                var width = rolled ? Mathf.Max(HalfWidth, rollLift * 0.5f) : HalfWidth;
+                if (WreckYaw == 0f) return width;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
-                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
+                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(width * Mathf.Cos(yaw));
             }
         }
 
@@ -1482,9 +1484,14 @@ namespace RoadRage.UnityRemake
             if (delta > 0f)
                 visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed,
                     Mathf.Lerp(0.12f, 0.45f, still), 30f, delta);
-            // Rolled about its base, the car needs lifting by its own height to lie on its roof.
-            var rollHeight = rolled ? rollLift * Mathf.InverseLerp(0f, 180f, Mathf.Abs(wreckRoll)) : 0f;
-            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset + rollHeight);
+            // A wreck is drawn where it is: thrown aside fast, the smoothing above left it
+            // lying metres behind its own hull, in the player's way.
+            if (IsWreck)
+            {
+                visualLateral = LaneOffset;
+                visualLateralSpeed = 0f;
+            }
+            transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
             var forward = Mathf.Max(3f, currentSpeedKph / 3.6f);
@@ -1496,6 +1503,9 @@ namespace RoadRage.UnityRemake
                   Mathf.Clamp01(currentSpeedKph / 20f);
             steerYaw = Mathf.Lerp(steerYaw, target, Mathf.Clamp01(delta * 8f));
             transform.rotation = facing * Quaternion.Euler(0f, WreckYaw + steerYaw, wreckRoll);
+            // A rolling car turns about its middle, where its hull is. Turned about its base,
+            // a tall one swung up to half its height outside the hull while on its side.
+            if (rolled) transform.position += (Vector3.up - transform.up) * (rollLift * 0.5f);
         }
 
         private float wreckSlideTarget;

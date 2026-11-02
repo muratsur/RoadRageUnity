@@ -1433,8 +1433,23 @@ namespace RoadRage.UnityRemake
                 BiomeMaterial($"Mosel House {house}", "MoselVillage", $"T_rodin_house_{house}_D", $"T_rodin_house_{house}_N", Color.white, 0f, 0.12f);
             BiomeMaterial("Mosel Burg", "MoselVillage", "T_burg_D", "", Color.white, 0f, 0.1f);
             MakeMaterial("Mosel Bridge", new Color(0.56f, 0.55f, 0.52f), 0f, 0.12f);
-            foreach (var kind in new[] { "cabin", "coasthouse", "store", "lighthouse" })
-                BiomeMaterial($"Sur {kind}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", Color.white, 0f, 0.12f);
+            BiomeMaterial("Sur lighthouse", "BigSur", "T_lighthouse_D", "T_lighthouse_N", Color.white, 0f, 0.12f);
+            BiomeMaterial("Sur Dirt", "BigSur", "T_sur_dirt_D", "", new Color(0.8f, 0.68f, 0.52f), 0f, 0.05f);
+            // Each building in three paint and timber colours.
+            foreach (var (kind, tints) in new[]
+            {
+                ("cabin", new[] { Color.white, new Color(0.75f, 0.85f, 1.25f), new Color(1.25f, 1.05f, 0.7f) }),
+                ("coasthouse", new[] { Color.white, new Color(0.62f, 0.62f, 0.62f), new Color(1.05f, 0.82f, 0.68f) }),
+                ("store", new[] { Color.white, new Color(0.72f, 0.86f, 0.74f), new Color(1f, 0.88f, 0.62f) }),
+                ("ranch", new[] { Color.white, new Color(1f, 0.92f, 0.78f), new Color(1f, 0.82f, 0.72f) }),
+                ("bungalow", new[] { Color.white, new Color(0.8f, 0.88f, 1f), new Color(1f, 0.92f, 0.8f) }),
+                ("aframe", new[] { Color.white, new Color(0.78f, 0.74f, 0.7f), new Color(1.1f, 0.95f, 0.75f) }),
+                ("motel", new[] { Color.white, new Color(0.8f, 0.95f, 0.92f), new Color(1f, 0.85f, 0.75f) }),
+                ("barn", new[] { Color.white, new Color(1f, 0.72f, 0.65f), new Color(0.8f, 0.8f, 0.8f) }),
+                ("lodge", new[] { Color.white, new Color(0.85f, 0.8f, 0.75f), new Color(1.05f, 0.95f, 0.82f) }),
+            })
+                for (var tint = 0; tint < tints.Length; tint++)
+                    BiomeMaterial($"Sur {kind} {tint}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", tints[tint], 0f, 0.12f);
             MakeMaterial("Mosel Steel", new Color(0.16f, 0.18f, 0.19f), 0.6f, 0.35f);
             MakeMaterial("Mosel Paint", new Color(0.85f, 0.85f, 0.82f), 0f, 0.2f);
             MoselLamps.Bind(MakeMaterial("Mosel Lamp", new Color(0.9f, 0.86f, 0.74f), 0f, 0.5f));
@@ -6469,10 +6484,21 @@ namespace RoadRage.UnityRemake
         private const float BigSurHouseFromRail = 20f;
         /// Nothing grows or stands on the sea bed or the wet edge of the shore.
         private const float AboveSeaMetres = 3f;
+        private const float BigSurDriveGap = 7f;
+        private const float BigSurDriveHalf = 1.5f;
+        private const float BigSurTrackStep = 2f;
+        private const float BigSurTrackFlare = 5f;
+        private const float BigSurYardHalf = 4f;
+        private const int BigSurHouseTints = 3;
+        private const float BigSurFootingInset = 0.97f;
+        private const float BigSurMaxSlopeRise = 2.2f;
+        private const float BigSurYardDepth = 10f;
+        private readonly List<Vector2> bigSurDrives = new();
         private const float ArchMinSpan = 120f;
         private const float ArchMaxRise = 70f;
         private const float ArchBelowDeck = 3f;
-        private static readonly string[] BigSurHouses = { "cabin", "coasthouse", "store", "cabin", "coasthouse" };
+        private static readonly string[] BigSurHouses = { "cabin", "coasthouse", "store", "ranch", "bungalow", "aframe", "motel", "barn", "lodge" };
+        private string bigSurLastHouse;
 
         private void BuildBigSur()
         {
@@ -6483,7 +6509,6 @@ namespace RoadRage.UnityRemake
             var rail = RoadPath.HalfWidthAt(segStart) + RoadPath.ShoulderWidth + GuardRailOffset;
 
             BuildMoselRiver();
-            BuildGuardRail(materials["Forest Guard Rail"]);
             BuildMoselBridges();
             var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
             bool OnLand(float d, float l) =>
@@ -6519,22 +6544,76 @@ namespace RoadRage.UnityRemake
                     new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(0.8f, 2.6f), "Big Sur Rock", false));
 
             var mesh = new VillageMesh();
+            bigSurDrives.Clear();
             for (var d = Mathf.Ceil(segStart / BigSurHouseEvery) * BigSurHouseEvery; d < segEnd; d += BigSurHouseEvery)
             {
+                // The rail opens for the drive, and a chunk only places its own rail.
+                if (d - segStart < BigSurDriveGap || segEnd - d < BigSurDriveGap || OnMoselDeck(d)) continue;
                 var side = RealGroundUnder(d, 40f, 1f) >= RealGroundUnder(d, -40f, 1f) ? 1 : -1;
                 var l = rail + BigSurHouseFromRail;
                 var at = RoadPath.Point(d, side * l);
-                if (!OnLand(d, side * l) || TerrainNoise(at.x, at.z, 0.004f) < 0f || GroundSpread(d, side * l, 7f) > 3f ||
+                if (!OnLand(d, side * l) || TerrainNoise(at.x, at.z, 0.004f) < -0.3f || GroundSpread(d, side * l, 8f) > BigSurMaxSlopeRise ||
                     RoadPath.Route.CoverAt(d, side * l) == RoadRoute.CoverWater) continue;
-                var kind = BigSurHouses[Mathf.Abs(Mathf.RoundToInt(d / BigSurHouseEvery)) % BigSurHouses.Length];
-                var house = BiomeModel("BigSur", $"SM_{kind}", materials[$"Sur {kind}"]);
+                // Never the same building twice running.
+                var kind = bigSurLastHouse;
+                while (kind == bigSurLastHouse) kind = BigSurHouses[Random.Range(0, BigSurHouses.Length)];
+                bigSurLastHouse = kind;
+                var house = BiomeModel("BigSur", $"SM_{kind}", materials[$"Sur {kind} {Random.Range(0, BigSurHouseTints)}"]);
                 if (house == null) continue;
                 house.name = "Big Sur House";
-                house.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.4f, at.z),
-                    Quaternion.LookRotation(Flat(-side * RoadPath.Right(d))));
-                mesh.Lay("Mosel Yard", d - 1.5f, d + 1.5f, side * (rail - 1f), side * (l - 4f), 0.08f);
+                // Mirrored half the time and a different size, so no two read alike.
+                var size = Random.Range(0.9f, 1.2f);
+                house.transform.localScale = new Vector3(Random.value < 0.5f ? -size : size, size, size);
+                // Its footprint, then the ground under its corners: set between the lowest and
+                // highest of them, cut in uphill, on a stone footing down to the lowest.
+                var halfX = 4f;
+                var halfZ = 4f;
+                house.transform.SetPositionAndRotation(at, Quaternion.identity);
+                if (TryGetCombinedBounds(house, out var footprint))
+                {
+                    halfX = footprint.extents.x;
+                    halfZ = footprint.extents.z;
+                }
+                var facing = Quaternion.LookRotation(Flat(-side * RoadPath.Right(d)));
+                var wideWay = facing * Vector3.right * halfX;
+                var deepWay = facing * Vector3.forward * halfZ;
+                var lowest = float.PositiveInfinity;
+                var highest = float.NegativeInfinity;
+                for (var cx = -1; cx <= 1; cx++)
+                for (var cz = -1; cz <= 1; cz++)
+                {
+                    var y = GridGroundY(at + wideWay * cx + deepWay * cz);
+                    lowest = Mathf.Min(lowest, y);
+                    highest = Mathf.Max(highest, y);
+                }
+                var floor = (lowest + highest) * 0.5f;
+                house.transform.SetPositionAndRotation(new Vector3(at.x, floor, at.z), facing);
+                var top = new Vector3(at.x, floor + 0.1f, at.z);
+                var foot = Vector3.up * (lowest - 0.6f - top.y);
+                for (var way = -1; way <= 1; way += 2)
+                {
+                    var w = wideWay * (way * BigSurFootingInset);
+                    var z = deepWay * BigSurFootingInset;
+                    mesh.Face("Mosel Burg", top + w - z, top + w + z, top + w + z + foot, top + w - z + foot);
+                    w = wideWay * BigSurFootingInset;
+                    z = deepWay * (way * BigSurFootingInset);
+                    mesh.Face("Mosel Burg", top + z - w, top + z + w, top + z + w + foot, top + z - w + foot);
+                }
+                // A dirt track, not a paved strip: it starts at the shoulder, wanders and
+                // changes width a little, and ends in a worn patch at the door.
+                var edge = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth - 0.5f;
+                for (var along = edge; along < l - BigSurYardDepth; along += BigSurTrackStep)
+                {
+                    var wander = Mathf.Sin(along * 0.31f + d) * 0.5f;
+                    var width = BigSurDriveHalf + Mathf.Sin(along * 0.73f + d * 2f) * 0.35f +
+                                Mathf.Max(0f, edge + BigSurTrackFlare - along) * 0.3f;
+                    mesh.Lay("Sur Dirt", d + wander - width, d + wander + width, side * along, side * (along + BigSurTrackStep), 0.09f);
+                }
+                mesh.Lay("Sur Dirt", d - BigSurYardHalf, d + BigSurYardHalf, side * (l - BigSurYardDepth), side * (l - 3f), 0.09f);
+                bigSurDrives.Add(new Vector2(d, side));
             }
             mesh.Build(this);
+            BuildGuardRail(materials["Forest Guard Rail"]);
 
             foreach (var d in PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
             {
@@ -11112,6 +11191,7 @@ namespace RoadRage.UnityRemake
         private bool PlaceGuardRailSection(Vector3 from, Vector3 to, int side, float midDistance, Material material) =>
             // No rail along a village front: the drives and paths reach the road there.
             !(RoadPath.Route != null && RoadPath.Route == moselRoute && MoselVillageAt(midDistance, side)) &&
+            !bigSurDrives.Exists(drive => drive.y == side && Mathf.Abs(drive.x - midDistance) < BigSurDriveGap) &&
             // A bridge has its own parapet.
             !(RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == bigSurRoute) && OnMoselDeck(midDistance)) &&
             PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,

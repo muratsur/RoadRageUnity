@@ -52,6 +52,7 @@ namespace RoadRage.UnityRemake
         /// Small positive gap so hulls rest touching rather than exactly coincident,
         /// which is what reads as clipping when two cars sit side by side.
         private const float ContactSkin = 0.08f;
+        private const float PlayerShoveShare = 0.3f;
         /// Above this height difference one vehicle is over the other, not into it.
         private const float ClearanceHeight = 1.6f;
         /// Above this many vehicles the pass drops to a single relaxation.
@@ -127,8 +128,9 @@ namespace RoadRage.UnityRemake
             var shareA = b.ContactMass / totalMass;
             var shareB = a.ContactMass / totalMass;
             // The player ploughs a wreck aside: it takes all of the correction.
-            if (a is ArcadeCarController && b is TrafficCarController wreckB && wreckB.PlayerShoves) { shareA = 0f; shareB = 1f; }
-            else if (b is ArcadeCarController && a is TrafficCarController wreckA && wreckA.PlayerShoves) { shareA = 1f; shareB = 0f; }
+            // Not quite all: a wreck's sideways push has a limit, and past it the player sat inside.
+            if (a is ArcadeCarController && b is TrafficCarController wreckB && wreckB.PlayerShoves) { shareA = PlayerShoveShare; shareB = 1f - PlayerShoveShare; }
+            else if (b is ArcadeCarController && a is TrafficCarController wreckA && wreckA.PlayerShoves) { shareA = 1f - PlayerShoveShare; shareB = PlayerShoveShare; }
 
             if (overlapLat < overlapLong)
             {
@@ -147,10 +149,14 @@ namespace RoadRage.UnityRemake
                 }
                 // A wreck already against the rail: the player slides off it instead of
                 // ploughing it along the road for ever.
-                if (shareA == 0f || shareB == 0f)
+                if (a is ArcadeCarController && shareA == PlayerShoveShare)
                 {
-                    if (shareA == 0f) a.ApplyContactPush(0f, -sign * overlapLat);
-                    else b.ApplyContactPush(0f, sign * overlapLat);
+                    a.ApplyContactPush(0f, -sign * overlapLat);
+                    return;
+                }
+                if (b is ArcadeCarController && shareB == PlayerShoveShare)
+                {
+                    b.ApplyContactPush(0f, sign * overlapLat);
                     return;
                 }
             }
