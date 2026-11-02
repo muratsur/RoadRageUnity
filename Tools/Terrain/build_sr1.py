@@ -1,4 +1,4 @@
-"""Builds the Big Sur biome's road from the real California Highway 1, Carmel to Lucia, with
+"""Builds the Big Sur biome's road from the real California Highway 1, Garrapata to Lucia, with
 the same rules as Greenwood's B500: this runs build_b500_road.py, export_b500_realmap.py and
 bake_b500_terrain.py with their inputs and outputs pointed at this road.
 
@@ -36,7 +36,7 @@ road.COVER_URL = ("https://esa-worldcover.s3.eu-central-1.amazonaws.com/v200/202
                   "ESA_WorldCover_10m_2021_v200_N36W123_Map.tif")
 road.COVER_BOUNDS = (-122.0, 36.0, -121.3, 36.56)
 road.PLACES = [
-    ("Carmel Highlands", 36.5000, -121.9370, "Carmel Highlands"),
+    ("Garrapata", 36.4668, -121.9200, "Garrapata"),
     ("Bixby Bridge", 36.3716, -121.9017, "Bixby Bridge"),
     ("Point Sur", 36.3063, -121.8900, "Point Sur"),
     ("Big Sur", 36.2704, -121.8081, "Big Sur"),
@@ -53,14 +53,16 @@ bake.ROAD_HALF = 8.0    # the DEM has 10 m cells
 DECK_MARGIN = 20.0
 GROUND_LIMIT = 260.0    # the game's MoselGroundLimit: it squeezes heights by tanh
 SEA_HEIGHT = 1.5        # m: the DEM has the sea at about 0
-SEA_BELOW_ROAD = 8.0    # m under the road's lowest point
+SEA_BELOW_ROAD = 55.0   # m under the road's lowest point: the game road has no real height, this is its cliff
 SEA_BED = 3.0
 LAND_ABOVE_SEA = 0.6
+START_LAT = 36.476       # the first 8 km from Carmel run inland: start where the Pacific is in view
 ROAD_BLEND = 300.0      # m from the road over which land goes from the road's height to its own
 
 
 def read_route():
     pts = np.array(json.load(open(LINE)))
+    pts = pts[np.argmax(pts[:, 1] < START_LAT):]
     return pts[:, 1], pts[:, 0]
 
 

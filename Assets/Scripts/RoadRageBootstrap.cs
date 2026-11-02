@@ -3366,7 +3366,8 @@ namespace RoadRage.UnityRemake
                     if (RoadPath.Route == bigSurRoute && j > 0 && j + 1 < across)
                     {
                         var slope = Mathf.Abs(GridCornerY(row, j + 1) - GridCornerY(row, j - 1)) / (columns[j + 1] - columns[j - 1]);
-                        w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.55f, 1f, slope)) + (patch - 0.85f) * 3f) * (1f - verge);
+                        var seaCliff = 1f - Mathf.InverseLerp(BigSurSeaCliffRock * 0.5f, BigSurSeaCliffRock, GridCornerY(row, j) - bigSurSeaLevel);
+                        w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 0.75f, slope)) + seaCliff + (patch - 0.85f) * 3f) * (1f - verge);
                     }
                     var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
                     var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
@@ -6287,9 +6288,13 @@ namespace RoadRage.UnityRemake
                     mesh.Face("Mosel Road", At(d, side * RoadPath.HalfWidthAt(d), 0.05f), At(next, side * RoadPath.HalfWidthAt(next), 0.05f),
                         At(next, side * wn, 0.05f), At(d, side * w, 0.05f));
                 var fold = RoadPath.Route.Fold(d);
-                ArchUnderDeck(mesh, d, next, fold, w);
+                ArchUnderDeck(mesh, d, next, w);
                 if (Mathf.FloorToInt(fold / MoselPierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / MoselPierSpacing))
-                    mesh.Pier("Mosel Bridge", RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f);
+                {
+                    // As on the real Bixby: over the arch the columns stand on it, and below it is open air.
+                    var floor = ArchAt(d, out var arch, out var archRise) ? RoadPath.Point(d, 0f, ArchRib(d, arch, archRise)).y : float.NegativeInfinity;
+                    mesh.Pier("Mosel Bridge", RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f, floor);
+                }
             }
         }
 
@@ -6481,7 +6486,7 @@ namespace RoadRage.UnityRemake
         /// bridges with concrete arches on the long ones, and the light station at Point Sur.
         private const int BigSurIndex = 16;
         private const float BigSurHouseEvery = 180f;
-        private const float BigSurHouseFromRail = 20f;
+        private const float BigSurHouseFromRail = 12f;
         /// Nothing grows or stands on the sea bed or the wet edge of the shore.
         private const float AboveSeaMetres = 3f;
         private const float BigSurDriveGap = 7f;
@@ -6492,6 +6497,11 @@ namespace RoadRage.UnityRemake
         private const int BigSurHouseTints = 3;
         private const float BigSurFootingInset = 0.97f;
         private const float BigSurMaxSlopeRise = 2.2f;
+        private const float BigSurSeaCliffRock = 40f;
+        private const float BigSurRedwoodSlim = 0.62f;
+        private const float BigSurLighthouseDistance = 60f;
+        private const float BigSurLighthouseScale = 1.6f;
+        private const float BigSurLighthouseYard = 14f;
         private const float BigSurYardDepth = 10f;
         private readonly List<Vector2> bigSurDrives = new();
         private const float ArchMinSpan = 120f;
@@ -6513,6 +6523,11 @@ namespace RoadRage.UnityRemake
             var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
             bool OnLand(float d, float l) =>
                 float.IsNaN(seaLevel) || GridGroundY(RoadPath.Point(d, l)) > seaLevel + AboveSeaMetres;
+            GameObject Slim(GameObject tree)
+            {
+                if (tree != null) tree.transform.localScale = Vector3.Scale(tree.transform.localScale, new Vector3(BigSurRedwoodSlim, 1f, BigSurRedwoodSlim));
+                return tree;
+            }
             // Redwoods: tall conifers, only where the land cover has forest.
             for (var near = 25f; near < 420f; near += 40f)
             {
@@ -6524,7 +6539,7 @@ namespace RoadRage.UnityRemake
                     var at = RoadPath.Point(d, l);
                     if (TerrainNoise(at.x, at.z, 0.02f) < -0.1f) return null;
                     var kind = Random.value;
-                    return kind < 0.5f ? SpawnForestPiece($"External|{Random.Range(0, 12)}", d, l, 0f, 26f, 48f, "Forest Tree")
+                    return kind < 0.5f ? Slim(SpawnForestPiece($"External|{Random.Range(0, 12)}", d, l, 0f, 26f, 48f, "Forest Tree"))
                         : kind < 0.75f ? SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 9f, 18f, "Forest Tree")
                         : SpawnForestPiece($"External|y{Random.Range(0, 8)}", d, l, 0f, 6f, 14f, "Forest Tree");
                 });
@@ -6601,6 +6616,11 @@ namespace RoadRage.UnityRemake
                 }
                 // A dirt track, not a paved strip: it starts at the shoulder, wanders and
                 // changes width a little, and ends in a worn patch at the door.
+                Track(d, side, l);
+            }
+
+            void Track(float d, int side, float l)
+            {
                 var edge = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth - 0.5f;
                 for (var along = edge; along < l - BigSurYardDepth; along += BigSurTrackStep)
                 {
@@ -6612,49 +6632,63 @@ namespace RoadRage.UnityRemake
                 mesh.Lay("Sur Dirt", d - BigSurYardHalf, d + BigSurYardHalf, side * (l - BigSurYardDepth), side * (l - 3f), 0.09f);
                 bigSurDrives.Add(new Vector2(d, side));
             }
-            mesh.Build(this);
-            BuildGuardRail(materials["Forest Guard Rail"]);
 
             foreach (var d in PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
             {
-                var side = RealGroundUnder(d, 150f, 1f) <= RealGroundUnder(d, -150f, 1f) ? 1 : -1;
+                var side = RealGroundUnder(d, BigSurLighthouseDistance, 1f) <= RealGroundUnder(d, -BigSurLighthouseDistance, 1f) ? 1 : -1;
                 var light = BiomeModel("BigSur", "SM_lighthouse", materials["Sur lighthouse"]);
                 if (light == null) continue;
                 light.name = "Point Sur Light";
-                var at = RoadPath.Point(d, side * 150f);
+                var at = RoadPath.Point(d, side * BigSurLighthouseDistance);
                 light.transform.SetPositionAndRotation(new Vector3(at.x, GridGroundY(at) - 0.5f, at.z), Quaternion.LookRotation(Flat(RoadPath.Forward(d))));
+                light.transform.localScale = Vector3.one * BigSurLighthouseScale;
+                Track(d, side, BigSurLighthouseDistance - BigSurLighthouseYard);
             }
+            mesh.Build(this);
+            BuildGuardRail(materials["Forest Guard Rail"]);
         }
 
         /// Twin concrete arch ribs under a long deck, springing from each side of the canyon.
-        private static void ArchUnderDeck(VillageMesh mesh, float d, float next, float fold, float halfWidth)
+        private static void ArchUnderDeck(VillageMesh mesh, float d, float next, float halfWidth)
         {
-            if (RoadPath.Route != bigSurRoute) return;
-            foreach (var span in moselDecks)
+            if (!ArchAt(d, out var span, out var rise)) return;
+            Vector3 Rib(float at, float lateral) => RoadPath.Point(at, lateral, ArchRib(at, span, rise));
+            for (var side = -1; side <= 1; side += 2)
             {
-                var length = span.y - span.x;
-                if (length < ArchMinSpan || fold < span.x || fold > span.y) continue;
-                var outward = Mathf.Repeat(d, 2f * RoadPath.Route.Length) <= RoadPath.Route.Length;
-                var middle = d + ((span.x + span.y) * 0.5f - fold) * (outward ? 1f : -1f);
-                var rise = Mathf.Min(ArchMaxRise, RoadPath.CenterY(middle) - GridGroundY(RoadPath.Point(middle, 0f)) - ArchBelowDeck);
-                if (rise <= 0f) return;
-                Vector3 Rib(float at, float lateral)
-                {
-                    var t = Mathf.Clamp01((RoadPath.Route.Fold(at) - span.x) / length);
-                    return RoadPath.Point(at, lateral, -ArchBelowDeck - rise * (2f * t - 1f) * (2f * t - 1f));
-                }
-                for (var side = -1; side <= 1; side += 2)
-                {
-                    var inner = side * halfWidth * 0.4f;
-                    var outer = side * halfWidth * 0.75f;
-                    var depth = Vector3.down * 2f;
-                    mesh.Face("Mosel Bridge", Rib(d, inner), Rib(d, outer), Rib(next, outer), Rib(next, inner));
-                    mesh.Face("Mosel Bridge", Rib(d, inner) + depth, Rib(d, outer) + depth, Rib(next, outer) + depth, Rib(next, inner) + depth);
-                    mesh.Face("Mosel Bridge", Rib(d, outer), Rib(next, outer), Rib(next, outer) + depth, Rib(d, outer) + depth);
-                    mesh.Face("Mosel Bridge", Rib(d, inner), Rib(next, inner), Rib(next, inner) + depth, Rib(d, inner) + depth);
-                }
-                return;
+                var inner = side * halfWidth * 0.4f;
+                var outer = side * halfWidth * 0.75f;
+                var depth = Vector3.down * 2f;
+                mesh.Face("Mosel Bridge", Rib(d, inner), Rib(d, outer), Rib(next, outer), Rib(next, inner));
+                mesh.Face("Mosel Bridge", Rib(d, inner) + depth, Rib(d, outer) + depth, Rib(next, outer) + depth, Rib(next, inner) + depth);
+                mesh.Face("Mosel Bridge", Rib(d, outer), Rib(next, outer), Rib(next, outer) + depth, Rib(d, outer) + depth);
+                mesh.Face("Mosel Bridge", Rib(d, inner), Rib(next, inner), Rib(next, inner) + depth, Rib(d, inner) + depth);
             }
+        }
+
+        /// The long bridge with an arch at this distance, and how far the arch rises.
+        private static bool ArchAt(float d, out Vector2 span, out float rise)
+        {
+            span = default;
+            rise = 0f;
+            if (RoadPath.Route != bigSurRoute) return false;
+            var fold = RoadPath.Route.Fold(d);
+            foreach (var deck in moselDecks)
+            {
+                if (deck.y - deck.x < ArchMinSpan || fold < deck.x || fold > deck.y) continue;
+                var outward = Mathf.Repeat(d, 2f * RoadPath.Route.Length) <= RoadPath.Route.Length;
+                var middle = d + ((deck.x + deck.y) * 0.5f - fold) * (outward ? 1f : -1f);
+                span = deck;
+                rise = Mathf.Min(ArchMaxRise, RoadPath.CenterY(middle) - GridGroundY(RoadPath.Point(middle, 0f)) - ArchBelowDeck);
+                return rise > 0f;
+            }
+            return false;
+        }
+
+        /// The arch's top under the road at this distance, as a height from the road.
+        private static float ArchRib(float d, Vector2 span, float rise)
+        {
+            var t = 2f * Mathf.Clamp01((RoadPath.Route.Fold(d) - span.x) / (span.y - span.x)) - 1f;
+            return -ArchBelowDeck - rise * t * t;
         }
 
         private const int MoselHouseModels = 9;
@@ -7068,9 +7102,9 @@ namespace RoadRage.UnityRemake
             }
 
             /// A pier from `top` down into the ground: `across` and `along` are half-sizes.
-            public void Pier(string material, Vector3 top, Vector3 across, Vector3 along)
+            public void Pier(string material, Vector3 top, Vector3 across, Vector3 along, float floor = float.NegativeInfinity)
             {
-                var foot = Vector3.up * (GridGroundY(top) - 1f - top.y);
+                var foot = Vector3.up * (Mathf.Max(GridGroundY(top) - 1f, floor) - top.y);
                 if (foot.y >= 0f) return;
                 for (var s = -1; s <= 1; s += 2)
                 {
@@ -11193,7 +11227,7 @@ namespace RoadRage.UnityRemake
             !(RoadPath.Route != null && RoadPath.Route == moselRoute && MoselVillageAt(midDistance, side)) &&
             !bigSurDrives.Exists(drive => drive.y == side && Mathf.Abs(drive.x - midDistance) < BigSurDriveGap) &&
             // A bridge has its own parapet.
-            !(RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == bigSurRoute) && OnMoselDeck(midDistance)) &&
+            !(RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == bigSurRoute) && OnMoselDeck(midDistance) && MoselDeckEndDistance(midDistance) > GuardRailSection) &&
             PlaceAlongSpan("Guardrail", "SM_guardrail_section_4m", material, from, to, side, midDistance,
                 "Forest Guard Rail") != null;
 
