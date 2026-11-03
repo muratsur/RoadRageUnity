@@ -1,8 +1,8 @@
 """Writes where the Mosel Valley road's real bridges are, for the game.
 
-    python Tools/Terrain/export_b53_structures.py [sr1]
+    python Tools/Terrain/export_b53_structures.py [sr1|bc99]
 
-With sr1: the same for Big Sur's Highway 1, its own bridges only.
+With sr1 or bc99: the same for Big Sur's Highway 1 or BC Highway 99, their own bridges only.
 
 Inputs, both from OpenStreetMap ((c) OpenStreetMap contributors, ODbL):
   D:/Projects/RoadRageData/rlp/b53_osm.json: the B53's own ways.
@@ -40,6 +40,9 @@ HIGH_HEIGHT = 150.0
 if sys.argv[1:] == ["sr1"]:
     import build_sr1  # noqa: F401 - points the map projection at California
     NAME, DATA, CROSSINGS = "sr1", build_sr1.DATA, None
+elif sys.argv[1:] == ["bc99"]:
+    import build_bc99  # noqa: F401 - points the map projection at British Columbia
+    NAME, DATA, CROSSINGS = "bc99", build_bc99.DATA, None
 else:
     NAME, CROSSINGS = "b53", f"{DATA}/b53_crossings_osm.json"
 OUT = os.path.join(HERE, "..", "..", "Assets", "Resources", "Biomes", "Routes", f"{NAME}_structures.txt")
