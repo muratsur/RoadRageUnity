@@ -24,3 +24,19 @@ Tools/Terrain/build_r1.py from:
 - Terrain: Copernicus DEM GLO-30 (ESA). Confirm the required credit wording before
   release.
 - Land cover and elevation: ESA WorldCover and AWS Terrain Tiles, as above.
+
+Big Sur follows California Highway 1, Garrapata to Lucia. Built by Tools/Terrain/build_sr1.py from:
+
+- Road centreline: (c) OpenStreetMap contributors, ODbL.
+- Terrain: USGS 3D Elevation Program 1/3 arc-second, public domain.
+- Land cover: ESA WorldCover, as above.
+
+Sea to Sky follows BC Highway 99, Horseshoe Bay to Whistler (Tools/Terrain/build_bc99.py), and the
+Amalfi Coast follows the SS163, Positano to Vietri sul Mare (Tools/Terrain/build_ss163.py), from:
+
+- Road centreline: (c) OpenStreetMap contributors, ODbL.
+- Terrain: Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space
+  GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
+- Land cover: ESA WorldCover, as above.
+
+All of these are carried in the game's credits (Assets/Resources/Credits.txt).
