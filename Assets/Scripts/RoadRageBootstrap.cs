@@ -10863,8 +10863,17 @@ namespace RoadRage.UnityRemake
             else if (biomeIndex == SeaToSkyIndex)
             {
                 // The Coast Mountains stand 3 to 20 km from Highway 99, far past the ground.
-                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/bc99_skyline", seaToSkyRoute, Mood(biomeIndex).FogDensity) == null)
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/bc99_skyline", seaToSkyRoute, Mood(biomeIndex).FogDensity,
+                        new Color(0.10f, 0.15f, 0.11f), 1100f) == null)
                     Debug.LogWarning("Missing Biomes/Routes/bc99_skyline - Sea to Sky has no far mountains.");
+            }
+            else if (biomeIndex == BigSurIndex)
+            {
+                // The Santa Lucia Range inland and the open Pacific to the horizon: the ground
+                // ends 1.2 km out, and past it was sky. Chaparral and dry grass, no treeline.
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/sr1_skyline", bigSurRoute, Mood(biomeIndex).FogDensity,
+                        new Color(0.30f, 0.29f, 0.17f), 5000f) == null)
+                    Debug.LogWarning("Missing Biomes/Routes/sr1_skyline - Big Sur has no far hills or open sea.");
             }
             else if (biomeIndex == 9) // Hollywood Hills
             {

@@ -23,6 +23,8 @@ namespace RoadRage.UnityRemake
         private float step;
         private RoadRoute route;
         private float clearFog;
+        private Color land;
+        private float treeline;
         private Mesh mesh;
         private Vector3[] vertices;
         private Color[] colours;
@@ -30,7 +32,7 @@ namespace RoadRage.UnityRemake
         private static readonly int HazeBoost = Shader.PropertyToID("_HazeBoost");
 
         /// Null when the file or material is missing: the biome then simply has no far mountains.
-        public static Skyline Build(Transform parent, string resourcePath, RoadRoute route, float clearFog)
+        public static Skyline Build(Transform parent, string resourcePath, RoadRoute route, float clearFog, Color land, float treeline)
         {
             var asset = Resources.Load<TextAsset>(resourcePath);
             var source = Resources.Load<Material>("Biomes/Mountains/M_skyline");
@@ -54,6 +56,8 @@ namespace RoadRage.UnityRemake
             sky.bands = bands;
             sky.route = route;
             sky.clearFog = clearFog;
+            sky.land = land;
+            sky.treeline = treeline;
             sky.angles = new short[count];
             sky.distances = new byte[count];
             sky.heights = new byte[count];
@@ -150,16 +154,16 @@ namespace RoadRage.UnityRemake
             Destroy(material);
         }
 
-        /// Sea, dark conifer forest, bare granite above about 1,300 m, snow above about 1,900 m.
-        private static Color GroundColour(float height)
+        /// Sea, the land's own colour, bare rock from treeline (rock to treeline + 400 m),
+        /// snow from treeline + 650 m. A treeline above the highest peak leaves it all land.
+        private Color GroundColour(float height)
         {
-            var water = new Color(0.30f, 0.36f, 0.40f);
-            var forest = new Color(0.10f, 0.15f, 0.11f);
+            var water = new Color(0.16f, 0.27f, 0.36f);
             var rock = new Color(0.36f, 0.37f, 0.38f);
             var snow = new Color(0.86f, 0.89f, 0.93f);
             if (height < 3f) return water;
-            if (height < 1700f) return Color.Lerp(forest, rock, Mathf.InverseLerp(1100f, 1500f, height));
-            return Color.Lerp(rock, snow, Mathf.InverseLerp(1750f, 2100f, height));
+            if (height < treeline + 600f) return Color.Lerp(land, rock, Mathf.InverseLerp(treeline, treeline + 400f, height));
+            return Color.Lerp(rock, snow, Mathf.InverseLerp(treeline + 650f, treeline + 1000f, height));
         }
     }
 }

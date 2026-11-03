@@ -16,6 +16,7 @@ import numpy as np
 import rasterio
 
 import bake_b500_terrain as bake
+import bake_skyline as skyline
 import build_b500_road as road
 import export_b500_realmap as realmap
 
@@ -150,6 +151,10 @@ bake.GROUND_TABLE = ground_table
 
 if __name__ == "__main__":
     os.makedirs(road.OUT, exist_ok=True)
+    # "skyline": only the Santa Lucia Range and the open Pacific beyond the ground (bake_skyline.py).
+    if sys.argv[1:] == ["skyline"]:
+        skyline.main(Dem(bake.DGM).height, realmap.OUT, os.path.join(ROUTES, "sr1_skyline.bytes"))
+        sys.exit()
     # "terrain": only the ground, which needs the structures from the road's first bake.
     if sys.argv[1:] != ["terrain"]:
         road.main()
