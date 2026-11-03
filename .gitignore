@@ -107,3 +107,6 @@ Assets/Resources/Weather.meta
 # the test-asset spot. Local only until one is chosen and its licence checked.
 Assets/Resources/TestAssets/
 Assets/Resources/TestAssets.meta
+# Where RoadRageCLI parks them during a phone build.
+Assets/TestAssetsParked/
+Assets/TestAssetsParked.meta

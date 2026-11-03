@@ -32,12 +32,19 @@ namespace RoadRage.Editor
         ///
         /// These builds name the scene explicitly rather than trusting that list.
         private const string MainScene = "Assets/Scenes/Greenwood.unity";
+        private const string TestAssets = "Assets/Resources/TestAssets";
+        private const string ParkedTestAssets = "Assets/TestAssetsParked";
+        private const int PhoneTextureSize = 1024;
 
         [MenuItem("Road Rage/Build/Windows 64")]
         public static void BuildWindows() => Build(BuildTarget.StandaloneWindows64, "Build/Windows/RoadRage.exe");
 
         [MenuItem("Road Rage/Build/Android")]
         public static void BuildAndroid() => Build(BuildTarget.Android, "Build/Android/RoadRage.apk");
+
+        /// An Xcode project only: building and signing it needs a Mac.
+        [MenuItem("Road Rage/Build/iOS Xcode Project")]
+        public static void BuildIOS() => Build(BuildTarget.iOS, "Build/iOS/RoadRageXcode");
 
         private static void Build(BuildTarget target, string defaultOutput)
         {
@@ -60,8 +67,24 @@ namespace RoadRage.Editor
                 options = BuildOptions.None,
             };
 
-            Debug.Log($"RR_BUILD start target={target} scene={MainScene} output={output}");
-            var report = BuildPipeline.BuildPlayer(options);
+            // A phone build ships what a clean clone has, at phone texture sizes: the
+            // git-ignored TestAssets (1.2 GB of local Rodin experiments under Resources)
+            // are parked outside Resources, and no texture is bigger than PhoneTextureSize.
+            var phone = target == BuildTarget.iOS || target == BuildTarget.Android;
+            var parked = phone && AssetDatabase.IsValidFolder(TestAssets) &&
+                         string.IsNullOrEmpty(AssetDatabase.MoveAsset(TestAssets, ParkedTestAssets));
+            if (phone) EditorUserBuildSettings.overrideMaxTextureSize = PhoneTextureSize;
+            BuildReport report;
+            try
+            {
+                Debug.Log($"RR_BUILD start target={target} scene={MainScene} output={output} testAssetsParked={parked}");
+                report = BuildPipeline.BuildPlayer(options);
+            }
+            finally
+            {
+                if (parked) AssetDatabase.MoveAsset(ParkedTestAssets, TestAssets);
+                if (phone) EditorUserBuildSettings.overrideMaxTextureSize = 0;
+            }
             var summary = report.summary;
 
             // Size is a gate in its own right: PRODUCTION-GATES sets 300 MB, and the

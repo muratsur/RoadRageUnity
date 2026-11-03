@@ -57,7 +57,7 @@ Shader "RoadRage/Skyline"
                 // Lit from above and by a share of the sun, so night and dusk darken it too.
                 half3 light = SampleSH(half3(0, 1, 0)) + GetMainLight().color * 0.5;
                 half3 colour = input.color.rgb * light;
-                half haze = 1.0 - pow(1.0 - input.color.a, _HazeBoost);
+                half haze = 1.0 - pow(saturate(1.0 - input.color.a), _HazeBoost);
                 return half4(lerp(colour, unity_FogColor.rgb, haze), 1.0);
             }
             ENDHLSL
