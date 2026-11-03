@@ -2613,7 +2613,7 @@ namespace RoadRage.UnityRemake
             Splat("Sea To Sky Ground", "BigSur", new[]
             {
                 ("T_sur_grass", 0.1f, new Color(0.38f, 0.56f, 0.6f)),
-                ("T_sur_rock", 0.05f, new Color(1.35f, 1.38f, 1.45f)),
+                ("T_sur_rock", 0.05f, new Color(1.25f, 1.5f, 2.6f)),
                 ("T_sur_grass", 0.14f, new Color(0.5f, 0.55f, 0.66f)),
             }, 0.08f);
             materials["Sea To Sky Ground"].SetFloat("_Macro", 1f);
@@ -2985,6 +2985,8 @@ namespace RoadRage.UnityRemake
         private const float RealGroundLimit = 90f;
         /// The Mosel valley sides are the view: they keep nearly their full 300 m.
         private const float MoselGroundLimit = 260f;
+        /// The Coast Mountains rise 1,000 m and more over Howe Sound and the valley to Whistler.
+        private const float SeaToSkyGroundLimit = 900f;
 
         /// The real ground beside the B500 (Road Rage > Bake B500 Terrain, from the LGL
         /// DGM1), relative to the road; 0 without the table. The game's carriageway is
@@ -3003,7 +3005,8 @@ namespace RoadRage.UnityRemake
             var deck = route == moselRoute || IsSeaRoute(route) ? MoselDeckWeight(distance) : 0f;
             if (across <= 0f && deck <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
-            var limit = route == moselRoute || route == icelandRoute || IsSeaRoute(route) ? MoselGroundLimit : RealGroundLimit;
+            var limit = route == seaToSkyRoute ? SeaToSkyGroundLimit
+                : route == moselRoute || route == icelandRoute || IsSeaRoute(route) ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             // Under a bridge the ground falls away from the road instead of meeting it.
             var below = Mathf.Min(real, -MoselDeckClearance);

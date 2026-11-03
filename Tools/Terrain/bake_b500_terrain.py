@@ -57,6 +57,8 @@ ROAD_HALF = 3.0         # m either side of the centre averaged for the road's ow
 ROAD_HEIGHTS = None
 # Optional (z, offsets, absolute ground, road height) -> the relative table to store.
 GROUND_TABLE = None
+# Stored units per metre, and the file's magic: centimetres hold +-327 m, enough below mountains.
+UNITS_PER_METRE, MAGIC = 100.0, b"RRTR"
 
 
 def offsets():
@@ -206,11 +208,11 @@ def main():
     # Onto the game's road distance grid.
     zs = np.arange(0.0, z[-1], Z_STEP)
     table = np.stack([np.interp(zs, z, rel[:, c]) for c in range(len(offs))], axis=1)
-    cm = np.clip(np.round(table * 100.0), -32767, 32767).astype("<i2")
+    cm = np.clip(np.round(table * UNITS_PER_METRE), -32767, 32767).astype("<i2")
 
     os.makedirs(os.path.dirname(ASSET), exist_ok=True)
     with open(ASSET, "wb") as f:
-        f.write(b"RRTR")
+        f.write(MAGIC)
         f.write(struct.pack("<ifi", len(zs), Z_STEP, len(offs)))
         f.write(offs.astype("<f4").tobytes())
         f.write(cm.tobytes())

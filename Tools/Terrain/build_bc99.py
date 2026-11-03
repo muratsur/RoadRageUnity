@@ -52,7 +52,7 @@ bake.ASSET = os.path.join(ROUTES, "bc99_terrain.bytes")
 bake.PREVIEW = os.path.join(DATA, "bc99_terrain_preview.png")
 bake.ROAD_HALF = 20.0   # the DEM has 30 m cells
 DECK_MARGIN = 20.0
-GROUND_LIMIT = 260.0    # the game's MoselGroundLimit: it squeezes heights by tanh
+GROUND_LIMIT = 900.0    # the game's SeaToSkyGroundLimit: it squeezes heights by tanh
 SEA_HEIGHT = 1.5        # m: the DEM has the sea at about 0
 SEA_BELOW_ROAD = 55.0   # m under the road's lowest point
 SEA_BED = 3.0
@@ -92,7 +92,8 @@ class Dem:
 
 
 def offsets():
-    right = list(bake_offsets()[bake_offsets() > 0]) + list(np.arange(320.0, 1100.1, 20.0))
+    # Out to the game's ground grid (GridFarReach): the valley walls are the view.
+    right = list(bake_offsets()[bake_offsets() > 0]) + list(np.arange(320.0, 1200.1, 20.0))
     return np.array([-o for o in reversed(right)] + [0.0] + right, np.float64)
 
 
@@ -151,6 +152,8 @@ bake.Dgm = Dem
 bake.offsets = offsets
 bake.ROAD_HEIGHTS = deck_heights
 bake.GROUND_TABLE = ground_table
+# Decimetres: the Coast Mountains stand far more than the 327 m centimetres can hold.
+bake.UNITS_PER_METRE, bake.MAGIC = 10.0, b"RRTD"
 
 if __name__ == "__main__":
     os.makedirs(road.OUT, exist_ok=True)

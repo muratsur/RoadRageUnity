@@ -258,6 +258,9 @@ namespace RoadRage.UnityRemake
         private int terrainRows;
         private float terrainStep;
         private float[] terrainOffsets;
+        /// Metres per stored unit: centimetres ("RRTR"), or decimetres ("RRTD") for mountains
+        /// higher than centimetres can hold in a short.
+        private float terrainUnit;
 
         public bool HasTerrain => terrain != null;
 
@@ -266,8 +269,9 @@ namespace RoadRage.UnityRemake
             var asset = Resources.Load<TextAsset>(resourcePath);
             if (asset == null) return;
             var bytes = asset.bytes;
-            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'T' || bytes[3] != 'R')
+            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'T' || (bytes[3] != 'R' && bytes[3] != 'D'))
                 return;
+            terrainUnit = bytes[3] == 'D' ? 0.1f : 0.01f;
             var rows = System.BitConverter.ToInt32(bytes, 4);
             var step = System.BitConverter.ToSingle(bytes, 8);
             var cols = System.BitConverter.ToInt32(bytes, 12);
@@ -302,7 +306,7 @@ namespace RoadRage.UnityRemake
             var tc = Mathf.InverseLerp(terrainOffsets[c], terrainOffsets[c + 1], o);
             var a = Mathf.Lerp(terrain[r * cols + c], terrain[r * cols + c + 1], tc);
             var b = Mathf.Lerp(terrain[(r + 1) * cols + c], terrain[(r + 1) * cols + c + 1], tc);
-            return Mathf.Lerp(a, b, tr) * 0.01f;
+            return Mathf.Lerp(a, b, tr) * terrainUnit;
         }
 
         /// Road distance folded into one pass, [0, Length]: there and back.
