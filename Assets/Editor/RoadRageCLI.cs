@@ -34,7 +34,9 @@ namespace RoadRage.Editor
         private const string MainScene = "Assets/Scenes/Greenwood.unity";
         private const string TestAssets = "Assets/Resources/TestAssets";
         private const string ParkedTestAssets = "Assets/TestAssetsParked";
-        private const int PhoneTextureSize = 1024;
+        /// The biome textures already ship at 512 on phones (BiomeTextureImporter); 1024 left
+        /// the pack and Rodin textures at four times that.
+        private const int PhoneTextureSize = 512;
 
         [MenuItem("Road Rage/Build/Windows 64")]
         public static void BuildWindows() => Build(BuildTarget.StandaloneWindows64, "Build/Windows/RoadRage.exe");
@@ -69,11 +71,17 @@ namespace RoadRage.Editor
 
             // A phone build ships what a clean clone has, at phone texture sizes: the
             // git-ignored TestAssets (1.2 GB of local Rodin experiments under Resources)
-            // are parked outside Resources, and no texture is bigger than PhoneTextureSize.
+            // are parked outside Resources, no texture is bigger than PhoneTextureSize, and
+            // meshes drop the vertex data no shader in the build reads (Optimize Mesh Data).
             var phone = target == BuildTarget.iOS || target == BuildTarget.Android;
+            var stripMeshes = PlayerSettings.stripUnusedMeshComponents;
             var parked = phone && AssetDatabase.IsValidFolder(TestAssets) &&
                          string.IsNullOrEmpty(AssetDatabase.MoveAsset(TestAssets, ParkedTestAssets));
-            if (phone) EditorUserBuildSettings.overrideMaxTextureSize = PhoneTextureSize;
+            if (phone)
+            {
+                EditorUserBuildSettings.overrideMaxTextureSize = PhoneTextureSize;
+                PlayerSettings.stripUnusedMeshComponents = true;
+            }
             BuildReport report;
             try
             {
@@ -83,7 +91,11 @@ namespace RoadRage.Editor
             finally
             {
                 if (parked) AssetDatabase.MoveAsset(ParkedTestAssets, TestAssets);
-                if (phone) EditorUserBuildSettings.overrideMaxTextureSize = 0;
+                if (phone)
+                {
+                    EditorUserBuildSettings.overrideMaxTextureSize = 0;
+                    PlayerSettings.stripUnusedMeshComponents = stripMeshes;
+                }
             }
             var summary = report.summary;
 
