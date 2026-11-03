@@ -295,14 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
             "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
-            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST"
+            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST", "GREAT OCEAN ROAD"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -591,6 +591,7 @@ namespace RoadRage.UnityRemake
             if (value.Contains("sur") || value.Contains("california")) return Biomes[BigSurIndex];
             if (value.Contains("sky") || value.Contains("canada") || value.Contains("whistler")) return Biomes[SeaToSkyIndex];
             if (value.Contains("amalfi") || value.Contains("italy") || value.Contains("positano")) return Biomes[AmalfiIndex];
+            if (value.Contains("ocean") || value.Contains("australia") || value.Contains("apostles")) return Biomes[OceanRoadIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -723,7 +724,7 @@ namespace RoadRage.UnityRemake
                 // Same centred-vs-right-lane rule as the initial spawn: single-lane
                 // biomes (Greenwood, Red Canyon, Hollywood) start on the centreline.
                 var reloadLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-                var reloadLateral = reloadLaneCount == 1 ? -1.2f : -2.25f;
+                var reloadLateral = (reloadLaneCount == 1 ? -1.2f : -2.25f) * RoadPath.DriveSide;
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance + 5f;
@@ -1457,6 +1458,7 @@ namespace RoadRage.UnityRemake
             })
                 for (var tint = 0; tint < tints.Length; tint++)
                     BiomeMaterial($"Sur {kind} {tint}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", tints[tint], 0f, 0.12f);
+            BiomeMaterial("Apostle Limestone", "BigSur", "T_sur_rock_D", "T_sur_rock_N", new Color(2.2f, 1.85f, 1.3f), 0f, 0.1f);
             // NVIDIA SimReady props (CC BY 4.0), baked by Tools/SimReady/fetch_simready.py.
             foreach (var prop in SimReadyProps)
                 BiomeMaterial($"SimReady {prop}", "SimReady", $"T_{prop}_D", $"T_{prop}_N", Color.white, 0f, 0.3f);
@@ -2475,6 +2477,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.25f, PostExposure = 0.02f, BloomIntensity = 0.12f, BloomThreshold = 4f,
                 AmbientIntensity = 1.1f, Saturation = 2f
             },
+            OceanRoadIndex => new BiomeMood // GREAT OCEAN ROAD - clear, hard southern light, sea spray haze
+            {
+                FogDensity = 0.0012f, Fog = new Color(0.78f, 0.85f, 0.92f),
+                Sky = new Color(0.40f, 0.62f, 0.95f), Equator = new Color(0.66f, 0.68f, 0.62f),
+                Ground = new Color(0.26f, 0.25f, 0.18f), SunColor = new Color(1f, 0.97f, 0.88f),
+                SunIntensity = 1.35f, PostExposure = 0.02f, BloomIntensity = 0.15f, BloomThreshold = 4f,
+                AmbientIntensity = 1.1f, Saturation = 2f
+            },
             AmalfiIndex => new BiomeMood // AMALFI COAST - hot, hazy Mediterranean light
             {
                 FogDensity = 0.0012f, Fog = new Color(0.80f, 0.84f, 0.88f),
@@ -2569,6 +2579,7 @@ namespace RoadRage.UnityRemake
             BigSurIndex => "Big Sur Ground",
             SeaToSkyIndex => "Sea To Sky Ground",
             AmalfiIndex => "Amalfi Ground",
+            OceanRoadIndex => "Ocean Road Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2648,6 +2659,16 @@ namespace RoadRage.UnityRemake
             }, 0.08f);
             materials["Amalfi Ground"].SetFloat("_Macro", 1f);
             materials["Amalfi Ground"].SetFloat("_MacroMean", 0.052f);
+
+            // Great Ocean Road: grey-green coastal heath, cream limestone, pale sandy verge.
+            Splat("Ocean Road Ground", "BigSur", new[]
+            {
+                ("T_sur_grass", 0.1f, new Color(0.6f, 0.78f, 0.82f)),
+                ("T_sur_rock", 0.05f, new Color(1.35f, 1.25f, 1.05f)),
+                ("ForestFloor/T_forest_verge", 0.62f, new Color(1.15f, 1.05f, 0.9f)),
+            }, 0.08f);
+            materials["Ocean Road Ground"].SetFloat("_Macro", 1f);
+            materials["Ocean Road Ground"].SetFloat("_MacroMean", 0.052f);
 
             // Iceland: black volcanic sand, bright moss in patches, dark gravel at the road edge.
             Splat("Iceland Ground", "ForestFloor", new[]
@@ -2847,7 +2868,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
                 : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
                 : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
@@ -2907,7 +2928,7 @@ namespace RoadRage.UnityRemake
                 BuildRibbon("Left Iceland Verge", -1.3f, -1.0f, 0.02f, gravel, relative: true);
                 BuildRibbon("Right Iceland Verge", 1.0f, 1.3f, 0.02f, gravel, relative: true);
             }
-            else if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex) // Greenwood Forest, Mosel Valley, Big Sur, Sea to Sky, Amalfi
+            else if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex) // Greenwood Forest, Mosel Valley, Big Sur, Sea to Sky, Amalfi, Great Ocean Road
             {
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
@@ -2927,7 +2948,7 @@ namespace RoadRage.UnityRemake
             // that has to be explained is worse than paint that does not.
             //
             // Greenwood is an unmarked single-lane forest road: no paint at all.
-            if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex && biomeIndex != AmalfiIndex)
+            if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex && biomeIndex != AmalfiIndex && biomeIndex != OceanRoadIndex)
             {
                 BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
                 BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
@@ -2945,7 +2966,7 @@ namespace RoadRage.UnityRemake
                 // Route 1: one broken white centre line, nothing at the edges.
                 BuildDashedRibbon("Center Dashes", 0f, 0.13f, 3f, 12f, materials["White Paint"], relative: true);
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == AmalfiIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex)
             {
                 // A German Bundesstrasse or an Italian strada statale: broken centre line, solid white at both edges.
                 BuildDashedRibbon("Center Dashes", 0f, 0.13f, 4f, 12f, materials["White Paint"], relative: true);
@@ -3035,7 +3056,7 @@ namespace RoadRage.UnityRemake
             var deck = route == moselRoute || IsSeaRoute(route) ? MoselDeckWeight(distance) : 0f;
             if (across <= 0f && deck <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
-            var limit = route == seaToSkyRoute || route == amalfiRoute ? SeaToSkyGroundLimit
+            var limit = route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute ? SeaToSkyGroundLimit
                 : route == moselRoute || route == icelandRoute || IsSeaRoute(route) ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             // Under a bridge the ground falls away from the road instead of meeting it.
@@ -5040,7 +5061,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -5063,7 +5084,7 @@ namespace RoadRage.UnityRemake
         /// could not be got past: it now has two each way (18 m of carriageway).
         private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2
             // One lane each way, as the real B53 and Route 1 are.
-            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex ? 1 : 3;
+            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -5074,8 +5095,9 @@ namespace RoadRage.UnityRemake
         private static RoadRoute bigSurRoute;
         private static RoadRoute seaToSkyRoute;
         private static RoadRoute amalfiRoute;
+        private static RoadRoute oceanRoute;
         /// Roads with one flat sea baked into their ground and their own bridges.
-        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute);
+        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute);
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -5087,7 +5109,18 @@ namespace RoadRage.UnityRemake
             PolizeiLivery.Sheet = biomeIndex == IcelandIndex ? "Police/T_logreglan"
                 : biomeIndex == BigSurIndex ? "Police/T_us_police"
                 : biomeIndex == SeaToSkyIndex ? "Police/T_ca_police"
-                : biomeIndex == AmalfiIndex ? "Police/T_it_police" : "Police/T_polizei";
+                : biomeIndex == AmalfiIndex ? "Police/T_it_police"
+                : biomeIndex == OceanRoadIndex ? "Police/T_au_police" : "Police/T_polizei";
+            // Australia drives on the left.
+            RoadPath.DriveSide = biomeIndex == OceanRoadIndex ? -1f : 1f;
+            if (biomeIndex == OceanRoadIndex)
+            {
+                oceanRoute ??= RoadRoute.Load("Biomes/Routes/b100");
+                if (oceanRoute == null) Debug.LogWarning("Missing Biomes/Routes/b100 - the Great Ocean Road keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE Great Ocean Road follows the B100: {oceanRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = oceanRoute;
+                return;
+            }
             if (biomeIndex == AmalfiIndex)
             {
                 amalfiRoute ??= RoadRoute.Load("Biomes/Routes/ss163");
@@ -5948,7 +5981,7 @@ namespace RoadRage.UnityRemake
                 case CanalTownIndex: BuildCanalTown(); break;
                 case MoselIndex: BuildMoselValley(); break;
                 case IcelandIndex: BuildIcelandCoast(); break;
-                case BigSurIndex: case SeaToSkyIndex: case AmalfiIndex: BuildBigSur(); break;
+                case BigSurIndex: case SeaToSkyIndex: case AmalfiIndex: case OceanRoadIndex: BuildBigSur(); break;
                 default: BuildForest(); break;
             }
         }
@@ -6255,7 +6288,8 @@ namespace RoadRage.UnityRemake
             moselCrossings.Clear();
             var asset = Resources.Load<TextAsset>(RoadPath.Route == bigSurRoute ? "Biomes/Routes/sr1_structures"
                 : RoadPath.Route == seaToSkyRoute ? "Biomes/Routes/bc99_structures"
-                : RoadPath.Route == amalfiRoute ? "Biomes/Routes/ss163_structures" : "Biomes/Routes/b53_structures");
+                : RoadPath.Route == amalfiRoute ? "Biomes/Routes/ss163_structures"
+                : RoadPath.Route == oceanRoute ? "Biomes/Routes/b100_structures" : "Biomes/Routes/b53_structures");
             if (asset == null)
             {
                 Debug.LogWarning("Missing Biomes/Routes/b53_structures - the Mosel Valley has no bridges.");
@@ -6568,9 +6602,15 @@ namespace RoadRage.UnityRemake
         private const int BigSurIndex = 16;
         private const int SeaToSkyIndex = 17;
         private const int AmalfiIndex = 18;
+        private const int OceanRoadIndex = 19;
         private static readonly string[] SeaToSkyHouses = { "chalet", "cottage", "cabin", "aframe", "lodge", "barn", "store" };
         private const float BigSurHouseEvery = 180f;
         private const float AmalfiHouseEvery = 30f;
+        private const int ApostlesPlace = 3;
+        private const float ApostlesReach = 900f;
+        private const float ApostleEvery = 110f;
+        /// Weatherboard and brick-veneer coast houses, a general store, a motel.
+        private static readonly string[] OceanRoadHouses = { "coasthouse", "bungalow", "store", "motel", "ranch" };
         private static readonly string[] SimReadyProps = { "barrier", "drum_steel", "drum_blue", "bin_blue", "bin_green", "crate", "pallet", "ibc", "wheelbarrow" };
         private static readonly string[] StoreYardProps = { "pallet", "pallet", "crate", "crate", "drum_steel", "drum_blue", "ibc" };
         /// Chance per chunk (about 150 m of road) of a road works yard.
@@ -6655,6 +6695,7 @@ namespace RoadRage.UnityRemake
                 float.IsNaN(seaLevel) || GridGroundY(RoadPath.Point(d, l)) > seaLevel + AboveSeaMetres;
             var seaToSky = RoadPath.Route == seaToSkyRoute;
             var amalfi = RoadPath.Route == amalfiRoute;
+            var ocean = RoadPath.Route == oceanRoute;
             GameObject Slim(GameObject tree)
             {
                 if (tree == null) return null;
@@ -6673,7 +6714,7 @@ namespace RoadRage.UnityRemake
                     var at = RoadPath.Point(d, l);
                     if (!seaToSky && !amalfi && TerrainNoise(at.x, at.z, 0.02f) < -0.1f) return null;
                     // Amalfi: broadleaf (holm oak, chestnut) and young trees, no tall conifers.
-                    var kind = amalfi ? 0.5f + Random.value * 0.5f : Random.value;
+                    var kind = amalfi || ocean ? 0.5f + Random.value * 0.5f : Random.value;
                     return kind < 0.5f ? Slim(SpawnForestPiece($"External|{Random.Range(0, 12)}", d, l, 0f, 26f, 48f, "Forest Tree"))
                         : kind < 0.75f ? SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 9f, 18f, "Forest Tree")
                         : SpawnForestPiece($"External|y{Random.Range(0, 8)}", d, l, 0f, 6f, 14f, "Forest Tree");
@@ -6730,7 +6771,7 @@ namespace RoadRage.UnityRemake
                     RoadPath.Route.CoverAt(d, side * l) == RoadRoute.CoverWater) continue;
                 // Never the same building twice running.
                 var kind = bigSurLastHouse;
-                var houses = seaToSky ? SeaToSkyHouses : amalfi ? AmalfiHouses : BigSurHouses;
+                var houses = seaToSky ? SeaToSkyHouses : amalfi ? AmalfiHouses : ocean ? OceanRoadHouses : BigSurHouses;
                 while (kind == bigSurLastHouse) kind = houses[Random.Range(0, houses.Length)];
                 bigSurLastHouse = kind;
                 var house = BiomeModel("BigSur", $"SM_{kind}", materials[$"Sur {kind} {Random.Range(0, BigSurHouseTints)}"]);
@@ -6833,6 +6874,38 @@ namespace RoadRage.UnityRemake
                 prop.AddComponent<KnockableProp>().Stand(d, l, half, speedCost);
             }
 
+            // The Twelve Apostles: tall limestone stacks standing off the cliffs near their real place.
+            // A little taller than the real 45 m, so they rise into view from the road over the
+            // cliff edge; the sea lies some 80 m below the road here.
+            if (ocean && !float.IsNaN(seaLevel) && RoadPath.Route.Places.Length > ApostlesPlace)
+            {
+                var apostles = RoadPath.Route.Places[ApostlesPlace].Distance;
+                for (var d = Mathf.Ceil(segStart / ApostleEvery) * ApostleEvery; d < segEnd; d += ApostleEvery)
+                {
+                    if (Mathf.Abs(RoadPath.Route.Fold(d) - apostles) > ApostlesReach) continue;
+                    for (var side = -1; side <= 1; side += 2)
+                    for (var l = rail + 20f; l < 1100f; l += 15f)
+                    {
+                        if (GridGroundY(RoadPath.Point(d, side * l)) >= seaLevel) continue;
+                        // The first water out from the road is the foot of the cliffs.
+                        if (Random.value < 0.75f)
+                        {
+                            var stack = PlaceBiomeModelOnRoad("ForestVillage", $"Rocks/SM_rock_0{Random.Range(1, 4)}", materials["Apostle Limestone"],
+                                d + Random.Range(-30f, 30f), side * (l + Random.Range(40f, 220f)), -2f,
+                                new Vector3(0f, Random.Range(0f, 360f), 0f),
+                                new Vector3(Random.Range(12f, 20f), Random.Range(50f, 70f), Random.Range(12f, 20f)), "Twelve Apostles", false);
+                            // The rock's origin is at its middle: stand its foot on the sea bed.
+                            if (stack != null && TryGetCombinedBounds(stack, out var foot))
+                                stack.transform.position += Vector3.up * (seaLevel - 3f - foot.min.y);
+                            // BiomeModel gives every ForestVillage rock its own boulder material.
+                            if (stack != null)
+                                foreach (var r in stack.GetComponentsInChildren<Renderer>()) r.sharedMaterial = materials["Apostle Limestone"];
+                        }
+                        break;
+                    }
+                }
+            }
+
             GameObject Prop(string name, float d, float l, float turn)
             {
                 if (!OnLand(d, l)) return null;
@@ -6841,7 +6914,7 @@ namespace RoadRage.UnityRemake
                     new Vector3(0f, turn, 0f), Vector3.one, "Roadside Prop", false);
             }
 
-            foreach (var d in seaToSky || amalfi ? new List<float>() : PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
+            foreach (var d in seaToSky || amalfi || ocean ? new List<float>() : PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
             {
                 var side = RealGroundUnder(d, BigSurLighthouseDistance, 1f) <= RealGroundUnder(d, -BigSurLighthouseDistance, 1f) ? 1 : -1;
                 var light = BiomeModel("BigSur", "SM_lighthouse", materials["Sur lighthouse"]);
@@ -11028,6 +11101,13 @@ namespace RoadRage.UnityRemake
                         new Color(0.10f, 0.15f, 0.11f), 1100f) == null)
                     Debug.LogWarning("Missing Biomes/Routes/bc99_skyline - Sea to Sky has no far mountains.");
             }
+            else if (biomeIndex == OceanRoadIndex)
+            {
+                // The Otway ranges inland and the Southern Ocean to the horizon.
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/b100_skyline", oceanRoute, Mood(biomeIndex).FogDensity,
+                        new Color(0.18f, 0.22f, 0.14f), 5000f) == null)
+                    Debug.LogWarning("Missing Biomes/Routes/b100_skyline - the Great Ocean Road has no far hills or open sea.");
+            }
             else if (biomeIndex == AmalfiIndex)
             {
                 // The Lattari mountains above and the Gulf of Salerno to the horizon.
@@ -11197,7 +11277,7 @@ namespace RoadRage.UnityRemake
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
                 var clouds = Resources.Load<Texture2D>(biomeIndex != IcelandIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
@@ -12065,7 +12145,7 @@ namespace RoadRage.UnityRemake
             var spawn = startDistance + 5f;
             // Single-lane biomes (country road, desert two-lane) start centred; multi-lane cities keep the classic right-lane launch.
             var startLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var startLateral = startLaneCount == 1 ? -1.2f : -2.25f;
+            var startLateral = (startLaneCount == 1 ? -1.2f : -2.25f) * RoadPath.DriveSide;
             car = new GameObject($"Player {GameState.CurrentCar.Name}").transform;
             car.position = RoadPath.Point(spawn, startLateral, 0.85f);
             car.rotation = RoadPath.Rotation(spawn);
@@ -12476,11 +12556,13 @@ namespace RoadRage.UnityRemake
         /// The country whose cars this biome's traffic drives, or null for the rest.
         private static string TrafficCountry(int biomeIndex) =>
             biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_"
-            : biomeIndex == BigSurIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : null;
+            : biomeIndex == BigSurIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : biomeIndex == OceanRoadIndex ? "_au_" : null;
 
-        /// Cars a country's roads share with a neighbour: North American in Canada, European in Italy.
+        /// Cars a country's roads share with a neighbour: North American in Canada, European in Italy,
+        /// both in Australia.
         private static bool CarFor(string car, string country) =>
-            car.Contains(country) || (country == "_ca_" && car.Contains("_us_")) || (country == "_it_" && car.Contains("_de_"));
+            car.Contains(country) || (country == "_ca_" && car.Contains("_us_")) || (country == "_it_" && car.Contains("_de_"))
+            || (country == "_au_" && (car.Contains("_de_") || car.Contains("_us_")));
 
         private string NextRodinModel()
         {
@@ -12499,7 +12581,7 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < cars.Count; i++)
                 {
                     if (cars[i].Name.StartsWith(SpecialVehiclePrefix)) continue;
-                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_") || cars[i].Name.Contains("_us_") || cars[i].Name.Contains("_ca_") || cars[i].Name.Contains("_it_");
+                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_") || cars[i].Name.Contains("_us_") || cars[i].Name.Contains("_ca_") || cars[i].Name.Contains("_it_") || cars[i].Name.Contains("_au_");
                     if (hasOwn ? CarFor(cars[i].Name, country) : !own) rodinBag.Add(i);
                 }
                 if (rodinBag.Count == 0) return null;
