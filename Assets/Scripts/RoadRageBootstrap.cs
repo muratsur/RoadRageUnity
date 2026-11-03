@@ -6575,6 +6575,10 @@ namespace RoadRage.UnityRemake
         private static readonly string[] StoreYardProps = { "pallet", "pallet", "crate", "crate", "drum_steel", "drum_blue", "ibc" };
         /// Chance per chunk (about 150 m of road) of a road works yard.
         private const float RoadWorksChance = 0.12f;
+        private const float KerbBinChance = 0.35f;
+        /// On the carriageway at its edge: past the traffic in the lane, in reach of a
+        /// player who hugs the edge (the car's centre stops 1.4 m inside it).
+        private static float KerbLateral(float d) => RoadPath.HalfWidthAt(d) - 0.55f;
         private const int AmalfiTownRows = 3;
         private const float AmalfiRowStep = 20f;
         /// The Amalfi towns are built into the cliff, each house on its own tall footing.
@@ -6777,6 +6781,10 @@ namespace RoadRage.UnityRemake
                 if (row == 0)
                     for (var bin = 0; bin < 1 + Random.Range(0, 2); bin++)
                         Prop(Random.value < 0.5f ? "bin_blue" : "bin_green", d + BigSurDriveHalf + 1.2f + bin * 0.8f, side * (rail + 1.4f), Random.Range(-20f, 20f));
+                // Collection day: some put theirs out at the very edge of the road.
+                if (row == 0 && Random.value < KerbBinChance)
+                    Knock(Prop(Random.value < 0.5f ? "bin_blue" : "bin_green", d - BigSurDriveHalf - 1.5f, side * KerbLateral(d), Random.Range(-15f, 15f)),
+                        d - BigSurDriveHalf - 1.5f, side * KerbLateral(d), 0.02f);
                 if (kind == "store")
                     for (var k = 0; k < 5; k++)
                         Prop(StoreYardProps[Random.Range(0, StoreYardProps.Length)], d + halfX + 2f + k * 1.7f, side * (l + Random.Range(-2f, 2f)), Random.Range(0f, 360f));
@@ -6806,10 +6814,23 @@ namespace RoadRage.UnityRemake
                 {
                     for (var k = 0; k < 5; k++)
                         Prop("barrier", d + k * 1.9f, side * (rail + 2.5f), 90f);
+                    // Drums along the edge line on the run up to the works.
+                    for (var k = 0; k < 6; k++)
+                    {
+                        var at = d - 40f + k * 7f;
+                        Knock(Prop("drum_steel", at, side * KerbLateral(at), Random.Range(0f, 360f)), at, side * KerbLateral(at), 0.03f);
+                    }
                     for (var k = 0; k < 3; k++)
                         Prop(Random.value < 0.6f ? "drum_steel" : "drum_blue", d + Random.Range(0f, 8f), side * (rail + 4.5f + Random.Range(0f, 2f)), Random.Range(0f, 360f));
                     Prop("wheelbarrow", d + 4f, side * (rail + 7f), Random.Range(0f, 360f));
                 }
+            }
+
+            void Knock(GameObject prop, float d, float l, float speedCost)
+            {
+                if (prop == null) return;
+                var half = TryGetCombinedBounds(prop, out var b) ? Mathf.Max(b.extents.x, b.extents.z) : 0.4f;
+                prop.AddComponent<KnockableProp>().Stand(d, l, half, speedCost);
             }
 
             GameObject Prop(string name, float d, float l, float turn)
@@ -13427,6 +13448,27 @@ namespace RoadRage.UnityRemake
             Debug.Log($"RR_TEST motion over 2s: moving={moved} stuck={stuck} " +
                       $"avgMetres={(cars.Length > 0 ? totalDelta / cars.Length : 0f):0.0}");
 
+            // A loose prop where the car is, the car moving: it must be sent flying. The
+            // speed is set from here, after the car's own Update (which holds it at 0 on
+            // the landing screen) and before the prop looks in LateUpdate.
+            var knockOk = false;
+            var hitter = FindAnyObjectByType<ArcadeCarController>();
+            if (hitter != null)
+            {
+                var block = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                block.transform.position = RoadPath.Point(hitter.RoadDistance, hitter.LateralOffset, 0.5f);
+                var knock = block.AddComponent<KnockableProp>();
+                knock.Stand(hitter.RoadDistance, hitter.LateralOffset, 0.5f, 0.02f);
+                for (var f = 0; f < 10 && !knock.Flying; f++)
+                {
+                    hitter.SpeedKph = 60f;
+                    yield return null;
+                }
+                knockOk = knock.Flying;
+                Destroy(block);
+            }
+            Debug.Log($"RR_TEST knock prop flying={knockOk}");
+
             GameState.RunDistanceKm = 3.2f;
             GameState.Award(250, "TAKEDOWN");
             Debug.Log($"RR_TEST after takedown score={GameState.Score} combo={GameState.Combo}");
@@ -13506,7 +13548,7 @@ namespace RoadRage.UnityRemake
                       $"paid={paid} expected={runCash} banked={GameState.LastRunCash} charges={GameState.DoubleCharges}");
 
             Debug.Log(GameState.RunOver && GameState.Cash > cashBefore
-                      && wheelOk && refusedWhenEmpty && reviveOk && furyOk && gemsOk && doubleOk
+                      && wheelOk && refusedWhenEmpty && reviveOk && furyOk && gemsOk && doubleOk && knockOk
                 ? "RR_TEST RESULT PASS"
                 : "RR_TEST RESULT FAIL");
 

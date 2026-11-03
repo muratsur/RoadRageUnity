@@ -229,4 +229,71 @@ namespace RoadRage.UnityRemake
             if (mesh != null) Destroy(mesh);
         }
     }
+
+    /// A loose thing at the road's edge - a bin out for collection, a drum at road works -
+    /// that the player's car sends flying instead of driving through. It stands until
+    /// hit, then flies on with the car's speed, tumbling, as CrashDebris does. Heavier
+    /// things take more of the car's speed.
+    public sealed class KnockableProp : MonoBehaviour
+    {
+        private const float Gravity = 14f;
+        private const float ClearBehindPlayer = 60f;
+        private const float MinKph = 8f;
+        private static ArcadeCarController player;
+        private float distance;
+        private float lateral;
+        private float half;
+        private float slow;
+        private bool flying;
+        private Vector3 velocity;
+        private Vector3 spin;
+
+        public bool Flying => flying;
+
+        /// slow: the share of the car's speed a hit costs (a bin 0.02, a barrier 0.08).
+        public void Stand(float roadDistance, float roadLateral, float halfSize, float speedCost)
+        {
+            distance = roadDistance;
+            lateral = roadLateral;
+            half = halfSize;
+            slow = speedCost;
+        }
+
+        // After the car has moved this frame.
+        private void LateUpdate()
+        {
+            if (TrafficCarController.PlayerDistance - transform.position.z > ClearBehindPlayer)
+            {
+                if (flying) Destroy(gameObject);
+                return;
+            }
+            if (!flying)
+            {
+                if (player == null) player = FindFirstObjectByType<ArcadeCarController>();
+                if (player == null || !player.isActiveAndEnabled || player.ClearsTraffic || player.SpeedKph < MinKph) return;
+                var along = player.RoadDistance - distance;
+                var across = player.LateralOffset - lateral;
+                if (Mathf.Abs(along) > player.HalfLength + half || Mathf.Abs(across) > player.HalfWidth + half) return;
+                var speed = player.Speed;
+                velocity = RoadPath.Forward(distance) * speed * Random.Range(0.75f, 1f)
+                           + RoadPath.Right(distance) * Mathf.Sign(-across) * speed * Random.Range(0.15f, 0.35f)
+                           + Vector3.up * (2f + speed * Random.Range(0.12f, 0.25f));
+                spin = Random.onUnitSphere * Random.Range(300f, 900f);
+                player.SpeedKph *= 1f - slow;
+                flying = true;
+                return;
+            }
+            if (velocity == Vector3.zero) return;
+            var ground = RoadPath.CenterY(transform.position.z);
+            velocity.y -= Gravity * Time.deltaTime;
+            transform.position += velocity * Time.deltaTime;
+            transform.Rotate(spin * Time.deltaTime, Space.World);
+            if (transform.position.y > ground) return;
+            transform.position = new Vector3(transform.position.x, ground, transform.position.z);
+            velocity *= 0.45f;
+            velocity.y = Mathf.Abs(velocity.y) * 0.5f;
+            spin *= 0.4f;
+            if (velocity.sqrMagnitude < 0.5f) velocity = Vector3.zero;
+        }
+    }
 }
