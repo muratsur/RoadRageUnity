@@ -2576,8 +2576,12 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < 3 && i < layers.Length; i++)
                 {
                     var (tex, tile, tint) = layers[i];
-                    var albedo = BiomeTexture(pack, tex + "_D");
-                    var normal = BiomeTexture(pack, tex + "_N");
+                    // "Pack/T_name" takes a layer from another biome's pack.
+                    var slash = tex.IndexOf('/');
+                    var from = slash > 0 ? tex.Substring(0, slash) : pack;
+                    tex = tex.Substring(slash + 1);
+                    var albedo = BiomeTexture(from, tex + "_D");
+                    var normal = BiomeTexture(from, tex + "_N");
                     if (albedo != null) material.SetTexture($"_Splat{i}", albedo);
                     if (normal != null) material.SetTexture($"_Normal{i}", normal);
                     material.SetFloat($"_Tile{i}", tile);
@@ -2609,15 +2613,14 @@ namespace RoadRage.UnityRemake
             materials["Big Sur Ground"].SetFloat("_Macro", 1f);
             materials["Big Sur Ground"].SetFloat("_MacroMean", 0.052f);
 
-            // Sea to Sky: the same ground textures as Big Sur, wet green and grey granite.
+            // Sea to Sky: coastal rainforest floor - Greenwood's litter tinted to dark moss
+            // and needles - grey granite, and grey gravel at the road edge.
             Splat("Sea To Sky Ground", "BigSur", new[]
             {
-                ("T_sur_grass", 0.1f, new Color(0.38f, 0.56f, 0.6f)),
+                ("ForestFloor/T_forest_litter", 0.5f, new Color(0.7f, 1.35f, 0.6f)),
                 ("T_sur_rock", 0.05f, new Color(1.25f, 1.5f, 2.6f)),
-                ("T_sur_grass", 0.14f, new Color(0.5f, 0.55f, 0.66f)),
+                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.75f, 0.8f, 0.85f)),
             }, 0.08f);
-            materials["Sea To Sky Ground"].SetFloat("_Macro", 1f);
-            materials["Sea To Sky Ground"].SetFloat("_MacroMean", 0.052f);
 
             // Iceland: black volcanic sand, bright moss in patches, dark gravel at the road edge.
             Splat("Iceland Ground", "ForestFloor", new[]
@@ -3392,7 +3395,9 @@ namespace RoadRage.UnityRemake
                     {
                         var slope = Mathf.Abs(GridCornerY(row, j + 1) - GridCornerY(row, j - 1)) / (columns[j + 1] - columns[j - 1]);
                         var seaCliff = 1f - Mathf.InverseLerp(BigSurSeaCliffRock * 0.5f, BigSurSeaCliffRock, GridCornerY(row, j) - bigSurSeaLevel);
-                        w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(0.4f, 0.75f, slope)) + seaCliff + (patch - 0.85f) * 3f) * (1f - verge);
+                        // Sea to Sky's granite shows through on gentler slopes than Big Sur's grass.
+                        var steep = RoadPath.Route == seaToSkyRoute ? Mathf.InverseLerp(0.28f, 0.55f, slope) : Mathf.InverseLerp(0.4f, 0.75f, slope);
+                        w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, steep) + seaCliff + (patch - 0.85f) * 3f) * (1f - verge);
                     }
                     var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
                     var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
