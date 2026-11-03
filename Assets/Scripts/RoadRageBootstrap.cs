@@ -884,8 +884,11 @@ namespace RoadRage.UnityRemake
         {
             GameState.FlushDailyProgress();
             // Leaving play mode keeps runtime edits to the pipeline asset, so a Save Project
-            // could write Greenwood's settings into it for every biome.
-            ApplyBiomeRenderCost(-1);
+            // could write Greenwood's settings into it for every biome. Editor only: a player
+            // never saves the asset, and changing MSAA as the device shuts down is a risk.
+            if (Application.isEditor) ApplyBiomeRenderCost(-1);
+            // Last: Unity's own shutdown would crash in a static destructor (see WindowsQuit).
+            WindowsQuit.EndNow();
         }
 
         private Shader LitShader => Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
