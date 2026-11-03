@@ -19,6 +19,7 @@ from rasterio.enums import Resampling
 from rasterio.merge import merge
 
 import bake_b500_terrain as bake
+import bake_skyline as skyline
 import build_b500_road as road
 import export_b500_realmap as realmap
 import fetch_bc99 as fetch
@@ -87,8 +88,11 @@ class Dem:
         ix = np.clip(np.floor(fx).astype(int), 0, a.shape[1] - 2)
         iy = np.clip(np.floor(fy).astype(int), 0, a.shape[0] - 2)
         ax, ay = np.clip(fx - ix, 0, 1), np.clip(fy - iy, 0, 1)
-        return (a[iy, ix] * (1 - ax) * (1 - ay) + a[iy, ix + 1] * ax * (1 - ay)
-                + a[iy + 1, ix] * (1 - ax) * ay + a[iy + 1, ix + 1] * ax * ay)
+        h = (a[iy, ix] * (1 - ax) * (1 - ay) + a[iy, ix + 1] * ax * (1 - ay)
+             + a[iy + 1, ix] * (1 - ax) * ay + a[iy + 1, ix + 1] * ax * ay)
+        # Off the tiles (the skyline looks 25 km out): sea level, not the edge repeated.
+        inside = (fx >= 0) & (fx <= a.shape[1] - 1) & (fy >= 0) & (fy <= a.shape[0] - 1)
+        return np.where(inside, h, 0.0)
 
 
 def offsets():
@@ -157,6 +161,10 @@ bake.UNITS_PER_METRE, bake.MAGIC = 10.0, b"RRTD"
 
 if __name__ == "__main__":
     os.makedirs(road.OUT, exist_ok=True)
+    # "skyline": only the far mountains (bake_skyline.py), from the road's realmap.
+    if sys.argv[1:] == ["skyline"]:
+        skyline.main(Dem(bake.DGM).height, realmap.OUT, os.path.join(ROUTES, "bc99_skyline.bytes"))
+        sys.exit()
     # "terrain": only the ground, which needs the structures from the road's first bake.
     if sys.argv[1:] != ["terrain"]:
         road.main()

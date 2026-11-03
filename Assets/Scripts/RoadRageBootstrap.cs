@@ -10855,6 +10855,12 @@ namespace RoadRage.UnityRemake
                 // No mesh clouds: Greenwood's sky is a baked panorama (ApplyBiomeSky),
                 // and sphere-cluster cumulus in front of it read as props hung in the air.
             }
+            else if (biomeIndex == SeaToSkyIndex)
+            {
+                // The Coast Mountains stand 3 to 20 km from Highway 99, far past the ground.
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/bc99_skyline", seaToSkyRoute, Mood(biomeIndex).FogDensity) == null)
+                    Debug.LogWarning("Missing Biomes/Routes/bc99_skyline - Sea to Sky has no far mountains.");
+            }
             else if (biomeIndex == 9) // Hollywood Hills
             {
                 // 1. Static Panoramic Mountains strictly on Left (-X) and Right (+X) flanks (NEVER across the road!)
