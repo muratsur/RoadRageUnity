@@ -170,8 +170,8 @@ namespace RoadRage.UnityRemake
         /// cab up the road every frame, for ever: a wrecked truck shot off at thousands
         /// of km/h, leaving its logs behind.
         private static bool SameRig(IRoadVehicle a, IRoadVehicle b) =>
-            (a is TrailerHitch ha && ReferenceEquals(ha.Rig, b)) ||
-            (b is TrailerHitch hb && ReferenceEquals(hb.Rig, a));
+            (a is TrailerHitch ha && object.ReferenceEquals(ha.Rig, b)) ||
+            (b is TrailerHitch hb && object.ReferenceEquals(hb.Rig, a));
 
         /// A wreck the player has been stuck against no longer blocks the player.
         private static bool PlayerGoesThrough(IRoadVehicle a, IRoadVehicle b) =>
