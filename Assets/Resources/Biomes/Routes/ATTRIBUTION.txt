@@ -32,7 +32,8 @@ Big Sur follows California Highway 1, Garrapata to Lucia. Built by Tools/Terrain
 
 Sea to Sky follows BC Highway 99, Horseshoe Bay to Whistler (Tools/Terrain/build_bc99.py), and the
 Amalfi Coast follows the SS163, Positano to Vietri sul Mare (Tools/Terrain/build_ss163.py), and the
-Great Ocean Road follows the B100, Lavers Hill to Peterborough (Tools/Terrain/build_b100.py), from:
+Great Ocean Road follows the B100, Lavers Hill to Peterborough (Tools/Terrain/build_b100.py), and the
+Transfagarasan follows the DN7C, Cartisoara to the Vidraru dam (Tools/Terrain/build_dn7c.py), from:
 
 - Road centreline: (c) OpenStreetMap contributors, ODbL.
 - Terrain: Copernicus WorldDEM-30 (c) DLR e.V. 2010-2014 and (c) Airbus Defence and Space

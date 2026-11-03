@@ -295,14 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
             "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
-            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST", "GREAT OCEAN ROAD"
+            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST", "GREAT OCEAN ROAD", "TRANSFAGARASAN"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -592,6 +592,7 @@ namespace RoadRage.UnityRemake
             if (value.Contains("sky") || value.Contains("canada") || value.Contains("whistler")) return Biomes[SeaToSkyIndex];
             if (value.Contains("amalfi") || value.Contains("italy") || value.Contains("positano")) return Biomes[AmalfiIndex];
             if (value.Contains("ocean") || value.Contains("australia") || value.Contains("apostles")) return Biomes[OceanRoadIndex];
+            if (value.Contains("transf") || value.Contains("romania") || value.Contains("fagaras")) return Biomes[TransfagarasanIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -2480,6 +2481,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.25f, PostExposure = 0.02f, BloomIntensity = 0.12f, BloomThreshold = 4f,
                 AmbientIntensity = 1.1f, Saturation = 2f
             },
+            TransfagarasanIndex => new BiomeMood // TRANSFAGARASAN - thin, clear mountain air
+            {
+                FogDensity = 0.0011f, Fog = new Color(0.72f, 0.80f, 0.90f),
+                Sky = new Color(0.38f, 0.58f, 0.95f), Equator = new Color(0.60f, 0.66f, 0.66f),
+                Ground = new Color(0.20f, 0.23f, 0.17f), SunColor = new Color(1f, 0.98f, 0.92f),
+                SunIntensity = 1.3f, PostExposure = 0.02f, BloomIntensity = 0.12f, BloomThreshold = 4f,
+                AmbientIntensity = 1.1f, Saturation = 2f
+            },
             OceanRoadIndex => new BiomeMood // GREAT OCEAN ROAD - clear, hard southern light, sea spray haze
             {
                 FogDensity = 0.0012f, Fog = new Color(0.78f, 0.85f, 0.92f),
@@ -2583,6 +2592,7 @@ namespace RoadRage.UnityRemake
             SeaToSkyIndex => "Sea To Sky Ground",
             AmalfiIndex => "Amalfi Ground",
             OceanRoadIndex => "Ocean Road Ground",
+            TransfagarasanIndex => "Fagaras Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2662,6 +2672,16 @@ namespace RoadRage.UnityRemake
             }, 0.08f);
             materials["Amalfi Ground"].SetFloat("_Macro", 1f);
             materials["Amalfi Ground"].SetFloat("_MacroMean", 0.052f);
+
+            // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
+            Splat("Fagaras Ground", "BigSur", new[]
+            {
+                ("T_sur_grass", 0.1f, new Color(0.5f, 0.82f, 0.62f)),
+                ("T_sur_rock", 0.05f, new Color(1.2f, 1.25f, 1.35f)),
+                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.8f, 0.82f, 0.85f)),
+            }, 0.08f);
+            materials["Fagaras Ground"].SetFloat("_Macro", 1f);
+            materials["Fagaras Ground"].SetFloat("_MacroMean", 0.052f);
 
             // Great Ocean Road: grey-green coastal heath, cream limestone, pale sandy verge.
             Splat("Ocean Road Ground", "BigSur", new[]
@@ -2871,7 +2891,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
                 : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
                 : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
@@ -2931,7 +2951,7 @@ namespace RoadRage.UnityRemake
                 BuildRibbon("Left Iceland Verge", -1.3f, -1.0f, 0.02f, gravel, relative: true);
                 BuildRibbon("Right Iceland Verge", 1.0f, 1.3f, 0.02f, gravel, relative: true);
             }
-            else if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex) // Greenwood Forest, Mosel Valley, Big Sur, Sea to Sky, Amalfi, Great Ocean Road
+            else if (biomeIndex == 0 || biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex) // Greenwood Forest, Mosel Valley, Big Sur, Sea to Sky, Amalfi, Great Ocean Road, Transfagarasan
             {
                 // Forest Litter & Dirt Verge
                 BuildRibbon("Left Forest Verge", -1.15f, -1.0f, 0.02f, materials["Forest Verge Dirt"], relative: true);
@@ -2951,7 +2971,7 @@ namespace RoadRage.UnityRemake
             // that has to be explained is worse than paint that does not.
             //
             // Greenwood is an unmarked single-lane forest road: no paint at all.
-            if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex && biomeIndex != AmalfiIndex && biomeIndex != OceanRoadIndex)
+            if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex && biomeIndex != AmalfiIndex && biomeIndex != OceanRoadIndex && biomeIndex != TransfagarasanIndex)
             {
                 BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
                 BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
@@ -2969,7 +2989,7 @@ namespace RoadRage.UnityRemake
                 // Route 1: one broken white centre line, nothing at the edges.
                 BuildDashedRibbon("Center Dashes", 0f, 0.13f, 3f, 12f, materials["White Paint"], relative: true);
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex)
             {
                 // A German Bundesstrasse or an Italian strada statale: broken centre line, solid white at both edges.
                 BuildDashedRibbon("Center Dashes", 0f, 0.13f, 4f, 12f, materials["White Paint"], relative: true);
@@ -3059,7 +3079,7 @@ namespace RoadRage.UnityRemake
             var deck = route == moselRoute || IsSeaRoute(route) ? MoselDeckWeight(distance) : 0f;
             if (across <= 0f && deck <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
-            var limit = route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute ? SeaToSkyGroundLimit
+            var limit = route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute ? SeaToSkyGroundLimit
                 : route == moselRoute || route == icelandRoute || IsSeaRoute(route) ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             // Under a bridge the ground falls away from the road instead of meeting it.
@@ -3447,7 +3467,7 @@ namespace RoadRage.UnityRemake
                         var slope = Mathf.Abs(GridCornerY(row, j + 1) - GridCornerY(row, j - 1)) / (columns[j + 1] - columns[j - 1]);
                         var seaCliff = 1f - Mathf.InverseLerp(BigSurSeaCliffRock * 0.5f, BigSurSeaCliffRock, GridCornerY(row, j) - bigSurSeaLevel);
                         // Sea to Sky's granite shows through on gentler slopes than Big Sur's grass.
-                        var steep = RoadPath.Route == seaToSkyRoute ? Mathf.InverseLerp(0.28f, 0.55f, slope) : Mathf.InverseLerp(0.4f, 0.75f, slope);
+                        var steep = RoadPath.Route == seaToSkyRoute || RoadPath.Route == transfagRoute ? Mathf.InverseLerp(0.28f, 0.55f, slope) : Mathf.InverseLerp(0.4f, 0.75f, slope);
                         w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, steep) + seaCliff + (patch - 0.85f) * 3f) * (1f - verge);
                     }
                     var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
@@ -5064,7 +5084,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -5087,7 +5107,7 @@ namespace RoadRage.UnityRemake
         /// could not be got past: it now has two each way (18 m of carriageway).
         private static int LaneCountFor(int biomeIndex) => biomeIndex == 0 || biomeIndex == CanalTownIndex ? 2
             // One lane each way, as the real B53 and Route 1 are.
-            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex ? 1 : 3;
+            : biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex ? 1 : 3;
 
         private static float HalfWidthFor(int biomeIndex) =>
             LaneCountFor(biomeIndex) * RoadPath.LaneWidth;
@@ -5099,8 +5119,9 @@ namespace RoadRage.UnityRemake
         private static RoadRoute seaToSkyRoute;
         private static RoadRoute amalfiRoute;
         private static RoadRoute oceanRoute;
+        private static RoadRoute transfagRoute;
         /// Roads with one flat sea baked into their ground and their own bridges.
-        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute);
+        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute);
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -5113,9 +5134,18 @@ namespace RoadRage.UnityRemake
                 : biomeIndex == BigSurIndex ? "Police/T_us_police"
                 : biomeIndex == SeaToSkyIndex ? "Police/T_ca_police"
                 : biomeIndex == AmalfiIndex ? "Police/T_it_police"
-                : biomeIndex == OceanRoadIndex ? "Police/T_au_police" : "Police/T_polizei";
+                : biomeIndex == OceanRoadIndex ? "Police/T_au_police"
+                : biomeIndex == TransfagarasanIndex ? "Police/T_ro_police" : "Police/T_polizei";
             // Australia drives on the left.
             RoadPath.DriveSide = biomeIndex == OceanRoadIndex ? -1f : 1f;
+            if (biomeIndex == TransfagarasanIndex)
+            {
+                transfagRoute ??= RoadRoute.Load("Biomes/Routes/dn7c");
+                if (transfagRoute == null) Debug.LogWarning("Missing Biomes/Routes/dn7c - the Transfagarasan keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE Transfagarasan follows the DN7C: {transfagRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = transfagRoute;
+                return;
+            }
             if (biomeIndex == OceanRoadIndex)
             {
                 oceanRoute ??= RoadRoute.Load("Biomes/Routes/b100");
@@ -5984,7 +6014,7 @@ namespace RoadRage.UnityRemake
                 case CanalTownIndex: BuildCanalTown(); break;
                 case MoselIndex: BuildMoselValley(); break;
                 case IcelandIndex: BuildIcelandCoast(); break;
-                case BigSurIndex: case SeaToSkyIndex: case AmalfiIndex: case OceanRoadIndex: BuildBigSur(); break;
+                case BigSurIndex: case SeaToSkyIndex: case AmalfiIndex: case OceanRoadIndex: case TransfagarasanIndex: BuildBigSur(); break;
                 default: BuildForest(); break;
             }
         }
@@ -6292,7 +6322,8 @@ namespace RoadRage.UnityRemake
             var asset = Resources.Load<TextAsset>(RoadPath.Route == bigSurRoute ? "Biomes/Routes/sr1_structures"
                 : RoadPath.Route == seaToSkyRoute ? "Biomes/Routes/bc99_structures"
                 : RoadPath.Route == amalfiRoute ? "Biomes/Routes/ss163_structures"
-                : RoadPath.Route == oceanRoute ? "Biomes/Routes/b100_structures" : "Biomes/Routes/b53_structures");
+                : RoadPath.Route == oceanRoute ? "Biomes/Routes/b100_structures"
+                : RoadPath.Route == transfagRoute ? "Biomes/Routes/dn7c_structures" : "Biomes/Routes/b53_structures");
             if (asset == null)
             {
                 Debug.LogWarning("Missing Biomes/Routes/b53_structures - the Mosel Valley has no bridges.");
@@ -6606,6 +6637,7 @@ namespace RoadRage.UnityRemake
         private const int SeaToSkyIndex = 17;
         private const int AmalfiIndex = 18;
         private const int OceanRoadIndex = 19;
+        private const int TransfagarasanIndex = 20;
         private static readonly string[] SeaToSkyHouses = { "chalet", "cottage", "cabin", "aframe", "lodge", "barn", "store" };
         private const float BigSurHouseEvery = 180f;
         private const float AmalfiHouseEvery = 30f;
@@ -6696,7 +6728,8 @@ namespace RoadRage.UnityRemake
             var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
             bool OnLand(float d, float l) =>
                 float.IsNaN(seaLevel) || GridGroundY(RoadPath.Point(d, l)) > seaLevel + AboveSeaMetres;
-            var seaToSky = RoadPath.Route == seaToSkyRoute;
+            // The Fagaras are planted and built as the Coast Mountains: dense spruce, chalets, cabins.
+            var seaToSky = RoadPath.Route == seaToSkyRoute || RoadPath.Route == transfagRoute;
             var amalfi = RoadPath.Route == amalfiRoute;
             var ocean = RoadPath.Route == oceanRoute;
             GameObject Slim(GameObject tree)
@@ -11104,6 +11137,13 @@ namespace RoadRage.UnityRemake
                         new Color(0.10f, 0.15f, 0.11f), 1100f) == null)
                     Debug.LogWarning("Missing Biomes/Routes/bc99_skyline - Sea to Sky has no far mountains.");
             }
+            else if (biomeIndex == TransfagarasanIndex)
+            {
+                // The Fagaras ridge: spruce forest, bare rock above the treeline, snow on the tops.
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/dn7c_skyline", transfagRoute, Mood(biomeIndex).FogDensity,
+                        new Color(0.12f, 0.16f, 0.12f), 1700f) == null)
+                    Debug.LogWarning("Missing Biomes/Routes/dn7c_skyline - the Transfagarasan has no far mountains.");
+            }
             else if (biomeIndex == OceanRoadIndex)
             {
                 // The Otway ranges inland and the Southern Ocean to the horizon.
@@ -11280,7 +11320,7 @@ namespace RoadRage.UnityRemake
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
                 var clouds = Resources.Load<Texture2D>(biomeIndex != IcelandIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
@@ -12559,13 +12599,14 @@ namespace RoadRage.UnityRemake
         /// The country whose cars this biome's traffic drives, or null for the rest.
         private static string TrafficCountry(int biomeIndex) =>
             biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_"
-            : biomeIndex == BigSurIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : biomeIndex == OceanRoadIndex ? "_au_" : null;
+            : biomeIndex == BigSurIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : biomeIndex == OceanRoadIndex ? "_au_" : biomeIndex == TransfagarasanIndex ? "_ro_" : null;
 
-        /// Cars a country's roads share with a neighbour: North American in Canada, European in Italy,
-        /// both in Australia.
+        /// Cars a country's roads share with a neighbour: North American in Canada, European in Italy
+        /// and Romania, both in Australia.
         private static bool CarFor(string car, string country) =>
             car.Contains(country) || (country == "_ca_" && car.Contains("_us_")) || (country == "_it_" && car.Contains("_de_"))
-            || (country == "_au_" && (car.Contains("_de_") || car.Contains("_us_")));
+            || (country == "_au_" && (car.Contains("_de_") || car.Contains("_us_")))
+            || (country == "_ro_" && car.Contains("_de_"));
 
         private string NextRodinModel()
         {
@@ -12584,7 +12625,7 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < cars.Count; i++)
                 {
                     if (cars[i].Name.StartsWith(SpecialVehiclePrefix)) continue;
-                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_") || cars[i].Name.Contains("_us_") || cars[i].Name.Contains("_ca_") || cars[i].Name.Contains("_it_") || cars[i].Name.Contains("_au_");
+                    var own = cars[i].Name.Contains("_de_") || cars[i].Name.Contains("_is_") || cars[i].Name.Contains("_us_") || cars[i].Name.Contains("_ca_") || cars[i].Name.Contains("_it_") || cars[i].Name.Contains("_au_") || cars[i].Name.Contains("_ro_");
                     if (hasOwn ? CarFor(cars[i].Name, country) : !own) rodinBag.Add(i);
                 }
                 if (rodinBag.Count == 0) return null;
@@ -13692,7 +13733,9 @@ namespace RoadRage.UnityRemake
                 ScreenCapture.CaptureScreenshot(outputPath);
                 captured = true;
             }
-            else if (captured && elapsed > CaptureAfterSeconds + 2f) Application.Quit();
+            // The file is written in the background; the quit ends the process at once (WindowsQuit).
+            else if (captured && elapsed > CaptureAfterSeconds + 2f &&
+                     (System.IO.File.Exists(outputPath) || elapsed > CaptureAfterSeconds + 12f)) Application.Quit();
         }
 
         /// Measurement hook for the chase loop: how many rule-breakers are alive at

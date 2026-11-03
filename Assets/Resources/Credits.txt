@@ -3,11 +3,12 @@ Ramline Games
 
 REAL ROADS
 Road centrelines (Greenwood, Mosel Valley, Iceland Coast, Big Sur, Sea to Sky, Amalfi Coast,
-Great Ocean Road):
+Great Ocean Road, Transfagarasan):
 © OpenStreetMap contributors, ODbL - openstreetmap.org/copyright
 
 ELEVATION
-Copernicus WorldDEM-30 (Iceland Coast, Sea to Sky, Amalfi Coast, Great Ocean Road):
+Copernicus WorldDEM-30 (Iceland Coast, Sea to Sky, Amalfi Coast, Great Ocean Road,
+Transfagarasan):
 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under
 COPERNICUS by the European Union and ESA; all rights reserved.
 USGS 3D Elevation Program (Big Sur): U.S. Geological Survey, public domain.
