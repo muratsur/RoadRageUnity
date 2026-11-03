@@ -1457,6 +1457,9 @@ namespace RoadRage.UnityRemake
             })
                 for (var tint = 0; tint < tints.Length; tint++)
                     BiomeMaterial($"Sur {kind} {tint}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", tints[tint], 0f, 0.12f);
+            // NVIDIA SimReady props (CC BY 4.0), baked by Tools/SimReady/fetch_simready.py.
+            foreach (var prop in SimReadyProps)
+                BiomeMaterial($"SimReady {prop}", "SimReady", $"T_{prop}_D", $"T_{prop}_N", Color.white, 0f, 0.3f);
             MakeMaterial("Mosel Steel", new Color(0.16f, 0.18f, 0.19f), 0.6f, 0.35f);
             MakeMaterial("Mosel Paint", new Color(0.85f, 0.85f, 0.82f), 0f, 0.2f);
             MoselLamps.Bind(MakeMaterial("Mosel Lamp", new Color(0.9f, 0.86f, 0.74f), 0f, 0.5f));
@@ -6568,6 +6571,10 @@ namespace RoadRage.UnityRemake
         private static readonly string[] SeaToSkyHouses = { "chalet", "cottage", "cabin", "aframe", "lodge", "barn", "store" };
         private const float BigSurHouseEvery = 180f;
         private const float AmalfiHouseEvery = 30f;
+        private static readonly string[] SimReadyProps = { "barrier", "drum_steel", "drum_blue", "bin_blue", "bin_green", "crate", "pallet", "ibc", "wheelbarrow" };
+        private static readonly string[] StoreYardProps = { "pallet", "pallet", "crate", "crate", "drum_steel", "drum_blue", "ibc" };
+        /// Chance per chunk (about 150 m of road) of a road works yard.
+        private const float RoadWorksChance = 0.12f;
         private const int AmalfiTownRows = 3;
         private const float AmalfiRowStep = 20f;
         /// The Amalfi towns are built into the cliff, each house on its own tall footing.
@@ -6700,6 +6707,7 @@ namespace RoadRage.UnityRemake
                 });
 
             var mesh = new VillageMesh();
+            var props = 0;
             bigSurDrives.Clear();
             // The Amalfi towns stand house to house along the road.
             var houseEvery = amalfi ? AmalfiHouseEvery : BigSurHouseEvery;
@@ -6765,6 +6773,13 @@ namespace RoadRage.UnityRemake
                 // A dirt track, not a paved strip: it starts at the shoulder, wanders and
                 // changes width a little, and ends in a worn patch at the door.
                 if (row == 0) Track(d, side, l);
+                // Bins out at the end of the drive; a store keeps its deliveries in the yard.
+                if (row == 0)
+                    for (var bin = 0; bin < 1 + Random.Range(0, 2); bin++)
+                        Prop(Random.value < 0.5f ? "bin_blue" : "bin_green", d + BigSurDriveHalf + 1.2f + bin * 0.8f, side * (rail + 1.4f), Random.Range(-20f, 20f));
+                if (kind == "store")
+                    for (var k = 0; k < 5; k++)
+                        Prop(StoreYardProps[Random.Range(0, StoreYardProps.Length)], d + halfX + 2f + k * 1.7f, side * (l + Random.Range(-2f, 2f)), Random.Range(0f, 360f));
                 }
             }
 
@@ -6782,6 +6797,29 @@ namespace RoadRage.UnityRemake
                 bigSurDrives.Add(new Vector2(d, side));
             }
 
+            // Now and then a road works yard behind the rail: a run of barriers, drums, a wheelbarrow.
+            if (Random.value < RoadWorksChance)
+            {
+                var d = Random.Range(segStart + 30f, segEnd - 30f);
+                var side = Random.value < 0.5f ? -1 : 1;
+                if (!OnMoselDeck(d) && OnLand(d, side * (rail + 3f)))
+                {
+                    for (var k = 0; k < 5; k++)
+                        Prop("barrier", d + k * 1.9f, side * (rail + 2.5f), 90f);
+                    for (var k = 0; k < 3; k++)
+                        Prop(Random.value < 0.6f ? "drum_steel" : "drum_blue", d + Random.Range(0f, 8f), side * (rail + 4.5f + Random.Range(0f, 2f)), Random.Range(0f, 360f));
+                    Prop("wheelbarrow", d + 4f, side * (rail + 7f), Random.Range(0f, 360f));
+                }
+            }
+
+            GameObject Prop(string name, float d, float l, float turn)
+            {
+                if (!OnLand(d, l)) return null;
+                props++;
+                return PlaceBiomeModelOnRoad("SimReady", $"SM_{name}", materials[$"SimReady {name}"], d, l, 0f,
+                    new Vector3(0f, turn, 0f), Vector3.one, "Roadside Prop", false);
+            }
+
             foreach (var d in seaToSky || amalfi ? new List<float>() : PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
             {
                 var side = RealGroundUnder(d, BigSurLighthouseDistance, 1f) <= RealGroundUnder(d, -BigSurLighthouseDistance, 1f) ? 1 : -1;
@@ -6795,6 +6833,7 @@ namespace RoadRage.UnityRemake
             }
             mesh.Build(this);
             BuildGuardRail(materials["Forest Guard Rail"]);
+            if (props > 0) Debug.Log($"RR_PROPS chunk at {segStart:0} m: {props} SimReady props");
         }
 
         /// Twin concrete arch ribs under a long deck, springing from each side of the canyon.
