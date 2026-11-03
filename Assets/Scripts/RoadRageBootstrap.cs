@@ -2607,7 +2607,8 @@ namespace RoadRage.UnityRemake
             Splat("Big Sur Ground", "BigSur", new[]
             {
                 ("T_sur_grass", 0.1f, new Color(1f, 1.15f, 1.9f)),
-                ("T_sur_rock", 0.05f, new Color(0.95f, 0.88f, 0.8f)),
+                // Darker than the grass, so the bare rock reads as rock from the road.
+                ("T_sur_rock", 0.05f, new Color(0.62f, 0.58f, 0.54f)),
                 ("T_sur_grass", 0.14f, new Color(0.9f, 1f, 1.5f)),
             }, 0.08f);
             materials["Big Sur Ground"].SetFloat("_Macro", 1f);
@@ -6545,6 +6546,36 @@ namespace RoadRage.UnityRemake
         private const float BigSurSeaCliffRock = 40f;
         private const float SeaToSkyTreeEvery = 6f;
         private const float BigSurRedwoodSlim = 0.62f;
+        private const float BigSurCliffRockEvery = 16f;
+        private const float BigSurStackOffshore = 60f;
+        /// The spruce bark, warmed to a redwood's red-brown (shared, so trees still batch).
+        private static readonly Color RedwoodBark = new(1.45f, 0.78f, 0.58f);
+        private static readonly Dictionary<Material, Material> redwoodBarks = new();
+
+        /// Swaps the pack spruce's bark ("Spruce") for a red-brown copy.
+        private static void Redwood(GameObject tree)
+        {
+            foreach (var renderer in tree.GetComponentsInChildren<Renderer>())
+            {
+                var shared = renderer.sharedMaterials;
+                var changed = false;
+                for (var i = 0; i < shared.Length; i++)
+                {
+                    if (shared[i] == null || shared[i].name != "Spruce") continue;
+                    if (!redwoodBarks.TryGetValue(shared[i], out var bark))
+                    {
+                        bark = new Material(shared[i]) { name = "Redwood Bark" };
+                        // The pack's shader graph names its two colour tints by GUID.
+                        foreach (var property in bark.GetPropertyNames(MaterialPropertyType.Vector))
+                            if (property.StartsWith("Color_")) bark.SetColor(property, RedwoodBark);
+                        redwoodBarks[shared[i]] = bark;
+                    }
+                    shared[i] = bark;
+                    changed = true;
+                }
+                if (changed) renderer.sharedMaterials = shared;
+            }
+        }
         private const float BigSurLighthouseDistance = 60f;
         private const float BigSurLighthouseScale = 1.6f;
         private const float BigSurLighthouseYard = 14f;
@@ -6569,12 +6600,14 @@ namespace RoadRage.UnityRemake
             var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
             bool OnLand(float d, float l) =>
                 float.IsNaN(seaLevel) || GridGroundY(RoadPath.Point(d, l)) > seaLevel + AboveSeaMetres;
+            var seaToSky = RoadPath.Route == seaToSkyRoute;
             GameObject Slim(GameObject tree)
             {
-                if (tree != null) tree.transform.localScale = Vector3.Scale(tree.transform.localScale, new Vector3(BigSurRedwoodSlim, 1f, BigSurRedwoodSlim));
+                if (tree == null) return null;
+                tree.transform.localScale = Vector3.Scale(tree.transform.localScale, new Vector3(BigSurRedwoodSlim, 1f, BigSurRedwoodSlim));
+                if (!seaToSky) Redwood(tree);
                 return tree;
             }
-            var seaToSky = RoadPath.Route == seaToSkyRoute;
             // Redwoods, or the Coast Mountains' thick fir: tall conifers, only where the land cover has forest.
             for (var near = 25f; near < 420f; near += 40f)
             {
@@ -6604,6 +6637,23 @@ namespace RoadRage.UnityRemake
             ScatterBand(14f, rail + 3f, 200f, (d, l, s) => !OnLand(d, l) ? null :
                 PlaceBiomeModelOnRoad("ForestVillage", $"Rocks/SM_rock_0{Random.Range(1, 4)}", materials["Forest Boulder"], d, l, -0.5f,
                     new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one * Random.Range(0.8f, 2.6f), "Big Sur Rock", false));
+            // The sea cliffs: crags on the band just above the water, and on Big Sur sea
+            // stacks standing off the shore (water here, land a little nearer the road).
+            // ScatterBand tries one lateral per row, so a wide band is laid as many narrow ones.
+            for (var near = rail + 20f; !float.IsNaN(seaLevel) && near < 900f; near += 60f)
+                ScatterBand(BigSurCliffRockEvery, near, near + 60f, (d, l, s) =>
+                {
+                    var above = GridGroundY(RoadPath.Point(d, l)) - seaLevel;
+                    var rock = $"Rocks/SM_rock_0{Random.Range(1, 4)}";
+                    var turn = new Vector3(0f, Random.Range(0f, 360f), 0f);
+                    if (above > 0f && above < BigSurSeaCliffRock)
+                        return PlaceBiomeModelOnRoad("ForestVillage", rock, materials["Forest Boulder"], d, l, -1f,
+                            turn, Vector3.one * Random.Range(6f, 14f), "Big Sur Cliff Rock", false);
+                    var shore = GridGroundY(RoadPath.Point(d, l - Mathf.Sign(l) * BigSurStackOffshore)) > seaLevel;
+                    if (seaToSky || above > 0f || !shore || Random.value > 0.5f) return null;
+                    return PlaceBiomeModelOnRoad("ForestVillage", rock, materials["Forest Boulder"], d, l, -2f,
+                        turn, new Vector3(Random.Range(10f, 18f), Random.Range(18f, 34f), Random.Range(10f, 18f)), "Big Sur Sea Stack", false);
+                });
 
             var mesh = new VillageMesh();
             bigSurDrives.Clear();
