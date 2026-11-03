@@ -2,7 +2,7 @@ ROAD RAGE
 Ramline Games
 
 REAL ROADS
-Road centrelines (Mosel Valley, Iceland Coast, Big Sur, Sea to Sky, Amalfi Coast):
+Road centrelines (Greenwood, Mosel Valley, Iceland Coast, Big Sur, Sea to Sky, Amalfi Coast):
 © OpenStreetMap contributors, ODbL - openstreetmap.org/copyright
 
 ELEVATION
@@ -11,7 +11,8 @@ Copernicus WorldDEM-30 (Iceland Coast, Sea to Sky, Amalfi Coast):
 COPERNICUS by the European Union and ESA; all rights reserved.
 USGS 3D Elevation Program (Big Sur): U.S. Geological Survey, public domain.
 Mosel Valley terrain: © GeoBasis-DE / LVermGeoRP, dl-de/by-2-0, www.lvermgeo.rlp.de [Daten bearbeitet].
-Greenwood terrain and mountain ring: AWS Terrain Tiles (Tilezen). EU-DEM produced using
+Greenwood terrain: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0.
+Greenwood road profile and mountain ring: AWS Terrain Tiles (Tilezen). EU-DEM produced using
 Copernicus data and information funded by the European Union; SRTM: NASA / USGS.
 
 LAND COVER

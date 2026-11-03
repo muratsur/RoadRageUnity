@@ -2,11 +2,9 @@
 to Freudenstadt: the real sequence of bends and the real hills, fitted to what the
 game's road can be.
 
-Input: Tools/Terrain/b500.kml, a Google My Maps directions export. Its first leg is
-Baden-Baden -> Freudenstadt along the B500 (past Buehlerhoehe, the Mummelsee,
-Ruhestein and Kniebis). The export carries further legs to a wrongly matched
-"Buehler Hoehe" in Dornhan and back, so only the first leg is used: the line is cut
-where it first reaches Freudenstadt.
+Input: Tools/Terrain/b500_line.json from fetch_b500.py, the B500 Baden-Baden -> Kniebis
+and the B28 on to Freudenstadt (past Buehlerhoehe, the Mummelsee and Ruhestein), from
+OpenStreetMap ((c) OpenStreetMap contributors, ODbL).
 
 Elevation: AWS Terrain Tiles (EU-DEM / SRTM, terrarium PNG), sampled along the line.
 
@@ -35,30 +33,28 @@ Output, in Assets/Resources/Biomes/Routes (little endian):
                    ...): the local name for the road signs, the English one for the HUD
 plus ./out_b500/preview.png (plan and profile).
 """
+import json
 import math
 import os
 import struct
 import sys
 import urllib.request
-import xml.etree.ElementTree as ET
 
 import numpy as np
 from PIL import Image, ImageDraw
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
-KML = os.path.join(HERE, "b500.kml")
+LINE = os.path.join(HERE, "b500_line.json")
 OUT = os.environ.get("RR_OUT", os.path.join(HERE, "out_b500"))
 ASSET = os.path.join(ROOT, "Assets", "Resources", "Biomes", "Routes", "b500.bytes")
 os.makedirs(OUT, exist_ok=True)
 
-END_NEAR = (48.4646, 8.4181)        # Freudenstadt: the first leg ends here
-END_RADIUS = 400.0                  # m
 # The drive is the mountain road: it starts where the forest closes in above
 # Geroldsau, past Baden-Baden's streets, and stops short of Freudenstadt's. The
 # towns are built-up land the game has no buildings for - it drew them as bare
 # ground, and every run started there.
-TRIM_START_KM = 8.4
+TRIM_START_KM = 7.7
 TRIM_END_KM = 2.0
 STEP = 5.0                          # m, resampling along the real road
 OUT_STEP = 4.0                      # m of Z between output samples
@@ -108,22 +104,9 @@ PLACES = [
 
 
 def read_route():
-    ns = {"k": "http://www.opengis.net/kml/2.2"}
-    root = ET.parse(KML).getroot()
-    lines = [e.text for e in root.iter("{%s}coordinates" % ns["k"])
-             if e.text and len(e.text.split()) > 10]
-    if not lines:
-        sys.exit("no LineString in " + KML)
-    pts = np.array([[float(v) for v in c.split(",")[:2]] for c in lines[0].split()])
+    pts = np.array(json.load(open(LINE)))
     lon, lat = pts[:, 0], pts[:, 1]
-    d = haversine(lat, lon, *END_NEAR)
-    hits = np.nonzero(d < END_RADIUS)[0]
-    end = int(hits[0]) if len(hits) else int(np.argmin(d[: len(d) // 2]))
-    # Keep going to the closest point of that first approach.
-    while end + 1 < len(d) and d[end + 1] < d[end]:
-        end += 1
-    print(f"route: {len(pts)} points, first leg ends at {end}")
-    lat, lon = lat[: end + 1], lon[: end + 1]
+    print(f"route: {len(pts)} points")
     along = np.concatenate([[0.0], np.cumsum([
         float(haversine(np.array([lat[i]]), np.array([lon[i]]), lat[i + 1], lon[i + 1])[0])
         for i in range(len(lat) - 1)])])
