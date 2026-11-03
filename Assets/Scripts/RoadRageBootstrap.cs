@@ -1451,6 +1451,9 @@ namespace RoadRage.UnityRemake
                 ("lodge", new[] { Color.white, new Color(0.85f, 0.8f, 0.75f), new Color(1.05f, 0.95f, 0.82f) }),
                 ("chalet", new[] { Color.white, new Color(0.85f, 0.8f, 0.76f), new Color(1.05f, 0.95f, 0.85f) }),
                 ("cottage", new[] { Color.white, new Color(0.9f, 0.95f, 1.05f), new Color(1f, 0.93f, 0.85f) }),
+                // Amalfi's pastels: yellow, cream-pink and pale green; pink, peach and lilac.
+                ("villa", new[] { Color.white, new Color(1.05f, 0.88f, 0.92f), new Color(0.88f, 1.02f, 0.86f) }),
+                ("townhouse", new[] { Color.white, new Color(1.1f, 0.98f, 0.72f), new Color(0.88f, 0.92f, 1.15f) }),
             })
                 for (var tint = 0; tint < tints.Length; tint++)
                     BiomeMaterial($"Sur {kind} {tint}", "BigSur", $"T_{kind}_D", $"T_{kind}_N", tints[tint], 0f, 0.12f);
@@ -6564,11 +6567,13 @@ namespace RoadRage.UnityRemake
         private const int AmalfiIndex = 18;
         private static readonly string[] SeaToSkyHouses = { "chalet", "cottage", "cabin", "aframe", "lodge", "barn", "store" };
         private const float BigSurHouseEvery = 180f;
-        private const float AmalfiHouseEvery = 60f;
+        private const float AmalfiHouseEvery = 30f;
+        private const int AmalfiTownRows = 3;
+        private const float AmalfiRowStep = 20f;
         /// The Amalfi towns are built into the cliff, each house on its own tall footing.
         private const float AmalfiMaxSlopeRise = 7f;
-        /// Flat-roofed and stuccoed of the Big Sur set; no cabins or barns on this coast.
-        private static readonly string[] AmalfiHouses = { "coasthouse", "store", "bungalow", "motel" };
+        /// Its own pastel villas and town houses (Rodin), with the odd flat-roofed shop.
+        private static readonly string[] AmalfiHouses = { "villa", "townhouse", "villa", "townhouse", "store" };
         private const float BigSurHouseFromRail = 12f;
         /// Nothing grows or stands on the sea bed or the wet edge of the shore.
         private const float AboveSeaMetres = 3f;
@@ -6703,7 +6708,11 @@ namespace RoadRage.UnityRemake
                 // The rail opens for the drive, and a chunk only places its own rail.
                 if (d - segStart < BigSurDriveGap || segEnd - d < BigSurDriveGap || OnMoselDeck(d)) continue;
                 var side = RealGroundUnder(d, 40f, 1f) >= RealGroundUnder(d, -40f, 1f) ? 1 : -1;
-                var l = rail + BigSurHouseFromRail;
+                // In an Amalfi town the houses climb the slope in rows above the road.
+                var rows = amalfi && RoadPath.Route.CoverAt(d, side * (rail + BigSurHouseFromRail)) == RoadRoute.CoverBuilt ? AmalfiTownRows : 1;
+                for (var row = 0; row < rows; row++)
+                {
+                var l = rail + BigSurHouseFromRail + row * AmalfiRowStep;
                 var at = RoadPath.Point(d, side * l);
                 if (!OnLand(d, side * l) || TerrainNoise(at.x, at.z, 0.004f) < -0.3f || GroundSpread(d, side * l, 8f) > (amalfi ? AmalfiMaxSlopeRise : BigSurMaxSlopeRise) ||
                     RoadPath.Route.CoverAt(d, side * l) == RoadRoute.CoverWater) continue;
@@ -6755,7 +6764,8 @@ namespace RoadRage.UnityRemake
                 }
                 // A dirt track, not a paved strip: it starts at the shoulder, wanders and
                 // changes width a little, and ends in a worn patch at the door.
-                Track(d, side, l);
+                if (row == 0) Track(d, side, l);
+                }
             }
 
             void Track(float d, int side, float l)
@@ -6772,7 +6782,7 @@ namespace RoadRage.UnityRemake
                 bigSurDrives.Add(new Vector2(d, side));
             }
 
-            foreach (var d in seaToSky ? new List<float>() : PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
+            foreach (var d in seaToSky || amalfi ? new List<float>() : PassesOf(RoadPath.Route.Places[2].Distance, RoadPath.Route.Places[2].Distance))
             {
                 var side = RealGroundUnder(d, BigSurLighthouseDistance, 1f) <= RealGroundUnder(d, -BigSurLighthouseDistance, 1f) ? 1 : -1;
                 var light = BiomeModel("BigSur", "SM_lighthouse", materials["Sur lighthouse"]);
