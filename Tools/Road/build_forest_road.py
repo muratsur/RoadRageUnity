@@ -192,7 +192,8 @@ def main():
                  for k, amp, phase in [(1, 0.06, 0.4), (2, 0.035, 2.1), (5, 0.012, 0.9), (11, 0.005, 3.3)])
     joint = list(zip((ROAD_WIDTH / 2 + offset).tolist(), ys.tolist()))
     stamp_polyline(tar, joint, 0.05)
-    stamp_polyline(crack, joint, 0.008)
+    # The joint is the soft tar band only. A 0.008 m crack hairline down its exact middle
+    # rendered as a crisp near-black line that read as a cable laid along the road.
     # Transverse cracks are hairlines only, unsealed: like the patches, anything bold
     # across the road would be seen recurring every tile.
     hair = np.zeros((H, W), np.float32)
@@ -232,7 +233,7 @@ def main():
     fresh = np.array([0.08, 0.08, 0.085], np.float32) * (0.9 + 0.2 * patch_grain)[..., None]
     col = col * (1 - patch[..., None]) + fresh * patch[..., None]
     col *= (1 - patch_edge * 0.25)[..., None]
-    col = col * (1 - (tar * 0.9)[..., None]) + np.array([0.025, 0.025, 0.026], np.float32) * (tar * 0.9)[..., None]
+    col = col * (1 - (tar * 0.6)[..., None]) + np.array([0.05, 0.05, 0.053], np.float32) * (tar * 0.6)[..., None]
     col *= (1 - crack * 0.6)[..., None]
     dust_col = np.array([0.20, 0.18, 0.15], np.float32)
     col = col * (1 - dust[..., None] * 0.35) + dust_col * dust[..., None] * 0.35

@@ -643,9 +643,10 @@ namespace RoadRage.UnityRemake
         private Material redLedMat;
         private Material blueLedMat;
 
-        /// On the B500 the cruisers are German: blue-silver Polizei cars with blue
-        /// lights only, no red. Other biomes keep the American black-and-red.
-        private static bool German => RoadPath.Route != null;
+        /// On a real European road the cruisers carry that country's markings
+        /// (PolizeiLivery.Sheet) and blue lights only, no red. Other biomes keep the
+        /// American black-and-red.
+        private static bool European => RoadPath.Route != null;
 
         private static readonly Color PoliceBlueA = new(0.10f, 0.45f, 1f);
         private static readonly Color PoliceBlueB = new(0.25f, 0.55f, 1f);
@@ -681,7 +682,7 @@ namespace RoadRage.UnityRemake
                 var paintMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"))
                 {
                     // Dark interceptor navy; silver on the B500, where the blue is the band.
-                    color = German ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.04f, 0.06f, 0.10f)
+                    color = European ? new Color(0.70f, 0.72f, 0.76f) : new Color(0.04f, 0.06f, 0.10f)
                 };
                 if (paintMat.HasProperty("_Smoothness")) paintMat.SetFloat("_Smoothness", 0.85f);
                 if (paintMat.HasProperty("_Metallic")) paintMat.SetFloat("_Metallic", 0.65f);
@@ -712,7 +713,7 @@ namespace RoadRage.UnityRemake
                     var centre = transform.InverseTransformPoint(modelBounds.center);
                     vehicleInstance.transform.localPosition -= new Vector3(centre.x, 0f, centre.z);
                 }
-                if (German) PolizeiLivery.Apply(transform, vehicleInstance);
+                if (European) PolizeiLivery.Apply(transform, vehicleInstance);
                 // Hull follows the mesh that was just normalised, so the cruiser
                 // collides as the car you can see rather than as a fixed guess.
                 hullHalfLength = 4.8f * 0.5f;
@@ -789,7 +790,7 @@ namespace RoadRage.UnityRemake
                 return false;
             }
             var painted = new Dictionary<Material, Material>();
-            var paint = German ? new Color(0.72f, 0.74f, 0.78f) : new Color(0.05f, 0.07f, 0.11f);
+            var paint = European ? new Color(0.72f, 0.74f, 0.78f) : new Color(0.05f, 0.07f, 0.11f);
             foreach (var r in renderers)
             {
                 var materials = r.sharedMaterials;
@@ -837,7 +838,7 @@ namespace RoadRage.UnityRemake
             hullHalfLength = b.size.z * 0.5f;
             hullHalfWidth = Mathf.Max(0.8f, b.size.x * 0.5f);
             // The livery measures the car the same way, so it too is laid on square.
-            if (German) PolizeiLivery.Apply(transform, holder);
+            if (European) PolizeiLivery.Apply(transform, holder);
             transform.rotation = heading;
 
             if (!packCruiserReported)
@@ -988,7 +989,7 @@ namespace RoadRage.UnityRemake
             barFrame.GetComponent<Renderer>().material = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard")) { color = new Color(0.05f, 0.05f, 0.05f) };
             Destroy(barFrame.GetComponent<Collider>());
 
-            var leftColour = German ? PoliceBlueB : Color.red;
+            var leftColour = European ? PoliceBlueB : Color.red;
             redLedMat = new Material(Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard"));
             redLedMat.color = leftColour;
             redLedMat.EnableKeyword("_EMISSION");
@@ -1026,7 +1027,7 @@ namespace RoadRage.UnityRemake
                 redStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(-0.35f, 0.1f, 0f), leftColour);
                 blueStrobe = MakeStrobe(lightbarRoot.transform, new Vector3(0.35f, 0.1f, 0f), new Color(0.15f, 0.45f, 1f));
             }
-            if (German) PolizeiLivery.AddRoofSign(lightbarRoot.transform);
+            if (European) PolizeiLivery.AddRoofSign(lightbarRoot.transform);
         }
 
         private static Light MakeStrobe(Transform parent, Vector3 localPosition, Color colour)
@@ -1055,6 +1056,48 @@ namespace RoadRage.UnityRemake
             var across = Mathf.Abs(hullHalfLength * Mathf.Sin(yaw)) + Mathf.Abs(hullHalfWidth * Mathf.Cos(yaw));
             var edge = Mathf.Max(0.5f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - across);
             return Mathf.Clamp(lateral, -edge, edge);
+        }
+
+        /// Cruisers held their formation slot whatever lay in it, so a car flipped on
+        /// its side in the lane was driven into and only the contact pass held them off
+        /// it. They now pick the nearer way past a wreck ahead, and brake short of one
+        /// that blocks the whole road.
+        private float SteerAroundWrecks(float targetLane, float laneLimit)
+        {
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car != null && car.IsWreck)
+                    targetLane = PastWreck(targetLane, laneLimit, car.RoadDistance, car.LaneOffset,
+                        car.LongitudinalExtent, car.LateralExtent);
+            }
+            foreach (var cop in OnRoad)
+            {
+                if (cop != null && cop != this && cop.IsWrecked)
+                    targetLane = PastWreck(targetLane, laneLimit, cop.ContactDistance, cop.ContactLateral,
+                        cop.ContactHalfLength, cop.ContactHalfWidth);
+            }
+            return targetLane;
+        }
+
+        private float PastWreck(float targetLane, float laneLimit, float wreckDistance, float wreckLateral,
+            float wreckHalfLength, float wreckHalfWidth)
+        {
+            var ahead = wreckDistance - RoadDistance;
+            var reach = hullHalfLength + wreckHalfLength;
+            if (ahead < -reach || ahead > 45f) return targetLane;
+            var clear = hullHalfWidth + wreckHalfWidth + 0.5f;
+            if (Mathf.Abs(targetLane - wreckLateral) >= clear) return targetLane;
+            var left = wreckLateral - clear;
+            var right = wreckLateral + clear;
+            var leftFits = left >= -laneLimit;
+            var rightFits = right <= laneLimit;
+            if (leftFits && (!rightFits || Mathf.Abs(left - LateralOffset) <= Mathf.Abs(right - LateralOffset)))
+                return left;
+            if (rightFits) return right;
+            if (ahead > 0f) SpeedKph = Mathf.Min(SpeedKph, Mathf.Max(0f, ahead - reach) * 4f);
+            return targetLane;
         }
 
         private float wreckSlideDir;
@@ -1119,7 +1162,7 @@ namespace RoadRage.UnityRemake
             var isRed = Mathf.Sin(strobeTimer) > 0f;
             if (redLedMat != null)
             {
-                redLedMat.SetColor("_EmissionColor", isRed ? (German ? PoliceBlueB : Color.red) * 5.5f : Color.black);
+                redLedMat.SetColor("_EmissionColor", isRed ? (European ? PoliceBlueB : Color.red) * 5.5f : Color.black);
             }
             if (blueLedMat != null)
             {
@@ -1183,6 +1226,8 @@ namespace RoadRage.UnityRemake
             {
                 SpeedKph = Mathf.MoveTowards(SpeedKph, targetPlayer.SpeedKph + (distToTarget * 2.5f), Time.deltaTime * 28f);
             }
+
+            targetLane = SteerAroundWrecks(targetLane, laneLimit);
 
             // Steer smoothly towards assigned tactical formation lane
             LateralOffset = Mathf.MoveTowards(LateralOffset, targetLane, Time.deltaTime * 6.5f);
@@ -1289,24 +1334,27 @@ namespace RoadRage.UnityRemake
 
         }
     }
-    /// German police markings for a cruiser: POLIZEI in white on a blue band along
-    /// both sides and across the back, and a lit POLIZEI sign on the roof light bar.
+    /// Police markings for a cruiser, in the country's own word: a band along both
+    /// sides and across the back, and a lit sign on the roof light bar. Sheet names the
+    /// texture: POLIZEI on the German roads, LOGREGLAN in Iceland.
     /// Flat quads over the pack's single-material car (Assets/Resources/Police,
     /// Tools/Blender/build_polizei_livery.py).
     internal static class PolizeiLivery
     {
         private static Material band;
         private static Material panel;
-        private static bool loaded;
+        private static string loaded;
+        public static string Sheet = "Police/T_polizei";
 
         private static bool Load()
         {
-            if (loaded) return band != null;
-            loaded = true;
-            var tex = Resources.Load<Texture2D>("Police/T_polizei");
+            if (loaded == Sheet) return band != null;
+            loaded = Sheet;
+            band = null;
+            var tex = Resources.Load<Texture2D>(Sheet);
             if (tex == null)
             {
-                Debug.LogWarning("Missing Police/T_polizei - cruisers carry no POLIZEI markings.");
+                Debug.LogWarning($"Missing {Sheet} - cruisers carry no police markings.");
                 return false;
             }
             var shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");

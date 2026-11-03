@@ -1,0 +1,7 @@
+0 Horseshoe Bay|Horseshoe Bay
+21529 Porteau Cove|Porteau Cove
+29438 Britannia Beach|Britannia Beach
+36455 Shannon Falls|Shannon Falls
+40141 Squamish|Squamish
+79046 Brandywine Falls|Brandywine Falls
+95542 Whistler|Whistler

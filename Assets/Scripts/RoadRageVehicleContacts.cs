@@ -52,10 +52,14 @@ namespace RoadRage.UnityRemake
         /// Small positive gap so hulls rest touching rather than exactly coincident,
         /// which is what reads as clipping when two cars sit side by side.
         private const float ContactSkin = 0.08f;
+        private const float PlayerShoveShare = 0.3f;
         /// Above this height difference one vehicle is over the other, not into it.
         private const float ClearanceHeight = 1.6f;
         /// Above this many vehicles the pass drops to a single relaxation.
-        private const int CrowdedSet = 18;
+        /// A five-star pursuit puts ~20 vehicles on the road with the wrecks, and with a
+        /// single pass a cruiser pushed out of a wreck into its neighbour was pushed
+        /// straight back in: it drove through. 40 vehicles is 780 pairs, still cheap.
+        private const int CrowdedSet = 40;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void Reset()
@@ -100,6 +104,7 @@ namespace RoadRage.UnityRemake
         private static void Separate(IRoadVehicle a, IRoadVehicle b)
         {
             if (!a.ContactActive || !b.ContactActive) return;
+            if (SameRig(a, b) || PlayerGoesThrough(a, b)) return;
             if (Mathf.Abs(a.ContactHeight - b.ContactHeight) > ClearanceHeight) return;
 
             var deltaDist = b.ContactDistance - a.ContactDistance;
@@ -110,6 +115,11 @@ namespace RoadRage.UnityRemake
             var latReach = a.ContactHalfWidth + b.ContactHalfWidth + ContactSkin;
             if (Mathf.Abs(deltaLat) > latReach) return;
 
+            // Noted here, not in the gameplay test: a folded trailer's box here is wider
+            // than its true shape there, so the player could be held by this one forever.
+            if (a is ArcadeCarController playerA) NotePlayerAgainst(b, playerA.LateralOffset);
+            else if (b is ArcadeCarController playerB) NotePlayerAgainst(a, playerB.LateralOffset);
+
             var overlapLong = reach - Mathf.Abs(deltaDist);
             var overlapLat = latReach - Mathf.Abs(deltaLat);
 
@@ -117,19 +127,77 @@ namespace RoadRage.UnityRemake
             var totalMass = Mathf.Max(0.01f, a.ContactMass + b.ContactMass);
             var shareA = b.ContactMass / totalMass;
             var shareB = a.ContactMass / totalMass;
+            // The player ploughs a wreck aside: it takes all of the correction.
+            // Not quite all: a wreck's sideways push has a limit, and past it the player sat inside.
+            if (a is ArcadeCarController && b is TrafficCarController wreckB && wreckB.PlayerShoves) { shareA = PlayerShoveShare; shareB = 1f - PlayerShoveShare; }
+            else if (b is ArcadeCarController && a is TrafficCarController wreckA && wreckA.PlayerShoves) { shareA = 1f - PlayerShoveShare; shareB = PlayerShoveShare; }
 
             if (overlapLat < overlapLong)
             {
                 var sign = deltaLat >= 0f ? 1f : -1f;
-                a.ApplyContactPush(0f, -sign * overlapLat * shareA);
-                b.ApplyContactPush(0f, sign * overlapLat * shareB);
+                var pushA = -sign * overlapLat * shareA;
+                var pushB = sign * overlapLat * shareB;
+                // Sideways only where the road has room for it. A car beside a wreck at
+                // the edge was pushed out past the kerb, the edge clamp put it straight
+                // back, and it sat inside the wreck: cars drove through a car lying on
+                // its side. Held back along the road instead, it stops against it.
+                if (FitsOnRoad(a, pushA) && FitsOnRoad(b, pushB))
+                {
+                    a.ApplyContactPush(0f, pushA);
+                    b.ApplyContactPush(0f, pushB);
+                    return;
+                }
+                // A wreck already against the rail: the player slides off it instead of
+                // ploughing it along the road for ever.
+                if (a is ArcadeCarController && shareA == PlayerShoveShare)
+                {
+                    a.ApplyContactPush(0f, -sign * overlapLat);
+                    return;
+                }
+                if (b is ArcadeCarController && shareB == PlayerShoveShare)
+                {
+                    b.ApplyContactPush(0f, sign * overlapLat);
+                    return;
+                }
             }
-            else
-            {
-                var sign = deltaDist >= 0f ? 1f : -1f;
-                a.ApplyContactPush(-sign * overlapLong * shareA, 0f);
-                b.ApplyContactPush(sign * overlapLong * shareB, 0f);
-            }
+            var along = deltaDist >= 0f ? 1f : -1f;
+            a.ApplyContactPush(-along * overlapLong * shareA, 0f);
+            b.ApplyContactPush(along * overlapLong * shareB, 0f);
+        }
+
+        /// A folded rig's cab and trailer are two bodies, and they overlap at the hitch.
+        /// The trailer takes no push and follows the cab, so separating them shoved the
+        /// cab up the road every frame, for ever: a wrecked truck shot off at thousands
+        /// of km/h, leaving its logs behind.
+        private static bool SameRig(IRoadVehicle a, IRoadVehicle b) =>
+            (a is TrailerHitch ha && object.ReferenceEquals(ha.Rig, b)) ||
+            (b is TrailerHitch hb && object.ReferenceEquals(hb.Rig, a));
+
+        /// A wreck the player has been stuck against no longer blocks the player.
+        private static bool PlayerGoesThrough(IRoadVehicle a, IRoadVehicle b) =>
+            (a is ArcadeCarController && WreckLetsPlayerThrough(b)) ||
+            (b is ArcadeCarController && WreckLetsPlayerThrough(a));
+
+        private static bool WreckLetsPlayerThrough(IRoadVehicle vehicle) =>
+            vehicle is TrailerHitch hitch ? hitch.Rig != null && hitch.Rig.PlayerPassing
+            : vehicle is TrafficCarController car && car.PlayerPassing;
+
+        private static void NotePlayerAgainst(IRoadVehicle vehicle, float playerLateral)
+        {
+            if (vehicle is TrailerHitch hitch) hitch.Rig?.PlayerPressing(playerLateral);
+            else if (vehicle is TrafficCarController car) car.PlayerPressing(playerLateral);
+        }
+
+        /// Whether a sideways push leaves the hull within the carriageway and shoulder,
+        /// where every controller clamps it. Moving back towards the road always fits.
+        private static bool FitsOnRoad(IRoadVehicle vehicle, float push)
+        {
+            if (Mathf.Abs(push) < 0.001f) return true;
+            var lateral = vehicle.ContactLateral + push;
+            if (Mathf.Abs(lateral) <= Mathf.Abs(vehicle.ContactLateral)) return true;
+            var d = vehicle.ContactDistance;
+            var edge = Mathf.Max(1f, RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth - vehicle.ContactHalfWidth);
+            return Mathf.Abs(lateral) <= edge + 0.02f;
         }
     }
 }

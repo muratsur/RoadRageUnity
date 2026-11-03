@@ -364,4 +364,5 @@ def preview(e, n, elev, s, xs, ys, zs):
     img.save(os.path.join(OUT, "preview.png"))
 
 
-main()
+if __name__ == "__main__":
+    main()

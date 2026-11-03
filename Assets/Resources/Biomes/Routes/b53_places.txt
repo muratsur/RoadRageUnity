@@ -1,0 +1,9 @@
+0 Mosel B53|Mosel Valley B53
+8357 Brauneberg|Brauneberg
+15982 Bernkastel-Kues|Bernkastel-Kues
+22534 Zeltingen|Zeltingen
+26263 Ürzig|Urzig
+33148 Kröv|Krov
+38443 Traben-Trarbach|Traben-Trarbach
+47669 Reil|Reil
+54656 Zell|Zell

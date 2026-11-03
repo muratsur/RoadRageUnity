@@ -14,8 +14,10 @@ namespace RoadRage.UnityRemake
         private const float Front = Length * 0.5f;
         private const float Rear = -Length * 0.5f;
 
-        private const float LogLength = 10.6f;
-        private const float LogCentreZ = -3.05f;
+        private const float LogLength = 10.4f;
+        private const float LogCentreZ = -3.3f;
+        /// The fifth wheel: where the trailer turns on the tractor.
+        public const float HitchZ = 1.35f;
         private const float DeckTop = 1.42f;
 
         private static readonly Dictionary<string, Material> Cache = new();
@@ -42,16 +44,46 @@ namespace RoadRage.UnityRemake
             var amber = Mat("Log Truck Amber", new Color(1f, 0.62f, 0.08f), 0f, 0.6f, emissive: 1.4f);
             var tail = Mat("Log Truck Tail", new Color(0.85f, 0.05f, 0.03f), 0f, 0.6f, emissive: 1.1f);
             var head = Mat("Log Truck Headlight", new Color(1f, 0.96f, 0.85f), 0f, 0.9f, emissive: 1.6f);
-            var strap = Mat("Log Truck Strap", new Color(0.92f, 0.30f, 0.08f), 0f, 0.3f);
             if (glass == null) glass = Mat("Log Truck Glass", new Color(0.10f, 0.14f, 0.17f), 0.2f, 0.95f);
 
-            BuildTractor(body, cab, chrome, frame, tyre, amber, head, glass);
-            BuildTrailer(body, frame, chrome, tyre, tail);
+            var tractor = new GameObject("Tractor").transform;
+            tractor.SetParent(body, false);
+            BuildTractor(tractor, cab, chrome, frame, tyre, amber, head, glass);
 
+            // The trailer and its load hang off the fifth wheel, so they can fold
+            // round it. Parts keep their rig coordinates under an offset child.
+            var trailer = AddHitch(root, body, HitchZ, HitchZ - Rear);
+            BuildTrailer(trailer, frame, chrome, tyre, tail);
+            return AddLoad(root, trailer, DeckTop, LogCentreZ, LogLength);
+        }
+
+        /// The trailer's pivot at `hitchZ` on the rig, under `parent`, and the hitch
+        /// that folds it when the rig is wrecked. Returns the frame everything on the
+        /// trailer goes under: it turns with the pivot, but its coordinates are the
+        /// rig's own, so parts are placed as if the trailer were not jointed.
+        public static Transform AddHitch(Transform root, Transform parent, float hitchZ, float trailerLength)
+        {
+            var pivot = new GameObject("Trailer Hitch").transform;
+            pivot.SetParent(parent, false);
+            pivot.localPosition = new Vector3(0f, 0f, hitchZ);
+            root.gameObject.AddComponent<TrailerHitch>().Bind(pivot, hitchZ, trailerLength);
+            var trailer = new GameObject("Trailer").transform;
+            trailer.SetParent(pivot, false);
+            trailer.localPosition = new Vector3(0f, 0f, -hitchZ);
+            return trailer;
+        }
+
+        /// Puts a strapped load of logs on a truck body built elsewhere - a Rodin model -
+        /// under `parent` (the root, or a trailer that folds), in the rig's frame:
+        /// `deckTop` is the bed's height, `centreZ` the middle of the load along the
+        /// rig, `logLength` how long the logs are.
+        public static LogTruckCargo AddLoad(Transform root, Transform parent, float deckTop, float centreZ, float logLength)
+        {
+            var strap = Mat("Log Truck Strap", new Color(0.92f, 0.30f, 0.08f), 0f, 0.3f);
             var cargoRoot = new GameObject("Log Load").transform;
-            cargoRoot.SetParent(body, false);
+            cargoRoot.SetParent(parent, false);
             var cargo = root.gameObject.AddComponent<LogTruckCargo>();
-            BuildLoad(cargoRoot, strap, cargo);
+            BuildLoad(cargoRoot, strap, cargo, deckTop, centreZ, logLength);
             cargo.Bind(cargoRoot);
             return cargo;
         }
@@ -105,7 +137,8 @@ namespace RoadRage.UnityRemake
 
         private static void BuildTrailer(Transform p, Material frame, Material chrome, Material tyre, Material tail)
         {
-            const float trailerFront = 2.55f;
+            // Clear of the sleeper (its back is at 2.375), so the rack is seen.
+            const float trailerFront = 2.2f;
             var trailerLength = trailerFront - Rear;
             var centre = (trailerFront + Rear) * 0.5f;
             Box(p, "Trailer Deck", new Vector3(0f, DeckTop - 0.14f, centre), new Vector3(2.45f, 0.26f, trailerLength), frame);
@@ -141,13 +174,14 @@ namespace RoadRage.UnityRemake
         }
 
         /// Three courses of logs, four, four and three, with straps over the top.
-        private static void BuildLoad(Transform cargoRoot, Material strap, LogTruckCargo cargo)
+        private static void BuildLoad(Transform cargoRoot, Material strap, LogTruckCargo cargo,
+            float deckTop, float centreZ, float logLength)
         {
             var bark = BarkMaterial();
             var grain = EndGrainMaterial();
             var mesh = LogMesh();
             var courses = new[] { 4, 4, 3 };
-            var y = DeckTop + 0.12f;
+            var y = deckTop + 0.12f;
             var seed = 11;
             for (var course = 0; course < courses.Length; course++)
             {
@@ -159,10 +193,10 @@ namespace RoadRage.UnityRemake
                     var jitter = ((seed >> 8) & 0xff) / 255f;
                     var r = Mathf.Lerp(0.27f, 0.33f, jitter);
                     var x = (i - (count - 1) * 0.5f) * 0.56f;
-                    var length = LogLength + Mathf.Lerp(-0.35f, 0.25f, 1f - jitter);
+                    var length = logLength + Mathf.Lerp(-0.35f, 0.25f, 1f - jitter);
                     var log = new GameObject("Log");
                     log.transform.SetParent(cargoRoot, false);
-                    log.transform.localPosition = new Vector3(x, y + radius, LogCentreZ + (jitter - 0.5f) * 0.3f);
+                    log.transform.localPosition = new Vector3(x, y + radius, centreZ + (jitter - 0.5f) * 0.3f);
                     log.transform.localRotation = Quaternion.Euler(0f, 0f, jitter * 360f);
                     log.transform.localScale = new Vector3(r, r, length);
                     log.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -175,11 +209,13 @@ namespace RoadRage.UnityRemake
             }
 
             var top = y + 0.08f;
-            foreach (var z in new[] { 0.2f, -2.3f, -4.8f, -7.0f })
+            // Four straps spread along the load, wherever the load sits.
+            foreach (var along in new[] { 0.31f, 0.07f, -0.17f, -0.37f })
             {
+                var z = centreZ + along * logLength;
                 Box(cargoRoot, "Strap", new Vector3(0f, top, z), new Vector3(2.4f, 0.03f, 0.09f), strap);
                 foreach (var x in new[] { -1.22f, 1.22f })
-                    Box(cargoRoot, "Strap", new Vector3(x, (DeckTop + top) * 0.5f, z), new Vector3(0.03f, top - DeckTop, 0.09f), strap);
+                    Box(cargoRoot, "Strap", new Vector3(x, (deckTop + top) * 0.5f, z), new Vector3(0.03f, top - deckTop, 0.09f), strap);
             }
         }
 
@@ -268,7 +304,7 @@ namespace RoadRage.UnityRemake
             var tex = new Texture2D(w, h, TextureFormat.RGBA32, true) { name = "Log Bark", wrapMode = TextureWrapMode.Repeat };
             var dark = new Color(0.22f, 0.19f, 0.16f);
             var grey = new Color(0.47f, 0.44f, 0.39f);
-            var inner = new Color(0.66f, 0.38f, 0.18f);
+            var inner = new Color(0.50f, 0.33f, 0.20f);
             var pixels = new Color[w * h];
             for (var y = 0; y < h; y++)
             for (var x = 0; x < w; x++)
@@ -280,7 +316,8 @@ namespace RoadRage.UnityRemake
                 var patch = Mathf.PerlinNoise(u * 5f + 13f, v * 7f + 3f);
                 var fine = Mathf.PerlinNoise(u * 60f, v * 30f);
                 var c = Color.Lerp(dark, grey, Mathf.SmoothStep(0.35f, 0.62f, fissure));
-                if (patch > 0.64f) c = Color.Lerp(c, inner, Mathf.Clamp01((patch - 0.64f) * 6f));
+                // Inner bark only where a strip has come away: rare, and never fully bright.
+                if (patch > 0.72f) c = Color.Lerp(c, inner, Mathf.Clamp01((patch - 0.72f) * 5f) * 0.6f);
                 c *= 0.85f + fine * 0.3f;
                 c.a = 1f;
                 pixels[y * w + x] = c;
@@ -435,7 +472,7 @@ namespace RoadRage.UnityRemake
                 if (RoadRageImpactShakeDirector.Instance != null)
                     RoadRageImpactShakeDirector.Instance.TriggerLightShake(0.6f);
             }
-            Debug.Log($"RR_EVENT logspill at {truck.RoadDistance:0}m logs={slots.Count} byPlayer={byPlayer}");
+            Debug.Log($"RR_EVENT logspill at {truck.RoadDistance:0}m logs={slots.Count} byPlayer={byPlayer} truckKph={truck.SpeedKph:0}");
         }
 
         /// A wreck revived up the road drives again with a fresh load.
@@ -446,6 +483,167 @@ namespace RoadRage.UnityRemake
         }
     }
 
+    /// A trailer folding on its fifth wheel when the rig is wrecked. The crash kicks it
+    /// one way; while the wreck still rolls the fold keeps opening, as a jackknife does,
+    /// until it meets the cab; stopped, it stays where it ended. The trailer's sideways
+    /// reach is handed to the controller, so the contact pass sees the folded trailer.
+    public sealed class TrailerHitch : MonoBehaviour, IRoadVehicle
+    {
+        /// About where a trailer's front corner meets the back of the cab.
+        private const float MaxFold = 70f;
+        private const float ShovedUnfoldSpeed = 60f;
+
+        private Transform pivot;
+        private TrafficCarController car;
+        private float trailerLength;
+        private float fold;
+        private float foldRate;
+
+        /// The fifth wheel's place along the rig, in the rig's frame.
+        public float HitchZ { get; private set; }
+        public float Fold => fold;
+
+        public void Bind(Transform trailerPivot, float hitchZ, float length)
+        {
+            pivot = trailerPivot;
+            HitchZ = hitchZ;
+            trailerLength = Mathf.Max(1f, length);
+        }
+
+        /// Degrees a second; positive swings the trailer's tail to the rig's left.
+        public void Kick(float degreesPerSecond) => foldRate += degreesPerSecond;
+
+        /// The truck this trailer belongs to.
+        public TrafficCarController Rig => car;
+
+        // --- IRoadVehicle: the folded trailer as a body of its own -------------------
+        // Active only while the rig is a folded wreck; the rig's own contact box is then
+        // its cab alone. Straight, the rig's box covers the trailer as it always did.
+
+        private void OnEnable() => VehicleContacts.Register(this);
+        private void OnDisable() => VehicleContacts.Unregister(this);
+
+        public bool ContactActive
+        {
+            get
+            {
+                if (car == null) car = GetComponent<TrafficCarController>();
+                return isActiveAndEnabled && car != null && car.IsWreck && !car.Ragdolled && Mathf.Abs(fold) >= 2f;
+            }
+        }
+
+        /// The trailer's middle in the rig's frame, turned by the rig's wreck yaw.
+        private Vector2 TrailerCentre()
+        {
+            var f = fold * Mathf.Deg2Rad;
+            var x = -trailerLength * 0.5f * Mathf.Sin(f);
+            var z = HitchZ - trailerLength * 0.5f * Mathf.Cos(f);
+            var y = car.WreckYaw * Mathf.Deg2Rad;
+            return new Vector2(x * Mathf.Cos(y) + z * Mathf.Sin(y), -x * Mathf.Sin(y) + z * Mathf.Cos(y));
+        }
+
+        private float TrailerTurn => (car.WreckYaw + fold) * Mathf.Deg2Rad;
+        public float ContactDistance => car.RoadDistance + car.Direction * TrailerCentre().y;
+        public float ContactLateral => car.LaneOffset + car.Direction * TrailerCentre().x;
+        public float ContactHalfLength =>
+            Mathf.Abs(trailerLength * 0.5f * Mathf.Cos(TrailerTurn)) + Mathf.Abs(car.HalfWidth * Mathf.Sin(TrailerTurn));
+        public float ContactHalfWidth =>
+            Mathf.Abs(trailerLength * 0.5f * Mathf.Sin(TrailerTurn)) + Mathf.Abs(car.HalfWidth * Mathf.Cos(TrailerTurn));
+        public float ContactHeight => 0f;
+        /// A wrecked trailer on its side of the road is not pushed by anything.
+        public float ContactMass => 1000f;
+        public void ApplyContactPush(float alongRoad, float acrossRoad) { }
+
+        /// A revived rig drives off straight.
+        public void Straighten()
+        {
+            fold = 0f;
+            foldRate = 0f;
+            Apply();
+        }
+
+        private void Update()
+        {
+            if (fold == 0f && foldRate == 0f) return;
+            if (car == null) car = GetComponent<TrafficCarController>();
+            if (car != null && car.Shoved)
+            {
+                // Dragged along the rail, the trailer swings back in line with the cab.
+                foldRate = 0f;
+                fold = Mathf.MoveTowards(fold, 0f, ShovedUnfoldSpeed * Time.deltaTime);
+                Apply();
+                return;
+            }
+            var dt = Time.deltaTime;
+            var rolling = car != null ? Mathf.Clamp01(car.SpeedKph / 40f) : 0f;
+            // Rolling, the trailer's own momentum keeps the fold opening; stopped, the
+            // tyres scrub it dead.
+            foldRate += Mathf.Sign(fold) * 45f * rolling * dt;
+            foldRate = Mathf.MoveTowards(foldRate, 0f, (rolling > 0.1f ? 35f : 240f) * dt);
+            fold += foldRate * dt;
+            if (Mathf.Abs(fold) > MaxFold)
+            {
+                fold = Mathf.Sign(fold) * MaxFold;
+                foldRate = -foldRate * 0.15f;
+            }
+            fold = FitBetweenRails(fold);
+            Apply();
+        }
+
+        /// Half the trailer's width.
+        private const float TrailerHalfWidth = 1.25f;
+        /// The guard rail stands 0.35 m beyond the shoulder; stop just short of it.
+        private const float RailInset = 0.15f;
+
+        /// The largest fold, up to `wanted`, that keeps the trailer's tail inside the
+        /// rails. Beyond the rail the ground falls away, and a trailer swung out over
+        /// it hung in the air. Meeting the rail stops the swing dead.
+        private float FitBetweenRails(float wanted)
+        {
+            if (car == null || TailInside(wanted)) return wanted;
+            var inside = 0f;
+            var outside = wanted;
+            for (var i = 0; i < 10; i++)
+            {
+                var mid = (inside + outside) * 0.5f;
+                if (TailInside(mid)) inside = mid;
+                else outside = mid;
+            }
+            foldRate = 0f;
+            return inside;
+        }
+
+        private bool TailInside(float foldDegrees)
+        {
+            // The tail's two corners in the rig's frame, then into the world through
+            // the rig's own transform (its heading, wreck turn and lean), and measured
+            // against the road where each corner actually is. Measured at the rig's
+            // middle, a tail 12 m back round a bend was judged against road that had
+            // already curved away, and it hung out over the rail.
+            var f = foldDegrees * Mathf.Deg2Rad;
+            var sin = Mathf.Sin(f);
+            var cos = Mathf.Cos(f);
+            foreach (var side in new[] { -1f, 1f })
+            {
+                // Tail centre plus half the trailer's width across it.
+                var x = -trailerLength * sin + side * TrailerHalfWidth * cos;
+                var z = HitchZ - trailerLength * cos - side * TrailerHalfWidth * sin;
+                var world = transform.TransformPoint(new Vector3(x, 0f, z));
+                var distance = world.z;
+                var lateral = Vector3.Dot(world - RoadPath.Center(distance), RoadPath.Right(distance));
+                if (Mathf.Abs(lateral) > RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth + RailInset) return false;
+            }
+            return true;
+        }
+
+        private void Apply()
+        {
+            if (pivot != null) pivot.localRotation = Quaternion.Euler(0f, fold, 0f);
+            if (car == null) car = GetComponent<TrafficCarController>();
+            if (car != null) car.TrailerSwing = 0.5f * trailerLength * Mathf.Abs(Mathf.Sin(fold * Mathf.Deg2Rad));
+        }
+    }
+
     /// One log off a spilled load, simulated in road coordinates: distance along the
     /// road, offset across it, and height above it. It bounces, slides and rolls to a
     /// stop, bumps the player over it, and wrecks traffic that drives into it.
@@ -453,6 +651,9 @@ namespace RoadRage.UnityRemake
     {
         private const float Gravity = 13f;
         private const float Lifetime = 70f;
+        /// The drawn asphalt stands this far above the road's centre line - the height
+        /// traffic is placed at - so a log on the line sat sunk into it.
+        private const float SurfaceLift = 0.16f;
         private const float ClearBehindPlayer = 70f;
 
         private TrafficCarController source;
@@ -487,7 +688,7 @@ namespace RoadRage.UnityRemake
             distance = p.z;
             var centre = RoadPath.Center(distance);
             lateral = Vector3.Dot(p - centre, RoadPath.Right(distance));
-            height = Mathf.Max(radius, p.y - centre.y);
+            height = Mathf.Max(radius, p.y - centre.y - SurfaceLift);
             var forward = RoadPath.Forward(distance);
             var axis = transform.forward;
             axis.y = 0f;
@@ -506,16 +707,102 @@ namespace RoadRage.UnityRemake
             if (dt <= 0f) return;
             age += dt;
             var playerDistance = TrafficCarController.PlayerDistance;
-            if (age > Lifetime || playerDistance - distance > ClearBehindPlayer)
+            // Gone once driven past. The time limit only clears logs out of sight - it
+            // used to apply anywhere, and logs vanished in front of a player who had
+            // stopped to look at them.
+            var behind = playerDistance - distance;
+            var outOfSight = behind > 15f || -behind > 400f;
+            if (behind > ClearBehindPlayer || (age > Lifetime && outOfSight))
             {
+                Debug.Log($"RR_LOG cleared a spilled log: {(behind > ClearBehindPlayer ? "driven past" : "out of sight")}, " +
+                          $"{behind:0} m behind the player, {age:0} s old");
                 Destroy(gameObject);
                 return;
             }
 
             Simulate(dt);
+            LieAgainstOtherLogs(dt);
             HitPlayer();
             HitTraffic();
+            KeepOutOfVehicles();
             Place();
+        }
+
+        private static readonly List<FallenLog> Spilled = new();
+        /// Still coming off the load, where the logs start out touching.
+        private const float LeavingLoadSeconds = 0.4f;
+        /// Degrees a second: quick, so crossed logs are not seen through each other for long.
+        private const float AlignSpeed = 300f;
+
+        private void OnEnable() => Spilled.Add(this);
+        private void OnDisable() => Spilled.Remove(this);
+
+        /// Each pair once a frame, seen from above. Logs that cross turn to lie along the
+        /// road, as a spill ends up; logs side by side or end to side are pushed apart.
+        /// Stacking them instead built piles that hung in the air over the player's car.
+        private void LieAgainstOtherLogs(float dt)
+        {
+            if (age < LeavingLoadSeconds) return;
+            for (var i = Spilled.IndexOf(this) + 1; i < Spilled.Count; i++)
+            {
+                var other = Spilled[i];
+                if (other.age < LeavingLoadSeconds) continue;
+                var reach = radius + other.radius;
+                if (Mathf.Abs(height - other.height) >= reach) continue;
+                var gap = Closest(other, out var crossing);
+                var apart = gap.magnitude;
+                if (!crossing && apart >= reach) continue;
+                if (crossing)
+                {
+                    yaw = Mathf.MoveTowards(yaw, Mathf.Round(yaw / 180f) * 180f, AlignSpeed * dt);
+                    other.yaw = Mathf.MoveTowards(other.yaw, Mathf.Round(other.yaw / 180f) * 180f, AlignSpeed * dt);
+                    yawRate = other.yawRate = 0f;
+                    continue;
+                }
+                // gap: from this log to the other, x across the road, y along it.
+                var away = apart > 0.001f ? gap / apart : Vector2.right;
+                var push = (reach - apart) * 0.5f;
+                lateral -= away.x * push;
+                distance -= away.y * push;
+                other.lateral += away.x * push;
+                other.distance += away.y * push;
+                var closing = Vector2.Dot(new Vector2(velocity.x - other.velocity.x, velocity.z - other.velocity.z), away);
+                if (closing <= 0f) continue;
+                var knock = away * (closing * 0.65f);
+                velocity.x -= knock.x; velocity.z -= knock.y;
+                other.velocity.x += knock.x; other.velocity.z += knock.y;
+            }
+        }
+
+        private Vector2 Middle => new(lateral, distance);
+        private Vector2 Along => new(Mathf.Sin(yaw * Mathf.Deg2Rad), Mathf.Cos(yaw * Mathf.Deg2Rad));
+
+        /// The shortest line from this log's axis to the other's, seen from above.
+        private Vector2 Closest(FallenLog other, out bool crossing)
+        {
+            Vector2 a = Middle, b = other.Middle, u = Along, v = other.Along, w = b - a;
+            var cross = u.x * v.y - u.y * v.x;
+            crossing = false;
+            if (Mathf.Abs(cross) > 0.001f)
+            {
+                var s = (w.x * v.y - w.y * v.x) / cross;
+                var t = (w.x * u.y - w.y * u.x) / cross;
+                crossing = Mathf.Abs(s) <= halfLength && Mathf.Abs(t) <= other.halfLength;
+                if (crossing) return Vector2.zero;
+            }
+            // Not crossing: the closest pair has an end of one log in it.
+            var best = w;
+            void Try(Vector2 from, Vector2 onto, Vector2 dir, float half, float sign)
+            {
+                var along = Mathf.Clamp(Vector2.Dot(from - onto, dir), -half, half);
+                var line = (from - (onto + dir * along)) * sign;
+                if (line.sqrMagnitude < best.sqrMagnitude) best = line;
+            }
+            Try(a + u * halfLength, b, v, other.halfLength, -1f);
+            Try(a - u * halfLength, b, v, other.halfLength, -1f);
+            Try(b + v * other.halfLength, a, u, halfLength, 1f);
+            Try(b - v * other.halfLength, a, u, halfLength, 1f);
+            return best;
         }
 
         private void Simulate(float dt)
@@ -528,8 +815,13 @@ namespace RoadRage.UnityRemake
             pitch += pitchRate * dt;
 
             var grounded = false;
-            // Lying flat its lowest point is its radius; tilted, the low end digs in.
-            var floor = radius + Mathf.Abs(Mathf.Sin(pitch * Mathf.Deg2Rad)) * halfLength * 0.2f;
+            // How high its middle stands with its lowest point on the road: its radius
+            // lying flat, and on a tilt the whole of its low half-length. Only a fifth of
+            // it was allowed for, so a tilted log landed with its end metres into the
+            // asphalt and sank there as it levelled out.
+            pitch = Mathf.Clamp(pitch, -75f, 75f);
+            var tilt = pitch * Mathf.Deg2Rad;
+            var floor = radius * Mathf.Abs(Mathf.Cos(tilt)) + halfLength * Mathf.Abs(Mathf.Sin(tilt));
             if (height <= floor)
             {
                 height = floor;
@@ -569,18 +861,32 @@ namespace RoadRage.UnityRemake
             }
             spin += spinRate * dt;
 
-            // The barrier stops it at the road edge.
-            var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - radius;
+            // The barrier stops it at the road edge - all of it: clamped by its middle,
+            // a log lying askew ended across the rail with one end over the drop.
+            var edge = Mathf.Max(radius, RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent);
             if (Mathf.Abs(lateral) > edge)
             {
                 lateral = Mathf.Sign(lateral) * edge;
                 if (velocity.x * lateral > 0f) velocity.x = -velocity.x * 0.25f;
             }
+            // Round a bend the ends are over different road from the middle: measure
+            // each end against the rail where it lies and bring the log in by any
+            // overshoot.
+            for (var end = -1; end <= 1; end += 2)
+            {
+                var tip = transform.position + transform.forward * (end * halfLength);
+                var tipDistance = tip.z;
+                var tipLateral = Vector3.Dot(tip - RoadPath.Center(tipDistance), RoadPath.Right(tipDistance));
+                var over = Mathf.Abs(tipLateral) - (RoadPath.HalfWidthAt(tipDistance) + RoadPath.ShoulderWidth + 0.1f);
+                if (over <= 0f) continue;
+                lateral -= Mathf.Sign(tipLateral) * over;
+                if (velocity.x * tipLateral > 0f) velocity.x = -velocity.x * 0.25f;
+            }
         }
 
         private void Place()
         {
-            transform.position = RoadPath.Point(distance, lateral, height);
+            transform.position = RoadPath.Point(distance, lateral, height + SurfaceLift);
             transform.rotation = RoadPath.Rotation(distance) * Quaternion.Euler(pitch, yaw, 0f) * Quaternion.Euler(0f, 0f, spin);
         }
 
@@ -626,6 +932,69 @@ namespace RoadRage.UnityRemake
             yawRate += Random.Range(-120f, 120f);
             pitchRate += Random.Range(-90f, 90f);
             if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.35f);
+        }
+
+        /// A log on the road is pushed out of any vehicle it lies in - wrecks and its own
+        /// truck included. Only live traffic was tested, and only to wreck it, so a log
+        /// came to rest through the wheels of the rig it fell off, or a crashed car
+        /// slid over one. Points a metre apart along the log are tested against each hull
+        /// (a folded rig as its cab and trailer): three along a 12 m log left room for a
+        /// whole cab between them. The log steps out across its own length: sideways if
+        /// it lies along the road, up or down the road if it lies across it.
+        private void KeepOutOfVehicles()
+        {
+            // Up at deck height just after the crash it is coming off its own load.
+            if (height > 1.4f && age < 1f) return;
+            var cars = TrafficCarController.All;
+            for (var i = 0; i < cars.Count; i++)
+            {
+                var car = cars[i];
+                if (car == null || (car == source && age < 0.5f)) continue;
+                StepOutOf(car.RoadDistance, car.LaneOffset, (along, across) => car.Touches(along, across, radius, radius));
+            }
+            // And the player's car, unless it is in the air going over the log.
+            if (player != null && player.isActiveAndEnabled && player.ContactHeight < 0.5f)
+                StepOutOf(player.RoadDistance, player.LateralOffset, (along, across) =>
+                    Mathf.Abs(along) <= player.HalfLength + radius && Mathf.Abs(across) <= player.HalfWidth + radius);
+        }
+
+        private void StepOutOf(float hullDistance, float hullLateral, System.Func<float, float, bool> touches)
+        {
+            var sin = Mathf.Sin(yaw * Mathf.Deg2Rad);
+            var cos = Mathf.Cos(yaw * Mathf.Deg2Rad);
+            var points = Mathf.Max(1, Mathf.CeilToInt(halfLength));
+            for (var step = 0; step < 16; step++)
+            {
+                var inside = false;
+                var towards = 0f;
+                var ahead = 0f;
+                for (var k = -points; k <= points; k++)
+                {
+                    var t = (float)k / points;
+                    var along = distance + cos * t * halfLength - hullDistance;
+                    var across = lateral + sin * t * halfLength - hullLateral;
+                    if (!touches(along, across)) continue;
+                    inside = true;
+                    towards += across;
+                    ahead += along;
+                }
+                if (!inside) break;
+                var side = Mathf.Abs(towards) < 0.01f ? (lateral >= hullLateral ? 1f : -1f) : Mathf.Sign(towards);
+                var edge = RoadPath.HalfWidthAt(distance) + RoadPath.ShoulderWidth - AcrossExtent;
+                // No room beside the hull: going back the other way only put it inside
+                // again, every frame, and it lay there through the wheels.
+                if (Mathf.Abs(sin) > 0.7f || Mathf.Abs(lateral + side * 0.5f) > edge)
+                {
+                    var way = Mathf.Abs(ahead) < 0.01f ? 1f : Mathf.Sign(ahead);
+                    distance += way * 0.25f;
+                    if (velocity.z * way < 0f) velocity.z = -velocity.z * 0.3f;
+                    velocity.x *= 0.8f;
+                    continue;
+                }
+                lateral += side * 0.25f;
+                if (velocity.x * side < 0f) velocity.x = -velocity.x * 0.3f;
+                velocity.z *= 0.8f;
+            }
         }
 
         /// Traffic that drives into a log is wrecked by it - once per car per log.

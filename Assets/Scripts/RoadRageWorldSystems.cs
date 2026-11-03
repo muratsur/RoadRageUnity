@@ -168,6 +168,7 @@ namespace RoadRage.UnityRemake
             if (route == null) return null;
             route.LoadCover(resourcePath + "_cover");
             route.LoadPlaces(resourcePath + "_places");
+            route.LoadTerrain(resourcePath + "_terrain");
             return route;
         }
 
@@ -250,6 +251,64 @@ namespace RoadRage.UnityRemake
             return cover[(i * 2 + side) * coverBands + band];
         }
 
+        /// The real ground beside the road, from Road Rage > Bake B500 Terrain (DGM1):
+        /// height relative to the real road, per row of road distance and per offset
+        /// from the real centreline. Null without the baked table.
+        private short[] terrain;
+        private int terrainRows;
+        private float terrainStep;
+        private float[] terrainOffsets;
+        /// Metres per stored unit: centimetres ("RRTR"), or decimetres ("RRTD") for mountains
+        /// higher than centimetres can hold in a short.
+        private float terrainUnit;
+
+        public bool HasTerrain => terrain != null;
+
+        private void LoadTerrain(string resourcePath)
+        {
+            var asset = Resources.Load<TextAsset>(resourcePath);
+            if (asset == null) return;
+            var bytes = asset.bytes;
+            if (bytes.Length < 16 || bytes[0] != 'R' || bytes[1] != 'R' || bytes[2] != 'T' || (bytes[3] != 'R' && bytes[3] != 'D'))
+                return;
+            terrainUnit = bytes[3] == 'D' ? 0.1f : 0.01f;
+            var rows = System.BitConverter.ToInt32(bytes, 4);
+            var step = System.BitConverter.ToSingle(bytes, 8);
+            var cols = System.BitConverter.ToInt32(bytes, 12);
+            var header = 16 + cols * 4;
+            if (rows < 2 || cols < 2 || step <= 0f || bytes.Length < header + rows * cols * 2) return;
+            terrainOffsets = new float[cols];
+            for (var c = 0; c < cols; c++) terrainOffsets[c] = System.BitConverter.ToSingle(bytes, 16 + c * 4);
+            terrain = new short[rows * cols];
+            System.Buffer.BlockCopy(bytes, header, terrain, 0, rows * cols * 2);
+            terrainRows = rows;
+            terrainStep = step;
+        }
+
+        /// Real ground height (m) relative to the road, at an offset from the real
+        /// centreline (right positive), bilinear in the table. The return pass mirrors
+        /// the outward one along the road, as the land cover does.
+        public float TerrainAt(float distance, float realOffset)
+        {
+            if (terrain == null) return 0f;
+            var cols = terrainOffsets.Length;
+            var f = Mathf.Clamp(Fold(distance) / terrainStep, 0f, terrainRows - 1.001f);
+            var r = (int)f;
+            var tr = f - r;
+            var o = Mathf.Clamp(realOffset, terrainOffsets[0], terrainOffsets[cols - 1]);
+            var c = 0;
+            var hi = cols - 2;
+            while (c < hi)
+            {
+                var mid = (c + hi + 1) / 2;
+                if (terrainOffsets[mid] <= o) c = mid; else hi = mid - 1;
+            }
+            var tc = Mathf.InverseLerp(terrainOffsets[c], terrainOffsets[c + 1], o);
+            var a = Mathf.Lerp(terrain[r * cols + c], terrain[r * cols + c + 1], tc);
+            var b = Mathf.Lerp(terrain[(r + 1) * cols + c], terrain[(r + 1) * cols + c + 1], tc);
+            return Mathf.Lerp(a, b, tr) * terrainUnit;
+        }
+
         /// Road distance folded into one pass, [0, Length]: there and back.
         public float Fold(float distance)
         {
@@ -329,7 +388,12 @@ namespace RoadRage.UnityRemake
         public enum Offence { None, Weaving, Speeding, WrongWay, Tailgating }
         public Offence Violation { get; private set; }
 
-        public enum VehicleRole { Standard, FuelTanker, CarHauler, LogTruck }
+        public enum VehicleRole { Standard, FuelTanker, CarHauler, LogTruck, PostVan, Bus, Ambulance, FireTruck }
+        /// Too heavy for a car to shift: it lurches and drives on.
+        public bool IsHeavy => Role == VehicleRole.LogTruck || Role == VehicleRole.Bus || Role == VehicleRole.FireTruck;
+        public bool IsEmergency => Role == VehicleRole.Ambulance || Role == VehicleRole.FireTruck;
+        /// Working vehicles never break the rules, however often they are recycled.
+        private bool Law => Role >= VehicleRole.PostVan;
         public VehicleRole Role { get; set; } = VehicleRole.Standard;
         public bool HasDetonated { get; private set; }
         /// Set by the player collision pass just before it wrecks this car, so a log
@@ -439,22 +503,104 @@ namespace RoadRage.UnityRemake
             get
             {
                 if (Ragdolled) return ragdollExtent.y;
-                if (WreckYaw == 0f) return HalfWidth;
+                // On its side a car is as wide as it was tall.
+                var width = rolled ? Mathf.Max(HalfWidth, rollLift * 0.5f) : HalfWidth;
+                if (WreckYaw == 0f) return width;
                 var yaw = WreckYaw * Mathf.Deg2Rad;
-                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(HalfWidth * Mathf.Cos(yaw));
+                return Mathf.Abs(HalfLength * Mathf.Sin(yaw)) + Mathf.Abs(width * Mathf.Cos(yaw));
             }
         }
+
+        /// How far a jackknifed trailer reaches out beyond the rig's own box, set by
+        /// its TrailerHitch. Zero for anything without a trailer. Only a first, coarse
+        /// test uses it: the box it would make round a folded rig is a V's bounding box,
+        /// most of it empty road, and counted as the rig it took hits off bare asphalt
+        /// beside the wreck. Touches() then tests the cab and the trailer as themselves.
+        public float TrailerSwing { get; set; }
+        private TrailerHitch hitch;
+        private bool hitchLooked;
+
+        /// A rig whose trailer is folded: the contact pass then takes this body as the
+        /// cab alone, and the trailer, a contact body of its own (TrailerHitch), as
+        /// the rest. As one straight box the rig blocked road where the trailer no
+        /// longer was, and traffic drove through the trailer where it was.
+        private bool FoldedRig
+        {
+            get
+            {
+                if (!hitchLooked)
+                {
+                    hitch = GetComponent<TrailerHitch>();
+                    hitchLooked = true;
+                }
+                return !Ragdolled && hitch != null && Mathf.Abs(hitch.Fold) >= 2f;
+            }
+        }
+
+        /// The cab's part of a folded rig: from just behind the fifth wheel to the nose.
+        private float CabCentre => (HalfLength + hitch.HitchZ - 1.5f) * 0.5f;
+        private float CabHalfLength => (HalfLength - hitch.HitchZ + 1.5f) * 0.5f;
+
+        /// Whether a box `halfLength` by `halfWidth` at `along`/`across` road metres
+        /// from this car touches it. For anything but a folded rig this is the plain
+        /// hull test; a folded rig is its cab and its trailer, each in its own frame.
+        public bool Touches(float along, float across, float halfLength, float halfWidth)
+        {
+            if (Mathf.Abs(along) > halfLength + LongitudinalExtent + TrailerSwing ||
+                Mathf.Abs(across) > halfWidth + LateralExtent + TrailerSwing)
+                return false;
+            if (!FoldedRig)
+                return Mathf.Abs(along) <= halfLength + LongitudinalExtent &&
+                       Mathf.Abs(across) <= halfWidth + LateralExtent;
+
+            // Road offsets into the rig's own frame: flip for an oncoming rig, then
+            // undo its wreck yaw (positive yaw turns +Z towards +X).
+            var x = across * Direction;
+            var z = along * Direction;
+            var yaw = WreckYaw * Mathf.Deg2Rad;
+            var lx = x * Mathf.Cos(yaw) - z * Mathf.Sin(yaw);
+            var lz = x * Mathf.Sin(yaw) + z * Mathf.Cos(yaw);
+            // The other box is taken as square to the part - near enough for a car.
+            var pad = (halfLength + halfWidth) * 0.5f;
+
+            // Cab: from just behind the fifth wheel to the nose.
+            var cabBack = hitch.HitchZ - 1.5f;
+            if (lz >= cabBack - pad && lz <= HalfLength + pad && Mathf.Abs(lx) <= HalfWidth + pad) return true;
+
+            // Trailer: turned by the fold about the fifth wheel.
+            var f = hitch.Fold * Mathf.Deg2Rad;
+            var hx = lx;
+            var hz = lz - hitch.HitchZ;
+            var tx = hx * Mathf.Cos(f) - hz * Mathf.Sin(f);
+            var tz = hx * Mathf.Sin(f) + hz * Mathf.Cos(f);
+            var tail = -HalfLength - hitch.HitchZ;
+            return tz >= tail - pad && tz <= 1f + pad && Mathf.Abs(tx) <= HalfWidth + pad;
+        }
         // --- IRoadVehicle -------------------------------------------------------
-        public float ContactDistance => RoadDistance;
-        public float ContactLateral => LaneOffset;
-        public float ContactHalfLength => LongitudinalExtent;
-        public float ContactHalfWidth => LateralExtent;
+        public float ContactDistance => FoldedRig
+            ? RoadDistance + Direction * CabCentre * Mathf.Cos(WreckYaw * Mathf.Deg2Rad)
+            : RoadDistance;
+        public float ContactLateral => FoldedRig
+            ? LaneOffset + Direction * CabCentre * Mathf.Sin(WreckYaw * Mathf.Deg2Rad)
+            : LaneOffset;
+        public float ContactHalfLength => FoldedRig
+            ? Mathf.Abs(CabHalfLength * Mathf.Cos(WreckYaw * Mathf.Deg2Rad)) + Mathf.Abs(HalfWidth * Mathf.Sin(WreckYaw * Mathf.Deg2Rad))
+            : LongitudinalExtent;
+        public float ContactHalfWidth => FoldedRig
+            ? Mathf.Abs(CabHalfLength * Mathf.Sin(WreckYaw * Mathf.Deg2Rad)) + Mathf.Abs(HalfWidth * Mathf.Cos(WreckYaw * Mathf.Deg2Rad))
+            : LateralExtent;
         public float ContactHeight => verticalOffset;
         /// Scales with footprint, so a lorry shoulders a hatchback aside rather than
         /// the pair meeting in the middle.
         /// A car the physics owns cannot be pushed by the pass; everything else moves
         /// round it, as round any wreck lying in the road.
-        public float ContactMass => Ragdolled ? 1000f : HalfLength * HalfWidth;
+        public float ContactMass => Ragdolled ? 1000f
+            // A loaded rig is not shoved about by a car, and a wrecked one not at all:
+            // at plain footprint mass the player's pickup slid a wrecked truck aside
+            // and opened the road.
+            // Nor is traffic able to shove any wreck: it stops against it or drives round.
+            : IsHeavy || IsWreck ? HalfLength * HalfWidth * 60f
+            : HalfLength * HalfWidth;
         /// Ragdolled cars stay in: taken out, a car flipped on its side by a blast was a
         /// hole in the road that police and traffic drove straight through.
         public bool ContactActive => isActiveAndEnabled;
@@ -748,6 +894,7 @@ namespace RoadRage.UnityRemake
             var closing = currentSpeedKph + other.currentSpeedKph;
             var side = Mathf.Sign(LaneOffset - other.LaneOffset);
             if (Mathf.Abs(side) < 0.01f) side = 1f;
+            HeadOnNext = other.HeadOnNext = true;
             Crash(side, closing * 0.5f);
             other.Crash(-side, closing * 0.5f);
             Debug.Log($"RR_EVENT headon at {RoadDistance:0}m closing={closing:0}kph");
@@ -819,6 +966,8 @@ namespace RoadRage.UnityRemake
                 relocated = true;
             }
 
+            if (relocated) RollCall();
+
             // Everything below belongs to the recycle EVENT. Recycle() runs every
             // frame: without the relocated gate, wrecks un-wrecked instantly and the
             // allegiance reroll flickered violator, fleeing and hit-and-run flags off
@@ -834,7 +983,7 @@ namespace RoadRage.UnityRemake
             if (!IsWreck)
             {
                 var offences = NarrowRoad ? NarrowRoadOffences : RecycleOffences;
-                Violation = Random.value < 0.45f
+                Violation = !Law && Random.value < 0.45f
                     ? offences[Random.Range(0, offences.Length)]
                     : Offence.None;
                 IsHitAndRunner = false;
@@ -844,11 +993,21 @@ namespace RoadRage.UnityRemake
             // A wreck recycled into fresh road should drive again, otherwise the player
             // eventually meets a highway made entirely of stationary crashes.
             IsWreck = false;
+            PlayerPassing = false;
+            Shoved = false;
+            Knocked = false;
+            playerHitOnce = false;
+            rolled = false;
+            var damaged = GetComponent<CarCrashDamage>();
+            if (damaged != null) damaged.Repair();
+            pressStartedAt = lastPressedAt = -1f;
             WreckYaw = 0f;
             wreckYawRate = 0f;
             wreckRoll = 0f;
             var cargo = Role == VehicleRole.LogTruck ? GetComponent<LogTruckCargo>() : null;
             if (cargo != null) cargo.Restock();
+            var hitch = Role == VehicleRole.LogTruck ? GetComponent<TrailerHitch>() : null;
+            if (hitch != null) hitch.Straighten();
             // Staged accident-scene cars are spawned with a cruise speed of zero. Reviving
             // one without giving it a real speed turned it into a permanently parked car
             // in a live lane, and everything behind it matched zero and stopped too - the
@@ -1076,6 +1235,7 @@ namespace RoadRage.UnityRemake
                         ? Mathf.Min(desiredSpeed, runSpeed)
                         : Mathf.Max(desiredSpeed, runSpeed);
                 }
+                desiredSpeed = ForWorkingVehicles(desiredSpeed);
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, desiredSpeed, acceleration * Time.deltaTime);
                 var step = ClampToStopLine(RoadDistance, Direction * currentSpeedKph / 3.6f * Time.deltaTime);
                 RoadDistance = RoadPath.Wrap(RoadDistance + step);
@@ -1088,11 +1248,21 @@ namespace RoadRage.UnityRemake
                 var dt = Time.deltaTime;
                 currentSpeedKph = Mathf.MoveTowards(currentSpeedKph, 0f, 26f * dt);
                 laneDrift = Mathf.MoveTowards(laneDrift, wreckSlideTarget,
-                    Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                    Knocked ? KnockSlideSpeed * dt : Shoved ? ShoveSlideSpeed * dt : Mathf.Lerp(2f, 8f, Mathf.Clamp01(currentSpeedKph / 60f)) * dt);
+                if (Shoved && HalfLength > 3.5f) WreckYaw = Mathf.MoveTowards(WreckYaw, 0f, ShoveTurnSpeed * dt);
                 wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 150f * dt);
                 if (currentSpeedKph < 8f) wreckYawRate = Mathf.MoveTowards(wreckYawRate, 0f, 400f * dt);
                 WreckYaw += wreckYawRate * dt;
-                wreckRoll = Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
+                // A rig turned much further ends across the road with its ends over the
+                // rails; the jackknife, not the whole rig, makes the dramatic angle.
+                if ((Role == VehicleRole.LogTruck || HalfLength > 3.5f) && Mathf.Abs(WreckYaw) > MaxRigWreckYaw)
+                {
+                    WreckYaw = Mathf.Sign(WreckYaw) * MaxRigWreckYaw;
+                    wreckYawRate = 0f;
+                }
+                wreckRoll = rolled
+                    ? Mathf.MoveTowards(wreckRoll, Mathf.Sign(wreckRoll) * 180f, RollDegreesPerSecond * dt)
+                    : Mathf.Lerp(wreckRoll, Mathf.Sign(wreckRoll) * 1.5f, dt * 3f);
                 RoadDistance = RoadPath.Wrap(RoadDistance + Direction * currentSpeedKph / 3.6f * Time.deltaTime);
             }
 
@@ -1122,6 +1292,70 @@ namespace RoadRage.UnityRemake
                 ReactToContacts();
             }
             PlaceOnRoad();
+        }
+
+        /// Most of the time an ambulance or fire engine is just driving somewhere. A call,
+        /// with lights and horn, is an event: one at a time, and minutes apart.
+        private const float CallGapSeconds = 150f;
+        private const float CallChance = 0.5f;
+        private const float OffDutyKph = 72f;
+        private const float AmbulanceCallKph = 125f;
+        private const float FireCallKph = 95f;
+        private static TrafficCarController onCallNow;
+        private static float nextCallAt = CallGapSeconds * 0.3f;
+        public bool OnCall { get; private set; }
+
+        /// Decided each time it comes round again out of sight, so nothing changes in view.
+        private void RollCall()
+        {
+            if (!IsEmergency) return;
+            if (onCallNow == this) onCallNow = null;
+            OnCall = onCallNow == null && Time.time >= nextCallAt && Random.value < CallChance;
+            if (OnCall)
+            {
+                onCallNow = this;
+                nextCallAt = Time.time + CallGapSeconds;
+            }
+            cruiseSpeedKph = !OnCall ? OffDutyKph : Role == VehicleRole.Ambulance ? AmbulanceCallKph : FireCallKph;
+            Debug.Log($"RR_CALL {name} onCall={OnCall} at {Time.time:0}s");
+        }
+
+        private const float BusStopSeconds = 6f;
+        private const float BusStopReach = 15f;
+        private const float YieldBehindMetres = 90f;
+        private const float YieldSpeedShare = 0.6f;
+        private const float YieldMetresPerSecond = 7f;
+        private int lastBusStop = -1;
+        private float busStoppedUntil;
+
+        /// A bus halts at each town on the route; anything with an emergency vehicle coming
+        /// up behind it slows and pulls over to its own edge of the road.
+        private float ForWorkingVehicles(float desiredSpeed)
+        {
+            if (Role == VehicleRole.Bus && RoadPath.Route != null)
+            {
+                var fold = RoadPath.Route.Fold(RoadDistance);
+                var places = RoadPath.Route.Places;
+                for (var i = 0; i < places.Length; i++)
+                    if (i != lastBusStop && Mathf.Abs(fold - places[i].Distance) < BusStopReach)
+                    {
+                        lastBusStop = i;
+                        busStoppedUntil = Time.time + BusStopSeconds;
+                    }
+                if (Time.time < busStoppedUntil) return 0f;
+            }
+            if (IsEmergency) return desiredSpeed;
+            for (var i = 0; i < ActiveCars.Count; i++)
+            {
+                var other = ActiveCars[i];
+                if (other == null || !other.OnCall || other.IsWreck || other.Direction != Direction) continue;
+                var behind = RoadPath.ForwardGap(other.RoadDistance, RoadDistance, Direction);
+                if (behind <= 0f || behind > YieldBehindMetres) continue;
+                separation = Mathf.Clamp(separation + (LaneOffset >= 0f ? 1f : -1f) * YieldMetresPerSecond * Time.deltaTime,
+                    -MaxSeparation, MaxSeparation);
+                return desiredSpeed * YieldSpeedShare;
+            }
+            return desiredSpeed;
         }
 
         private void OnEnable() => VehicleContacts.Register(this);
@@ -1183,6 +1417,11 @@ namespace RoadRage.UnityRemake
             else if (deltaDist * Direction > 0f)
             {
                 currentSpeedKph = Mathf.Min(currentSpeedKph, other.currentSpeedKph);
+            }
+            // The pair is visited once, either way round: the car behind may be the other.
+            else if (deltaDist * other.Direction < 0f)
+            {
+                other.currentSpeedKph = Mathf.Min(other.currentSpeedKph, currentSpeedKph);
             }
         }
 
@@ -1249,6 +1488,13 @@ namespace RoadRage.UnityRemake
             if (delta > 0f)
                 visualLateral = Mathf.SmoothDamp(visualLateral, LaneOffset, ref visualLateralSpeed,
                     Mathf.Lerp(0.12f, 0.45f, still), 30f, delta);
+            // A wreck is drawn where it is: thrown aside fast, the smoothing above left it
+            // lying metres behind its own hull, in the player's way.
+            if (IsWreck)
+            {
+                visualLateral = LaneOffset;
+                visualLateralSpeed = 0f;
+            }
             transform.position = RoadPath.Point(RoadDistance, visualLateral, 0.16f + verticalOffset);
             var facing = RoadPath.Rotation(RoadDistance);
             if (Direction < 0f) facing *= Quaternion.Euler(0f, 180f, 0f);
@@ -1261,15 +1507,30 @@ namespace RoadRage.UnityRemake
                   Mathf.Clamp01(currentSpeedKph / 20f);
             steerYaw = Mathf.Lerp(steerYaw, target, Mathf.Clamp01(delta * 8f));
             transform.rotation = facing * Quaternion.Euler(0f, WreckYaw + steerYaw, wreckRoll);
+            // A rolling car turns about its middle, where its hull is. Turned about its base,
+            // a tall one swung up to half its height outside the hull while on its side.
+            if (rolled) transform.position += (Vector3.up - transform.up) * (rollLift * 0.5f);
         }
 
         private float wreckSlideTarget;
         private float wreckYawRate;
+        private const float MaxRigWreckYaw = 35f;
 
         public void Crash(float lateralPush, float impactSpeedKph = 0f)
         {
             if (IsWreck) return;
+            if (IsHeavy)
+            {
+                TakeHitAsRig(lateralPush);
+                return;
+            }
             IsWreck = true;
+            var headOn = HeadOnNext;
+            HeadOnNext = false;
+            // One hit from behind or the side and it is thrown out of the way. Head on, it
+            // stays where it stopped until pushed aside.
+            var knockedByPlayer = crashedByPlayer && !headOn;
+            if (knockedByPlayer) Knocked = true;
 
             var rb = GetComponent<Rigidbody>();
             if (rb != null) rb.isKinematic = true;
@@ -1286,12 +1547,110 @@ namespace RoadRage.UnityRemake
             // other way it slid across the road; shoved a fixed 5.2 m, a wreck from an
             // inner lane stopped in the outer one - either way a wall that everything
             // behind it piled into.
-            sign = LaneOffset >= 0f ? 1f : -1f;
+            var damage = gameObject.GetComponent<CarCrashDamage>();
+            if (damage == null) damage = gameObject.AddComponent<CarCrashDamage>();
+            var hitAt = HitPointNext ?? transform.position + transform.forward * HalfLength + Vector3.up * 0.6f;
+            HitPointNext = null;
+            damage.Apply(hitAt, hit);
+
+            sign = knockedByPlayer && Mathf.Abs(lateralPush) >= 0.01f ? Mathf.Sign(lateralPush) : LaneOffset >= 0f ? 1f : -1f;
             var shoulder = sign * (RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - 1.6f);
             wreckSlideTarget = Mathf.Clamp(shoulder - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+            if (headOn)
+            {
+                // Two cars meeting head on stop where they meet.
+                currentSpeedKph = 0f;
+                shoveNotBefore = Time.time + HeadOnStaysSeconds;
+                wreckSlideTarget = laneDrift;
+                wreckYawRate *= 0.08f;
+            }
+            else if (knockedByPlayer)
+            {
+                currentSpeedKph = Mathf.Min(currentSpeedKph, KnockedSpeedKph);
+                if (impactSpeedKph >= RollOverKph && Random.value < RollOverChance)
+                {
+                    rolled = true;
+                    rollLift = HalfWidth * 1.1f;
+                    wreckRoll = Mathf.Abs(wreckRoll) * sign;
+                    var bounds = default(Bounds);
+                    var first = true;
+                    foreach (var r in GetComponentsInChildren<MeshRenderer>())
+                    {
+                        if (first) bounds = r.bounds; else bounds.Encapsulate(r.bounds);
+                        first = false;
+                    }
+                    if (!first) rollLift = bounds.size.y;
+                }
+            }
 
-            // After the speed transfer above, so the load leaves with the truck's momentum.
-            SpillLoad(lateralPush, impactSpeedKph);
+        }
+
+        private const float RigLurchMetres = 0.25f;
+        /// A hit this hard from the player may roll the car onto its roof.
+        private const float RollOverKph = 110f;
+        private const float RollOverChance = 0.35f;
+        private const float RollDegreesPerSecond = 300f;
+        /// A car hit by the player is scrubbed down to this at once, and stops within a second.
+        private const float KnockedSpeedKph = 28f;
+        /// The next Crash is a head-on: both stop dead where they met.
+        public bool HeadOnNext { get; set; }
+        /// Where the next Crash lands, in the world; the car's nose if not set.
+        public Vector3? HitPointNext { get; set; }
+        /// A head-on wreck stands where it stopped this long, however hard it is pushed.
+        private const float HeadOnStaysSeconds = 0.8f;
+        private float shoveNotBefore;
+        private bool rolled;
+        private float rollLift;
+        /// Out of touch this long and the next touch is a new hit.
+        private const float NewContactSeconds = 1.5f;
+        private float lastPlayerTouch = -10f;
+        private bool playerHitOnce;
+
+        /// Forty tonnes does not care about a car: the rig stays upright, keeps driving and
+        /// keeps its load. It only lurches. Folding and stopping it on a road this narrow
+        /// left a wall the player could neither pass nor shift.
+        private void TakeHitAsRig(float lateralPush)
+        {
+            separation = Mathf.Clamp(separation + Mathf.Sign(lateralPush) * RigLurchMetres, -MaxSeparation, MaxSeparation);
+            crashedByPlayer = false;
+        }
+
+        private const float WreckHoldsPlayerSeconds = 0.6f;
+        /// How fast a shoved wreck scrapes across the road, in m/s and degrees/s.
+        private const float ShoveSlideSpeed = 6f;
+        private const float ShoveTurnSpeed = 45f;
+        private const float ShoveCarriedKph = 25f;
+        /// Longer away than this and the player has driven off, not stayed against it.
+        private const float PressBreakSeconds = 0.25f;
+        private float pressStartedAt = -1f;
+        private float lastPressedAt = -1f;
+        private const float KnockSlideSpeed = 16f;
+        /// Hit by the player and thrown to the road edge.
+        public bool Knocked { get; private set; }
+        /// A wreck the player's car bulldozes rather than drives through or stops against.
+        public bool PlayerShoves => IsWreck && !IsHeavy && !Ragdolled && Time.time >= shoveNotBefore;
+        /// Being shoved to the road edge by the player.
+        public bool Shoved { get; private set; }
+        /// A physics-owned wreck cannot be shoved, so that one lets the player by.
+        public bool PlayerPassing { get; private set; }
+
+        /// The player is up against this wreck. Held there, it is shoved to the edge of the
+        /// road furthest from them, a long rig swinging straight against the rail: on a road
+        /// this narrow a wreck can fill it, and driving through one looked broken.
+        public void PlayerPressing(float playerLateral)
+        {
+            if (!IsWreck || PlayerPassing || Shoved || Time.time < shoveNotBefore) return;
+            if (Time.time - lastPressedAt > PressBreakSeconds) pressStartedAt = Time.time;
+            lastPressedAt = Time.time;
+            if (Time.time - pressStartedAt <= WreckHoldsPlayerSeconds) return;
+            if (Ragdolled) { PlayerPassing = true; return; }
+            Shoved = true;
+            var side = Mathf.Abs(playerLateral) > 0.3f ? -Mathf.Sign(playerLateral) : LaneOffset >= 0f ? 1f : -1f;
+            var edge = side * Mathf.Max(0f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - HalfWidth);
+            wreckSlideTarget = Mathf.Clamp(edge - RoadPath.LaneLateral(RoadDistance, LaneFraction), -16f, 16f);
+            currentSpeedKph = Mathf.Max(currentSpeedKph, ShoveCarriedKph);
+            wreckYawRate = 0f;
+            if (RoadRageAudioBridge.Instance != null) RoadRageAudioBridge.Instance.PlayCrash(0.6f);
         }
 
         /// Nearest violator ahead of the player, for the cinematic autopilot. Returns
@@ -1372,11 +1731,8 @@ namespace RoadRage.UnityRemake
                 // the test, so contact only registered once the meshes had already
                 // interpenetrated by that much. They are compared at full size now, with
                 // a small positive skin, so the hit lands as the bumpers meet.
-                var reach = driver.HalfLength + traffic.LongitudinalExtent;
-                if (Mathf.Abs(longitudinal) > reach) continue;
                 var lateral = traffic.LaneOffset - driver.LateralOffset;
-                var lateralReach = driver.HalfWidth + traffic.LateralExtent;
-                if (Mathf.Abs(lateral) > lateralReach) continue;
+                if (!traffic.Touches(-longitudinal, -lateral, driver.HalfLength, driver.HalfWidth)) continue;
 
                 // Special Vehicle: Car Hauler ramp jump from behind
                 if (traffic.Role == VehicleRole.CarHauler && longitudinal > 0.4f && Mathf.Abs(lateral) < 1.4f && driver.SpeedKph > 35f)
@@ -1392,10 +1748,16 @@ namespace RoadRage.UnityRemake
 
                 // Anti-penetration is handled by the shared vehicle pass; only the
                 // gameplay consequences of the contact are decided here.
-                if (longitudinal > 0f)
+                if (longitudinal > 0f && !traffic.IsWreck && !traffic.IsHeavy)
                 {
                     // Momentum transfer: the car you rear-end is carried along rather
-                    // than standing still while you drive into it.
+                    // than standing still while you drive into it. A wreck is excluded -
+                    // it is left to its crash deceleration, otherwise staying in contact
+                    // behind a fresh wreck pumps it back up to 95% of the player's speed
+                    // every frame, overriding the braking and driving it (worst on the
+                    // heavy log truck, which keeps 80% of its speed) off up the road.
+                    // The log truck is excluded too: this ran just before its Crash, which
+                    // then kept 80% of the player's speed and left the logs behind.
                     traffic.currentSpeedKph = Mathf.Max(traffic.currentSpeedKph, driver.SpeedKph * 0.95f);
                 }
 
@@ -1405,16 +1767,32 @@ namespace RoadRage.UnityRemake
                     traffic.DetonateTanker();
                 }
 
+                // One contact is one hit. Staying against a car hit it again every 0.35 s, with
+                // a crash sound and sparks each time; a wreck is only ever hit once.
+                var fresh = Time.time - traffic.lastPlayerTouch > NewContactSeconds;
+                traffic.lastPlayerTouch = Time.time;
+                if (traffic.IsWreck) traffic.PlayerPressing(driver.LateralOffset);
+                if (!fresh || (traffic.IsWreck && traffic.playerHitOnce)) continue;
+                traffic.playerHitOnce = true;
+                Debug.Log($"RR_EVENT playerhit {traffic.name} wreck={traffic.IsWreck} kph={driver.SpeedKph:0}");
+
                 // 2. Trigger gameplay impact & damage/score events
                 var speedAtImpact = driver.SpeedKph;
-                driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
-                if (!traffic.IsWreck)
+                var wasWreck = traffic.IsWreck;
+                if (!wasWreck)
                 {
-                    if (traffic.Role == VehicleRole.LogTruck && speedAtImpact > 30f)
-                        GameState.Award(1500, "🪵 LOG TRUCK TAKEDOWN!");
+                    // Set before the impact: from 60 km/h its takedown wrecks the car itself.
                     traffic.crashedByPlayer = true;
-                    traffic.Crash(lateral, speedAtImpact);
                 }
+                else
+                {
+                    // One real hit, then a moment against it. On a road this narrow a
+                    // wreck can fill the lane, and being held against it, hit again every
+                    // 0.35 s, left the player crawling and stuck behind it.
+                    if (traffic.PlayerPassing) continue;
+                }
+                driver.ApplyTrafficImpact(traffic, longitudinal, lateral);
+                if (!traffic.IsWreck) traffic.Crash(lateral, speedAtImpact);
             }
         }
     }

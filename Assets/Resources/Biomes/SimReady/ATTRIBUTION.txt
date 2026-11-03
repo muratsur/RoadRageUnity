@@ -1,0 +1,17 @@
+Roadside props from NVIDIA SimReady Assets, (c) NVIDIA Corporation, licensed CC BY 4.0
+(https://creativecommons.org/licenses/by/4.0/). Source: https://huggingface.co/datasets/nvidia/simready-assets
+
+Changed for this game by Tools/SimReady/fetch_simready.py and bake_prop.py: meshes reduced in
+triangle count, materials baked into one colour and one normal texture, recentred.
+
+  SM_barrier      barrier_wall_plastic_orange_a03
+  SM_drum_steel   drum_steel_a01
+  SM_drum_blue    drum_plastic_blue_a01
+  SM_bin_blue     container_recycle_blue_wheeled_a01
+  SM_bin_green    waste_recycling_container_a01
+  SM_crate        crate_plywood_b01
+  SM_pallet       pallet_block_a01
+  SM_ibc          ibcTank_a02
+  SM_wheelbarrow  construction_wheelbarrow_metal_a01
+
+The game's credits must carry: "Roadside props: NVIDIA SimReady Assets, CC BY 4.0".

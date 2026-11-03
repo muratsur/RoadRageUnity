@@ -306,17 +306,28 @@ namespace RoadRage.UnityRemake
             SpeedKph = Mathf.Min(SpeedKph + 25f, 220f);
         }
 
+        private const float OneHitKeepsSpeed = 0.7f;
+        private const int EmergencyHitPenalty = 1000;
+
+        private static bool sideSwipeAt(float lateralGap, float longitudinalGap) =>
+            Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
+
+        private const float RigHitKeepsSpeed = 0.6f;
+
         public bool ApplyTrafficImpact(TrafficCarController traffic, float longitudinalGap, float lateralGap)
         {
             if (Time.time < nextImpactTime) return false;
             nextImpactTime = Time.time + 0.35f;
-            var sideSwipe = Mathf.Abs(lateralGap) > 1.25f && Mathf.Abs(longitudinalGap) < 3.2f;
+            var wasWreck = traffic.IsWreck;
+            var solidHit = wasWreck || traffic.IsHeavy;
+            var headOn = !wasWreck && !sideSwipeAt(lateralGap, longitudinalGap) && traffic.Direction < 0f;
+            if (!wasWreck)
+            {
+                traffic.HeadOnNext = headOn;
+                traffic.HitPointNext = transform.position + (traffic.transform.position - transform.position).normalized * (HalfLength + 0.3f) + Vector3.up * 0.6f;
+            }
 
-            // Anti-penetration is no longer done here. It used to push on both axes at
-            // once with its own shrunken hull sizes, fighting the traffic's separate
-            // resolution of the same contact; both now go through the single relaxation
-            // pass in TrafficCarController, which runs after every vehicle has moved.
-
+            var sideSwipe = sideSwipeAt(lateralGap, longitudinalGap);
             // Armour is the reason to drive a truck: it cuts how much speed an impact
             // scrubs off and how far you get shoved. Upgrades and ram bars stack on top of the chassis.
             var ramArmorBonus = GameState.TuningRamBar switch
@@ -332,7 +343,21 @@ namespace RoadRage.UnityRemake
             {
                 GameState.Combo = 0;
                 GameState.Show("WRECKAGE");
-                GameState.ApplyDamage(6f * absorb);
+            }
+            else if (traffic.IsEmergency)
+            {
+                GameState.Combo = 0;
+                GameState.Score = Mathf.Max(0, GameState.Score - EmergencyHitPenalty);
+                GameState.Show($"EMERGENCY VEHICLE  -{EmergencyHitPenalty}");
+                if (traffic.IsHeavy) SpeedKph *= RigHitKeepsSpeed;
+            }
+            else if (traffic.IsHeavy)
+            {
+                // Like hitting a wall that drives: the car bounces. The player is the hitter
+                // and is never hurt by traffic.
+                GameState.Combo = 0;
+                GameState.Show(traffic.Role == TrafficCarController.VehicleRole.Bus ? "BUS!" : "LOG TRUCK!");
+                SpeedKph *= RigHitKeepsSpeed;
             }
             else if (traffic.IsViolator)
             {
@@ -359,7 +384,6 @@ namespace RoadRage.UnityRemake
                     RoadRagePolicePursuitDirector.Instance.AddHeat(0.35f);
                 if (RoadRageBoostDirector.Instance != null)
                     RoadRageBoostDirector.Instance.AddBoost(pursued ? 80f : 50f, "TAKEDOWN BOOST");
-                GameState.ApplyDamage((sideSwipe ? 1.5f : 3f) * absorb);
             }
             else
             {
@@ -367,7 +391,6 @@ namespace RoadRage.UnityRemake
                 GameState.InnocentsHit++;
                 GameState.Score = Mathf.Max(0, GameState.Score - 200);
                 GameState.Show("INNOCENT DRIVER  -200");
-                GameState.ApplyDamage(14f * absorb);
             }
             var contactPoint = transform.position + transform.forward * 2.2f + Vector3.up * 0.6f;
             CrashEffects.Active?.PlayAt(contactPoint);
@@ -401,11 +424,25 @@ namespace RoadRage.UnityRemake
 
             if (traffic.IsViolator || SpeedKph >= 60f)
             {
-                if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck)
+                if (RoadRageTakedownDirector.Instance != null && !traffic.IsWreck &&
+                    !traffic.IsHeavy)
                 {
                     var impactNormal = (traffic.transform.position - transform.position).normalized;
                     RoadRageTakedownDirector.Instance.TriggerTakedown(traffic.transform, contactPoint, impactNormal, SpeedKph);
                 }
+            }
+
+            if (headOn)
+            {
+                // Both stop dead.
+                SpeedKph = 0f;
+                return true;
+            }
+            // One hit and it is out of the way, at the cost of real speed.
+            if (!solidHit)
+            {
+                SpeedKph *= OneHitKeepsSpeed;
+                return true;
             }
 
             if (sideSwipe)
