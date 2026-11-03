@@ -1,6 +1,6 @@
 """Writes where the Mosel Valley road's real bridges are, for the game.
 
-    python Tools/Terrain/export_b53_structures.py [sr1|bc99|ss163|b100]
+    python Tools/Terrain/export_b53_structures.py [sr1|bc99|ss163|b100|dn7c]
 
 With sr1 or bc99: the same for Big Sur's Highway 1 or BC Highway 99, their own bridges only.
 
@@ -49,6 +49,9 @@ elif sys.argv[1:] == ["ss163"]:
 elif sys.argv[1:] == ["b100"]:
     import build_b100  # noqa: F401 - points the map projection at Victoria
     NAME, DATA, CROSSINGS = "b100", build_b100.DATA, None
+elif sys.argv[1:] == ["dn7c"]:
+    import build_dn7c  # noqa: F401 - points the map projection at the Fagaras mountains
+    NAME, DATA, CROSSINGS = "dn7c", build_dn7c.DATA, None
 else:
     NAME, CROSSINGS = "b53", f"{DATA}/b53_crossings_osm.json"
 OUT = os.path.join(HERE, "..", "..", "Assets", "Resources", "Biomes", "Routes", f"{NAME}_structures.txt")
@@ -90,25 +93,29 @@ def relative(e, n, i):
     return ";".join(f"{a:.1f},{l:.1f}" for a, l in zip(along, lat))
 
 
-lines = []
-spans = []
-for way in json.load(open(f"{DATA}/{NAME}_osm.json"))["elements"]:
-    if "bridge" not in (way.get("tags") or {}) or not way.get("geometry"):
-        continue
-    e, n = points(way)
-    idx = [int(((east - a) ** 2 + (north - b) ** 2).argmin()) for a, b in zip(e, n)]
-    if max(np.hypot(east[i] - a, north[i] - b) for i, a, b in zip(idx, e, n)) < 15.0:
-        spans.append((z[min(idx)], z[max(idx)]))
-spans.sort()
-merged = []
-for a, b in spans:
-    if merged and a - merged[-1][1] < MERGE_GAP:
-        merged[-1][1] = max(merged[-1][1], b)
-    else:
-        merged.append([a, b])
-for a, b in merged:
-    if b - a >= MIN_DECK:
-        lines.append(f"deck {a:.0f} {b:.0f}")
+def own_spans(tag):
+    """Road distances where the road's own ways carry this tag (bridge, tunnel), merged."""
+    spans = []
+    for way in json.load(open(f"{DATA}/{NAME}_osm.json"))["elements"]:
+        if tag not in (way.get("tags") or {}) or not way.get("geometry"):
+            continue
+        e, n = points(way)
+        idx = [int(((east - a) ** 2 + (north - b) ** 2).argmin()) for a, b in zip(e, n)]
+        if max(np.hypot(east[i] - a, north[i] - b) for i, a, b in zip(idx, e, n)) < 15.0:
+            spans.append((z[min(idx)], z[max(idx)]))
+    spans.sort()
+    merged = []
+    for a, b in spans:
+        if merged and a - merged[-1][1] < MERGE_GAP:
+            merged[-1][1] = max(merged[-1][1], b)
+        else:
+            merged.append([a, b])
+    return [(a, b) for a, b in merged if b - a >= MIN_DECK]
+
+
+lines = [f"deck {a:.0f} {b:.0f}" for a, b in own_spans("bridge")]
+# A tunnel: the game has no tunnels, so the ground bake opens a cutting through the ridge.
+lines += [f"cut {a:.0f} {b:.0f}" for a, b in own_spans("tunnel")]
 
 seen = []
 for way in (json.load(open(CROSSINGS))["elements"] if CROSSINGS else []):
