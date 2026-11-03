@@ -50,6 +50,11 @@ namespace RoadRage.UnityRemake
         /// historically wrapped stays continuous.
         public static float Wrap(float distance) => distance;
 
+        /// Which side of the road traffic keeps to: 1 for the right, as in most of the
+        /// world, -1 for the left (Australia). Lanes are mirrored where traffic is placed,
+        /// so everything that works from a lane's own side follows.
+        public static float DriveSide = 1f;
+
         /// A real road, when the biome has one (Greenwood: the B500). It replaces the
         /// sines below for both the bends and the hills. See RoadRoute.
         public static RoadRoute Route;
@@ -652,7 +657,7 @@ namespace RoadRage.UnityRemake
             if (Violation == Offence.Speeding) speedKph = Mathf.Min(speedKph * 1.55f, 165f);
             if (Violation == Offence.WrongWay) direction = -direction;
             RoadDistance = RoadPath.Wrap(distance);
-            LaneFraction = Mathf.Clamp(lane, -1f, 1f);
+            LaneFraction = Mathf.Clamp(lane * RoadPath.DriveSide, -1f, 1f);
             cruiseSpeedKph = speedKph;
             currentSpeedKph = wreck ? 0f : speedKph;
             Direction = direction >= 0f ? 1f : -1f;
