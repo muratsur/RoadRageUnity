@@ -1,6 +1,6 @@
 """Writes where the Mosel Valley road's real bridges are, for the game.
 
-    python Tools/Terrain/export_b53_structures.py [sr1|bc99]
+    python Tools/Terrain/export_b53_structures.py [sr1|bc99|ss163]
 
 With sr1 or bc99: the same for Big Sur's Highway 1 or BC Highway 99, their own bridges only.
 
@@ -43,6 +43,9 @@ if sys.argv[1:] == ["sr1"]:
 elif sys.argv[1:] == ["bc99"]:
     import build_bc99  # noqa: F401 - points the map projection at British Columbia
     NAME, DATA, CROSSINGS = "bc99", build_bc99.DATA, None
+elif sys.argv[1:] == ["ss163"]:
+    import build_ss163  # noqa: F401 - points the map projection at the Amalfi Coast
+    NAME, DATA, CROSSINGS = "ss163", build_ss163.DATA, None
 else:
     NAME, CROSSINGS = "b53", f"{DATA}/b53_crossings_osm.json"
 OUT = os.path.join(HERE, "..", "..", "Assets", "Resources", "Biomes", "Routes", f"{NAME}_structures.txt")
