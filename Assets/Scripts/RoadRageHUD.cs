@@ -292,6 +292,8 @@ namespace RoadRage.UnityRemake
             else if (panel == "missions") missionsOpen = true;
             else if (panel == "wheel") wheelOpen = true;
             else if (panel == "fury") furyOpen = true;
+            else if (panel == "settings") settingsOpen = true;
+            else if (panel == "credits") settingsOpen = creditsOpen = true;
         }
 
         /// Store/press captures must not show the HUD, the mobile touch buttons or the
@@ -482,6 +484,12 @@ namespace RoadRage.UnityRemake
             if (RoadRageLeaderboardDirector.Instance != null && RoadRageLeaderboardDirector.Instance.IsLeaderboardOpen)
             {
                 DrawLeaderboardModal();
+                return;
+            }
+            // Over everything, from the landing screen's settings (or -ui=credits).
+            if (creditsOpen)
+            {
+                DrawCreditsModal();
                 return;
             }
             if (RoadRageLandingDirector.Instance != null && RoadRageLandingDirector.Instance.IsLandingActive)
@@ -2132,7 +2140,7 @@ namespace RoadRage.UnityRemake
             var w = Screen.width;
             var h = Screen.height;
             var modalW = Mathf.Min(w * 0.7f, 400f);
-            var modalH = Mathf.Min(h * 0.8f, 400f);
+            var modalH = Mathf.Min(h * 0.8f, 460f);
             var modalX = w * 0.5f - modalW * 0.5f;
             var modalY = h * 0.5f - modalH * 0.5f;
 
@@ -2189,12 +2197,56 @@ namespace RoadRage.UnityRemake
             {
                 Application.targetFrameRate = currentFps == 120 ? 60 : 120;
             }
+            rowY += rowH + 8f;
+
+            if (GUI.Button(new Rect(modalX + 20f, rowY, modalW - 40f, rowH), "CREDITS", btnS))
+            {
+                creditsOpen = true;
+            }
             rowY += rowH + 14f;
 
             // Close Button
             if (GUI.Button(new Rect(modalX + modalW * 0.5f - 70f, rowY, 140f, rowH), "CLOSE", btnS))
             {
                 settingsOpen = false;
+            }
+        }
+
+        private bool creditsOpen;
+        private Vector2 creditsScroll;
+        private string creditsText;
+
+        /// The data and asset credits the licences ask for (Resources/Credits.txt), scrolling.
+        private void DrawCreditsModal()
+        {
+            creditsText ??= Resources.Load<TextAsset>("Credits")?.text ?? "Credits missing.";
+            var w = Screen.width;
+            var h = Screen.height;
+            var modalW = Mathf.Min(w * 0.9f, 720f);
+            var modalH = Mathf.Min(h * 0.9f, 620f);
+            var modalX = w * 0.5f - modalW * 0.5f;
+            var modalY = h * 0.5f - modalH * 0.5f;
+
+            GUI.DrawTexture(new Rect(0f, 0f, w, h), dimTexture);
+            GUI.DrawTexture(new Rect(modalX, modalY, modalW, modalH), cardGlassTex != null ? cardGlassTex : dimTexture);
+
+            var s = UiScale;
+            GUI.Label(new Rect(modalX, modalY + 14f, modalW, 30f), "CREDITS",
+                new GUIStyle(pickerTitleStyle) { fontSize = Mathf.RoundToInt(24 * s) });
+
+            var textStyle = new GUIStyle(GUI.skin.label) { wordWrap = true, fontSize = Mathf.RoundToInt(13 * s) };
+            textStyle.normal.textColor = Color.white;
+            var view = new Rect(modalX + 20f, modalY + 54f, modalW - 40f, modalH - 54f - 64f);
+            var content = new GUIContent(creditsText);
+            var contentH = textStyle.CalcHeight(content, view.width - 20f);
+            creditsScroll = GUI.BeginScrollView(view, creditsScroll, new Rect(0f, 0f, view.width - 20f, contentH));
+            GUI.Label(new Rect(0f, 0f, view.width - 20f, contentH), content, textStyle);
+            GUI.EndScrollView();
+
+            var btnS = new GUIStyle(buttonStyle) { fontSize = Mathf.RoundToInt(14 * s) };
+            if (GUI.Button(new Rect(modalX + modalW * 0.5f - 70f, modalY + modalH - 52f, 140f, 40f), "BACK", btnS))
+            {
+                creditsOpen = false;
             }
         }
 
