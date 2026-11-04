@@ -703,6 +703,9 @@ namespace RoadRage.UnityRemake
             journeyStart = Mathf.Max(0, System.Array.IndexOf(JourneyOrder, Mathf.Max(0, biomeIndex)));
             activeWeather = WeatherSystem.Roll(Mathf.Max(0, biomeIndex));
             ApplyBiomeRoute(biomeIndex);
+            // The ground caches belong to the old road: Big Sur's hills were drawn over FDR Drive
+            // when one was picked after the other, both starting at the same distance.
+            ForgetGround();
             lastPlaceIndex = -1;
 
             // 7. Rebuild lighting for new biome
@@ -10737,6 +10740,15 @@ namespace RoadRage.UnityRemake
 
         private static float padsFor = float.NaN;
 
+        /// Drops everything cached about the ground of the road that was driven before.
+        private static void ForgetGround()
+        {
+            gridHeights.Clear();
+            lakeIsReal.Clear();
+            icelandCliffs.Clear();
+            padsFor = float.NaN;
+        }
+
         /// The level ground each test model will stand on, known before any ground is
         /// built so the terrain mesh and everything planted on it agree.
         private void PrepareBuildingPads()
@@ -13977,10 +13989,24 @@ namespace RoadRage.UnityRemake
             Application.targetFrameRate = -1;
         }
 
+        /// -thenbiome=<NAME> (as the picker shows it, e.g. "FDR DRIVE"): switch biome part way
+        /// through, as the picker does, so a capture
+        /// shows the second biome built after the first (stale caches show up there).
+        private static readonly string ThenBiome = RoadRageBootstrap.CommandLineValue("-thenbiome=");
+        private bool switched;
+
         private void Update()
         {
             elapsed += Time.unscaledDeltaTime;
             warmupFrames++;
+            if (!switched && !string.IsNullOrEmpty(ThenBiome) && warmupFrames == 120 && RoadRageBootstrap.Instance != null)
+            {
+                switched = true;
+                RoadRageBootstrap.Instance.SelectBiome(ThenBiome);
+            }
+            // The reload returns to the start screen: drive on, as a player would.
+            if (switched && warmupFrames == 240 && RoadRageLandingDirector.Instance != null)
+                RoadRageLandingDirector.Instance.LaunchRun();
 
             // Sample by frame count, not wall clock: the first frame builds the whole
             // world and compiles shaders (~2.7s), which would otherwise swallow a
