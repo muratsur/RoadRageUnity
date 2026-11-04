@@ -559,7 +559,7 @@ namespace RoadRage.UnityRemake
 
                 var chain = RoadRageBoostDirector.Instance.BurnoutChain;
                 var boostLabel = chain > 0 ? $"🔥 BURNOUT x{chain}" : (isFull ? "★ NITRO READY" : (isBurning ? "🔥 BOOSTING" : "NITRO"));
-                GUI.Label(new Rect(35f + barW, 146f, 180f, 20f), boostLabel, readoutStyle);
+                GUI.Label(new Rect(35f + barW, 141f, 220f, 30f), boostLabel, readoutStyle); // 20 px tall cut the text in half
             }
 
             GUI.Label(new Rect(30f, 96f, 520f, 32f),
@@ -629,7 +629,7 @@ namespace RoadRage.UnityRemake
                 }
                 titleStyle.normal.textColor = prevColor;
             }
-            GUI.Label(new Rect(Screen.width - 270f, 24f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle);
+            GUI.Label(new Rect(Screen.width - 240f, 68f, 130f, 32f), $"{Mathf.RoundToInt(1f / Mathf.Max(Time.unscaledDeltaTime, 0.0001f))} FPS", readoutStyle); // under MENU, not on it
             
             var pauseRect = new Rect(Screen.width - 130f, 20f, 110f, 44f);
             if (GUI.Button(pauseRect, w.PickerOpen ? "RESUME" : "PAUSE", buttonStyle))

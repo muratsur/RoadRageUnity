@@ -141,7 +141,9 @@ def ground_table(z, offs, ground, road_real):
     fall = 1.0 - fall * fall * (3.0 - 2.0 * fall)
     coast_world = sea_level + ground + (game_y - sea_level - road_real)[:, None] * fall[None, :]
     inland_world = game_y[:, None] + (ground - road_real[:, None])
-    water = ground < SEA_HEIGHT
+    # The river is always on the left; Manhattan's landfill on the right is as low as the
+    # river in the DEM (0.4-1.7 m) and became strips of water beside the road.
+    water = (ground < SEA_HEIGHT) & (offs < 0.0)[None, :]
     coast = np.convolve(water.any(axis=1).astype(float), np.ones(COAST_EASE_ROWS * 2 + 1), "same") > 0
     coast = np.convolve(coast.astype(float), np.ones(COAST_EASE_ROWS * 2 + 1) / (COAST_EASE_ROWS * 2 + 1), "same")
     world = coast[:, None] * coast_world + (1.0 - coast[:, None]) * inland_world

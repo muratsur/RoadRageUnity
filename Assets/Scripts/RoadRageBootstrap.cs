@@ -729,7 +729,7 @@ namespace RoadRage.UnityRemake
                 // Same centred-vs-right-lane rule as the initial spawn: single-lane
                 // biomes (Greenwood, Red Canyon, Hollywood) start on the centreline.
                 var reloadLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-                var reloadLateral = (reloadLaneCount == 1 ? -1.2f : -2.25f) * RoadPath.DriveSide;
+                var reloadLateral = (reloadLaneCount == 1 ? 1.2f : 2.25f) * RoadPath.DriveSide;
                 if (controller != null)
                 {
                     controller.RoadDistance = startDistance + 5f;
@@ -1175,6 +1175,7 @@ namespace RoadRage.UnityRemake
             shoulder.mainTextureScale = new Vector2(1.4f, 3.2f);
             MakeMaterial("White Paint", new Color(0.92f, 0.94f, 0.9f), 0f, 0.3f);
             MakeMaterial("Yellow Paint", new Color(1f, 0.66f, 0.06f), 0f, 0.25f);
+            MakeMaterial("Jersey Concrete", new Color(0.86f, 0.85f, 0.81f), 0f, 0.1f);
             tireMaterial = MakeMaterial("Tire Rubber", new Color(0.055f, 0.055f, 0.06f), 0f, 0.4f);
             rimMaterial = MakeMaterial("Wheel Rim", new Color(0.58f, 0.59f, 0.61f), 0.75f, 0.7f);
             MakeMaterial("Car Orange", new Color(0.95f, 0.22f, 0.035f), 0.55f, 0.78f);
@@ -2686,15 +2687,15 @@ namespace RoadRage.UnityRemake
             materials["Amalfi Ground"].SetFloat("_Macro", 1f);
             materials["Amalfi Ground"].SetFloat("_MacroMean", 0.052f);
 
-            // FDR Drive: pavement and park grass, concrete where it is steep, a grey verge.
+            // FDR Drive: city pavement (full-bright it read as snow), concrete where it is steep, a grey verge.
             Splat("Fdr Ground", "BigSur", new[]
             {
-                ("T_sur_grass", 0.1f, new Color(0.55f, 0.78f, 0.6f)),
+                ("CyberpunkCity/T_concrete_floor", 0.25f, new Color(0.55f, 0.55f, 0.56f)),
                 ("T_sur_rock", 0.05f, new Color(1.05f, 1.1f, 1.18f)),
-                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.7f, 0.72f, 0.75f)),
+                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.62f, 0.63f, 0.65f)),
             }, 0.08f);
-            materials["Fdr Ground"].SetFloat("_Macro", 1f);
-            materials["Fdr Ground"].SetFloat("_MacroMean", 0.052f);
+            // No macro variation: its brightness mean is the grass's, and pavement went white.
+            materials["Fdr Ground"].SetFloat("_Macro", 0f);
             // The city's facades: ambientCG photo facades (CC0) with their normal maps, and roofs.
             foreach (var (facade, _) in FdrFacades)
             {
@@ -3005,8 +3006,13 @@ namespace RoadRage.UnityRemake
             // Greenwood is an unmarked single-lane forest road: no paint at all.
             if (biomeIndex != 0 && biomeIndex != MoselIndex && biomeIndex != IcelandIndex && biomeIndex != AmalfiIndex && biomeIndex != OceanRoadIndex && biomeIndex != TransfagarasanIndex)
             {
-                BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
-                BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
+                if (RoadPath.MedianHalf > 0f)
+                    BuildJerseyBarrier();
+                else
+                {
+                    BuildRibbon("Center Yellow L", -0.22f, -0.10f, 0.038f, materials["Yellow Paint"]);
+                    BuildRibbon("Center Yellow R", 0.10f, 0.22f, 0.038f, materials["Yellow Paint"]);
+                }
                 BuildRibbon("Left Edge Line", -0.96f, -0.90f, 0.038f, materials["White Paint"], relative: true);
                 BuildRibbon("Right Edge Line", 0.90f, 0.96f, 0.038f, materials["White Paint"], relative: true);
             }
@@ -3052,6 +3058,52 @@ namespace RoadRage.UnityRemake
                 BuildDashedRibbon("Right Lane Dashes Inner", 1f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
                 BuildDashedRibbon("Right Lane Dashes Outer", 2f / 3f, 0.15f, 6.5f, 12f, materials["White Paint"], relative: true);
             }
+        }
+
+        private const float JerseyBase = 0.61f;
+
+        /// A concrete Jersey barrier down the centre line: the standard US profile (0.61 m
+        /// foot, 0.81 m tall, 0.15 m top) as one mesh per chunk, each face its own strip so
+        /// the creases stay sharp.
+        private void BuildJerseyBarrier()
+        {
+            // Half-widths and heights of the profile from the left foot over the top.
+            var profile = new[]
+            {
+                new Vector2(-0.305f, 0f), new Vector2(-0.28f, 0.08f), new Vector2(-0.18f, 0.33f),
+                new Vector2(-0.075f, 0.81f), new Vector2(0.075f, 0.81f), new Vector2(0.18f, 0.33f),
+                new Vector2(0.28f, 0.08f), new Vector2(0.305f, 0f),
+            };
+            const float step = 3f;
+            var start = segStart - 2f;
+            var count = Mathf.CeilToInt((segEnd + 2f - start) / step) + 1;
+            var faces = profile.Length - 1;
+            var vertices = new Vector3[count * faces * 2];
+            var uv = new Vector2[vertices.Length];
+            var triangles = new int[(count - 1) * faces * 6];
+            var t = 0;
+            for (var i = 0; i < count; i++)
+            {
+                var d = Mathf.Min(segEnd + 2f, start + i * step);
+                for (var f = 0; f < faces; f++)
+                for (var k = 0; k < 2; k++)
+                {
+                    var p = profile[f + k];
+                    var v = (i * faces + f) * 2 + k;
+                    vertices[v] = RoadPath.Point(d, p.x, p.y);
+                    uv[v] = new Vector2(d * 0.25f, (f + k) * 0.2f);
+                }
+                if (i == count - 1) continue;
+                for (var f = 0; f < faces; f++)
+                {
+                    var a = (i * faces + f) * 2;
+                    var b = a + faces * 2;
+                    // Same winding as BuildRibbon: ahead, then across to the right.
+                    triangles[t++] = a; triangles[t++] = b; triangles[t++] = b + 1;
+                    triangles[t++] = a; triangles[t++] = b + 1; triangles[t++] = a + 1;
+                }
+            }
+            CreateMeshObject("Jersey Barrier", vertices, triangles, uv, materials["Jersey Concrete"]);
         }
 
         /// A road surface in this country's tone, from a material the biomes share.
@@ -5181,6 +5233,8 @@ namespace RoadRage.UnityRemake
                 : biomeIndex == FdrDriveIndex ? "Police/T_us_police" : "Police/T_polizei";
             // Australia drives on the left.
             RoadPath.DriveSide = biomeIndex == OceanRoadIndex ? -1f : 1f;
+            // FDR Drive is a divided highway: a concrete barrier, not paint, down the middle.
+            RoadPath.MedianHalf = biomeIndex == FdrDriveIndex ? JerseyBase * 0.5f : 0f;
             if (biomeIndex == FdrDriveIndex)
             {
                 fdrRoute ??= RoadRoute.Load("Biomes/Routes/fdr");
@@ -5937,7 +5991,7 @@ namespace RoadRage.UnityRemake
                 // The guard rail is placed from the measured road width and belongs on the
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
-                if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake") continue;
+                if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake" || n == "Jersey Barrier") continue;
                 // B500 posts and signs stand just behind the rail on purpose.
                 if (n.StartsWith("B500 ") || n.StartsWith("Canal ")) continue;
 
@@ -12469,7 +12523,7 @@ namespace RoadRage.UnityRemake
             var spawn = startDistance + 5f;
             // Single-lane biomes (country road, desert two-lane) start centred; multi-lane cities keep the classic right-lane launch.
             var startLaneCount = LaneCountFor(BiomeIndexAt(startDistance));
-            var startLateral = (startLaneCount == 1 ? -1.2f : -2.25f) * RoadPath.DriveSide;
+            var startLateral = (startLaneCount == 1 ? 1.2f : 2.25f) * RoadPath.DriveSide;
             car = new GameObject($"Player {GameState.CurrentCar.Name}").transform;
             car.position = RoadPath.Point(spawn, startLateral, 0.85f);
             car.rotation = RoadPath.Rotation(spawn);

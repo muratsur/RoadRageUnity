@@ -296,6 +296,10 @@ namespace RoadRage.UnityRemake
             var laneSign = (slot % 2 == 0) ? -1f : 1f;
             var halfW = RoadPath.HalfWidthAt(spawnDist);
             var spawnLane = Mathf.Clamp(playerController.LateralOffset + laneSign * (3.4f + slot * 0.6f), -halfW + 1.8f, halfW - 1.8f);
+            // Across a centre barrier would be the oncoming carriageway: the other flank instead.
+            if (RoadPath.MedianHalf > 0f && spawnLane * playerController.LateralOffset < 0f)
+                spawnLane = Mathf.Clamp(playerController.LateralOffset - laneSign * (3.4f + slot * 0.6f), -halfW + 1.8f, halfW - 1.8f);
+            spawnLane = RoadPath.KeepOffMedian(spawnLane, 1.2f, playerController.LateralOffset);
 
             var copObj = new GameObject($"Police Unit [{HeatLevel} Star - Slot {slot}]");
             copObj.transform.position = RoadPath.Point(spawnDist, spawnLane, 0.4f);
@@ -1236,7 +1240,7 @@ namespace RoadRage.UnityRemake
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
 
             var halfWidth = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset, -halfWidth, halfWidth);
+            LateralOffset = RoadPath.KeepOffMedian(Mathf.Clamp(LateralOffset, -halfWidth, halfWidth), 1.2f, LateralOffset);
 
             // Anti-penetration - against other cruisers, the player AND traffic - is
             // handled by the shared vehicle pass in LateUpdate, after everything has

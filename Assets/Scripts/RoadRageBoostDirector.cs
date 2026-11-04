@@ -189,7 +189,7 @@ namespace RoadRage.UnityRemake
             if (!IsBoosting)
             {
                 // Oncoming Wrong-Way Driving charges boost!
-                if (playerController.LateralOffset < -1.5f && playerController.SpeedKph > 65f)
+                if (RoadPath.OnOncomingSide(playerController.LateralOffset) && playerController.SpeedKph > 65f)
                 {
                     AddBoost(Time.deltaTime * 12.5f);
                 }
@@ -344,11 +344,9 @@ namespace RoadRage.UnityRemake
                         // A big rig is a bigger gap to thread and is worth more, and
                         // passing on the oncoming side doubles it - that is the whole
                         // risk-buys-boost trade the shipped game is built on, and this
-                        // paid a flat 150 whatever you did to earn it. Lateral is signed
-                        // the opposite way here: traffic with a negative lane runs the
-                        // player's direction, so the oncoming half is positive.
+                        // paid a flat 150 whatever you did to earn it.
                         var big = traffic.LongitudinalExtent > 3f;
-                        var wrongWay = playerController.LateralOffset > 1.5f;
+                        var wrongWay = RoadPath.OnOncomingSide(playerController.LateralOffset);
                         var points = (big ? 260 : 150) * (wrongWay ? 2 : 1);
                         var label = wrongWay ? "⚡ WRONG-WAY PASS" : "⚡ NEAR MISS";
 

@@ -43,7 +43,7 @@ namespace RoadRage.UnityRemake
 
         public float DistanceKm => totalDistance / 1000f;
         public float RoadDistance { get; internal set; } = 5f;
-        public float LateralOffset { get; internal set; } = -2.25f;
+        public float LateralOffset { get; internal set; } = 2.25f;
 
         /// What a collision leaves behind, ported from the shipped build's _hero_impact.
         ///
@@ -264,7 +264,7 @@ namespace RoadRage.UnityRemake
             // Distance points tick up as you drive; the oncoming side is worth double,
             // the risk/reward trade the shipped build uses to pull players across the line.
             GameState.Tick(Time.deltaTime);
-            GameState.Score += Mathf.RoundToInt(SpeedKph * Time.deltaTime * 0.7f * (LateralOffset < -1.5f ? 2f : 1f));
+            GameState.Score += Mathf.RoundToInt(SpeedKph * Time.deltaTime * 0.7f * (RoadPath.OnOncomingSide(LateralOffset) ? 2f : 1f));
             var travelledKm = forwardTravel / 1000f;
             GameState.RunDistanceKm += travelledKm;
             distanceSinceDailyBump += travelledKm;
@@ -276,8 +276,9 @@ namespace RoadRage.UnityRemake
 
             RoadDistance = RoadPath.Wrap(RoadDistance + forwardTravel);
             var edge = Mathf.Max(3f, RoadPath.HalfWidthAt(RoadDistance) - 1.4f);
-            LateralOffset = Mathf.Clamp(LateralOffset + (lateralVelocity + impactKnock) * Time.deltaTime, -edge, edge);
-            RoadRageHaptics.EdgeScrape = Mathf.Abs(LateralOffset) >= edge - 0.05f && verticalOffset <= 0f
+            var wanted = Mathf.Clamp(LateralOffset + (lateralVelocity + impactKnock) * Time.deltaTime, -edge, edge);
+            LateralOffset = RoadPath.KeepOffMedian(wanted, 1.1f, LateralOffset);
+            RoadRageHaptics.EdgeScrape = (Mathf.Abs(LateralOffset) >= edge - 0.05f || LateralOffset != wanted) && verticalOffset <= 0f
                 ? Mathf.InverseLerp(30f, 160f, SpeedKph)
                 : 0f;
             // Both decay towards zero over roughly a second, so an impact reads as a shove
