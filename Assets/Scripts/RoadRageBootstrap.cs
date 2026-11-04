@@ -2705,6 +2705,14 @@ namespace RoadRage.UnityRemake
             }
             MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
             MakeMaterial("NY Tank", new Color(0.30f, 0.22f, 0.16f), 0f, 0.1f);
+            // The East River bridges: Brooklyn's granite, Manhattan's pale blue steel, grey steel,
+            // Queensboro's tan, the decks and the cables.
+            MakeMaterial("Bridge Stone", new Color(0.72f, 0.64f, 0.52f), 0f, 0.1f);
+            MakeMaterial("Bridge Blue", new Color(0.52f, 0.62f, 0.72f), 0.2f, 0.3f);
+            MakeMaterial("Bridge Steel", new Color(0.40f, 0.42f, 0.44f), 0.2f, 0.3f);
+            MakeMaterial("Bridge Tan", new Color(0.62f, 0.58f, 0.50f), 0.1f, 0.2f);
+            MakeMaterial("Bridge Deck", new Color(0.28f, 0.28f, 0.29f), 0f, 0.1f);
+            MakeMaterial("Bridge Cable", new Color(0.24f, 0.24f, 0.25f), 0.3f, 0.3f);
 
             // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
             Splat("Fagaras Ground", "BigSur", new[]
@@ -6841,7 +6849,8 @@ namespace RoadRage.UnityRemake
                         : SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 8f, 15f, "Forest Tree"));
             }
             var mesh = new VillageMesh();
-            var placed = FdrCity.Build(mesh, segStart, segEnd);
+            var placed = FdrCity.Build(mesh, segStart, segEnd, seaLevel);
+            FdrCity.BuildBridges(mesh, segStart, segEnd, seaLevel);
             mesh.Build(this);
             BuildGuardRail(materials["Forest Guard Rail"]);
             if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} buildings");
@@ -6902,7 +6911,7 @@ namespace RoadRage.UnityRemake
 
             /// Every building whose centre falls in this chunk, on the way there or back
             /// (the return pass mirrors the outward one along the road).
-            public static int Build(VillageMesh mesh, float segStart, float segEnd)
+            public static int Build(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
             {
                 if (!Load()) return 0;
                 var length = RoadPath.Route.Length;
@@ -6912,16 +6921,34 @@ namespace RoadRage.UnityRemake
                     foreach (var (d, back) in Passes(centres[i], length, segStart, segEnd))
                     {
                         var ring = new Vector3[counts[i]];
-                        var foot = float.PositiveInfinity;
                         for (var k = 0; k < ring.Length; k++)
                         {
                             var c = corners[starts[i] + k];
-                            var p = RoadPath.Point(d + (back ? -1f : 1f) * (c.x - centres[i]), c.y);
-                            foot = Mathf.Min(foot, GridGroundY(p));
-                            ring[k] = p;
+                            ring[k] = RoadPath.Point(d + (back ? -1f : 1f) * (c.x - centres[i]), c.y);
                         }
-                        for (var k = 0; k < ring.Length; k++) ring[k].y = foot - 0.5f;
-                        var h = heights[i];
+                        // Standing on its lowest corner, one low corner (a ditch) sank the whole
+                        // building and the ground covered its lower floors. Its height counts
+                        // from the mean ground along its walls, which reach down to the lowest point.
+                        var low = float.PositiveInfinity;
+                        var sum = 0f;
+                        var samples = 0;
+                        var wet = 0;
+                        for (var k = 0; k < ring.Length; k++)
+                        for (var s = 0; s < 3; s++)
+                        {
+                            var y = GridGroundY(Vector3.Lerp(ring[k], ring[(k + 1) % ring.Length], s / 3f));
+                            low = Mathf.Min(low, y);
+                            sum += y;
+                            samples++;
+                            if (!float.IsNaN(seaLevel) && y < seaLevel + 0.3f) wet++;
+                        }
+                        var ground = sum / samples;
+                        // Where the game's river runs (road and river are fitted, not surveyed),
+                        // a building would stand in the water: left out.
+                        if (wet * 4 > samples) continue;
+                        var foot = Mathf.Min(low, ground) - 0.5f;
+                        for (var k = 0; k < ring.Length; k++) ring[k].y = foot;
+                        var h = heights[i] + ground - foot - 0.5f;
                         // By height, as the city is: walk-ups, brick and concrete blocks, office and
                         // residential towers, glass at the top.
                         var pick = (int)((uint)(i * 2654435761u) >> 28);
@@ -6932,7 +6959,7 @@ namespace RoadRage.UnityRemake
                         var (key, tile) = FdrFacades[facade];
                         mesh.Building($"NY {key}", "NY Roof", ring, h + 0.5f, tile, pick / 16f);
                         // New York's wooden water tanks, on the roofs of mid-rise blocks.
-                        if (h > TankFrom && h < TankTo && (pick & 3) == 0)
+                        if (heights[i] > TankFrom && heights[i] < TankTo && (pick & 3) == 0)
                         {
                             var centre = Vector3.zero;
                             foreach (var p in ring) centre += p;
@@ -6942,6 +6969,169 @@ namespace RoadRage.UnityRemake
                     }
                 }
                 return placed;
+            }
+
+            /// One East River bridge (build_fdr.py bridges): deck points in road distance and
+            /// lateral, deck and cable (or truss top) heights above the river, towers by point.
+            private sealed class Bridge
+            {
+                public string Kind;
+                public float Width;
+                public float Cross;
+                public readonly List<Vector4> Points = new();
+                public readonly List<(int Index, float Height)> Towers = new();
+            }
+
+            private static List<Bridge> bridges;
+
+            private static List<Bridge> LoadBridges()
+            {
+                if (bridges != null) return bridges;
+                bridges = new List<Bridge>();
+                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_bridges");
+                if (asset == null) return bridges;
+                var inv = System.Globalization.CultureInfo.InvariantCulture;
+                Bridge bridge = null;
+                foreach (var line in asset.text.Split('\n'))
+                {
+                    var f = line.Trim().Split(' ');
+                    if (f[0] == "bridge")
+                        bridges.Add(bridge = new Bridge { Kind = f[1], Width = float.Parse(f[2], inv) });
+                    else if (f[0] == "p" && bridge != null)
+                        bridge.Points.Add(new Vector4(float.Parse(f[1], inv), float.Parse(f[2], inv), float.Parse(f[3], inv), float.Parse(f[4], inv)));
+                    else if (f[0] == "tower" && bridge != null)
+                        bridge.Towers.Add((int.Parse(f[1], inv), float.Parse(f[2], inv)));
+                }
+                foreach (var b in bridges)
+                {
+                    var best = float.PositiveInfinity;
+                    foreach (var q in b.Points)
+                        if (Mathf.Abs(q.y) < best) { best = Mathf.Abs(q.y); b.Cross = q.x; }
+                }
+                return bridges;
+            }
+
+            /// Each bridge whose crossing of the road falls in this chunk, whole: deck, columns
+            /// under the approaches, towers or piers, and cables with hangers or trusses.
+            public static void BuildBridges(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
+            {
+                if (float.IsNaN(seaLevel)) return;
+                var length = RoadPath.Route.Length;
+                foreach (var bridge in LoadBridges())
+                foreach (var (d, back) in Passes(bridge.Cross, length, segStart, segEnd))
+                    BuildBridge(mesh, bridge, d, back, seaLevel);
+            }
+
+            private static void BuildBridge(VillageMesh mesh, Bridge bridge, float d, bool back, float seaLevel)
+            {
+                var steel = bridge.Kind switch
+                {
+                    "brooklyn" => "Bridge Cable", "manhattan" => "Bridge Blue", "queensboro" => "Bridge Tan", _ => "Bridge Steel",
+                };
+                var n = bridge.Points.Count;
+                var deck = new Vector3[n];
+                var top = new float[n];
+                for (var i = 0; i < n; i++)
+                {
+                    var q = bridge.Points[i];
+                    var dd = d + (back ? -1f : 1f) * (q.x - bridge.Cross);
+                    var p = RoadPath.Point(dd, q.y);
+                    var ground = GridGroundY(p);
+                    p.y = Mathf.Max(seaLevel + q.z, ground + 1f);
+                    // Over the drive, always clear of the traffic.
+                    if (Mathf.Abs(q.y) < 25f) p.y = Mathf.Max(p.y, RoadPath.CenterY(dd) + 8f);
+                    deck[i] = p;
+                    top[i] = q.w > 0f ? seaLevel + q.w : 0f;
+                }
+                var half = bridge.Width * 0.5f;
+                var thick = bridge.Kind == "queensboro" ? 4f : 3f;
+                var across = new Vector3[n];
+                for (var i = 0; i < n; i++)
+                {
+                    var dir = deck[Mathf.Min(n - 1, i + 1)] - deck[Mathf.Max(0, i - 1)];
+                    dir.y = 0f;
+                    across[i] = Vector3.Cross(Vector3.up, dir).normalized;
+                }
+                var down = Vector3.down * thick;
+                for (var i = 0; i + 1 < n; i++)
+                {
+                    var l0 = deck[i] - across[i] * half;
+                    var r0 = deck[i] + across[i] * half;
+                    var l1 = deck[i + 1] - across[i + 1] * half;
+                    var r1 = deck[i + 1] + across[i + 1] * half;
+                    mesh.Face("Bridge Deck", l0, r0, r1, l1);
+                    mesh.Face("Bridge Deck", l0 + down, r0 + down, r1 + down, l1 + down);
+                    mesh.Face(steel, l0, l1, l1 + down, l0 + down);
+                    mesh.Face(steel, r0, r1, r1 + down, r0 + down);
+                }
+                // Columns under the approaches, on land and off the drive.
+                for (var i = 2; i < n - 2; i += 4)
+                {
+                    var p = deck[i];
+                    var ground = GridGroundY(p);
+                    var lateral = bridge.Points[i].y;
+                    if (Mathf.Abs(lateral) < 22f || ground < seaLevel + 0.3f || p.y - ground < 4f || top[i] > 0f && bridge.Kind != "queensboro") continue;
+                    var along = Vector3.Cross(across[i], Vector3.up);
+                    mesh.Pier(steel, p + down, across[i] * (half * 0.8f), along * 1.5f);
+                }
+                foreach (var (index, height) in bridge.Towers)
+                {
+                    var i = Mathf.Clamp(index, 0, n - 1);
+                    var foot = deck[i];
+                    foot.y = seaLevel;
+                    var along = Vector3.Cross(across[i], Vector3.up);
+                    var crown = seaLevel + height;
+                    if (bridge.Kind == "brooklyn")
+                    {
+                        // Granite: a base, three piers between the two Gothic arches, a block over them.
+                        var arch = deck[i].y + 32f;
+                        mesh.Box("Bridge Stone", foot + Vector3.down * 4f, across[i] * (half + 7f), along * 10f, deck[i].y - thick - foot.y + 4f);
+                        foreach (var x in new[] { -1f, 0f, 1f })
+                            mesh.Box("Bridge Stone", deck[i] + down + across[i] * (x * (half + 3f)), across[i] * (x == 0f ? 3f : 4f), along * 10f, arch - deck[i].y + thick);
+                        mesh.Box("Bridge Stone", new Vector3(deck[i].x, arch, deck[i].z), across[i] * (half + 7f), along * 10f, crown - arch);
+                    }
+                    else
+                    {
+                        // A masonry pier in the river, steel above: two legs braced across.
+                        var pierTop = bridge.Kind == "queensboro" ? deck[i].y - thick : seaLevel + 8f;
+                        mesh.Box("Bridge Stone", foot + Vector3.down * 4f, across[i] * (half + 4f), along * 8f, pierTop - foot.y + 4f);
+                        foreach (var x in new[] { -1f, 1f })
+                        {
+                            var leg = new Vector3(deck[i].x, pierTop, deck[i].z) + across[i] * (x * (half + 1.5f));
+                            mesh.Box(steel, leg, across[i] * 2.2f, along * 2.5f, crown - pierTop);
+                        }
+                        foreach (var y in bridge.Kind == "queensboro" ? new float[0] : new[] { deck[i].y - thick - 1f, (deck[i].y + crown) * 0.5f, crown - 4f })
+                            mesh.Box(steel, new Vector3(deck[i].x, y, deck[i].z), across[i] * (half + 3f), along * 1.6f, 2.5f);
+                    }
+                }
+                if (bridge.Kind == "queensboro")
+                {
+                    // Cantilever trusses either side: top chord, posts, and diagonals.
+                    foreach (var x in new[] { -1f, 1f })
+                    for (var i = 0; i + 1 < n; i++)
+                    {
+                        if (top[i] <= 0f || top[i + 1] <= 0f) continue;
+                        var a = deck[i] + across[i] * (x * half);
+                        var b = deck[i + 1] + across[i + 1] * (x * half);
+                        var ta = new Vector3(a.x, top[i], a.z);
+                        var tb = new Vector3(b.x, top[i + 1], b.z);
+                        mesh.Beam(steel, ta, tb, 0.8f);
+                        mesh.Beam(steel, a, ta, 0.45f);
+                        mesh.Beam(steel, i % 2 == 0 ? a : ta, i % 2 == 0 ? tb : b, 0.35f);
+                    }
+                    return;
+                }
+                // Main cables, two either side, and the hangers down to the deck.
+                foreach (var x in new[] { -1f, -0.35f, 0.35f, 1f })
+                for (var i = 0; i + 1 < n; i++)
+                {
+                    if (top[i] <= 0f || top[i + 1] <= 0f) continue;
+                    var a = deck[i] + across[i] * (x * (half - 1f));
+                    var b = deck[i + 1] + across[i + 1] * (x * (half - 1f));
+                    var ta = new Vector3(a.x, top[i], a.z);
+                    mesh.Beam("Bridge Cable", ta, new Vector3(b.x, top[i + 1], b.z), 0.45f);
+                    if (top[i] - a.y > 2f) mesh.Beam("Bridge Cable", a, ta, 0.08f);
+                }
             }
 
             private static IEnumerable<(float, bool)> Passes(float z, float length, float segStart, float segEnd)
@@ -7683,6 +7873,30 @@ namespace RoadRage.UnityRemake
                     part.Uv.Add(Vector2.zero); part.Uv.Add(Vector2.right); part.Uv.Add(Vector2.up);
                     part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
                 }
+            }
+
+            /// A block standing on `foot`: `across` and `along` are half-sizes, sides and a top.
+            public void Box(string material, Vector3 foot, Vector3 across, Vector3 along, float height)
+            {
+                if (height <= 0f) return;
+                var up = Vector3.up * height;
+                for (var s = -1; s <= 1; s += 2)
+                {
+                    Face(material, foot + across * s - along, foot + across * s + along, foot + across * s + along + up, foot + across * s - along + up);
+                    Face(material, foot + along * s - across, foot + along * s + across, foot + along * s + across + up, foot + along * s - across + up);
+                }
+                Face(material, foot + up - across - along, foot + up + across - along, foot + up + across + along, foot + up - across + along);
+            }
+
+            /// A thin straight member from a to b, `half` thick: two crossed strips.
+            public void Beam(string material, Vector3 a, Vector3 b, float half)
+            {
+                var dir = b - a;
+                if (dir.sqrMagnitude < 0.01f) return;
+                var side = Vector3.Cross(dir, Mathf.Abs(dir.normalized.y) > 0.9f ? Vector3.right : Vector3.up).normalized * half;
+                var other = Vector3.Cross(dir, side).normalized * half;
+                Face(material, a - side, a + side, b + side, b - side);
+                Face(material, a - other, a + other, b + other, b - other);
             }
 
             /// A surface seen from both sides.
@@ -11466,11 +11680,8 @@ namespace RoadRage.UnityRemake
             }
             else if (biomeIndex == FdrDriveIndex)
             {
-                // Midtown and Downtown on the horizon, Brooklyn and Queens across the river: the far
-                // ring is baked from the ground plus every building's height (build_fdr.py).
-                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/fdr_skyline", fdrRoute, Mood(biomeIndex).FogDensity,
-                        new Color(0.34f, 0.35f, 0.38f), 5000f, stepped: true) == null)
-                    Debug.LogWarning("Missing Biomes/Routes/fdr_skyline - FDR Drive has no skyline.");
+                // No far ring: drawn as flat columns, the city beyond the real buildings read as
+                // black cardboard on the horizon. The haze closes the view instead.
             }
             else if (biomeIndex == TransfagarasanIndex)
             {
@@ -13306,6 +13517,8 @@ namespace RoadRage.UnityRemake
             var enforcers = 0;
             var cabs = 0;
             var rodinSpawned = 0;
+            // Commercial vehicles are banned from FDR Drive: cars only.
+            var carsOnly = BiomeIndexAt(startDistance) == FdrDriveIndex;
             for (var i = 0; i < Mathf.Min(distances.Length, trafficCount); i++)
             {
                 var direction = lanes[i] < 0f ? 1f : -1f;
@@ -13317,17 +13530,17 @@ namespace RoadRage.UnityRemake
 
                 var role = TrafficCarController.VehicleRole.Standard;
                 var model = models[i % models.Length];
-                if (i == 4 || i == 9)
+                if (!carsOnly && (i == 4 || i == 9))
                 {
                     role = TrafficCarController.VehicleRole.FuelTanker;
                     model = tankers[i % tankers.Length];
                 }
-                else if (i == 6 || i == 11)
+                else if (!carsOnly && (i == 6 || i == 11))
                 {
                     role = TrafficCarController.VehicleRole.CarHauler;
                     model = haulers[i % haulers.Length];
                 }
-                else if ((i == 2 || i == 14) && offence == TrafficCarController.Offence.None)
+                else if (!carsOnly && (i == 2 || i == 14) && offence == TrafficCarController.Offence.None)
                 {
                     // Loaded logger: slow, long, and it sheds its load across the road
                     // when it is hit. Slot 2 runs with the player, 14 comes the other way.
@@ -13348,7 +13561,7 @@ namespace RoadRage.UnityRemake
                         model = i % 4 == 1 ? "SK_Veh_Preset_Ute_04" : "SK_Veh_Preset_Ute_03";
                     else if (offence == TrafficCarController.Offence.WrongWay)
                         model = i % 4 == 1 ? "SK_Veh_Preset_Sports_01" : "SK_Veh_Preset_Exotic_01";
-                    else if (i == 8 && offence == TrafficCarController.Offence.None)
+                    else if (!carsOnly && i == 8 && offence == TrafficCarController.Offence.None)
                         model = "SK_Veh_Preset_Truck_02";
                 }
 
@@ -13391,8 +13604,11 @@ namespace RoadRage.UnityRemake
             if (TrafficCountry(BiomeIndexAt(startDistance)) == "_de_") AddGermanWorkingVehicles(trafficRoot, startDistance);
             if (TrafficCountry(BiomeIndexAt(startDistance)) is "_us_" or "_ca_")
             {
-                AddWorkingVehicle(trafficRoot, startDistance, "schoolbus", TrafficCarController.VehicleRole.Bus, 900f, -0.5f, 50f, 1f);
-                AddWorkingVehicle(trafficRoot, startDistance, "rv", TrafficCarController.VehicleRole.PostVan, 1200f, 0.5f, 68f, -1f);
+                if (!carsOnly)
+                {
+                    AddWorkingVehicle(trafficRoot, startDistance, "schoolbus", TrafficCarController.VehicleRole.Bus, 900f, -0.5f, 50f, 1f);
+                    AddWorkingVehicle(trafficRoot, startDistance, "rv", TrafficCarController.VehicleRole.PostVan, 1200f, 0.5f, 68f, -1f);
+                }
                 // One lane each way carries few cars, and those came from only part of the
                 // list: enough more that every kind of car is on the road at once.
                 for (var extra = 0; extra < UsExtraCars; extra++)
