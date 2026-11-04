@@ -30,6 +30,7 @@ Roadside props: NVIDIA SimReady Assets, © NVIDIA Corporation, CC BY 4.0
 
 TEXTURES AND SOUND
 Ground and rock textures: Poly Haven, CC0.
+FDR Drive's facades: ambientCG, CC0.
 Crash sounds: Kenney Impact Sounds and OpenGameArt collections, CC0.
 
 AUDIO ENGINE

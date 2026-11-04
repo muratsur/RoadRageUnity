@@ -2692,10 +2692,15 @@ namespace RoadRage.UnityRemake
             }, 0.08f);
             materials["Fdr Ground"].SetFloat("_Macro", 1f);
             materials["Fdr Ground"].SetFloat("_MacroMean", 0.052f);
-            // The city's facades (Tools/Terrain/make_facades.py) and its roofs.
-            foreach (var facade in FdrFacades)
-                BiomeMaterial($"NY {facade}", "NewYork", $"T_facade_{facade}_D", "", Color.white, 0f, facade == "glass" ? 0.6f : 0.1f);
+            // The city's facades: ambientCG photo facades (CC0) with their normal maps, and roofs.
+            foreach (var (facade, _) in FdrFacades)
+            {
+                var shiny = facade == "glass" || facade == "office";
+                BiomeMaterial($"NY {facade}", "NewYork", $"T_facade_{facade}_D", $"T_facade_{facade}_N", Color.white,
+                    facade == "glass" ? 0.3f : 0f, shiny ? 0.7f : 0.15f);
+            }
             MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
+            MakeMaterial("NY Tank", new Color(0.30f, 0.22f, 0.16f), 0f, 0.1f);
 
             // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
             Splat("Fagaras Ground", "BigSur", new[]
@@ -3781,6 +3786,9 @@ namespace RoadRage.UnityRemake
             // not - doing it for every ground ribbon stalled chunk generation.
             if (colors != null && material != null && material.shader != null &&
                 material.shader.name == "RoadRage/TerrainSplat")
+                mesh.RecalculateTangents();
+            // And for anything normal-mapped (FDR Drive's photo facades).
+            else if (material != null && material.HasProperty("_BumpMap") && material.GetTexture("_BumpMap") != null)
                 mesh.RecalculateTangents();
             mesh.RecalculateBounds();
             item.AddComponent<MeshFilter>().sharedMesh = mesh;
@@ -6782,14 +6790,20 @@ namespace RoadRage.UnityRemake
             if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} buildings");
         }
 
-        private static readonly string[] FdrFacades = { "brick", "stone", "glass" };
+        /// Each facade texture and the metres of wall it covers, counted in floors of about 3.5 m:
+        /// ambientCG Facade018A, 020A, 019A, 006, 001 and 014 (CC0).
+        private static readonly (string Key, float Tile)[] FdrFacades =
+        {
+            ("brick", 21f), ("browntower", 14f), ("concrete", 17.5f), ("office", 31f), ("glass", 35f), ("highrise", 87f),
+        };
 
         /// The baked footprints (FDRB: int count, then per building float height, byte corners,
         /// corners x (float road distance, float lateral)), loaded once.
         private static class FdrCity
         {
-            private const float FacadeBay = 4f;
-            private const float FacadeFloor = 3.5f;
+            private const float TankChance = 0.25f;
+            private const float TankFrom = 18f;
+            private const float TankTo = 70f;
             private static float[] heights;
             private static int[] starts;
             private static int[] counts;
@@ -6851,8 +6865,22 @@ namespace RoadRage.UnityRemake
                         }
                         for (var k = 0; k < ring.Length; k++) ring[k].y = foot - 0.5f;
                         var h = heights[i];
-                        var facade = h > 60f ? (i % 4 == 0 ? "stone" : "glass") : h > 25f ? (i % 2 == 0 ? "stone" : "brick") : "brick";
-                        mesh.Building($"NY {facade}", "NY Roof", ring, h + 0.5f, FacadeBay, FacadeFloor);
+                        // By height, as the city is: walk-ups, brick and concrete blocks, office and
+                        // residential towers, glass at the top.
+                        var pick = (int)((uint)(i * 2654435761u) >> 28);
+                        var facade = h < 25f ? (pick % 3 == 0 ? 1 : 0)
+                            : h < 60f ? new[] { 0, 1, 2 }[pick % 3]
+                            : h < 150f ? new[] { 3, 2, 5, 1 }[pick % 4]
+                            : new[] { 4, 3, 4, 5 }[pick % 4];
+                        var (key, tile) = FdrFacades[facade];
+                        mesh.Building($"NY {key}", "NY Roof", ring, h + 0.5f, tile, pick / 16f);
+                        // New York's wooden water tanks, on the roofs of mid-rise blocks.
+                        if (h > TankFrom && h < TankTo && (pick & 3) == 0)
+                        {
+                            var centre = Vector3.zero;
+                            foreach (var p in ring) centre += p;
+                            mesh.WaterTank(centre / ring.Length + Vector3.up * (h + 0.5f));
+                        }
                         placed++;
                     }
                 }
@@ -7523,8 +7551,9 @@ namespace RoadRage.UnityRemake
             }
 
             /// An extruded building: walls from `ring` (its foot, in order, all at one height) up by
-            /// `height`, facing out, the facade repeating every `bay` across and `floor` up; a flat roof.
-            public void Building(string wall, string roof, Vector3[] ring, float height, float bay, float floor)
+            /// `height`, facing out, the facade texture covering `tile` metres each way and slid by
+            /// `shift` so neighbours do not line up; a flat roof.
+            public void Building(string wall, string roof, Vector3[] ring, float height, float tile, float shift)
             {
                 var centre = Vector3.zero;
                 foreach (var p in ring) centre += p;
@@ -7541,8 +7570,10 @@ namespace RoadRage.UnityRemake
                     if (Vector3.Dot(Vector3.Cross(b - a, Vector3.up), (a + b) * 0.5f - centre) < 0f) (a, b) = (b, a);
                     var v = part.Vertices.Count;
                     part.Vertices.Add(a); part.Vertices.Add(b); part.Vertices.Add(b + up); part.Vertices.Add(a + up);
-                    part.Uv.Add(new Vector2(run / bay, 0f)); part.Uv.Add(new Vector2((run + width) / bay, 0f));
-                    part.Uv.Add(new Vector2((run + width) / bay, height / floor)); part.Uv.Add(new Vector2(run / bay, height / floor));
+                    var u0 = shift + run / tile;
+                    var u1 = shift + (run + width) / tile;
+                    part.Uv.Add(new Vector2(u0, 0f)); part.Uv.Add(new Vector2(u1, 0f));
+                    part.Uv.Add(new Vector2(u1, height / tile)); part.Uv.Add(new Vector2(u0, height / tile));
                     part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
                     part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3);
                     run += width;
@@ -7563,6 +7594,37 @@ namespace RoadRage.UnityRemake
                     // Facing up: Cross(a - centre, b - centre).y > 0 is the front face.
                     var up1 = Vector3.Cross(top.Vertices[a] - top.Vertices[mid], top.Vertices[b] - top.Vertices[mid]).y > 0f;
                     top.Triangles.Add(mid); top.Triangles.Add(up1 ? a : b); top.Triangles.Add(up1 ? b : a);
+                }
+            }
+
+            /// A wooden water tank on its stand: an eight-sided barrel with a cone roof.
+            public void WaterTank(Vector3 roof)
+            {
+                const int sides = 8;
+                const float radius = 2.2f, stand = 2.5f, barrel = 4.5f, cone = 1.6f;
+                var foot = roof + Vector3.up * stand;
+                var top = foot + Vector3.up * barrel;
+                var apex = top + Vector3.up * cone;
+                var leg = Vector3.right * 0.25f;
+                var legBack = Vector3.forward * 0.25f;
+                for (var k = 0; k < 4; k++)
+                {
+                    var at = roof + Quaternion.Euler(0f, 45f + k * 90f, 0f) * Vector3.forward * radius * 0.8f;
+                    Face("NY Tank", at - leg, at + leg, at + leg + Vector3.up * stand, at - leg + Vector3.up * stand);
+                    Face("NY Tank", at - legBack, at + legBack, at + legBack + Vector3.up * stand, at - legBack + Vector3.up * stand);
+                }
+                var part = For("NY Tank");
+                for (var k = 0; k < sides; k++)
+                {
+                    var a = Quaternion.Euler(0f, k * 360f / sides, 0f) * Vector3.forward * radius;
+                    var c = Quaternion.Euler(0f, (k + 1) * 360f / sides, 0f) * Vector3.forward * radius;
+                    // Outward: a quad (a, b, b + up) faces Cross(b - a, up).
+                    if (Vector3.Dot(Vector3.Cross(c - a, Vector3.up), a + c) < 0f) (a, c) = (c, a);
+                    Quad(part, foot + a, foot + c, top + c, top + a);
+                    var v = part.Vertices.Count;
+                    part.Vertices.Add(top + a); part.Vertices.Add(top + c); part.Vertices.Add(apex);
+                    part.Uv.Add(Vector2.zero); part.Uv.Add(Vector2.right); part.Uv.Add(Vector2.up);
+                    part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
                 }
             }
 
@@ -11341,7 +11403,7 @@ namespace RoadRage.UnityRemake
                 // Midtown and Downtown on the horizon, Brooklyn and Queens across the river: the far
                 // ring is baked from the ground plus every building's height (build_fdr.py).
                 if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/fdr_skyline", fdrRoute, Mood(biomeIndex).FogDensity,
-                        new Color(0.34f, 0.35f, 0.38f), 5000f) == null)
+                        new Color(0.34f, 0.35f, 0.38f), 5000f, stepped: true) == null)
                     Debug.LogWarning("Missing Biomes/Routes/fdr_skyline - FDR Drive has no skyline.");
             }
             else if (biomeIndex == TransfagarasanIndex)
