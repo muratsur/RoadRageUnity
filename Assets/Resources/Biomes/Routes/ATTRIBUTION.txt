@@ -40,4 +40,13 @@ Transfagarasan follows the DN7C, Cartisoara to the Vidraru dam (Tools/Terrain/bu
   GmbH 2014-2018 provided under COPERNICUS by the European Union and ESA; all rights reserved.
 - Land cover: ESA WorldCover, as above.
 
+FDR Drive follows the real FDR Drive, Manhattan, East 125th Street to the Battery (Tools/Terrain/build_fdr.py),
+from:
+
+- Road centreline: (c) OpenStreetMap contributors, ODbL.
+- Building footprints and roof heights: Building Footprints, NYC Open Data (NYC Office of
+  Technology and Innovation), free to use under the NYC Open Data terms of use.
+- Terrain: USGS 3D Elevation Program 1 arc-second, public domain.
+- Land cover: ESA WorldCover, as above.
+
 All of these are carried in the game's credits (Assets/Resources/Credits.txt).

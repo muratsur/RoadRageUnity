@@ -1,0 +1,9 @@
+0 East 125th Street|East 125th Street
+2732 Gracie Mansion|Gracie Mansion
+5220 Queensboro Bridge|Queensboro Bridge
+6383 United Nations|United Nations
+10421 Williamsburg Bridge|Williamsburg Bridge
+11698 Manhattan Bridge|Manhattan Bridge
+12345 Brooklyn Bridge|Brooklyn Bridge
+12788 South Street Seaport|South Street Seaport
+13693 The Battery|The Battery
