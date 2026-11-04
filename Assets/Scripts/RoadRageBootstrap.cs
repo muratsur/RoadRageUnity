@@ -295,14 +295,14 @@ namespace RoadRage.UnityRemake
         /// Indices the picker and journey currently expose.
         // CANAL TOWN (10) is out: one street of the same few houses repeating was not
         // worth a biome slot. Its builder stays for -biome=canal.
-        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex };
+        private static readonly int[] ActiveBiomes = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex, FdrDriveIndex };
 
         private static readonly string[] Biomes =
         {
             "GREENWOOD", "SNOW STATION", "SEWER TUNNEL", "TIRE DISTRICT",
             "ALIEN BIOMASS", "NEON CITY", "RED CANYON", "HONG KONG", "MANHATTAN",
             "HOLLYWOOD HILLS", "CANAL TOWN", "VOLCANO PASS", "SALT FLATS", "STORM COAST",
-            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST", "GREAT OCEAN ROAD", "TRANSFAGARASAN"
+            "MOSEL VALLEY", "ICELAND COAST", "BIG SUR", "SEA TO SKY", "AMALFI COAST", "GREAT OCEAN ROAD", "TRANSFAGARASAN", "FDR DRIVE"
         };
         private static readonly string[] ComingSoon = { "VOLCANO PASS", "SALT FLATS", "STORM COAST" };
         private bool pickerSeen;
@@ -593,6 +593,7 @@ namespace RoadRage.UnityRemake
             if (value.Contains("amalfi") || value.Contains("italy") || value.Contains("positano")) return Biomes[AmalfiIndex];
             if (value.Contains("ocean") || value.Contains("australia") || value.Contains("apostles")) return Biomes[OceanRoadIndex];
             if (value.Contains("transf") || value.Contains("romania") || value.Contains("fagaras")) return Biomes[TransfagarasanIndex];
+            if (value.Contains("fdr") || value.Contains("new york") || value.Contains("newyork")) return Biomes[FdrDriveIndex];
             if (value.Contains("greenwood")) return Biomes[0];
             if (value.Contains("snow")) return Biomes[1];
             if (value.Contains("sewer")) return Biomes[2];
@@ -2481,6 +2482,14 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.25f, PostExposure = 0.02f, BloomIntensity = 0.12f, BloomThreshold = 4f,
                 AmbientIntensity = 1.1f, Saturation = 2f
             },
+            FdrDriveIndex => new BiomeMood // FDR DRIVE - bright, a little river haze between the towers
+            {
+                FogDensity = 0.0013f, Fog = new Color(0.74f, 0.79f, 0.85f),
+                Sky = new Color(0.42f, 0.60f, 0.90f), Equator = new Color(0.62f, 0.64f, 0.66f),
+                Ground = new Color(0.22f, 0.22f, 0.22f), SunColor = new Color(1f, 0.97f, 0.90f),
+                SunIntensity = 1.3f, PostExposure = 0.02f, BloomIntensity = 0.15f, BloomThreshold = 4f,
+                AmbientIntensity = 1.15f, Saturation = 0f
+            },
             TransfagarasanIndex => new BiomeMood // TRANSFAGARASAN - thin, clear mountain air
             {
                 FogDensity = 0.0011f, Fog = new Color(0.72f, 0.80f, 0.90f),
@@ -2593,6 +2602,7 @@ namespace RoadRage.UnityRemake
             AmalfiIndex => "Amalfi Ground",
             OceanRoadIndex => "Ocean Road Ground",
             TransfagarasanIndex => "Fagaras Ground",
+            FdrDriveIndex => "Fdr Ground",
             _ => "Forest Floor PBR"
         };
 
@@ -2672,6 +2682,20 @@ namespace RoadRage.UnityRemake
             }, 0.08f);
             materials["Amalfi Ground"].SetFloat("_Macro", 1f);
             materials["Amalfi Ground"].SetFloat("_MacroMean", 0.052f);
+
+            // FDR Drive: pavement and park grass, concrete where it is steep, a grey verge.
+            Splat("Fdr Ground", "BigSur", new[]
+            {
+                ("T_sur_grass", 0.1f, new Color(0.55f, 0.78f, 0.6f)),
+                ("T_sur_rock", 0.05f, new Color(1.05f, 1.1f, 1.18f)),
+                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.7f, 0.72f, 0.75f)),
+            }, 0.08f);
+            materials["Fdr Ground"].SetFloat("_Macro", 1f);
+            materials["Fdr Ground"].SetFloat("_MacroMean", 0.052f);
+            // The city's facades (Tools/Terrain/make_facades.py) and its roofs.
+            foreach (var facade in FdrFacades)
+                BiomeMaterial($"NY {facade}", "NewYork", $"T_facade_{facade}_D", "", Color.white, 0f, facade == "glass" ? 0.6f : 0.1f);
+            MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
 
             // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
             Splat("Fagaras Ground", "BigSur", new[]
@@ -2891,7 +2915,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex || biomeIndex == FdrDriveIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
                 : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
                 : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
@@ -3079,7 +3103,7 @@ namespace RoadRage.UnityRemake
             var deck = route == moselRoute || IsSeaRoute(route) ? MoselDeckWeight(distance) : 0f;
             if (across <= 0f && deck <= 0f) return 0f;
             var real = route.TerrainAt(distance, Mathf.Sign(lateral) * (RealRoadEdge + Mathf.Max(0f, across)));
-            var limit = route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute ? SeaToSkyGroundLimit
+            var limit = route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute || route == fdrRoute ? SeaToSkyGroundLimit
                 : route == moselRoute || route == icelandRoute || IsSeaRoute(route) ? MoselGroundLimit : RealGroundLimit;
             real = limit * (float)System.Math.Tanh(real / limit);
             // Under a bridge the ground falls away from the road instead of meeting it.
@@ -3742,7 +3766,13 @@ namespace RoadRage.UnityRemake
             Material material, Color[] colors = null)
         {
             var item = Adopt(new GameObject(name));
-            var mesh = new Mesh { name = $"{name} Runtime Mesh", vertices = vertices, triangles = triangles, uv = uv };
+            // A city chunk's facades can pass 65,535 vertices.
+            var mesh = new Mesh
+            {
+                name = $"{name} Runtime Mesh",
+                indexFormat = vertices.Length > 65535 ? UnityEngine.Rendering.IndexFormat.UInt32 : UnityEngine.Rendering.IndexFormat.UInt16,
+                vertices = vertices, triangles = triangles, uv = uv,
+            };
             if (colors != null) mesh.colors = colors;
             mesh.RecalculateNormals();
             // Tangents only for meshes actually drawn with the splat shader. Every
@@ -5084,7 +5114,7 @@ namespace RoadRage.UnityRemake
         // registered as anywhere. 5400 m is ~3.7 min, so a zone reads as a place.
         private const float ZoneLength = 5400f;
         /// Order a journey visits biomes, starting from whichever the player picked.
-        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex };
+        private static readonly int[] JourneyOrder = { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, MoselIndex, IcelandIndex, BigSurIndex, SeaToSkyIndex, AmalfiIndex, OceanRoadIndex, TransfagarasanIndex, FdrDriveIndex };
 
         private readonly Dictionary<int, GameObject> liveChunks = new();
         private int journeyStart;
@@ -5120,8 +5150,9 @@ namespace RoadRage.UnityRemake
         private static RoadRoute amalfiRoute;
         private static RoadRoute oceanRoute;
         private static RoadRoute transfagRoute;
+        private static RoadRoute fdrRoute;
         /// Roads with one flat sea baked into their ground and their own bridges.
-        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute);
+        private static bool IsSeaRoute(RoadRoute route) => route != null && (route == bigSurRoute || route == seaToSkyRoute || route == amalfiRoute || route == oceanRoute || route == transfagRoute || route == fdrRoute);
 
         /// Greenwood drives the real Schwarzwaldhochstrasse (B500), Baden-Baden to
         /// Freudenstadt and back: its bends and hills, fitted to this road by
@@ -5135,9 +5166,18 @@ namespace RoadRage.UnityRemake
                 : biomeIndex == SeaToSkyIndex ? "Police/T_ca_police"
                 : biomeIndex == AmalfiIndex ? "Police/T_it_police"
                 : biomeIndex == OceanRoadIndex ? "Police/T_au_police"
-                : biomeIndex == TransfagarasanIndex ? "Police/T_ro_police" : "Police/T_polizei";
+                : biomeIndex == TransfagarasanIndex ? "Police/T_ro_police"
+                : biomeIndex == FdrDriveIndex ? "Police/T_us_police" : "Police/T_polizei";
             // Australia drives on the left.
             RoadPath.DriveSide = biomeIndex == OceanRoadIndex ? -1f : 1f;
+            if (biomeIndex == FdrDriveIndex)
+            {
+                fdrRoute ??= RoadRoute.Load("Biomes/Routes/fdr");
+                if (fdrRoute == null) Debug.LogWarning("Missing Biomes/Routes/fdr - FDR Drive keeps the procedural road.");
+                else Debug.Log($"RR_ROUTE FDR Drive follows the real FDR Drive: {fdrRoute.Length / 1000f:0.0} km, there and back");
+                RoadPath.Route = fdrRoute;
+                return;
+            }
             if (biomeIndex == TransfagarasanIndex)
             {
                 transfagRoute ??= RoadRoute.Load("Biomes/Routes/dn7c");
@@ -6015,6 +6055,7 @@ namespace RoadRage.UnityRemake
                 case MoselIndex: BuildMoselValley(); break;
                 case IcelandIndex: BuildIcelandCoast(); break;
                 case BigSurIndex: case SeaToSkyIndex: case AmalfiIndex: case OceanRoadIndex: case TransfagarasanIndex: BuildBigSur(); break;
+                case FdrDriveIndex: BuildFdrDrive(); break;
                 default: BuildForest(); break;
             }
         }
@@ -6323,7 +6364,8 @@ namespace RoadRage.UnityRemake
                 : RoadPath.Route == seaToSkyRoute ? "Biomes/Routes/bc99_structures"
                 : RoadPath.Route == amalfiRoute ? "Biomes/Routes/ss163_structures"
                 : RoadPath.Route == oceanRoute ? "Biomes/Routes/b100_structures"
-                : RoadPath.Route == transfagRoute ? "Biomes/Routes/dn7c_structures" : "Biomes/Routes/b53_structures");
+                : RoadPath.Route == transfagRoute ? "Biomes/Routes/dn7c_structures"
+                : RoadPath.Route == fdrRoute ? "Biomes/Routes/fdr_structures" : "Biomes/Routes/b53_structures");
             if (asset == null)
             {
                 Debug.LogWarning("Missing Biomes/Routes/b53_structures - the Mosel Valley has no bridges.");
@@ -6638,6 +6680,7 @@ namespace RoadRage.UnityRemake
         private const int AmalfiIndex = 18;
         private const int OceanRoadIndex = 19;
         private const int TransfagarasanIndex = 20;
+        private const int FdrDriveIndex = 21;
         private static readonly string[] SeaToSkyHouses = { "chalet", "cottage", "cabin", "aframe", "lodge", "barn", "store" };
         private const float BigSurHouseEvery = 180f;
         private const float AmalfiHouseEvery = 30f;
@@ -6714,6 +6757,118 @@ namespace RoadRage.UnityRemake
         private const float ArchBelowDeck = 3f;
         private static readonly string[] BigSurHouses = { "cabin", "coasthouse", "store", "ranch", "bungalow", "aframe", "motel", "barn", "lodge" };
         private string bigSurLastHouse;
+
+        /// FDR Drive, Manhattan: the East River, the road's viaducts, park trees, and the city - every
+        /// OSM building near the road, extruded from its footprint (Tools/Terrain/build_fdr.py).
+        private void BuildFdrDrive()
+        {
+            Random.InitState(40712 ^ chunkSeed);
+            Physics.SyncTransforms();
+            BuildMoselRiver();
+            BuildMoselBridges();
+            var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
+            for (var near = 25f; near < 300f; near += 40f)
+            {
+                var from = near;
+                ScatterBand(9f, from, from + 40f, (d, l, s) =>
+                    RoadPath.Route.CoverAt(d, l) != RoadRoute.CoverForest ||
+                    (!float.IsNaN(seaLevel) && GridGroundY(RoadPath.Point(d, l)) < seaLevel + AboveSeaMetres) ? null
+                        : SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 8f, 15f, "Forest Tree"));
+            }
+            var mesh = new VillageMesh();
+            var placed = FdrCity.Build(mesh, segStart, segEnd);
+            mesh.Build(this);
+            BuildGuardRail(materials["Forest Guard Rail"]);
+            if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} buildings");
+        }
+
+        private static readonly string[] FdrFacades = { "brick", "stone", "glass" };
+
+        /// The baked footprints (FDRB: int count, then per building float height, byte corners,
+        /// corners x (float road distance, float lateral)), loaded once.
+        private static class FdrCity
+        {
+            private const float FacadeBay = 4f;
+            private const float FacadeFloor = 3.5f;
+            private static float[] heights;
+            private static int[] starts;
+            private static int[] counts;
+            private static float[] centres;
+            private static Vector2[] corners;
+
+            private static bool Load()
+            {
+                if (heights != null) return heights.Length > 0;
+                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_buildings");
+                heights = System.Array.Empty<float>();
+                if (asset == null || asset.bytes.Length < 8 || asset.bytes[0] != 'F' || asset.bytes[3] != 'B') return false;
+                var bytes = asset.bytes;
+                var count = System.BitConverter.ToInt32(bytes, 4);
+                heights = new float[count];
+                starts = new int[count];
+                counts = new int[count];
+                centres = new float[count];
+                var all = new List<Vector2>();
+                var at = 8;
+                for (var i = 0; i < count; i++)
+                {
+                    heights[i] = System.BitConverter.ToSingle(bytes, at);
+                    counts[i] = bytes[at + 4];
+                    starts[i] = all.Count;
+                    at += 5;
+                    var sum = 0f;
+                    for (var k = 0; k < counts[i]; k++, at += 8)
+                    {
+                        var c = new Vector2(System.BitConverter.ToSingle(bytes, at), System.BitConverter.ToSingle(bytes, at + 4));
+                        all.Add(c);
+                        sum += c.x;
+                    }
+                    centres[i] = sum / counts[i];
+                }
+                corners = all.ToArray();
+                return count > 0;
+            }
+
+            /// Every building whose centre falls in this chunk, on the way there or back
+            /// (the return pass mirrors the outward one along the road).
+            public static int Build(VillageMesh mesh, float segStart, float segEnd)
+            {
+                if (!Load()) return 0;
+                var length = RoadPath.Route.Length;
+                var placed = 0;
+                for (var i = 0; i < heights.Length; i++)
+                {
+                    foreach (var (d, back) in Passes(centres[i], length, segStart, segEnd))
+                    {
+                        var ring = new Vector3[counts[i]];
+                        var foot = float.PositiveInfinity;
+                        for (var k = 0; k < ring.Length; k++)
+                        {
+                            var c = corners[starts[i] + k];
+                            var p = RoadPath.Point(d + (back ? -1f : 1f) * (c.x - centres[i]), c.y);
+                            foot = Mathf.Min(foot, GridGroundY(p));
+                            ring[k] = p;
+                        }
+                        for (var k = 0; k < ring.Length; k++) ring[k].y = foot - 0.5f;
+                        var h = heights[i];
+                        var facade = h > 60f ? (i % 4 == 0 ? "stone" : "glass") : h > 25f ? (i % 2 == 0 ? "stone" : "brick") : "brick";
+                        mesh.Building($"NY {facade}", "NY Roof", ring, h + 0.5f, FacadeBay, FacadeFloor);
+                        placed++;
+                    }
+                }
+                return placed;
+            }
+
+            private static IEnumerable<(float, bool)> Passes(float z, float length, float segStart, float segEnd)
+            {
+                var period = 2f * length;
+                var d = z + period * Mathf.Ceil((segStart - z) / period);
+                if (d < segEnd) yield return (d, false);
+                var back = period - z;
+                d = back + period * Mathf.Ceil((segStart - back) / period);
+                if (d < segEnd) yield return (d, true);
+            }
+        }
 
         private void BuildBigSur()
         {
@@ -7364,6 +7519,50 @@ namespace RoadRage.UnityRemake
                     var d = Ground(db, la, lift);
                     if (Vector3.Cross(b - a, c - a).y > 0f) Quad(part, a, b, c, d);
                     else Quad(part, a, d, c, b);
+                }
+            }
+
+            /// An extruded building: walls from `ring` (its foot, in order, all at one height) up by
+            /// `height`, facing out, the facade repeating every `bay` across and `floor` up; a flat roof.
+            public void Building(string wall, string roof, Vector3[] ring, float height, float bay, float floor)
+            {
+                var centre = Vector3.zero;
+                foreach (var p in ring) centre += p;
+                centre /= ring.Length;
+                var up = Vector3.up * height;
+                var part = For(wall);
+                var run = 0f;
+                for (var k = 0; k < ring.Length; k++)
+                {
+                    var a = ring[k];
+                    var b = ring[(k + 1) % ring.Length];
+                    var width = Vector3.Distance(a, b);
+                    // A quad (a, b, b + up) faces Cross(b - a, up): turn it to face away from the middle.
+                    if (Vector3.Dot(Vector3.Cross(b - a, Vector3.up), (a + b) * 0.5f - centre) < 0f) (a, b) = (b, a);
+                    var v = part.Vertices.Count;
+                    part.Vertices.Add(a); part.Vertices.Add(b); part.Vertices.Add(b + up); part.Vertices.Add(a + up);
+                    part.Uv.Add(new Vector2(run / bay, 0f)); part.Uv.Add(new Vector2((run + width) / bay, 0f));
+                    part.Uv.Add(new Vector2((run + width) / bay, height / floor)); part.Uv.Add(new Vector2(run / bay, height / floor));
+                    part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
+                    part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3);
+                    run += width;
+                }
+                var top = For(roof);
+                var mid = top.Vertices.Count;
+                top.Vertices.Add(centre + up);
+                top.Uv.Add(Vector2.zero);
+                for (var k = 0; k < ring.Length; k++)
+                {
+                    top.Vertices.Add(ring[k] + up);
+                    top.Uv.Add(new Vector2(ring[k].x - centre.x, ring[k].z - centre.z) * 0.1f);
+                }
+                for (var k = 0; k < ring.Length; k++)
+                {
+                    var a = mid + 1 + k;
+                    var b = mid + 1 + (k + 1) % ring.Length;
+                    // Facing up: Cross(a - centre, b - centre).y > 0 is the front face.
+                    var up1 = Vector3.Cross(top.Vertices[a] - top.Vertices[mid], top.Vertices[b] - top.Vertices[mid]).y > 0f;
+                    top.Triangles.Add(mid); top.Triangles.Add(up1 ? a : b); top.Triangles.Add(up1 ? b : a);
                 }
             }
 
@@ -11137,6 +11336,14 @@ namespace RoadRage.UnityRemake
                         new Color(0.10f, 0.15f, 0.11f), 1100f) == null)
                     Debug.LogWarning("Missing Biomes/Routes/bc99_skyline - Sea to Sky has no far mountains.");
             }
+            else if (biomeIndex == FdrDriveIndex)
+            {
+                // Midtown and Downtown on the horizon, Brooklyn and Queens across the river: the far
+                // ring is baked from the ground plus every building's height (build_fdr.py).
+                if (Skyline.Build(globalHorizonSky.transform, "Biomes/Routes/fdr_skyline", fdrRoute, Mood(biomeIndex).FogDensity,
+                        new Color(0.34f, 0.35f, 0.38f), 5000f) == null)
+                    Debug.LogWarning("Missing Biomes/Routes/fdr_skyline - FDR Drive has no skyline.");
+            }
             else if (biomeIndex == TransfagarasanIndex)
             {
                 // The Fagaras ridge: spruce forest, bare rock above the treeline, snow on the tops.
@@ -11320,7 +11527,7 @@ namespace RoadRage.UnityRemake
                                      "this setup (see the red shader error in the Console); keeping solid background");
                 else skyMaterial = new Material(source) { name = "Greenwood Overcast Sky" };
             }
-            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex)
+            else if (biomeIndex == MoselIndex || biomeIndex == IcelandIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex || biomeIndex == FdrDriveIndex)
             {
                 var source = Resources.Load<Material>("Sky/M_sky_overcast");
                 var clouds = Resources.Load<Texture2D>(biomeIndex != IcelandIndex ? "Sky/Textures/T_sky_mosel" : "Sky/Textures/T_sky_iceland");
@@ -12599,7 +12806,7 @@ namespace RoadRage.UnityRemake
         /// The country whose cars this biome's traffic drives, or null for the rest.
         private static string TrafficCountry(int biomeIndex) =>
             biomeIndex == 0 || biomeIndex == MoselIndex ? "_de_" : biomeIndex == IcelandIndex ? "_is_"
-            : biomeIndex == BigSurIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : biomeIndex == OceanRoadIndex ? "_au_" : biomeIndex == TransfagarasanIndex ? "_ro_" : null;
+            : biomeIndex == BigSurIndex || biomeIndex == FdrDriveIndex ? "_us_" : biomeIndex == SeaToSkyIndex ? "_ca_" : biomeIndex == AmalfiIndex ? "_it_" : biomeIndex == OceanRoadIndex ? "_au_" : biomeIndex == TransfagarasanIndex ? "_ro_" : null;
 
         /// Cars a country's roads share with a neighbour: North American in Canada, European in Italy
         /// and Romania, both in Australia.

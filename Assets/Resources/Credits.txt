@@ -3,7 +3,7 @@ Ramline Games
 
 REAL ROADS
 Road centrelines (Greenwood, Mosel Valley, Iceland Coast, Big Sur, Sea to Sky, Amalfi Coast,
-Great Ocean Road, Transfagarasan):
+Great Ocean Road, Transfagarasan, FDR Drive):
 © OpenStreetMap contributors, ODbL - openstreetmap.org/copyright
 
 ELEVATION
@@ -11,11 +11,14 @@ Copernicus WorldDEM-30 (Iceland Coast, Sea to Sky, Amalfi Coast, Great Ocean Roa
 Transfagarasan):
 © DLR e.V. 2010-2014 and © Airbus Defence and Space GmbH 2014-2018, provided under
 COPERNICUS by the European Union and ESA; all rights reserved.
-USGS 3D Elevation Program (Big Sur): U.S. Geological Survey, public domain.
+USGS 3D Elevation Program (Big Sur, FDR Drive): U.S. Geological Survey, public domain.
 Mosel Valley terrain: © GeoBasis-DE / LVermGeoRP, dl-de/by-2-0, www.lvermgeo.rlp.de [Daten bearbeitet].
 Greenwood terrain: Datenquelle: LGL, www.lgl-bw.de, dl-de/by-2-0.
 Greenwood road profile and mountain ring: AWS Terrain Tiles (Tilezen). EU-DEM produced using
 Copernicus data and information funded by the European Union; SRTM: NASA / USGS.
+
+BUILDINGS
+FDR Drive's buildings: Building Footprints, NYC Open Data, NYC Office of Technology and Innovation.
 
 LAND COVER
 ESA WorldCover 10 m 2021 v200: © ESA WorldCover project 2021 / Contains modified
