@@ -51,9 +51,25 @@ namespace RoadRage.UnityRemake
         public static float Wrap(float distance) => distance;
 
         /// Which side of the road traffic keeps to: 1 for the right, as in most of the
-        /// world, -1 for the left (Australia). Lanes are mirrored where traffic is placed,
-        /// so everything that works from a lane's own side follows.
+        /// world, -1 for the left (Australia). Spawners write lanes with the player's
+        /// direction negative; they are mirrored where traffic is placed (lateral is
+        /// positive to the right), so everything that works from a lane's own side follows.
         public static float DriveSide = 1f;
+
+        /// True when `lateral` is well over on the oncoming half of the road.
+        public static bool OnOncomingSide(float lateral) => lateral * DriveSide < -1.5f;
+
+        /// Half the width of a concrete barrier down the centre line (FDR Drive), 0 for none.
+        public static float MedianHalf;
+
+        /// Keeps something `halfWidth` wide on the `side` (sign) of the centre barrier it is on.
+        public static float KeepOffMedian(float lateral, float halfWidth, float side)
+        {
+            if (MedianHalf <= 0f) return lateral;
+            var min = MedianHalf + halfWidth;
+            side = side >= 0f ? 1f : -1f;
+            return lateral * side < min ? side * min : lateral;
+        }
 
         /// A real road, when the biome has one (Greenwood: the B500). It replaces the
         /// sines below for both the bends and the hills. See RoadRoute.
@@ -366,8 +382,8 @@ namespace RoadRage.UnityRemake
                 // LateralExtent, not HalfWidth: a wreck slewed across the road is wider
                 // than the car, and with its raw width its nose went through the rail.
                 var edge = Mathf.Max(1f, RoadPath.HalfWidthAt(RoadDistance) + RoadPath.ShoulderWidth - LateralExtent);
-                return Mathf.Clamp(RoadPath.LaneLateral(RoadDistance, LaneFraction) + laneDrift + separation,
-                                   -edge, edge);
+                return RoadPath.KeepOffMedian(Mathf.Clamp(RoadPath.LaneLateral(RoadDistance, LaneFraction) + laneDrift + separation,
+                                   -edge, edge), LateralExtent, LaneFraction);
             }
         }
         private float laneDrift;
@@ -657,7 +673,7 @@ namespace RoadRage.UnityRemake
             if (Violation == Offence.Speeding) speedKph = Mathf.Min(speedKph * 1.55f, 165f);
             if (Violation == Offence.WrongWay) direction = -direction;
             RoadDistance = RoadPath.Wrap(distance);
-            LaneFraction = Mathf.Clamp(lane * RoadPath.DriveSide, -1f, 1f);
+            LaneFraction = Mathf.Clamp(-lane * RoadPath.DriveSide, -1f, 1f);
             cruiseSpeedKph = speedKph;
             currentSpeedKph = wreck ? 0f : speedKph;
             Direction = direction >= 0f ? 1f : -1f;
