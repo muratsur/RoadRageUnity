@@ -25,6 +25,10 @@ namespace RoadRage.UnityRemake
         private float clearFog;
         private Color land;
         private float treeline;
+        private bool stepped;
+        /// Columns of vertices round the ring: one per azimuth and the first again to close it, or
+        /// in steps two per azimuth, at either edge of its block.
+        private int Columns => stepped ? azimuths * 2 : azimuths + 1;
         private Mesh mesh;
         private Vector3[] vertices;
         private Color[] colours;
@@ -32,7 +36,10 @@ namespace RoadRage.UnityRemake
         private static readonly int HazeBoost = Shader.PropertyToID("_HazeBoost");
 
         /// Null when the file or material is missing: the biome then simply has no far mountains.
-        public static Skyline Build(Transform parent, string resourcePath, RoadRoute route, float clearFog, Color land, float treeline)
+        /// stepped: each azimuth a flat-topped block, for a city's towers; smooth slopes between
+        /// azimuths read as mountains.
+        public static Skyline Build(Transform parent, string resourcePath, RoadRoute route, float clearFog, Color land, float treeline,
+            bool stepped = false)
         {
             var asset = Resources.Load<TextAsset>(resourcePath);
             var source = Resources.Load<Material>("Biomes/Mountains/M_skyline");
@@ -58,6 +65,7 @@ namespace RoadRage.UnityRemake
             sky.clearFog = clearFog;
             sky.land = land;
             sky.treeline = treeline;
+            sky.stepped = stepped;
             sky.angles = new short[count];
             sky.distances = new byte[count];
             sky.heights = new byte[count];
@@ -69,13 +77,13 @@ namespace RoadRage.UnityRemake
                 sky.heights[i] = bytes[at + 3];
             }
 
-            var columns = azimuths + 1;
+            var columns = sky.Columns;
             sky.vertices = new Vector3[bands * columns * 2];
             sky.colours = new Color[sky.vertices.Length];
-            var triangles = new int[bands * azimuths * 6];
+            var triangles = new int[bands * (columns - 1) * 6];
             var t = 0;
             for (var b = 0; b < bands; b++)
-            for (var q = 0; q < azimuths; q++)
+            for (var q = 0; q < columns - 1; q++)
             {
                 var v = (b * columns + q) * 2;
                 triangles[t++] = v; triangles[t++] = v + 2; triangles[t++] = v + 1;
@@ -114,14 +122,14 @@ namespace RoadRage.UnityRemake
             var heading = Mathf.Atan2(forward.x, forward.z);
             var baseY = RoadPath.CenterY(d) + Eye;
             var linear = QualitySettings.activeColorSpace == ColorSpace.Linear;
-            var columns = azimuths + 1;
+            var columns = Columns;
             var bottomSin = Mathf.Sin(BottomAngle * Mathf.Deg2Rad);
             var bottomCos = Mathf.Cos(BottomAngle * Mathf.Deg2Rad);
 
             for (var b = 0; b < bands; b++)
             for (var c = 0; c < columns; c++)
             {
-                var q = c % azimuths;
+                var q = stepped ? c / 2 : c % azimuths;
                 var baked = back ? ((azimuths / 2 - q) % azimuths + azimuths) % azimuths : q;
                 var i0 = (r * bands + b) * azimuths + baked;
                 var i1 = i0 + bands * azimuths;
@@ -129,7 +137,7 @@ namespace RoadRage.UnityRemake
                 var distance = Mathf.Lerp(distances[i0], distances[i1], tr) * 100f;
                 var height = Mathf.Lerp(heights[i0], heights[i1], tr) * 16f;
 
-                var yaw = heading + q * (2f * Mathf.PI / azimuths);
+                var yaw = heading + (q + (stepped ? (c % 2 == 0 ? -0.5f : 0.5f) : 0f)) * (2f * Mathf.PI / azimuths);
                 var dir = new Vector3(Mathf.Sin(yaw), 0f, Mathf.Cos(yaw));
                 var radius = Radii[b];
                 var v = (b * columns + c) * 2;
