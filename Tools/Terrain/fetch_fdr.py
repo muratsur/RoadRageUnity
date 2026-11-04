@@ -106,6 +106,20 @@ def buildings():
     json.dump({"elements": list(found.values())}, open(path, "w"))
 
 
+BRIDGE_QUERY = """[out:json][timeout:120];
+way["bridge"]["name"~"^(Brooklyn Bridge|Manhattan Bridge|Williamsburg Bridge|Ed Koch Queensboro Bridge|Queensboro Bridge)$"](40.69,-74.01,40.77,-73.93);
+out tags geom;"""
+
+
+def bridges():
+    """Every OSM way on the four East River bridges the drive passes under (roadways, rails,
+    paths): build_fdr.py takes each bridge's axis and width from them."""
+    path = os.path.join(DATA, "bridges_osm.json")
+    if not os.path.exists(path):
+        json.dump(fetch_tile(BRIDGE_QUERY), open(path, "w"))
+    return json.load(open(path))["elements"]
+
+
 def main():
     import rasterio
     from rasterio.merge import merge
@@ -134,6 +148,7 @@ def main():
     print("cover", np.load(cache).shape)
     buildings()
     print("buildings", len(json.load(open(os.path.join(DATA, "buildings_osm.json")))["elements"]))
+    print("bridge ways", len(bridges()))
 
 
 if __name__ == "__main__":

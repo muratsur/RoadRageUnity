@@ -7,8 +7,8 @@ a few metres above the East River: one sea level, land at its real height above 
 become cuttings as in build_dn7c.py.
 
 Also bakes the city (`buildings`): every building near the road (NYC Open Data, via fetch_fdr.py) as a footprint in road
-distance and lateral offset, with its height, for the game to extrude; and (`skyline`) the far
-ring with building heights added to the ground, so Midtown stands on the horizon.
+distance and lateral offset, with its height, for the game to extrude. No far skyline ring: its
+flat columns read as black cardboard on the horizon.
 Needs rasterio.
 """
 import json
@@ -23,7 +23,6 @@ from rasterio.enums import Resampling
 from rasterio.merge import merge
 
 import bake_b500_terrain as bake
-import bake_skyline as skyline
 import build_b500_road as road
 import export_b500_realmap as realmap
 import fetch_fdr as fetch
@@ -178,11 +177,10 @@ bake.GROUND_TABLE = ground_table
 bake.UNITS_PER_METRE, bake.MAGIC = 10.0, b"RRTD"
 
 BUILDINGS_ASSET = os.path.join(ROUTES, "fdr_buildings.bytes")
-BUILDING_REACH = 1150.0     # m out from the road; the skyline ring takes over past the ground
+BUILDING_REACH = 1150.0     # m out from the road, to the edge of the ground
 BUILDING_CLEAR = 18.0       # m: nothing closer to the centreline (FDR runs under some buildings)
 LEVEL_HEIGHT = 3.2
 DEFAULT_HEIGHT = 12.0
-SKYLINE_CELL = 15.0         # m, the building height raster for the far ring
 
 
 def building_height(tags):
@@ -240,32 +238,125 @@ def bake_buildings():
           f"{os.path.getsize(BUILDINGS_ASSET) // 1024} KB")
 
 
-def city_height(dem):
-    """Ground plus buildings, for the far ring: the tallest building in each SKYLINE_CELL."""
-    fps = list(footprints())
-    e0 = min(f[0].min() for f in fps)
-    n0 = min(f[1].min() for f in fps)
-    w = int((max(f[0].max() for f in fps) - e0) / SKYLINE_CELL) + 2
-    hgt = int((max(f[1].max() for f in fps) - n0) / SKYLINE_CELL) + 2
-    grid = np.zeros((hgt, w), np.float32)
-    for e, n, h in fps:
-        x0, x1 = int((e.min() - e0) / SKYLINE_CELL), int((e.max() - e0) / SKYLINE_CELL)
-        y0, y1 = int((n.min() - n0) / SKYLINE_CELL), int((n.max() - n0) / SKYLINE_CELL)
-        grid[y0:y1 + 1, x0:x1 + 1] = np.maximum(grid[y0:y1 + 1, x0:x1 + 1], h)
+BRIDGES_ASSET = os.path.join(ROUTES, "fdr_bridges.txt")
+BRIDGE_STEP = 10.0          # m between deck points
+BRIDGE_PIER_CLEAR = 30.0    # m: no tower or pier nearer the road's centreline
+# Published sizes (m): deck width, main span, side span, tower height above the water, clearance.
+BRIDGES = {
+    "Queensboro Bridge": ("queensboro", 27.0, 0.0, 0.0, 106.0, 41.0),
+    "Williamsburg Bridge": ("williamsburg", 36.0, 488.0, 181.0, 102.0, 41.0),
+    "Manhattan Bridge": ("manhattan", 37.0, 448.0, 221.0, 102.0, 41.0),
+    "Brooklyn Bridge": ("brooklyn", 26.0, 486.0, 283.0, 84.0, 41.0),
+}
+TRUSS_OVER_PIER = 45.0      # m: Queensboro's cantilever trusses stand this high over the deck at a pier
+TRUSS_AT_MIDSPAN = 12.0
 
-    def height(east, north):
-        x = ((east - e0) / SKYLINE_CELL).astype(int)
-        y = ((north - n0) / SKYLINE_CELL).astype(int)
-        inside = (x >= 0) & (x < w) & (y >= 0) & (y < hgt)
-        tower = np.where(inside, grid[np.clip(y, 0, hgt - 1), np.clip(x, 0, w - 1)], 0.0)
-        return dem.height(east, north) + tower
-    return height
+
+def water_runs(wet):
+    """(start, end) index pairs of each run of water along the axis, longest first."""
+    runs, start = [], None
+    for i, w in enumerate(list(wet) + [False]):
+        if w and start is None:
+            start = i
+        elif not w and start is not None:
+            runs.append((start, i - 1))
+            start = None
+    return sorted(runs, key=lambda r: r[0] - r[1])
+
+
+def bridge_profile(kind, s, wet, main, side, tower, clear, ground):
+    """Deck height, and the main cable's (or Queensboro's truss top's) height, above the water at
+    each point `s` along the axis; and the indices of the towers (or piers)."""
+    deck = np.zeros_like(s)
+    top = np.zeros_like(s)
+    runs = water_runs(wet)
+    if kind == "queensboro":
+        # Two channels either side of Roosevelt Island: a pier at each shore.
+        piers = sorted(s[i] for r in runs[:2] for i in r)
+        a, b = piers[0], piers[-1]
+        inside = (s >= a) & (s <= b)
+        deck[inside] = clear
+        near = np.min(np.abs(s[:, None] - np.array(piers)[None, :]), axis=1)
+        gaps = np.diff(piers)
+        half = np.max(gaps) / 2.0
+        top[inside] = deck[inside] + TRUSS_AT_MIDSPAN + (TRUSS_OVER_PIER - TRUSS_AT_MIDSPAN) * np.clip(1.0 - near[inside] / half, 0.0, 1.0) ** 2
+        stands = [int(np.argmin(np.abs(s - p))) for p in piers]
+    else:
+        lo, hi = runs[0]
+        mid = (s[lo] + s[hi]) / 2.0
+        t0, t1 = mid - main / 2.0, mid + main / 2.0
+        a, b = max(s[0], t0 - side), min(s[-1], t1 + side)
+        at_tower = clear - 3.0
+        x = (s - mid) / (main / 2.0)
+        inside = (s >= t0) & (s <= t1)
+        deck[inside] = clear - 3.0 * x[inside] ** 2
+        for t, anchor in ((t0, a), (t1, b)):
+            span = (s - anchor) / (t - anchor) if t != anchor else np.ones_like(s)
+            on = ((s >= min(t, anchor)) & (s <= max(t, anchor))) & ~inside
+            deck[on] = at_tower - 8.0 * (1.0 - span[on])
+            # Side cable: anchorage to tower top, sagging a little.
+            top[on] = deck[on] + 2.0 + (tower - 3.0 - at_tower - 2.0) * span[on] - 6.0 * span[on] * (1.0 - span[on])
+        top[inside] = deck[inside] + 3.0 + (tower - 3.0 - deck[inside] - 3.0) * x[inside] ** 2
+        stands = [int(np.argmin(np.abs(s - t0))), int(np.argmin(np.abs(s - t1)))]
+    # Approaches: down from the bridge's ends to the ground at the ends of the way.
+    for end, edge in ((0, a), (len(s) - 1, b)):
+        out = (s < a) if end == 0 else (s > b)
+        if out.any():
+            h_edge = np.interp(edge, s, deck) if deck[np.argmin(np.abs(s - edge))] > 0 else clear - 11.0
+            f = np.abs(s[out] - s[end]) / max(1.0, abs(edge - s[end]))
+            deck[out] = ground[out] + 1.0 + (h_edge - ground[out] - 1.0) * f
+    return deck, top, stands
+
+
+def bake_bridges():
+    """fdr_bridges.txt: for each bridge, `bridge kind width`, its deck points `p z lateral deck top`
+    (heights above the river, top 0 where there is no cable or truss) and `tower index height`."""
+    rm = np.loadtxt(realmap.OUT, delimiter=",", skiprows=1)
+    z, east, north, de, dn = rm.T
+    dem = Dem(bake.DGM)
+    ways = {}
+    for w in fetch.bridges():
+        ways.setdefault(w["tags"]["name"], []).append(w)
+    lines = []
+    for name, (kind, width, main, side, tower, clear) in BRIDGES.items():
+        pts = np.array([local(g["lat"], g["lon"]) for w in ways[name] for g in w["geometry"]])
+        c = pts.mean(axis=0)
+        axis = np.linalg.svd(pts - c)[2][0]
+        # Refit on the points near the axis: Williamsburg's ramps fan out at the ends.
+        across = (pts - c) @ np.array([-axis[1], axis[0]])
+        core = pts[np.abs(across) < 40.0]
+        c = core.mean(axis=0)
+        axis = np.linalg.svd(core - c)[2][0]
+        t = (core - c) @ axis
+        s = np.arange(t.min(), t.max() + 0.1, BRIDGE_STEP)
+        e, n = c[0] + axis[0] * s, c[1] + axis[1] * s
+        ground = dem.height(e, n)
+        deck, top, stands = bridge_profile(kind, s, ground < SEA_HEIGHT, main, side, tower, clear, ground)
+        d2 = (e[:, None] - east[None, :]) ** 2 + (n[:, None] - north[None, :]) ** 2
+        i = d2.argmin(axis=1)
+        along = (e - east[i]) * de[i] + (n - north[i]) * dn[i]
+        lat = (e - east[i]) * dn[i] - (n - north[i]) * de[i]
+        # A pier on the drive (the road runs along the shore): moved inland, off the road, as
+        # Queensboro's Manhattan pier stands between York Avenue and the drive.
+        for j, k in enumerate(stands):
+            inland = 1 if lat[-1] > lat[0] else -1
+            while abs(lat[k]) < BRIDGE_PIER_CLEAR and 0 < k < len(s) - 1:
+                k += inland
+            stands[j] = k
+        lines.append(f"bridge {kind} {width:.0f}")
+        lines += [f"p {zz:.1f} {ll:.1f} {dd:.1f} {tt:.1f}" for zz, ll, dd, tt in zip(z[i] + along, lat, deck, top)]
+        lines += [f"tower {k} {tower:.0f}" for k in stands]
+        cross = int(np.argmin(np.abs(lat)))
+        print(f"{name}: {s[-1] - s[0]:.0f} m, crosses the road at {z[i][cross] + along[cross]:.0f} m, "
+              f"deck there {deck[cross]:.0f} m, towers at {[round(float(s[k] - s[0])) for k in stands]}")
+    open(BRIDGES_ASSET, "w", newline="\n").write("\n".join(lines) + "\n")
+    print("wrote", BRIDGES_ASSET)
+
 
 if __name__ == "__main__":
     os.makedirs(road.OUT, exist_ok=True)
-    # "skyline": only the far mountains (bake_skyline.py), from the road's realmap.
-    if sys.argv[1:] == ["skyline"]:
-        skyline.main(city_height(Dem(bake.DGM)), realmap.OUT, os.path.join(ROUTES, "fdr_skyline.bytes"))
+    if sys.argv[1:] == ["bridges"]:
+        bake_bridges()
         sys.exit()
     if sys.argv[1:] == ["buildings"]:
         bake_buildings()
