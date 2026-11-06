@@ -655,6 +655,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             liveChunks.Clear();
+            ForgetFdrBridges(null);
             stale.Clear();
 
             // 2. Destroy old Sun and Post-Processing Volumes
@@ -2713,6 +2714,7 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Bridge Tan", new Color(0.62f, 0.58f, 0.50f), 0.1f, 0.2f);
             MakeMaterial("Bridge Deck", new Color(0.28f, 0.28f, 0.29f), 0f, 0.1f);
             MakeMaterial("Bridge Cable", new Color(0.24f, 0.24f, 0.25f), 0.3f, 0.3f);
+            MakeMaterial("Viaduct Steel", new Color(0.28f, 0.36f, 0.32f), 0.2f, 0.3f);
 
             // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
             Splat("Fagaras Ground", "BigSur", new[]
@@ -6060,8 +6062,58 @@ namespace RoadRage.UnityRemake
         ///
         /// This rig is built once per biome and rides with the player, so its contents
         /// stay at a fixed distance ahead and never enter or leave view. Real mountains
+        /// How far FDR Drive's camera sees, and its bridges are built ahead: they stand 40-100 m
+        /// over the river and were built with the chunk they cross in, popping in at 900 m.
+        private const float ViaductColumnSpacing = 20f;
+        private const float ViaductGirderDepth = 1.6f;
+        private const float FdrViewDistance = 2600f;
+        private const float DefaultFarClip = 1400f;
+        private readonly Dictionary<long, GameObject> fdrBridgeRoots = new();
+        private readonly List<long> fdrBridgeWanted = new();
+        private readonly List<long> fdrBridgeStale = new();
+
+        private void UpdateFdrBridges(float playerDistance)
+        {
+            var on = RoadPath.Route != null && RoadPath.Route == fdrRoute;
+            var cam = Camera.main;
+            if (cam != null && on) cam.farClipPlane = FdrViewDistance;
+            else if (cam != null && cam.farClipPlane == FdrViewDistance) cam.farClipPlane = DefaultFarClip;
+            fdrBridgeWanted.Clear();
+            if (on)
+                foreach (var (index, d, back) in FdrCity.BridgesIn(playerDistance - 500f, playerDistance + FdrViewDistance))
+                {
+                    var key = (long)Mathf.Round(d) * 64 + index * 2 + (back ? 1 : 0);
+                    fdrBridgeWanted.Add(key);
+                    if (fdrBridgeRoots.ContainsKey(key)) continue;
+                    var seaLevel = RiverLevel((long)Mathf.Round((d - GridRowOffset) / GridRowStep));
+                    var root = new GameObject($"FDR Bridge {index} at {d:0}");
+                    fdrBridgeRoots[key] = root;
+                    if (float.IsNaN(seaLevel)) continue;
+                    chunkRoot = root.transform;
+                    var mesh = new VillageMesh();
+                    FdrCity.BuildBridge(mesh, index, d, back, seaLevel);
+                    mesh.Build(this);
+                    chunkRoot = null;
+                }
+            ForgetFdrBridges(fdrBridgeWanted);
+        }
+
+        /// Destroys the built bridges not in `keep` (all of them when it is null).
+        private void ForgetFdrBridges(List<long> keep)
+        {
+            fdrBridgeStale.Clear();
+            foreach (var pair in fdrBridgeRoots)
+                if (keep == null || !keep.Contains(pair.Key)) fdrBridgeStale.Add(pair.Key);
+            foreach (var key in fdrBridgeStale)
+            {
+                if (fdrBridgeRoots[key] != null) Destroy(fdrBridgeRoots[key]);
+                fdrBridgeRoots.Remove(key);
+            }
+        }
+
         private void UpdateStreaming(float playerDistance)
         {
+            UpdateFdrBridges(playerDistance);
             // The Mosel flows: its ripples drift along the valley.
             if (RoadPath.Route != null && (RoadPath.Route == moselRoute || RoadPath.Route == icelandRoute || IsSeaRoute(RoadPath.Route)))
                 materials["Mosel Water"].SetTextureOffset("_BaseMap", new Vector2(0f, Time.time * 0.035f));
@@ -6524,6 +6576,11 @@ namespace RoadRage.UnityRemake
         private void BuildMoselDecks(VillageMesh mesh)
         {
             const float step = 4f;
+            // FDR Drive's viaducts (the South Street Viaduct) are steel: girders under the
+            // deck on paired columns, not a concrete girder on wide piers.
+            var steel = RoadPath.Route == fdrRoute;
+            var deckMaterial = steel ? "Viaduct Steel" : "Mosel Bridge";
+            var pierSpacing = steel ? ViaductColumnSpacing : MoselPierSpacing;
             for (var d = Mathf.Floor(segStart / step) * step; d < segEnd; d += step)
             {
                 var next = d + step;
@@ -6537,15 +6594,15 @@ namespace RoadRage.UnityRemake
                 var firstStep = !OnMoselDeck(d - step);
                 var lastStep = !OnMoselDeck(next + step);
                 Vector3 At(float distance, float lateral, float y) => RoadPath.Point(distance, lateral, y);
-                mesh.Face("Mosel Bridge", At(d, -w, -MoselDeckDepth), At(d, w, -MoselDeckDepth), At(next, wn, -MoselDeckDepth), At(next, -wn, -MoselDeckDepth));
+                mesh.Face(deckMaterial, At(d, -w, -MoselDeckDepth), At(d, w, -MoselDeckDepth), At(next, wn, -MoselDeckDepth), At(next, -wn, -MoselDeckDepth));
                 for (var side = -1; side <= 1; side += 2)
                 {
-                    mesh.Face("Mosel Bridge", At(d, side * w, -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(d, side * w, top));
+                    mesh.Face(deckMaterial, At(d, side * w, -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(d, side * w, top));
                     var inner = MoselWallThick;
-                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), 0f), At(next, side * (wn - inner), 0f), At(next, side * (wn - inner), topn), At(d, side * (w - inner), top));
-                    mesh.Face("Mosel Bridge", At(d, side * (w - inner), top), At(next, side * (wn - inner), topn), At(next, side * wn, topn), At(d, side * w, top));
-                    if (firstStep) mesh.Face("Mosel Bridge", At(d, side * (w - inner), -MoselDeckDepth), At(d, side * w, -MoselDeckDepth), At(d, side * w, top), At(d, side * (w - inner), top));
-                    if (lastStep) mesh.Face("Mosel Bridge", At(next, side * (wn - inner), -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(next, side * (wn - inner), topn));
+                    mesh.Face(deckMaterial, At(d, side * (w - inner), 0f), At(next, side * (wn - inner), 0f), At(next, side * (wn - inner), topn), At(d, side * (w - inner), top));
+                    mesh.Face(deckMaterial, At(d, side * (w - inner), top), At(next, side * (wn - inner), topn), At(next, side * wn, topn), At(d, side * w, top));
+                    if (firstStep) mesh.Face(deckMaterial, At(d, side * (w - inner), -MoselDeckDepth), At(d, side * w, -MoselDeckDepth), At(d, side * w, top), At(d, side * (w - inner), top));
+                    if (lastStep) mesh.Face(deckMaterial, At(next, side * (wn - inner), -MoselDeckDepth), At(next, side * wn, -MoselDeckDepth), At(next, side * wn, topn), At(next, side * (wn - inner), topn));
                 }
                 // Road surface out to the parapet: below it the deck was an open trench.
                 for (var side = -1; side <= 1; side += 2)
@@ -6553,11 +6610,24 @@ namespace RoadRage.UnityRemake
                         At(next, side * wn, 0.05f), At(d, side * w, 0.05f));
                 var fold = RoadPath.Route.Fold(d);
                 ArchUnderDeck(mesh, d, next, w);
-                if (Mathf.FloorToInt(fold / MoselPierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / MoselPierSpacing))
+                if (steel)
+                {
+                    foreach (var girder in new[] { -0.8f, -0.3f, 0.3f, 0.8f })
+                        mesh.Face(deckMaterial, At(d, girder * w, -MoselDeckDepth), At(next, girder * wn, -MoselDeckDepth),
+                            At(next, girder * wn, -MoselDeckDepth - ViaductGirderDepth), At(d, girder * w, -MoselDeckDepth - ViaductGirderDepth));
+                }
+                if (Mathf.FloorToInt(fold / pierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / pierSpacing) && steel)
+                {
+                    var under = -MoselDeckDepth - ViaductGirderDepth;
+                    mesh.Box(deckMaterial, RoadPath.Point(d, 0f, under - 1f), RoadPath.Right(d) * (w * 0.85f), RoadPath.Forward(d) * 0.5f, 1f);
+                    for (var side = -1; side <= 1; side += 2)
+                        mesh.Pier(deckMaterial, RoadPath.Point(d, side * w * 0.75f, under - 1f), RoadPath.Right(d) * 0.6f, RoadPath.Forward(d) * 0.6f);
+                }
+                else if (Mathf.FloorToInt(fold / pierSpacing) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / pierSpacing))
                 {
                     // As on the real Bixby: over the arch the columns stand on it, and below it is open air.
                     var floor = ArchAt(d, out var arch, out var archRise) ? RoadPath.Point(d, 0f, ArchRib(d, arch, archRise)).y : float.NegativeInfinity;
-                    mesh.Pier("Mosel Bridge", RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f, floor);
+                    mesh.Pier(deckMaterial, RoadPath.Point(d, 0f, -MoselDeckDepth), RoadPath.Right(d) * (w * 0.7f), RoadPath.Forward(d) * 0.7f, floor);
                 }
             }
         }
@@ -6850,7 +6920,6 @@ namespace RoadRage.UnityRemake
             }
             var mesh = new VillageMesh();
             var placed = FdrCity.Build(mesh, segStart, segEnd, seaLevel);
-            FdrCity.BuildBridges(mesh, segStart, segEnd, seaLevel);
             mesh.Build(this);
             BuildGuardRail(materials["Forest Guard Rail"]);
             if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} buildings");
@@ -7011,19 +7080,21 @@ namespace RoadRage.UnityRemake
                 return bridges;
             }
 
-            /// Each bridge whose crossing of the road falls in this chunk, whole: deck, columns
-            /// under the approaches, towers or piers, and cables with hangers or trusses.
-            public static void BuildBridges(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
+            /// Each bridge crossing the road between `from` and `to`, on the way there or back:
+            /// its index and the road distance of the crossing.
+            public static IEnumerable<(int Index, float Distance, bool Back)> BridgesIn(float from, float to)
             {
-                if (float.IsNaN(seaLevel)) return;
-                var length = RoadPath.Route.Length;
-                foreach (var bridge in LoadBridges())
-                foreach (var (d, back) in Passes(bridge.Cross, length, segStart, segEnd))
-                    BuildBridge(mesh, bridge, d, back, seaLevel);
+                var all = LoadBridges();
+                for (var i = 0; i < all.Count; i++)
+                foreach (var (d, back) in Passes(all[i].Cross, RoadPath.Route.Length, from, to))
+                    yield return (i, d, back);
             }
 
-            private static void BuildBridge(VillageMesh mesh, Bridge bridge, float d, bool back, float seaLevel)
+            /// One bridge, whole: deck, columns under the approaches, towers or piers, and
+            /// cables with hangers or trusses.
+            public static void BuildBridge(VillageMesh mesh, int index, float d, bool back, float seaLevel)
             {
+                var bridge = LoadBridges()[index];
                 var steel = bridge.Kind switch
                 {
                     "brooklyn" => "Bridge Cable", "manhattan" => "Bridge Blue", "queensboro" => "Bridge Tan", _ => "Bridge Steel",
@@ -7074,9 +7145,9 @@ namespace RoadRage.UnityRemake
                     var along = Vector3.Cross(across[i], Vector3.up);
                     mesh.Pier(steel, p + down, across[i] * (half * 0.8f), along * 1.5f);
                 }
-                foreach (var (index, height) in bridge.Towers)
+                foreach (var (tower, height) in bridge.Towers)
                 {
-                    var i = Mathf.Clamp(index, 0, n - 1);
+                    var i = Mathf.Clamp(tower, 0, n - 1);
                     var foot = deck[i];
                     foot.y = seaLevel;
                     var along = Vector3.Cross(across[i], Vector3.up);
@@ -13573,7 +13644,7 @@ namespace RoadRage.UnityRemake
                 var tint = role == TrafficCarController.VehicleRole.LogTruck
                     ? LogTruckPaints[i % LogTruckPaints.Length]
                     : palette[i % palette.Length];
-                var isCab = biomeName == "MANHATTAN"
+                var isCab = (biomeName == "MANHATTAN" || carsOnly)
                             && role == TrafficCarController.VehicleRole.Standard
                             && offence == TrafficCarController.Offence.None
                             && i % 3 == 0;
