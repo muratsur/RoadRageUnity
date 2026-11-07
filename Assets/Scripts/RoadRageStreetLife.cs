@@ -167,6 +167,8 @@ namespace RoadRage.UnityRemake
             // Facing: a walker going the other way looks back down the road. Idle ones keep
             // the direction they were given and turn a little to the shopfront.
             var facing = RoadPath.Forward(d) * walker.Direction;
+            // No pavement beside a tunnel: the walker is put away until it is out again.
+            walker.Root.gameObject.SetActive(!RoadPath.Covered(d, 10f));
             walker.Root.position = position;
             walker.Root.rotation = Quaternion.LookRotation(facing, Vector3.up)
                 * Quaternion.Euler(0f, walker.Yaw, 0f);

@@ -150,7 +150,7 @@ def build():
     return tower
 
 
-def render(tower, folder):
+def render(tower, folder, prefix="brooklyn_tower", look_at=45):
     scene = bpy.context.scene
     scene.render.engine = "BLENDER_WORKBENCH"
     scene.display.shading.light = "STUDIO"
@@ -164,9 +164,9 @@ def render(tower, folder):
     scene.camera = cam
     for name, eye in (("front", (0, -130, 45)), ("three_quarter", (80, -100, 60))):
         cam.location = eye
-        d = [0 - eye[0], 0 - eye[1], 45 - eye[2]]
+        d = [0 - eye[0], 0 - eye[1], look_at - eye[2]]
         cam.rotation_euler = (math.atan2(math.hypot(d[0], d[1]), -d[2]), 0, math.atan2(d[1], d[0]) - math.pi / 2)
-        scene.render.filepath = os.path.join(folder, f"brooklyn_tower_{name}.png")
+        scene.render.filepath = os.path.join(folder, f"{prefix}_{name}.png")
         bpy.ops.render.render(write_still=True)
 
 

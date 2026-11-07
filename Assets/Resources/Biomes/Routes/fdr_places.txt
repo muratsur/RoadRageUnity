@@ -6,4 +6,8 @@
 11698 Manhattan Bridge|Manhattan Bridge
 12345 Brooklyn Bridge|Brooklyn Bridge
 12788 South Street Seaport|South Street Seaport
-13693 The Battery|The Battery
+13706 The Battery|The Battery
+15092 World Trade Center|World Trade Center
+18846 Chelsea Piers|Chelsea Piers
+20996 The Intrepid|The Intrepid
+23085 West 70th Street|West 70th Street

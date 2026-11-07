@@ -50,6 +50,10 @@ road.PLACES = [
     ("Brooklyn Bridge", 40.7061, -73.9969, "Brooklyn Bridge"),
     ("South Street Seaport", 40.7060, -74.0030, "South Street Seaport"),
     ("The Battery", 40.7032, -74.0128, "The Battery"),
+    ("World Trade Center", 40.7127, -74.0134, "World Trade Center"),
+    ("Chelsea Piers", 40.7465, -74.0090, "Chelsea Piers"),
+    ("The Intrepid", 40.7645, -73.9996, "The Intrepid"),
+    ("West 70th Street", 40.7809, -73.9874, "West 70th Street"),
 ]
 realmap.OUT = os.path.join(HERE, "fdr_realmap.csv")
 bake.REALMAP = realmap.OUT
