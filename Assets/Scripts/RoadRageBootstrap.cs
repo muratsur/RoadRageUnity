@@ -2864,17 +2864,6 @@ namespace RoadRage.UnityRemake
             }, 0.08f);
             // No macro variation: its brightness mean is the grass's, and pavement went white.
             materials["Fdr Ground"].SetFloat("_Macro", 0f);
-            // The city's facades: ambientCG photo facades (CC0) with their normal maps, and roofs.
-            foreach (var (facade, _) in FdrFacades)
-            {
-                var shiny = facade == "glass" || facade == "office";
-                BiomeMaterial($"NY {facade}", "NewYork", $"T_facade_{facade}_D", $"T_facade_{facade}_N", Color.white,
-                    facade == "glass" ? 0.3f : 0f, shiny ? 0.7f : 0.15f);
-            }
-            MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
-            MakeMaterial("NY Tank", new Color(0.30f, 0.22f, 0.16f), 0f, 0.1f);
-            MakeMaterial("NY Cornice", new Color(0.78f, 0.74f, 0.66f), 0f, 0.15f);
-            BiomeMaterial("NY Shopfront", "NewYork", "T_shopfront_D", "", Color.white, 0f, 0.55f);
             // Side streets in the Megascans asphalt: a 2 m scan on VillageMesh's 4 m UVs.
             BiomeMaterial("NY Street", "NewYork", "T_asphalt_D", "T_asphalt_N", new Color(0.68f, 0.69f, 0.72f), 0.08f, 0.74f)
                 .SetTextureScale("_BaseMap", new Vector2(2f, 2f));
@@ -7303,6 +7292,8 @@ namespace RoadRage.UnityRemake
         /// cast-iron grates, cantilever traffic lights, street furniture, curbside NYC vehicles,
         /// 3D sculpted street-frontage buildings flush with the sidewalk, and Midtown/FiDi/SoHo/UWS
         /// skyscraper & hero landmarks rising behind.
+        private readonly List<(Vector3 A, Vector3 B, float Half)> fdrDecks = new();
+
         private void BuildFdrDrive()
         {
             Random.InitState(40712 ^ chunkSeed);
@@ -7330,6 +7321,14 @@ namespace RoadRage.UnityRemake
             // 2. Continuous 3D sculpted Manhattan street-frontage buildings flush with the raised concrete sidewalk
             //    on side = +1, plus two tiers of 3D Midtown/FiDi skyscrapers & Hero Landmarks behind them.
             var placed = 0;
+            FdrCity.DecksNear(segStart, segEnd, fdrDecks);
+            // A building the bridge approach would run into is taken away again.
+            GameObject ClearOfDecks(GameObject building)
+            {
+                if (building == null || fdrDecks.Count == 0 || !TryGetCombinedBounds(building, out var b) || !FdrCity.HitsDeck(b, fdrDecks)) return building;
+                Destroy(building);
+                return null;
+            }
             for (var z = SegBegin(0f, 32f); z < segEnd; z += 32f)
             {
                 var block = Mathf.FloorToInt(z / 32f);
@@ -7342,7 +7341,10 @@ namespace RoadRage.UnityRemake
                 // Alternate between our 48-building 3D sculpted catalogue (with 2K VRBN photogrammetry &
                 // Beaux-Arts stone/brick/glass facades) and direct VRBN/Landmark 3D meshes flush with the sidewalk.
                 GameObject frontage = null;
-                if (block % 3 == 1)
+                // Nothing where a bridge comes down into the city: the Queensboro approach ran
+                // into the frontage.
+                if (FdrCity.NearBridge(frontDistance, fdrFrontageSetback + 14f, 18f)) { }
+                else if (block % 3 == 1)
                 {
                     var pool = GisPoolForRouteDistance(z, true);
                     var meshName = pool[(frontageHash & 0x7fffffff) % pool.Length];
@@ -7377,6 +7379,7 @@ namespace RoadRage.UnityRemake
                         frontageLine: fdrFrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
                 }
 
+                frontage = ClearOfDecks(frontage);
                 if (frontage != null) placed++;
                 BuildStorefrontAwning(frontage, frontDistance, side, BlockHash(block, 17));
 
@@ -7398,13 +7401,15 @@ namespace RoadRage.UnityRemake
                 var towerDistance = z + ((frontageHash >> 5) % 15) - 7f;
                 var towerHash = BlockHash(block * 19 + 3, 3);
                 var towerPlot = 42f + (towerHash >> 3 & 0x7fffffff) % 8 * 2f;
-                var midTower = PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
-                    "NYC Ground Midtown Skyscraper", towerDistance, side,
-                    frontageLine: fdrFrontageSetback + 28f, plotWidth: towerPlot, hash: towerHash);
+                var midTower = FdrCity.NearBridge(towerDistance, fdrFrontageSetback + 28f + towerPlot * 0.5f, towerPlot * 0.5f) ? null
+                    : PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
+                        "NYC Ground Midtown Skyscraper", towerDistance, side,
+                        frontageLine: fdrFrontageSetback + 28f, plotWidth: towerPlot, hash: towerHash);
+                midTower = ClearOfDecks(midTower);
                 if (midTower != null) placed++;
 
                 // Third Tier: Hero Skyline Landmarks every 2 blocks (Empire State, One WTC, Flatiron, Curtain Towers, San Remo)
-                if (block % 2 == 0)
+                if (block % 2 == 0 && !FdrCity.NearBridge(z + 16f, fdrFrontageSetback + 58f, 30f))
                 {
                     var heroPool = GisPoolForRouteDistance(z + 180f, true);
                     var heroName = heroPool[((towerHash >> 4) & 0x7fffffff) % heroPool.Length];
@@ -7413,6 +7418,7 @@ namespace RoadRage.UnityRemake
                         z + 16f, fdrFrontageSetback + 58f, 0.08f,
                         new Vector3(0f, facing, 0f), Vector3.one,
                         $"NYC Ground Hero Skyline {heroName}", enforceClearance: false);
+                    hero = ClearOfDecks(hero);
                     if (hero != null)
                     {
                         if (TryGetCombinedBounds(hero, out var hBounds))
@@ -7428,590 +7434,8 @@ namespace RoadRage.UnityRemake
             if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} 3D street-level NYC buildings");
         }
 
-        /// FDR Drive's OSM footprints fitted with our 62 real Manhattan GIS & Landmark 3D meshes
-        /// (Biomes/ManhattanGIS/Meshes) plus the 14 intact 4K USA/NYC buildings (Biomes/ManhattanGIS/VRBN),
-        /// with hash-based candidate diversity so adjacent footprints never repeat the same building.
-        private static class FdrKit
-        {
-            public const float Lowest = 6f;
-            public const float Tallest = 500f;
-            public const float Reach = 480f;
-            public const int PerChunk = 54;
-            public const float Level = 14f;
-            private const float MinScale = 0.40f;
-            private const float MaxScale = 2.35f;
-
-            public struct Spot
-            {
-                public GameObject Prefab;
-                public Vector3 Position;
-                public Quaternion Rotation;
-                public Vector3 Scale;
-                public int FootprintIndex;
-            }
-
-            private static GameObject[] prefabs;
-            private static Bounds[] bounds;
-            private static readonly int[] recentPrefabIndices = { -1, -1, -1, -1, -1, -1, -1, -1 };
-            private static int recentPrefabCursor;
-
-            public static bool On => !Application.isMobilePlatform && Load();
-
-            private static bool Load()
-            {
-                if (prefabs != null) return prefabs.Length > 0;
-                var list = new List<GameObject>();
-                var gisMeshes = Resources.LoadAll<GameObject>("Biomes/ManhattanGIS/Meshes");
-                if (gisMeshes != null) list.AddRange(gisMeshes);
-                var gisVrbn = Resources.LoadAll<GameObject>("Biomes/ManhattanGIS/VRBN");
-                if (gisVrbn != null) list.AddRange(gisVrbn);
-                if (list.Count == 0)
-                {
-                    var usaVrbn = Resources.LoadAll<GameObject>("Buildings/USA_VRBN");
-                    if (usaVrbn != null) list.AddRange(usaVrbn);
-                }
-                prefabs = list.ToArray();
-                bounds = new Bounds[prefabs.Length];
-                for (var i = 0; i < prefabs.Length; i++) bounds[i] = LocalBounds(prefabs[i]);
-                return prefabs.Length > 0;
-            }
-
-            /// The prefab's bounds in its own space, from its meshes (a prefab asset has no
-            /// renderer bounds until it is in the scene).
-            private static Bounds LocalBounds(GameObject prefab)
-            {
-                var root = prefab.transform.worldToLocalMatrix;
-                var b = new Bounds();
-                var first = true;
-                foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
-                {
-                    if (filter.sharedMesh == null) continue;
-                    var m = root * filter.transform.localToWorldMatrix;
-                    var mb = filter.sharedMesh.bounds;
-                    for (var c = 0; c < 8; c++)
-                    {
-                        var corner = m.MultiplyPoint3x4(mb.center + Vector3.Scale(mb.extents,
-                            new Vector3((c & 1) == 0 ? -1f : 1f, (c & 2) == 0 ? -1f : 1f, (c & 4) == 0 ? -1f : 1f)));
-                        if (first) { b = new Bounds(corner, Vector3.zero); first = false; }
-                        else b.Encapsulate(corner);
-                    }
-                }
-                return b;
-            }
-
-            private static readonly List<(int Index, float FitScore, bool AlongX, float Sl, float Sw, float Sh)> fitCandidates = new();
-
-            /// Fits a real Manhattan GIS or VRBN 3D building to this OSM footprint, selecting
-            /// among all well-fitting candidates using a spatial/index hash and anti-repeat ring
-            /// buffer so neighbouring footprints never instantiate the same building.
-            public static bool Fit(Vector3[] ring, float ground, float height, int footprintIndex, out Spot spot)
-            {
-                spot = default;
-                var best = float.PositiveInfinity;
-                Vector3 axis = Vector3.right, centre = Vector3.zero;
-                float length = 0f, width = 0f;
-                for (var e = 0; e < ring.Length; e++)
-                {
-                    var u = ring[(e + 1) % ring.Length] - ring[e];
-                    u.y = 0f;
-                    if (u.sqrMagnitude < 1f) continue;
-                    u.Normalize();
-                    var v = new Vector3(-u.z, 0f, u.x);
-                    float u0 = float.PositiveInfinity, u1 = float.NegativeInfinity, v0 = float.PositiveInfinity, v1 = float.NegativeInfinity;
-                    foreach (var p in ring)
-                    {
-                        var a = Vector3.Dot(p, u);
-                        var b = Vector3.Dot(p, v);
-                        u0 = Mathf.Min(u0, a); u1 = Mathf.Max(u1, a);
-                        v0 = Mathf.Min(v0, b); v1 = Mathf.Max(v1, b);
-                    }
-                    var area = (u1 - u0) * (v1 - v0);
-                    if (area >= best) continue;
-                    best = area;
-                    var longAlongU = u1 - u0 >= v1 - v0;
-                    axis = longAlongU ? u : v;
-                    length = Mathf.Max(u1 - u0, v1 - v0);
-                    width = Mathf.Min(u1 - u0, v1 - v0);
-                    centre = u * ((u0 + u1) * 0.5f) + v * ((v0 + v1) * 0.5f);
-                }
-                if (float.IsInfinity(best)) return false;
-
-                fitCandidates.Clear();
-                var bestFit = float.PositiveInfinity;
-                for (var i = 0; i < prefabs.Length; i++)
-                {
-                    var size = bounds[i].size;
-                    if (size.x < 1f || size.z < 1f || size.y < 1f) continue;
-                    var alongX = size.x >= size.z;
-                    var sl = length / (alongX ? size.x : size.z);
-                    var sw = width / (alongX ? size.z : size.x);
-                    var sh = height / Mathf.Max(1f, size.y);
-                    if (sl < MinScale || sl > MaxScale || sw < MinScale || sw > MaxScale || sh < 0.45f || sh > 1.85f) continue;
-                    var fit = Mathf.Abs(Mathf.Log(sl)) + Mathf.Abs(Mathf.Log(sw)) + 1.5f * Mathf.Abs(Mathf.Log(sh));
-                    if (fit < bestFit) bestFit = fit;
-                    fitCandidates.Add((i, fit, alongX, sl, sw, sh));
-                }
-                if (fitCandidates.Count == 0) return false;
-
-                // Keep all candidates within a generous fit window so all 76 buildings participate
-                var poolCount = 0;
-                for (var c = 0; c < fitCandidates.Count; c++)
-                {
-                    if (fitCandidates[c].FitScore <= bestFit + 1.15f)
-                        fitCandidates[poolCount++] = fitCandidates[c];
-                }
-                if (poolCount == 0) poolCount = fitCandidates.Count;
-
-                var hash = Mathf.Abs(unchecked(footprintIndex * 73856093 ^ Mathf.RoundToInt(centre.x * 19f) ^ Mathf.RoundToInt(centre.z * 37f)));
-                var chosenSlot = hash % poolCount;
-                for (var attempt = 0; attempt < poolCount; attempt++)
-                {
-                    var candSlot = (chosenSlot + attempt * 5) % poolCount;
-                    var prefabIdx = fitCandidates[candSlot].Index;
-                    var recent = false;
-                    for (var r = 0; r < recentPrefabIndices.Length; r++)
-                    {
-                        if (recentPrefabIndices[r] == prefabIdx) { recent = true; break; }
-                    }
-                    if (!recent)
-                    {
-                        chosenSlot = candSlot;
-                        break;
-                    }
-                }
-
-                var picked = fitCandidates[chosenSlot];
-                recentPrefabIndices[recentPrefabCursor++ % recentPrefabIndices.Length] = picked.Index;
-
-                var yaw = picked.AlongX
-                    ? -Mathf.Atan2(axis.z, axis.x) * Mathf.Rad2Deg
-                    : Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg;
-                var rotation = Quaternion.Euler(0f, yaw, 0f);
-                var scale = picked.AlongX
-                    ? new Vector3(picked.Sl, picked.Sh, picked.Sw)
-                    : new Vector3(picked.Sw, picked.Sh, picked.Sl);
-                var pickedBounds = bounds[picked.Index];
-                var position = centre - rotation * Vector3.Scale(pickedBounds.center, scale);
-                position.y = ground - 0.3f - pickedBounds.min.y * picked.Sh;
-                spot = new Spot
-                {
-                    Prefab = prefabs[picked.Index],
-                    Position = position,
-                    Rotation = rotation,
-                    Scale = scale,
-                    FootprintIndex = footprintIndex
-                };
-                return true;
-            }
-
-            public static void Place(Spot spot, Transform parent, RoadRageBootstrap owner = null)
-            {
-                var building = UnityEngine.Object.Instantiate(spot.Prefab, spot.Position, spot.Rotation, parent);
-                building.transform.localScale = spot.Scale;
-                building.name = $"NYC Ground Building {spot.Prefab.name}";
-                if (owner != null)
-                {
-                    var pname = spot.Prefab.name;
-                    if (pname.StartsWith("SM_"))
-                    {
-                        var gisMat = owner.ManhattanGisMaterial(pname);
-                        foreach (var renderer in building.GetComponentsInChildren<Renderer>(true))
-                        {
-                            var shared = renderer.sharedMaterials;
-                            var assigned = new Material[Mathf.Max(1, shared.Length)];
-                            for (var i = 0; i < assigned.Length; i++) assigned[i] = gisMat;
-                            renderer.sharedMaterials = assigned;
-                        }
-                    }
-                    else
-                    {
-                        foreach (var renderer in building.GetComponentsInChildren<Renderer>(true))
-                        {
-                            var shared = renderer.sharedMaterials;
-                            var assigned = new Material[Mathf.Max(1, shared.Length)];
-                            for (var i = 0; i < assigned.Length; i++)
-                            {
-                                var srcMat = i < shared.Length ? shared[i] : null;
-                                var sn = srcMat != null ? srcMat.name.ToLowerInvariant() : string.Empty;
-                                if (sn.Contains("glass") || sn.Contains("window"))
-                                    assigned[i] = owner.materials["City Windows"];
-                                else if (srcMat != null && srcMat.HasProperty("_BaseMap") && srcMat.GetTexture("_BaseMap") != null)
-                                    assigned[i] = srcMat;
-                                else if (sn.Contains("brick"))
-                                    assigned[i] = owner.materials["GIS SoHoBrick"];
-                                else
-                                    assigned[i] = owner.materials["GIS ArtDeco"];
-                            }
-                            renderer.sharedMaterials = assigned;
-                        }
-                        if (owner.materials.TryGetValue("City Windows", out var cw))
-                            VaryWindowLighting(building, cw, spot.FootprintIndex * 31 + 7);
-                    }
-                }
-                foreach (var collider in building.GetComponentsInChildren<Collider>(true)) UnityEngine.Object.Destroy(collider);
-            }
-        }
-
-        /// Each facade texture and the metres of wall it covers, counted in floors of about 3.5 m:
-        /// ambientCG Facade018A, 020A, 019A, 006, 001 and 014 (CC0).
-        private static readonly (string Key, float Tile)[] FdrFacades =
-        {
-            ("brick", 21f), ("browntower", 14f), ("concrete", 17.5f), ("office", 31f), ("glass", 35f), ("highrise", 87f),
-        };
-
-        /// The baked footprints (FDRB: int count, then per building float height, byte corners,
-        /// corners x (float road distance, float lateral)), loaded once.
         private static class FdrCity
         {
-            private const float TankChance = 0.25f;
-            private const float TankFrom = 18f;
-            private const float TankTo = 70f;
-            private static float[] heights;
-            private static int[] starts;
-            private static int[] counts;
-            private static float[] centres;
-            private static Vector2[] corners;
-
-            private static bool Load()
-            {
-                if (heights != null) return heights.Length > 0;
-                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_buildings");
-                heights = System.Array.Empty<float>();
-                if (asset == null || asset.bytes.Length < 8 || asset.bytes[0] != 'F' || asset.bytes[3] != 'B') return false;
-                var bytes = asset.bytes;
-                var count = System.BitConverter.ToInt32(bytes, 4);
-                heights = new float[count];
-                starts = new int[count];
-                counts = new int[count];
-                centres = new float[count];
-                var all = new List<Vector2>();
-                var at = 8;
-                for (var i = 0; i < count; i++)
-                {
-                    heights[i] = System.BitConverter.ToSingle(bytes, at);
-                    counts[i] = bytes[at + 4];
-                    starts[i] = all.Count;
-                    at += 5;
-                    var sum = 0f;
-                    for (var k = 0; k < counts[i]; k++, at += 8)
-                    {
-                        var c = new Vector2(System.BitConverter.ToSingle(bytes, at), System.BitConverter.ToSingle(bytes, at + 4));
-                        all.Add(c);
-                        sum += c.x;
-                    }
-                    centres[i] = sum / counts[i];
-                }
-                corners = all.ToArray();
-                return count > 0;
-            }
-
-            /// Every building whose centre falls in this chunk, on the way there or back
-            /// (the return pass mirrors the outward one along the road).
-            public static int Build(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
-            {
-                if (!Load()) return 0;
-                candidates.Clear();
-                var length = RoadPath.Route.Length;
-                var placed = 0;
-                for (var i = 0; i < heights.Length; i++)
-                {
-                    foreach (var (d, back) in Passes(centres[i], length, segStart, segEnd))
-                    {
-                        var ring = new Vector3[counts[i]];
-                        for (var k = 0; k < ring.Length; k++)
-                        {
-                            var c = corners[starts[i] + k];
-                            ring[k] = RoadPath.Point(d + (back ? -1f : 1f) * (c.x - centres[i]), c.y);
-                        }
-                        // Standing on its lowest corner, one low corner (a ditch) sank the whole
-                        // building and the ground covered its lower floors. Its height counts
-                        // from the mean ground along its walls, which reach down to the lowest point.
-                        var low = float.PositiveInfinity;
-                        var high = float.NegativeInfinity;
-                        var sum = 0f;
-                        var samples = 0;
-                        var wet = 0;
-                        for (var k = 0; k < ring.Length; k++)
-                        for (var s = 0; s < 3; s++)
-                        {
-                            var y = GridGroundY(Vector3.Lerp(ring[k], ring[(k + 1) % ring.Length], s / 3f));
-                            low = Mathf.Min(low, y);
-                            high = Mathf.Max(high, y);
-                            sum += y;
-                            samples++;
-                            if (!float.IsNaN(seaLevel) && y < seaLevel + 0.3f) wet++;
-                        }
-                        var ground = sum / samples;
-                        // Where the game's river runs (road and river are fitted, not surveyed),
-                        // a building would stand in the water: left out.
-                        if (wet * 4 > samples) continue;
-                        var foot = Mathf.Min(low, ground) - 0.5f;
-                        for (var k = 0; k < ring.Length; k++) ring[k].y = foot;
-                        var near = float.PositiveInfinity;
-                        for (var k = 0; k < counts[i]; k++) near = Mathf.Min(near, Mathf.Abs(corners[starts[i] + k].y));
-                        // Keep the highway carriageway itself clear, while building all real OSM footprints along the drive.
-                        if (near < RoadPath.HalfWidth + 4.5f) continue;
-                        // A kit building has a flat foot: only on level ground, or its ground floor is buried.
-                        if (FdrKit.On && heights[i] >= FdrKit.Lowest && heights[i] <= FdrKit.Tallest && near < FdrKit.Reach
-                            && high - low < FdrKit.Level)
-                            candidates.Add((near, i, ring, foot, ground));
-                        else Extrude(mesh, i, ring, foot, ground, near);
-                        placed++;
-                    }
-                }
-                // The front row, nearest the road first, as real modelled buildings (FdrKit);
-                // the rest, and any the kit has no fit for, as boxes.
-                candidates.Sort((a, b) => a.Near.CompareTo(b.Near));
-                KitSpots.Clear();
-                foreach (var c in candidates)
-                {
-                    if (KitSpots.Count < FdrKit.PerChunk && FdrKit.Fit(c.Ring, c.Ground, heights[c.Index], c.Index, out var spot))
-                    {
-                        KitSpots.Add(spot);
-                        Street(mesh, c.Ring, c.Ground, c.Near, false, 0f);
-                    }
-                    else Extrude(mesh, c.Index, c.Ring, c.Foot, c.Ground, c.Near);
-                }
-                return placed;
-            }
-
-            /// Modelled buildings for this chunk, from the last Build: placed by the caller.
-            public static readonly List<FdrKit.Spot> KitSpots = new();
-            private static readonly List<(float Near, int Index, Vector3[] Ring, float Foot, float Ground)> candidates = new();
-
-            /// Street level round a building: a pavement out from every wall (none beside the
-            /// drive, where it would lie over the road) and, for the boxes, shops along the foot:
-            /// a box's facade ran straight into the ground with no door or pavement and read as
-            /// sinking. The kit's buildings have their own ground floor.
-            private static void Street(VillageMesh mesh, Vector3[] ring, float ground, float near, bool shops, float u)
-            {
-                // Out of the footprint by its winding: Cross(up, along) points right of the
-                // edge, which is out on a counter-clockwise ring.
-                var flip = VillageMesh.SignedArea(ring) > 0f ? 1f : -1f;
-                for (var k = 0; k < ring.Length; k++)
-                {
-                    var a = ring[k];
-                    var b = ring[(k + 1) % ring.Length];
-                    var along = b - a;
-                    along.y = 0f;
-                    if (along.sqrMagnitude < 1f) continue;
-                    var outward = Vector3.Cross(Vector3.up, along).normalized * flip;
-                    // Shops where the wall faces a street (a housing tower in its lawn has none).
-                    if (shops && FacesStreet((a + b) * 0.5f + outward * 2f))
-                    {
-                        mesh.Storefront("NY Shopfront", a, b, outward, ground - ShopBelow, ground + ShopHeight, u, 1f / ShopRepeat);
-                        u += along.magnitude / ShopRepeat;
-                    }
-                    if (near > ApronClear) mesh.Apron("NY Sidewalk", a, b, outward, ApronWidth, 0.02f);
-                }
-            }
-
-            /// Manhattan's street grid (build_fdr.py streets, from OSM): per piece its kind and its
-            /// points in road distance and lateral, with the distances it spans.
-            private sealed class StreetPiece
-            {
-                public int Kind;
-                public Vector2[] Points;
-                public float From, To;
-            }
-
-            private static List<StreetPiece> streets;
-            private static Vector3[] trees;
-
-            /// Carriageway half-widths by kind (avenue, street, narrow street, pedestrian) and the
-            /// pavement either side.
-            private static readonly float[] StreetHalf = { 8f, 5f, 3.5f, 0f };
-            private const float PavementWidth = 3f;
-            private const float LampEvery = 32f;
-            private const int TreesPerChunk = 90;
-            /// Pieces of street in and around this chunk, as world segments with their half-width,
-            /// for the buildings' street test.
-            private static readonly List<(Vector3 A, Vector3 B, float Half)> nearbyStreets = new();
-            /// The street trees to plant in this chunk: road distance, lateral, height.
-            public static readonly List<(float D, float Lateral, float Height)> ChunkTrees = new();
-
-            private static void LoadStreets()
-            {
-                if (streets != null) return;
-                streets = new List<StreetPiece>();
-                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_streets");
-                if (asset != null && asset.bytes.Length >= 8 && asset.bytes[3] == 'S')
-                {
-                    var b = asset.bytes;
-                    var count = System.BitConverter.ToInt32(b, 4);
-                    var at = 8;
-                    for (var i = 0; i < count; i++)
-                    {
-                        var piece = new StreetPiece { Kind = b[at], Points = new Vector2[System.BitConverter.ToUInt16(b, at + 1)] };
-                        at += 3;
-                        piece.From = float.PositiveInfinity;
-                        piece.To = float.NegativeInfinity;
-                        for (var k = 0; k < piece.Points.Length; k++, at += 8)
-                        {
-                            piece.Points[k] = new Vector2(System.BitConverter.ToSingle(b, at), System.BitConverter.ToSingle(b, at + 4));
-                            piece.From = Mathf.Min(piece.From, piece.Points[k].x);
-                            piece.To = Mathf.Max(piece.To, piece.Points[k].x);
-                        }
-                        streets.Add(piece);
-                    }
-                }
-                var treeAsset = Resources.Load<TextAsset>("Biomes/Routes/fdr_trees");
-                trees = System.Array.Empty<Vector3>();
-                if (treeAsset != null && treeAsset.bytes.Length >= 8 && treeAsset.bytes[3] == 'T')
-                {
-                    var b = treeAsset.bytes;
-                    trees = new Vector3[System.BitConverter.ToInt32(b, 4)];
-                    for (int i = 0, at = 8; i < trees.Length; i++, at += 9)
-                        trees[i] = new Vector3(System.BitConverter.ToSingle(b, at), System.BitConverter.ToSingle(b, at + 4), b[at + 8]);
-                }
-            }
-
-            /// Road distance `z` from the bake as the game road meets it in [from, to): on the way
-            /// there, or mirrored on the way back.
-            private static bool Meet(float z, float length, float from, float to, out float d, out bool back)
-            {
-                foreach (var (dd, b) in Passes(z, length, from, to)) { d = dd; back = b; return true; }
-                d = 0f; back = false;
-                return false;
-            }
-
-            /// The streets in this chunk: asphalt, a pavement either side and lamp posts; and the
-            /// street trees to plant, nearest the drive first.
-            public static void BuildStreets(VillageMesh mesh, float segStart, float segEnd)
-            {
-                LoadStreets();
-                nearbyStreets.Clear();
-                ChunkTrees.Clear();
-                var length = RoadPath.Route.Length;
-                const float margin = 60f;
-                for (var s = 0; s < streets.Count; s++)
-                {
-                    var piece = streets[s];
-                    var half = StreetHalf[piece.Kind];
-                    // Streets crossing one another: each a little higher than the last, so they do not flicker.
-                    var lift = 0.05f + (s % 7) * 0.004f;
-                    for (var k = 0; k + 1 < piece.Points.Length; k++)
-                    {
-                        var p = piece.Points[k];
-                        var q = piece.Points[k + 1];
-                        var mid = (p.x + q.x) * 0.5f;
-                        if (!Meet(mid, length, segStart - margin, segEnd + margin, out var d, out var back)) continue;
-                        var sign = back ? -1f : 1f;
-                        var a = RoadPath.Point(d + sign * (p.x - mid), p.y);
-                        var b = RoadPath.Point(d + sign * (q.x - mid), q.y);
-                        nearbyStreets.Add((a, b, half));
-                        if (d < segStart || d >= segEnd) continue;
-                        var along = b - a;
-                        along.y = 0f;
-                        if (along.sqrMagnitude < 0.25f) continue;
-                        var side = Vector3.Cross(Vector3.up, along).normalized;
-                        Vector3 On(Vector3 at, float y) { at.y = GridGroundY(at) + y; return at; }
-                        if (half > 0f)
-                        {
-                            mesh.Face("NY Street", On(a - side * half, lift), On(a + side * half, lift), On(b + side * half, lift), On(b - side * half, lift));
-                            for (var x = -1; x <= 1; x += 2)
-                            {
-                                var inner = side * (x * half);
-                                var outer = side * (x * (half + PavementWidth));
-                                mesh.Face("NY Sidewalk", On(a + inner, 0.03f), On(a + outer, 0.03f), On(b + outer, 0.03f), On(b + inner, 0.03f));
-                            }
-                            // Lamp posts at the kerb, staggered either side.
-                            var run = Vector3.Distance(a, b);
-                            if (Mathf.FloorToInt((s * 17 + k) * 10f / LampEvery) != Mathf.FloorToInt((s * 17 + k + 1) * 10f / LampEvery))
-                            {
-                                var x = (k & 1) == 0 ? 1f : -1f;
-                                var foot = On(a + side * (x * (half + 0.6f)) + along.normalized * (run * 0.5f), 0f);
-                                mesh.StreetLamp(foot, foot - side * x);
-                            }
-                        }
-                        else mesh.Face("NY Sidewalk", On(a - side * 3f, 0.03f), On(a + side * 3f, 0.03f), On(b + side * 3f, 0.03f), On(b - side * 3f, 0.03f));
-                    }
-                }
-                // The street trees, nearest the drive first: they are what is seen.
-                treeOrder.Clear();
-                for (var i = 0; i < trees.Length; i++)
-                    if (Meet(trees[i].x, length, segStart, segEnd, out var d, out var back))
-                        treeOrder.Add((Mathf.Abs(trees[i].y), d, trees[i].y, trees[i].z));
-                treeOrder.Sort((x, y) => x.Near.CompareTo(y.Near));
-                for (var i = 0; i < treeOrder.Count && i < TreesPerChunk; i++)
-                    ChunkTrees.Add((treeOrder[i].D, treeOrder[i].Lateral, Mathf.Clamp(5f + treeOrder[i].Dbh * 0.45f, 6f, 17f)));
-            }
-
-            private static readonly List<(float Near, float D, float Lateral, float Dbh)> treeOrder = new();
-
-            /// Whether a point is beside a street: within its pavement of a carriageway nearby.
-            private static bool FacesStreet(Vector3 at)
-            {
-                foreach (var (a, b, half) in nearbyStreets)
-                {
-                    var ab = new Vector2(b.x - a.x, b.z - a.z);
-                    var ap = new Vector2(at.x - a.x, at.z - a.z);
-                    var t = Mathf.Clamp01(Vector2.Dot(ap, ab) / Mathf.Max(0.01f, ab.sqrMagnitude));
-                    if ((ap - ab * t).magnitude < half + PavementWidth + 4f) return true;
-                }
-                return false;
-            }
-
-            /// The street-level storey's texture (Tools/Textures/make_shopfront.py): four 6 m shop
-            /// bays, 4.5 m above the pavement and 1 m below it.
-            private const float ShopRepeat = 24f;
-            private const float ShopHeight = 4.5f;
-            private const float ShopBelow = 1f;
-            private const float ApronWidth = 3.5f;
-            /// m from the road's centreline: nearer, a pavement would lie on the shoulder.
-            private const float ApronClear = 26f;
-
-            /// A building as an extruded box: walls with a photo facade, a flat roof, setbacks on
-            /// some towers, a cornice on mid-rise blocks, and water tanks.
-            private static void Extrude(VillageMesh mesh, int i, Vector3[] ring, float foot, float ground, float near)
-            {
-                Street(mesh, ring, ground, near, heights[i] >= 8f, (i % 16) * 0.25f);
-                {
-                    {
-                        var h = heights[i] + ground - foot - 0.5f;
-                        // By height, as the city is: walk-ups, brick and concrete blocks, office and
-                        // residential towers, glass at the top.
-                        var pick = (int)((uint)(i * 2654435761u) >> 28);
-                        var facade = h < 25f ? (pick % 3 == 0 ? 1 : 0)
-                            : h < 60f ? new[] { 0, 1, 2 }[pick % 3]
-                            : h < 150f ? new[] { 3, 2, 5, 1 }[pick % 4]
-                            : new[] { 4, 3, 4, 5 }[pick % 4];
-                        var (key, tile) = FdrFacades[facade];
-                        var centre = Vector3.zero;
-                        foreach (var p in ring) centre += p;
-                        centre /= ring.Length;
-                        Vector3[] Scaled(float k, float y)
-                        {
-                            var r = new Vector3[ring.Length];
-                            for (var k2 = 0; k2 < r.Length; k2++)
-                            {
-                                r[k2] = centre + (ring[k2] - centre) * k;
-                                r[k2].y = y;
-                            }
-                            return r;
-                        }
-                        var top = h + 0.5f;
-                        if (heights[i] > 60f && (pick & 1) == 0)
-                        {
-                            // A tower steps back: its upper third set in, as the zoning made them.
-                            var lower = top * 0.62f;
-                            mesh.Building($"NY {key}", "NY Roof", ring, lower, tile, pick / 16f);
-                            mesh.Building($"NY {key}", "NY Roof", Scaled(0.78f, foot + lower), top - lower, tile, pick / 16f);
-                        }
-                        else mesh.Building($"NY {key}", "NY Roof", ring, top, tile, pick / 16f);
-                        // A stone cornice at the roof line. (A shopfront band round the foot read as
-                        // a grey box the building sank into.)
-                        if (heights[i] >= 12f && heights[i] < 60f)
-                            mesh.Building("NY Cornice", "NY Cornice", Scaled(1.04f, foot + top - 0.9f), 0.9f, 4f, 0f);
-                        // New York's wooden water tanks, on the roofs of mid-rise blocks.
-                        if (heights[i] > TankFrom && heights[i] < TankTo && (pick & 3) == 0)
-                        {
-                            mesh.WaterTank(centre + Vector3.up * top);
-                        }
-                    }
-                }
-            }
-
             /// One East River bridge (build_fdr.py bridges): deck points in road distance and
             /// lateral, deck and cable (or truss top) heights above the river, towers by point.
             private sealed class Bridge
@@ -8060,6 +7484,70 @@ namespace RoadRage.UnityRemake
                 for (var i = 0; i < all.Count; i++)
                 foreach (var (d, back) in Passes(all[i].Cross, RoadPath.Route.Length, from, to))
                     yield return (i, d, back);
+            }
+
+            /// Metres from Queensboro's upper roadway down to its bottom chord and lower roadway.
+            private const float QueensboroBelow = 7f;
+            /// Metres either side of a bridge's deck where no building stands.
+            private const float BridgeClear = 8f;
+
+            /// The bridge decks crossing the road near [from, to), as world segments (flat) with
+            /// their half-widths: what a building beside the drive must not stand in.
+            public static void DecksNear(float from, float to, List<(Vector3 A, Vector3 B, float Half)> into)
+            {
+                into.Clear();
+                var length = RoadPath.Route.Length;
+                foreach (var bridge in LoadBridges())
+                foreach (var (d, back) in Passes(bridge.Cross, length, from - 1000f, to + 1000f))
+                {
+                    var sign = back ? -1f : 1f;
+                    for (var p = 0; p + 1 < bridge.Points.Count; p++)
+                    {
+                        var a = RoadPath.Point(d + sign * (bridge.Points[p].x - bridge.Cross), bridge.Points[p].y);
+                        var b = RoadPath.Point(d + sign * (bridge.Points[p + 1].x - bridge.Cross), bridge.Points[p + 1].y);
+                        a.y = b.y = 0f;
+                        into.Add((a, b, bridge.Width * 0.5f + BridgeClear));
+                    }
+                }
+            }
+
+            /// Whether a building's bounds reach into any of these decks.
+            public static bool HitsDeck(Bounds bounds, List<(Vector3 A, Vector3 B, float Half)> decks)
+            {
+                foreach (var (a, b, half) in decks)
+                {
+                    var steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 4f));
+                    for (var k = 0; k <= steps; k++)
+                    {
+                        var p = Vector3.Lerp(a, b, k / (float)steps);
+                        var dx = Mathf.Max(0f, Mathf.Abs(p.x - bounds.center.x) - bounds.extents.x);
+                        var dz = Mathf.Max(0f, Mathf.Abs(p.z - bounds.center.z) - bounds.extents.z);
+                        if (dx * dx + dz * dz < half * half) return true;
+                    }
+                }
+                return false;
+            }
+
+            /// Whether a spot `reach` metres across, at road distance d and lateral, would stand on a
+            /// bridge's line (on the way there or mirrored on the way back).
+            public static bool NearBridge(float d, float lateral, float reach)
+            {
+                var length = RoadPath.Route.Length;
+                var z = Mathf.Repeat(d, 2f * length);
+                if (z > length) z = 2f * length - z;
+                var at = new Vector2(z, lateral);
+                foreach (var bridge in LoadBridges())
+                    for (var p = 0; p + 1 < bridge.Points.Count; p++)
+                        if (DistanceToSegment(at, bridge.Points[p], bridge.Points[p + 1]) < bridge.Width * 0.5f + BridgeClear + reach)
+                            return true;
+                return false;
+            }
+
+            private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
+            {
+                var ab = b - a;
+                var t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(0.0001f, ab.sqrMagnitude));
+                return (p - (a + ab * t)).magnitude;
             }
 
             /// The Brooklyn Bridge's towers from the last BuildBridge: water-level foot and turn.
@@ -8143,6 +7631,9 @@ namespace RoadRage.UnityRemake
                         {
                             var leg = new Vector3(deck[i].x, pierTop, deck[i].z) + across[i] * (x * (half + 1.5f));
                             mesh.Box(steel, leg, across[i] * 2.2f, along * 2.5f, crown - pierTop);
+                            // Queensboro's finials over its towers.
+                            if (bridge.Kind == "queensboro")
+                                mesh.Beam(steel, new Vector3(leg.x, crown, leg.z), new Vector3(leg.x, crown + 8f, leg.z), 1.1f);
                         }
                         foreach (var y in bridge.Kind == "queensboro" ? new float[0] : new[] { deck[i].y - thick - 1f, (deck[i].y + crown) * 0.5f, crown - 4f })
                             mesh.Box(steel, new Vector3(deck[i].x, y, deck[i].z), across[i] * (half + 3f), along * 1.6f, 2.5f);
@@ -8150,7 +7641,10 @@ namespace RoadRage.UnityRemake
                 }
                 if (bridge.Kind == "queensboro")
                 {
-                    // Cantilever trusses either side: top chord, posts, and diagonals.
+                    // A deep through-truss either side, as the real one: a bottom chord under the
+                    // deck (with the lower roadway on it), posts up to the cantilever top chord,
+                    // crossed diagonals in every panel, and bracing across the top.
+                    var below = Vector3.down * QueensboroBelow;
                     foreach (var x in new[] { -1f, 1f })
                     for (var i = 0; i + 1 < n; i++)
                     {
@@ -8160,8 +7654,25 @@ namespace RoadRage.UnityRemake
                         var ta = new Vector3(a.x, top[i], a.z);
                         var tb = new Vector3(b.x, top[i + 1], b.z);
                         mesh.Beam(steel, ta, tb, 0.8f);
-                        mesh.Beam(steel, a, ta, 0.45f);
-                        mesh.Beam(steel, i % 2 == 0 ? a : ta, i % 2 == 0 ? tb : b, 0.35f);
+                        mesh.Beam(steel, a + below, b + below, 0.7f);
+                        mesh.Beam(steel, a + below, ta, 0.5f);
+                        mesh.Beam(steel, a + below, tb, 0.3f);
+                        mesh.Beam(steel, ta, b + below, 0.3f);
+                        if (top[i + 1 < n - 1 ? i + 2 : i + 1] <= 0f) mesh.Beam(steel, b + below, tb, 0.5f);
+                    }
+                    for (var i = 0; i + 1 < n; i++)
+                    {
+                        if (top[i] <= 0f || top[i + 1] <= 0f) continue;
+                        var l = deck[i] - across[i] * half;
+                        var r = deck[i] + across[i] * half;
+                        var l1 = deck[i + 1] - across[i + 1] * half;
+                        var r1 = deck[i + 1] + across[i + 1] * half;
+                        mesh.Face("Bridge Deck", l + below, r + below, r1 + below, l1 + below);
+                        if (i % 2 != 0) continue;
+                        var tl = new Vector3(l.x, top[i], l.z);
+                        var tr = new Vector3(r.x, top[i], r.z);
+                        mesh.Beam(steel, tl, tr, 0.4f);
+                        mesh.Beam(steel, tl, new Vector3(r1.x, top[i + 1], r1.z), 0.25f);
                     }
                     return;
                 }
@@ -8950,37 +8461,6 @@ namespace RoadRage.UnityRemake
                 return result;
             }
 
-            /// A wooden water tank on its stand: an eight-sided barrel with a cone roof.
-            public void WaterTank(Vector3 roof)
-            {
-                const int sides = 8;
-                const float radius = 2.2f, stand = 2.5f, barrel = 4.5f, cone = 1.6f;
-                var foot = roof + Vector3.up * stand;
-                var top = foot + Vector3.up * barrel;
-                var apex = top + Vector3.up * cone;
-                var leg = Vector3.right * 0.25f;
-                var legBack = Vector3.forward * 0.25f;
-                for (var k = 0; k < 4; k++)
-                {
-                    var at = roof + Quaternion.Euler(0f, 45f + k * 90f, 0f) * Vector3.forward * radius * 0.8f;
-                    Face("NY Tank", at - leg, at + leg, at + leg + Vector3.up * stand, at - leg + Vector3.up * stand);
-                    Face("NY Tank", at - legBack, at + legBack, at + legBack + Vector3.up * stand, at - legBack + Vector3.up * stand);
-                }
-                var part = For("NY Tank");
-                for (var k = 0; k < sides; k++)
-                {
-                    var a = Quaternion.Euler(0f, k * 360f / sides, 0f) * Vector3.forward * radius;
-                    var c = Quaternion.Euler(0f, (k + 1) * 360f / sides, 0f) * Vector3.forward * radius;
-                    // Outward: a quad (a, b, b + up) faces Cross(b - a, up).
-                    if (Vector3.Dot(Vector3.Cross(c - a, Vector3.up), a + c) < 0f) (a, c) = (c, a);
-                    Quad(part, foot + a, foot + c, top + c, top + a);
-                    var v = part.Vertices.Count;
-                    part.Vertices.Add(top + a); part.Vertices.Add(top + c); part.Vertices.Add(apex);
-                    part.Uv.Add(Vector2.zero); part.Uv.Add(Vector2.right); part.Uv.Add(Vector2.up);
-                    part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2);
-                }
-            }
-
             /// A block standing on `foot`: `across` and `along` are half-sizes, sides and a top.
             public void Box(string material, Vector3 foot, Vector3 across, Vector3 along, float height)
             {
@@ -9003,44 +8483,6 @@ namespace RoadRage.UnityRemake
                 var other = Vector3.Cross(dir, side).normalized * half;
                 Face(material, a - side, a + side, b + side, b - side);
                 Face(material, a - other, a + other, b + other, b - other);
-            }
-
-            /// A wall's street-level storey from a to b, just out from the wall, between heights
-            /// `bottom` and `top`: the texture runs across from `u0`, `uPerMetre`, and once up.
-            public void Storefront(string material, Vector3 a, Vector3 b, Vector3 outward, float bottom, float top, float u0, float uPerMetre)
-            {
-                var part = For(material);
-                var o = outward * 0.06f;
-                var a0 = new Vector3(a.x, bottom, a.z) + o;
-                var b0 = new Vector3(b.x, bottom, b.z) + o;
-                var a1 = new Vector3(a.x, top, a.z) + o;
-                var b1 = new Vector3(b.x, top, b.z) + o;
-                var u1 = u0 + Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z)) * uPerMetre;
-                for (var side = 0; side < 2; side++)
-                {
-                    var v = part.Vertices.Count;
-                    part.Vertices.Add(a0); part.Vertices.Add(b0); part.Vertices.Add(b1); part.Vertices.Add(a1);
-                    part.Uv.Add(new Vector2(u0, 0f)); part.Uv.Add(new Vector2(u1, 0f));
-                    part.Uv.Add(new Vector2(u1, 1f)); part.Uv.Add(new Vector2(u0, 1f));
-                    if (side == 0) { part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2); part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3); }
-                    else { part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 1); part.Triangles.Add(v); part.Triangles.Add(v + 3); part.Triangles.Add(v + 2); }
-                }
-            }
-
-            /// A strip of pavement `width` wide out from a wall a to b, on the ground.
-            public void Apron(string material, Vector3 a, Vector3 b, Vector3 outward, float width, float lift)
-            {
-                var steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 4f));
-                for (var i = 0; i < steps; i++)
-                {
-                    var p0 = Vector3.Lerp(a, b, i / (float)steps);
-                    var p1 = Vector3.Lerp(a, b, (i + 1) / (float)steps);
-                    var q0 = p0 + outward * width;
-                    var q1 = p1 + outward * width;
-                    p0.y = GridGroundY(p0) + lift; p1.y = GridGroundY(p1) + lift;
-                    q0.y = GridGroundY(q0) + lift; q1.y = GridGroundY(q1) + lift;
-                    Face(material, p0, p1, q1, q0);
-                }
             }
 
             /// A surface seen from both sides.
