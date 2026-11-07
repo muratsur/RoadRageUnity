@@ -1332,6 +1332,12 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Awning Burgundy", new Color(0.42f, 0.08f, 0.18f), 0f, 0.20f);
             MakeMaterial("Awning Gold", new Color(0.70f, 0.52f, 0.10f), 0.05f, 0.30f);
             BiomeSurface(BiomeMaterial("City Windows", "Synthwave", "T_window_02_D", "T_window_02_N", new Color(0.58f, 0.72f, 1f), 0.34f, 0.72f, "T_window_02_RE"), "Synthwave", "T_window_02_MSO");
+            // FDR Drive's windows: dark glass with a little warm light behind it. City Windows'
+            // mirror finish showed the reflection probe's other buildings, which read as seeing
+            // straight through the building.
+            var fdrWindow = MakeMaterial("NY Window", new Color(0.15f, 0.17f, 0.20f), 0f, 0.38f);
+            fdrWindow.EnableKeyword("_EMISSION");
+            fdrWindow.SetColor("_EmissionColor", new Color(0.22f, 0.17f, 0.11f));
             // Emissive skyline for distant towers - the pack's own RE sheet is flat grey,
             // so the procedural pane grid gives real lit windows (Unlit, see Cyber Window).
             var citySkyline = BiomeSurface(BiomeMaterial("City Skyline", "Synthwave", "T_concrete_D", "T_concrete_N",
@@ -2865,6 +2871,12 @@ namespace RoadRage.UnityRemake
             // No macro variation: its brightness mean is the grass's, and pavement went white.
             materials["Fdr Ground"].SetFloat("_Macro", 0f);
             // Side streets in the Megascans asphalt: a 2 m scan on VillageMesh's 4 m UVs.
+            // The city behind the corridor: ambientCG photo facades (CC0) with normal maps, roofs, cornices.
+            foreach (var (facade, _) in FdrFacades)
+                BiomeMaterial($"NY {facade}", "NewYork", $"T_facade_{facade}_D", $"T_facade_{facade}_N", Color.white,
+                    facade == "glass" ? 0.3f : 0f, facade == "glass" || facade == "office" ? 0.5f : 0.15f);
+            MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
+            MakeMaterial("NY Cornice", new Color(0.78f, 0.74f, 0.66f), 0f, 0.15f);
             BiomeMaterial("NY Street", "NewYork", "T_asphalt_D", "T_asphalt_N", new Color(0.68f, 0.69f, 0.72f), 0.08f, 0.74f)
                 .SetTextureScale("_BaseMap", new Vector2(2f, 2f));
             // The Megascans pavement is a 1 m scan; VillageMesh UVs are 4 m each.
@@ -2884,6 +2896,11 @@ namespace RoadRage.UnityRemake
             MakeMaterial("Bridge Tan", new Color(0.62f, 0.58f, 0.50f), 0.1f, 0.2f);
             MakeMaterial("Bridge Deck", new Color(0.28f, 0.28f, 0.29f), 0f, 0.1f);
             MakeMaterial("Bridge Cable", new Color(0.24f, 0.24f, 0.25f), 0.3f, 0.3f);
+            // FDR Drive's tunnels: a grey concrete soffit and lights along it, always lit.
+            MakeMaterial("Tunnel Ceiling", new Color(0.33f, 0.33f, 0.34f), 0f, 0.1f);
+            var tunnelLight = MakeMaterial("Tunnel Light", new Color(1f, 0.85f, 0.6f), 0f, 0.4f);
+            tunnelLight.EnableKeyword("_EMISSION");
+            tunnelLight.SetColor("_EmissionColor", new Color(3.2f, 2.4f, 1.3f));
             MakeMaterial("Viaduct Steel", new Color(0.28f, 0.36f, 0.32f), 0.2f, 0.3f);
 
             // Transfagarasan: alpine meadow, grey Carpathian rock, grey gravel verge.
@@ -4202,7 +4219,7 @@ namespace RoadRage.UnityRemake
                     {
                         var facadePass = material != null && IsFacadeMaterial(material.name);
                         if (sourceName.Contains("window") || sourceName.Contains("glass") || sourceName.Contains("light"))
-                            assigned[i] = materials["City Windows"];
+                            assigned[i] = CityWindowGlass;
                         else if (sourceName.Contains("metal") || sourceName.Contains("aluminium") || sourceName.Contains("copper") || sourceName.Contains("steel") || sourceName.Contains("roof"))
                             assigned[i] = materials["City Asphalt Trim"];
                         else
@@ -4221,7 +4238,7 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("streetlamp") || sourceName.Contains("pole") || sourceName.Contains("post")) assigned[i] = materials["City Asphalt Trim"];
                         else if (sourceName.Contains("fireplug") || sourceName.Contains("hydrant")) assigned[i] = materials["Car Orange"];
                         else if (sourceName.Contains("window_car") || sourceName.Contains("glass")) assigned[i] = materials["Glass"];
-                        else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = materials["City Windows"];
+                        else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = CityWindowGlass;
                         else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("aluminium") || sourceName.Contains("copper") || sourceName.Contains("steel") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
                         else if (resourceName.Contains("USA_VRBN/"))
                         {
@@ -6421,14 +6438,21 @@ namespace RoadRage.UnityRemake
                     var mesh = new VillageMesh();
                     FdrCity.BuildBridge(mesh, index, d, back, seaLevel);
                     mesh.Build(this);
-                    var towerModel = Resources.Load<GameObject>("Biomes/NewYork/Models/BrooklynTower");
-                    if (towerModel != null)
-                        foreach (var (foot, turn) in FdrCity.BrooklynTowers)
+                    foreach (var (model, foot, turn, steel) in FdrCity.TowerModels)
+                    {
+                        var towerModel = Resources.Load<GameObject>($"Biomes/NewYork/Models/{model}");
+                        if (towerModel == null) continue;
+                        var tower = Instantiate(towerModel, foot, turn, root.transform);
+                        tower.name = model;
+                        // The model's "Stone" and "Steel" slots take the game's own materials.
+                        foreach (var r in tower.GetComponentsInChildren<Renderer>())
                         {
-                            var tower = Instantiate(towerModel, foot, turn, root.transform);
-                            tower.name = "Brooklyn Bridge Tower";
-                            foreach (var r in tower.GetComponentsInChildren<Renderer>()) r.sharedMaterial = materials["Bridge Stone"];
+                            var slots = r.sharedMaterials;
+                            for (var k = 0; k < slots.Length; k++)
+                                slots[k] = slots[k] != null && slots[k].name.StartsWith("Steel") ? materials[steel] : materials["Bridge Stone"];
+                            r.sharedMaterials = slots;
                         }
+                    }
                     chunkRoot = null;
                 }
             ForgetFdrBridges(fdrBridgeWanted);
@@ -6821,6 +6845,7 @@ namespace RoadRage.UnityRemake
             structuresRoute = RoadPath.Route;
             moselDecks = new List<Vector2>();
             moselCrossings.Clear();
+            RoadPath.CoveredSpans.Clear();
             var asset = Resources.Load<TextAsset>(RoadPath.Route == bigSurRoute ? "Biomes/Routes/sr1_structures"
                 : RoadPath.Route == seaToSkyRoute ? "Biomes/Routes/bc99_structures"
                 : RoadPath.Route == amalfiRoute ? "Biomes/Routes/ss163_structures"
@@ -6842,6 +6867,9 @@ namespace RoadRage.UnityRemake
             {
                 var f = line.Trim().Split(' ');
                 if (f[0] == "deck") moselDecks.Add(new Vector2(Number(f[1]), Number(f[2])));
+                // FDR Drive's covered stretches stay tunnels (BuildFdrTunnels); elsewhere a "cut" is
+                // only the open cutting the terrain bake made.
+                else if (f[0] == "cut" && RoadPath.Route == fdrRoute) RoadPath.CoveredSpans.Add(new Vector2(Number(f[1]), Number(f[2])));
                 else if (f[0] == "sea") bigSurSeaLevel = Number(f[1]);
                 else if (f[0] == "side") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Points = Line(f[2]) });
                 else if (f[0] == "high") moselCrossings.Add(new MoselCrossing { Anchor = Number(f[1]), Height = Number(f[2]), Points = Line(f[3]) });
@@ -7294,12 +7322,63 @@ namespace RoadRage.UnityRemake
         /// skyscraper & hero landmarks rising behind.
         private readonly List<(Vector3 A, Vector3 B, float Half)> fdrDecks = new();
 
+        private const float TunnelHeight = 6.5f;
+        private const float TunnelRoof = 0.9f;
+        private const float TunnelLightEvery = 10f;
+
+        /// FDR Drive's covered stretches as cut-and-cover tunnels, as they are: concrete walls just
+        /// outside the shoulders, a roof slab with the pavement or park on top, headwalls over
+        /// both portals, and a line of lights along the soffit over each carriageway.
+        private void BuildFdrTunnels(VillageMesh mesh)
+        {
+            const float step = 4f;
+            for (var d = Mathf.Floor(segStart / step) * step; d < segEnd; d += step)
+            {
+                var next = d + step;
+                if (!RoadPath.Covered(d) || !RoadPath.Covered(next)) continue;
+                var w = RoadPath.HalfWidthAt(d) + RoadPath.ShoulderWidth + 1.2f;
+                var wn = RoadPath.HalfWidthAt(next) + RoadPath.ShoulderWidth + 1.2f;
+                Vector3 At(float distance, float lateral, float y) => RoadPath.Point(distance, lateral, y);
+                const float h = TunnelHeight;
+                const float top = TunnelHeight + TunnelRoof;
+                for (var side = -1; side <= 1; side += 2)
+                {
+                    mesh.Face("Bridge Stone", At(d, side * w, -0.2f), At(next, side * wn, -0.2f), At(next, side * wn, h), At(d, side * w, h));
+                    mesh.Face("Bridge Stone", At(d, side * (w + 1f), h), At(next, side * (wn + 1f), h), At(next, side * (wn + 1f), top), At(d, side * (w + 1f), top));
+                }
+                mesh.Face("Tunnel Ceiling", At(d, -w, h), At(d, w, h), At(next, wn, h), At(next, -wn, h));
+                mesh.Face("NY Sidewalk", At(d, -w - 1f, top), At(d, w + 1f, top), At(next, wn + 1f, top), At(next, -wn - 1f, top));
+                // A light over the middle of each carriageway, every TunnelLightEvery metres.
+                var fold = RoadPath.Route.Fold(d);
+                if (Mathf.FloorToInt(fold / TunnelLightEvery) != Mathf.FloorToInt(RoadPath.Route.Fold(next) / TunnelLightEvery))
+                    for (var side = -1; side <= 1; side += 2)
+                    {
+                        var x = side * w * 0.5f;
+                        mesh.Face("Tunnel Light", At(d, x - 0.3f, h - 0.05f), At(d, x + 0.3f, h - 0.05f), At(d + 1.6f, x + 0.3f, h - 0.05f), At(d + 1.6f, x - 0.3f, h - 0.05f));
+                    }
+                // Headwalls over the portals.
+                foreach (var (at, outside) in new[] { (d, d - step), (next, next + step) })
+                {
+                    if (RoadPath.Covered(outside)) continue;
+                    var wa = RoadPath.HalfWidthAt(at) + RoadPath.ShoulderWidth + 1.2f;
+                    mesh.Face("Bridge Stone", At(at, -wa - 2f, h), At(at, wa + 2f, h), At(at, wa + 2f, top + 2.2f), At(at, -wa - 2f, top + 2.2f));
+                }
+            }
+        }
+
+        /// Window glass for the city's buildings: FDR Drive's own, City Windows elsewhere.
+        private Material CityWindowGlass =>
+            RoadPath.Route != null && RoadPath.Route == fdrRoute ? materials["NY Window"] : materials["City Windows"];
+
         private void BuildFdrDrive()
         {
             Random.InitState(40712 ^ chunkSeed);
             Physics.SyncTransforms();
             BuildMoselRiver();
             BuildMoselBridges();
+            var tunnels = new VillageMesh();
+            BuildFdrTunnels(tunnels);
+            tunnels.Build(this);
 
             var kerbEdge = RoadPath.HalfWidth + 1.2f;
 
@@ -7334,6 +7413,7 @@ namespace RoadRage.UnityRemake
                 var block = Mathf.FloorToInt(z / 32f);
                 const int side = 1;
                 const float facing = -90f;
+                if (RoadPath.Covered(z, 12f)) continue;
                 var frontDistance = z + 4f;
                 var frontageHash = BlockHash(block * 11 + 1, 7);
                 var frontagePlot = 30f + (frontageHash >> 3 & 0x7fffffff) % 7 * 2f;
@@ -7429,13 +7509,167 @@ namespace RoadRage.UnityRemake
                 }
             }
 
+            // The real city behind the corridor and across the river.
+            var behind = new VillageMesh();
+            placed += FdrCity.BuildBehind(behind, segStart, segEnd,
+                RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep)));
+            behind.Build(this);
+
             // 3. Guardrail ONLY on the East River side (side = -1)
             BuildGuardRail(materials["Forest Guard Rail"], -1);
             if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} 3D street-level NYC buildings");
         }
 
+        /// Each facade texture and the metres of wall it covers, counted in floors of about 3.5 m:
+        /// ambientCG Facade018A, 020A, 019A, 006, 001 and 014 (CC0).
+        private static readonly (string Key, float Tile)[] FdrFacades =
+        {
+            ("brick", 21f), ("browntower", 14f), ("concrete", 17.5f), ("office", 31f), ("glass", 35f), ("highrise", 87f),
+        };
+
         private static class FdrCity
         {
+            /// Metres from the drive's centreline: nearer, the corridor's own buildings stand.
+            private const float BehindCorridor = 150f;
+            /// Per footprint: far enough from the drive and clear of the bridges (worked out once).
+            private static bool[] behind;
+            private static float[] heights;
+            private static int[] starts;
+            private static int[] counts;
+            private static float[] centres;
+            private static Vector2[] corners;
+
+            /// The real footprints (build_fdr.py buildings; NYC Open Data), loaded once: FDRB, int
+            /// count, then per building float height, byte corners, corners x (float road distance,
+            /// float lateral).
+            private static bool LoadFootprints()
+            {
+                if (heights != null) return heights.Length > 0;
+                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_buildings");
+                heights = System.Array.Empty<float>();
+                if (asset == null || asset.bytes.Length < 8 || asset.bytes[0] != 'F' || asset.bytes[3] != 'B') return false;
+                var bytes = asset.bytes;
+                var count = System.BitConverter.ToInt32(bytes, 4);
+                heights = new float[count];
+                starts = new int[count];
+                counts = new int[count];
+                centres = new float[count];
+                var all = new List<Vector2>();
+                var at = 8;
+                for (var i = 0; i < count; i++)
+                {
+                    heights[i] = System.BitConverter.ToSingle(bytes, at);
+                    counts[i] = bytes[at + 4];
+                    starts[i] = all.Count;
+                    at += 5;
+                    var sum = 0f;
+                    for (var k = 0; k < counts[i]; k++, at += 8)
+                    {
+                        var c = new Vector2(System.BitConverter.ToSingle(bytes, at), System.BitConverter.ToSingle(bytes, at + 4));
+                        all.Add(c);
+                        sum += c.x;
+                    }
+                    centres[i] = sum / counts[i];
+                }
+                corners = all.ToArray();
+                return count > 0;
+            }
+
+            /// The real city behind the corridor and across the river: every footprint more than
+            /// BehindCorridor from the drive whose centre falls in this chunk, as a box with a photo
+            /// facade (the corridor had nothing behind it). None in the river or on a bridge's line.
+            public static int BuildBehind(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
+            {
+                if (!LoadFootprints()) return 0;
+                if (behind == null)
+                {
+                    behind = new bool[heights.Length];
+                    for (var i = 0; i < heights.Length; i++)
+                    {
+                        var near = float.PositiveInfinity;
+                        var lateral = 0f;
+                        for (var k = 0; k < counts[i]; k++)
+                        {
+                            near = Mathf.Min(near, Mathf.Abs(corners[starts[i] + k].y));
+                            lateral += corners[starts[i] + k].y / counts[i];
+                        }
+                        behind[i] = near >= BehindCorridor && !NearBridge(centres[i], lateral, 20f);
+                    }
+                }
+                var length = RoadPath.Route.Length;
+                var placed = 0;
+                for (var i = 0; i < heights.Length; i++)
+                {
+                    if (!behind[i]) continue;
+                    foreach (var (d, back) in Passes(centres[i], length, segStart, segEnd))
+                    {
+                        var ring = new Vector3[counts[i]];
+                        for (var k = 0; k < ring.Length; k++)
+                        {
+                            var c = corners[starts[i] + k];
+                            ring[k] = RoadPath.Point(d + (back ? -1f : 1f) * (c.x - centres[i]), c.y);
+                        }
+                        // Height from the mean ground along the walls, walls down to the lowest point.
+                        var low = float.PositiveInfinity;
+                        var sum = 0f;
+                        var wet = 0;
+                        for (var k = 0; k < ring.Length; k++)
+                        {
+                            var y = GridGroundY(ring[k]);
+                            low = Mathf.Min(low, y);
+                            sum += y;
+                            if (!float.IsNaN(seaLevel) && y < seaLevel + 0.3f) wet++;
+                        }
+                        if (wet * 4 > ring.Length) continue;
+                        var ground = sum / ring.Length;
+                        var foot = Mathf.Min(low, ground) - 0.5f;
+                        for (var k = 0; k < ring.Length; k++) ring[k].y = foot;
+                        Extrude(mesh, i, ring, foot, ground);
+                        placed++;
+                    }
+                }
+                return placed;
+            }
+
+            /// A footprint as a box: a photo facade by height, a flat roof, setbacks on some towers,
+            /// a cornice on mid-rise blocks.
+            private static void Extrude(VillageMesh mesh, int i, Vector3[] ring, float foot, float ground)
+            {
+                var h = heights[i] + ground - foot - 0.5f;
+                // By height, as the city is: walk-ups, brick and concrete blocks, office and
+                // residential towers, glass at the top.
+                var pick = (int)((uint)(i * 2654435761u) >> 28);
+                var facade = h < 25f ? (pick % 3 == 0 ? 1 : 0)
+                    : h < 60f ? new[] { 0, 1, 2 }[pick % 3]
+                    : h < 150f ? new[] { 3, 2, 5, 1 }[pick % 4]
+                    : new[] { 4, 3, 4, 5 }[pick % 4];
+                var (key, tile) = FdrFacades[facade];
+                var centre = Vector3.zero;
+                foreach (var p in ring) centre += p;
+                centre /= ring.Length;
+                Vector3[] Scaled(float k, float y)
+                {
+                    var r = new Vector3[ring.Length];
+                    for (var k2 = 0; k2 < r.Length; k2++)
+                    {
+                        r[k2] = centre + (ring[k2] - centre) * k;
+                        r[k2].y = y;
+                    }
+                    return r;
+                }
+                var top = h + 0.5f;
+                if (heights[i] > 60f && (pick & 1) == 0)
+                {
+                    // A tower steps back: its upper third set in, as the zoning made them.
+                    var lower = top * 0.62f;
+                    mesh.Building($"NY {key}", "NY Roof", ring, lower, tile, pick / 16f);
+                    mesh.Building($"NY {key}", "NY Roof", Scaled(0.78f, foot + lower), top - lower, tile, pick / 16f);
+                }
+                else mesh.Building($"NY {key}", "NY Roof", ring, top, tile, pick / 16f);
+                if (heights[i] >= 12f && heights[i] < 60f)
+                    mesh.Building("NY Cornice", "NY Cornice", Scaled(1.04f, foot + top - 0.9f), 0.9f, 4f, 0f);
+            }
+
             /// One East River bridge (build_fdr.py bridges): deck points in road distance and
             /// lateral, deck and cable (or truss top) heights above the river, towers by point.
             private sealed class Bridge
@@ -7443,6 +7677,8 @@ namespace RoadRage.UnityRemake
                 public string Kind;
                 public float Width;
                 public float Cross;
+                /// Its points' bounds in road distance and lateral, widened 250 m: a quick reject.
+                public Rect Near;
                 public readonly List<Vector4> Points = new();
                 public readonly List<(int Index, float Height)> Towers = new();
             }
@@ -7470,8 +7706,15 @@ namespace RoadRage.UnityRemake
                 foreach (var b in bridges)
                 {
                     var best = float.PositiveInfinity;
+                    var lo = new Vector2(float.PositiveInfinity, float.PositiveInfinity);
+                    var hi = -lo;
                     foreach (var q in b.Points)
+                    {
                         if (Mathf.Abs(q.y) < best) { best = Mathf.Abs(q.y); b.Cross = q.x; }
+                        lo = Vector2.Min(lo, q);
+                        hi = Vector2.Max(hi, q);
+                    }
+                    b.Near = Rect.MinMaxRect(lo.x - 250f, lo.y - 250f, hi.x + 250f, hi.y + 250f);
                 }
                 return bridges;
             }
@@ -7537,9 +7780,12 @@ namespace RoadRage.UnityRemake
                 if (z > length) z = 2f * length - z;
                 var at = new Vector2(z, lateral);
                 foreach (var bridge in LoadBridges())
+                {
+                    if (!bridge.Near.Contains(at)) continue;
                     for (var p = 0; p + 1 < bridge.Points.Count; p++)
                         if (DistanceToSegment(at, bridge.Points[p], bridge.Points[p + 1]) < bridge.Width * 0.5f + BridgeClear + reach)
                             return true;
+                }
                 return false;
             }
 
@@ -7550,14 +7796,14 @@ namespace RoadRage.UnityRemake
                 return (p - (a + ab * t)).magnitude;
             }
 
-            /// The Brooklyn Bridge's towers from the last BuildBridge: water-level foot and turn.
-            public static readonly List<(Vector3 Foot, Quaternion Rotation)> BrooklynTowers = new();
+            /// The modelled towers from the last BuildBridge: model, water-level foot, turn, steel material.
+            public static readonly List<(string Model, Vector3 Foot, Quaternion Rotation, string Steel)> TowerModels = new();
 
             /// One bridge, whole: deck, columns under the approaches, towers or piers, and
             /// cables with hangers or trusses.
             public static void BuildBridge(VillageMesh mesh, int index, float d, bool back, float seaLevel)
             {
-                BrooklynTowers.Clear();
+                TowerModels.Clear();
                 var bridge = LoadBridges()[index];
                 var steel = bridge.Kind switch
                 {
@@ -7616,11 +7862,12 @@ namespace RoadRage.UnityRemake
                     foot.y = seaLevel;
                     var along = Vector3.Cross(across[i], Vector3.up);
                     var crown = seaLevel + height;
-                    if (bridge.Kind == "brooklyn")
+                    if (bridge.Kind == "brooklyn" || bridge.Kind == "manhattan")
                     {
-                        // The modelled granite tower (Tools/Blender/build_brooklyn_tower.py), from the
-                        // water up, its arches across the deck; placed by the caller.
-                        BrooklynTowers.Add((foot, Quaternion.LookRotation(along, Vector3.up)));
+                        // The modelled towers (Tools/Blender/build_brooklyn_tower.py and
+                        // build_manhattan_tower.py), from the water up, across the deck; placed by the caller.
+                        TowerModels.Add((bridge.Kind == "brooklyn" ? "BrooklynTower" : "ManhattanTower", foot,
+                            Quaternion.LookRotation(along, Vector3.up), steel));
                     }
                     else
                     {
@@ -10036,6 +10283,7 @@ namespace RoadRage.UnityRemake
             // 1. Cast-iron ConEd manhole covers along the wet asphalt road lanes (irregular spacing)
             for (var d = SegBegin(9f, 37f); d < segEnd; d += 37f)
             {
+                if (RoadPath.Covered(d, 6f)) continue;
                 var mhHash = BlockHash(Mathf.FloorToInt(d / 37f), 71);
                 var dJitter = d + ((mhHash >> 3) % 11) - 5f;
                 var laneOffset = ((mhHash & 1) == 0 ? 1f : -1f) * (2.2f + (mhHash & 3) * 1.15f);
@@ -10049,6 +10297,7 @@ namespace RoadRage.UnityRemake
             for (var z = SegBegin(0f, 32f); z < segEnd; z += 32f)
             {
                 var block = Mathf.FloorToInt(z / 32f);
+                if (RoadPath.Covered(z, 12f)) continue;
 
                 // Continental Crosswalk at every 4th block intersection
                 if (block % 4 == 0)

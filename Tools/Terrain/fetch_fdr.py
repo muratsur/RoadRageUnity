@@ -24,9 +24,16 @@ import fetch_ss163 as ss163
 HERE = os.path.dirname(os.path.abspath(__file__))
 DATA = os.path.join(os.environ.get("RR_DATA", "D:/Projects/RoadRageData"), "newyork")
 SOUTH, WEST, NORTH, EAST = 40.695, -74.025, 40.81, -73.92
+# FDR Drive south to the Battery, under Battery Park, then north up the West Side (Route 9A:
+# West Street, the West Side Highway) to West 72nd Street: one drive round the bottom of Manhattan.
+# The Battery Park Underpass is unnamed in OSM: every motorway at the Battery is taken.
 COVER_BOUNDS = (-74.3, 40.5, -73.65, 41.0)
-QUERY = f"""[out:json][timeout:120];
-way["highway"~"^(motorway|trunk|primary|motorway_link)$"]["name"~"Roosevelt East River Drive|FDR Drive"]({SOUTH},{WEST},{NORTH},{EAST});
+QUERY = f"""[out:json][timeout:180];
+(
+way["highway"~"^(motorway|trunk|primary|motorway_link|trunk_link)$"]["name"~"Roosevelt East River Drive|FDR Drive|Battery Park Underpass|West Street|West Side Highway|Joe DiMaggio Highway|Henry Hudson Parkway|12th Avenue|11th Avenue"]({SOUTH},{WEST},{NORTH},{EAST});
+way["highway"~"^(motorway|trunk|primary|motorway_link|trunk_link)$"]["ref"~"(^|;)NY 9A($|;)"]({SOUTH},{WEST},{NORTH},{EAST});
+way["highway"="motorway"](40.699,-74.020,40.708,-74.008);
+);
 out body geom;"""
 # The towers seen from the road: Manhattan, and the Brooklyn and Queens waterfront.
 BUILDING_BOX = (40.68, -74.03, 40.82, -73.90)
@@ -37,7 +44,8 @@ DEM_TILES = ("USGS_1_n41w074", "USGS_1_n41w075")
 DEM_URL = "https://prd-tnm.s3.amazonaws.com/StagedProducts/Elevation/1/TIFF/current/{0}/USGS_1_{0}.tif"
 COVER_TILES = ("N39W075",)
 FROM = (40.7985, -73.9295)   # East 125th Street, where Harlem River Drive becomes FDR Drive
-TO = (40.7032, -74.0128)     # the Battery
+TO = (40.7809147, -73.9874269)  # about West 70th Street, on the northbound West Side Highway (the nearest
+                             # point the drive reaches: 72nd Street's nearest is on the southbound side)
 
 
 TILES = 4    # per side: 16 tiles, each small enough for the public servers
@@ -179,8 +187,8 @@ def main():
     route = bc99.chain(osm["elements"] + ss163.bridges(osm["elements"], 60.0))
     length = sum(bc99.metres(a, b) for a, b in zip(route, route[1:]))
     print(f"ways {len(osm['elements'])} points {len(route)} length {length / 1000:.1f} km", "from", route[0], "to", route[-1])
-    assert length > 12000, "the road did not chain up"
-    assert bc99.metres(route[-1], TO) < 1000, "the road stopped short of the Battery"
+    assert length > 20000, "the road did not chain up"
+    assert bc99.metres(route[-1], TO) < 1000, "the road stopped short of West 72nd Street"
     json.dump([[lon, lat] for lat, lon in route], open(os.path.join(HERE, "fdr_line.json"), "w"))
     for tile in DEM_TILES:
         path = os.path.join(DATA, "dem", f"{tile}.tif")

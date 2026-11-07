@@ -56,6 +56,19 @@ namespace RoadRage.UnityRemake
         /// positive to the right), so everything that works from a lane's own side follows.
         public static float DriveSide = 1f;
 
+        /// Stretches of road under a roof (FDR Drive's tunnels), in folded route distance.
+        public static readonly System.Collections.Generic.List<Vector2> CoveredSpans = new();
+
+        /// Whether the road is under a roof here, or within `margin` metres of a portal.
+        public static bool Covered(float distance, float margin = 0f)
+        {
+            if (CoveredSpans.Count == 0 || Route == null) return false;
+            var f = Route.Fold(distance);
+            foreach (var span in CoveredSpans)
+                if (f >= span.x - margin && f <= span.y + margin) return true;
+            return false;
+        }
+
         /// True when `lateral` is well over on the oncoming half of the road.
         public static bool OnOncomingSide(float lateral) => lateral * DriveSide < -1.5f;
 
