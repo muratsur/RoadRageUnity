@@ -120,6 +120,52 @@ def bridges():
     return json.load(open(path))["elements"]
 
 
+STREET_QUERY = """[out:json][timeout:180];
+way["highway"~"^(primary|secondary|tertiary|residential|unclassified|living_street|pedestrian)$"]({},{},{},{});
+out tags geom;"""
+TREES = "https://data.cityofnewyork.us/resource/uvpi-gqnh.json"
+
+
+def streets():
+    """Manhattan's street grid near the drive, from OSM (not the drive itself: motorways are left
+    out). Fetched in tiles; kept on disk."""
+    path = os.path.join(DATA, "streets_osm.json")
+    if not os.path.exists(path):
+        s, w, n, e = NEAR_BOX
+        found = {}
+        for i in range(TILES):
+            for j in range(TILES):
+                box = (s + (n - s) * i / TILES, w + (e - w) * j / TILES,
+                       s + (n - s) * (i + 1) / TILES, w + (e - w) * (j + 1) / TILES)
+                for way in fetch_tile(STREET_QUERY.format(*box))["elements"]:
+                    found[way["id"]] = way
+                print(f"  streets tile {i},{j}: {len(found)} ways", flush=True)
+        json.dump({"elements": list(found.values())}, open(path, "w"))
+    return json.load(open(path))["elements"]
+
+
+def trees():
+    """Every living street tree near the drive, from NYC Open Data's 2015 Street Tree Census:
+    position and trunk diameter (inches at breast height)."""
+    path = os.path.join(DATA, "trees.json")
+    if not os.path.exists(path):
+        s, w, n, e = NEAR_BOX
+        rows, offset = [], 0
+        while True:
+            query = urllib.parse.urlencode({
+                "$select": "latitude,longitude,tree_dbh",
+                "$where": f"status='Alive' AND latitude between {s} and {n} AND longitude between {w} and {e}",
+                "$order": "tree_id", "$limit": PAGE, "$offset": offset})
+            page = json.loads(urllib.request.urlopen(f"{TREES}?{query}", timeout=600).read())
+            rows += page
+            print(f"  trees from {offset}: {len(rows)}", flush=True)
+            if len(page) < PAGE:
+                break
+            offset += PAGE
+        json.dump(rows, open(path, "w"))
+    return json.load(open(path))
+
+
 def main():
     import rasterio
     from rasterio.merge import merge
@@ -149,6 +195,8 @@ def main():
     buildings()
     print("buildings", len(json.load(open(os.path.join(DATA, "buildings_osm.json")))["elements"]))
     print("bridge ways", len(bridges()))
+    print("street ways", len(streets()))
+    print("street trees", len(trees()))
 
 
 if __name__ == "__main__":
