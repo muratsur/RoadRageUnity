@@ -21,6 +21,7 @@ namespace RoadRage.Editor
     public static class ManhattanMoodMenu
     {
         private const string DaylightItem = "Road Rage/Manhattan Daylight";
+        private const string GoldenHourItem = "Road Rage/Manhattan Golden-Hour Dusk";
 
         [MenuItem(DaylightItem, true)]
         private static bool ValidateDaylight()
@@ -35,15 +36,36 @@ namespace RoadRage.Editor
             var daylight = !RoadRageBootstrap.ManhattanIsDaylight;
             RoadRageBootstrap.SetManhattanDaylight(daylight);
             Menu.SetChecked(DaylightItem, daylight);
+            Menu.SetChecked(GoldenHourItem, RoadRageBootstrap.ManhattanIsGoldenHour);
+            RebuildIfActive();
+        }
 
+        [MenuItem(GoldenHourItem, true)]
+        private static bool ValidateGoldenHour()
+        {
+            Menu.SetChecked(GoldenHourItem, RoadRageBootstrap.ManhattanIsGoldenHour);
+            return true;
+        }
+
+        [MenuItem(GoldenHourItem)]
+        private static void ToggleGoldenHour()
+        {
+            var golden = !RoadRageBootstrap.ManhattanIsGoldenHour;
+            RoadRageBootstrap.SetManhattanGoldenHour(golden);
+            Menu.SetChecked(GoldenHourItem, golden);
+            Menu.SetChecked(DaylightItem, RoadRageBootstrap.ManhattanIsDaylight);
+            RebuildIfActive();
+        }
+
+        private static void RebuildIfActive()
+        {
             var world = RoadRageBootstrap.Instance;
             if (world == null) return;
-            // Only worth rebuilding what the change can be seen in. Reloading Greenwood
-            // to show a Manhattan mood would throw away the world you are standing in for
-            // no visible reason.
-            if (world.BiomeName == "MANHATTAN") world.ReloadBiome(world.BiomeName);
-            else Debug.Log($"RR_MOOD {world.BiomeName} is loaded, so nothing rebuilt. " +
-                           "The mood applies next time Manhattan is built.");
+            if (world.BiomeName == "MANHATTAN" || world.BiomeName == "FDR DRIVE")
+                world.ReloadBiome(world.BiomeName);
+            else
+                Debug.Log($"RR_MOOD {world.BiomeName} is loaded, so nothing rebuilt. " +
+                          "The mood applies next time Manhattan or FDR Drive is built.");
         }
     }
 }

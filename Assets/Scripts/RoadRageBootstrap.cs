@@ -309,6 +309,8 @@ namespace RoadRage.UnityRemake
 		private string biomeName;
 		private WeatherKind activeWeather;
 		private WeatherSystem weatherSystem;
+		private StreetLife streetLife;
+		private bool pedestriansOn;
 		private float startDistance;
 		public WeatherKind Weather => activeWeather;
 
@@ -457,6 +459,7 @@ namespace RoadRage.UnityRemake
             ReflectionsEnabled = !HasCommandLineFlag("-noreflections");
             ShadowsDisabled = HasCommandLineFlag("-noshadows");
             ChaseCamera.LogCamera = HasCommandLineFlag("-camlog");
+            ChaseCamera.Aerial = HasCommandLineFlag("-aerial");
             var cinematic = HasCommandLineFlag("-cinematic");
             ArcadeCarController.CinematicPilot = cinematic;
             RoadRageHUD.HideForCapture = HasCommandLineFlag("-cleanshot") || cinematic;
@@ -504,6 +507,10 @@ namespace RoadRage.UnityRemake
             BuildCamera();
             CrashEffects.Create(materials["White Paint"]);
             weatherSystem = gameObject.AddComponent<WeatherSystem>();
+            streetLife = gameObject.AddComponent<StreetLife>();
+            // Desktop-only street dressing, and switchable like -nobloom so its cost can be
+            // measured rather than assumed.
+            pedestriansOn = !Application.isMobilePlatform && !HasCommandLineFlag("-nopedestrians");
             var particleMaterial = Resources.Load<Material>("WeatherParticle");
             if (particleMaterial == null)
             {
@@ -876,6 +883,11 @@ namespace RoadRage.UnityRemake
 					SelectBiome(Biomes[ActiveBiomes[i]]);
 				}
 			}
+
+			// Street life is the only thing that moves on the Manhattan pavement. Resolved
+			// every frame so a biome switch cannot leave walkers standing in the wrong city.
+			if (streetLife != null)
+				streetLife.On = pedestriansOn && biomeName == Biomes[FdrDriveIndex];
 		}
 
         // Daily progress lives only in memory during a run (per-hit saves were dropped for
@@ -1176,7 +1188,8 @@ namespace RoadRage.UnityRemake
             shoulder.mainTextureScale = new Vector2(1.4f, 3.2f);
             MakeMaterial("White Paint", new Color(0.92f, 0.94f, 0.9f), 0f, 0.3f);
             MakeMaterial("Yellow Paint", new Color(1f, 0.66f, 0.06f), 0f, 0.25f);
-            MakeMaterial("Jersey Concrete", new Color(0.86f, 0.85f, 0.81f), 0f, 0.1f);
+            // Quixel Megascans scans (Fab, Standard License): weathered concrete for the barrier.
+            BiomeMaterial("Jersey Concrete", "NewYork", "T_concrete_D", "T_concrete_N", new Color(0.95f, 0.94f, 0.92f), 0f, 0.1f);
             tireMaterial = MakeMaterial("Tire Rubber", new Color(0.055f, 0.055f, 0.06f), 0f, 0.4f);
             rimMaterial = MakeMaterial("Wheel Rim", new Color(0.58f, 0.59f, 0.61f), 0.75f, 0.7f);
             MakeMaterial("Car Orange", new Color(0.95f, 0.22f, 0.035f), 0.55f, 0.78f);
@@ -1370,6 +1383,89 @@ namespace RoadRage.UnityRemake
             MakeMaterial("City Asphalt Trim", new Color(0.10f, 0.10f, 0.13f), 0.2f, 0.44f);
             MakeMaterial("City Props", new Color(0.44f, 0.43f, 0.42f), 0.15f, 0.30f);
             MakeMaterial("Taxi Sign", new Color(0.97f, 0.79f, 0.13f), 0.05f, 0.28f);
+
+            // Epic Games CitySample (The Matrix Awakens NYC) PBR material palette for
+            // exported street furniture, ConEd manhole covers, LinkNYC totems, cafe umbrellas,
+            // scaffolding sheds, traffic signals, and NYC vehicles.
+            MakeMaterial("CS Black Iron", new Color(0.11f, 0.12f, 0.13f), 0.78f, 0.52f);
+            MakeMaterial("CS Brushed Steel", new Color(0.66f, 0.68f, 0.71f), 0.85f, 0.68f);
+            MakeMaterial("CS Chrome", new Color(0.88f, 0.90f, 0.93f), 0.94f, 0.88f);
+            MakeMaterial("CS Manhole Iron", new Color(0.18f, 0.17f, 0.16f), 0.72f, 0.38f);
+            MakeMaterial("CS Taxi Yellow", new Color(0.98f, 0.76f, 0.08f), 0.35f, 0.78f);
+            MakeMaterial("CS Sedan Red", new Color(0.78f, 0.11f, 0.10f), 0.32f, 0.72f);
+            MakeMaterial("CS Sedan Blue", new Color(0.12f, 0.28f, 0.64f), 0.38f, 0.72f);
+            MakeMaterial("CS Cruiser Black", new Color(0.08f, 0.09f, 0.11f), 0.48f, 0.84f);
+            MakeMaterial("CS Bus White", new Color(0.86f, 0.88f, 0.91f), 0.25f, 0.68f);
+            MakeMaterial("CS Tire Rubber", new Color(0.09f, 0.09f, 0.10f), 0.04f, 0.18f);
+            MakeMaterial("CS Cafe Stone", new Color(0.72f, 0.70f, 0.66f), 0.05f, 0.32f);
+            MakeMaterial("CS Newsstand Green", new Color(0.11f, 0.26f, 0.16f), 0.22f, 0.46f);
+            MakeMaterial("CS Safety Orange", new Color(0.96f, 0.38f, 0.06f), 0.08f, 0.45f);
+            var csSignalGlow = MakeMaterial("CS Signal Glow", new Color(0.98f, 0.82f, 0.28f), 0.1f, 0.82f);
+            csSignalGlow.SetColor("_EmissionColor", new Color(1.8f, 1.35f, 0.35f));
+            csSignalGlow.EnableKeyword("_EMISSION");
+
+            // Real Manhattan GIS 1024x1024 PBR Architectural Facade Atlases (from Substrate/Saved/NYC_Assets)
+            foreach (var (gisKey, texBase, metal, smooth) in new[]
+            {
+                ("GIS CurtainWall", "T_CurtainWall", 0.58f, 0.78f),
+                ("GIS ArtDeco",     "T_ArtDeco",     0.08f, 0.44f),
+                ("GIS SoHoBrick",   "T_SoHoBrick",   0.06f, 0.36f),
+                ("GIS Brownstone",  "T_Brownstone",  0.05f, 0.34f),
+            })
+            {
+                var bcTex = Resources.Load<Texture2D>($"Biomes/ManhattanGIS/Textures/{texBase}_BC");
+                var emTex = Resources.Load<Texture2D>($"Biomes/ManhattanGIS/Textures/{texBase}_EM");
+                var gisMat = MakeMaterial(gisKey, Color.white, metal, smooth);
+                if (bcTex != null)
+                {
+                    bcTex.wrapMode = TextureWrapMode.Repeat;
+                    bcTex.anisoLevel = 8;
+                    gisMat.mainTexture = bcTex;
+                    if (gisMat.HasProperty("_BaseMap")) gisMat.SetTexture("_BaseMap", bcTex);
+                }
+                if (emTex != null)
+                {
+                    emTex.wrapMode = TextureWrapMode.Repeat;
+                    gisMat.SetTexture("_EmissionMap", emTex);
+                    gisMat.SetColor("_EmissionColor", new Color(0.85f, 0.72f, 0.48f));
+                    gisMat.EnableKeyword("_EMISSION");
+                }
+            }
+
+            // 14 vrbn_studios 2048x2048 Photogrammetry 3D USA/NYC Building Materials (BC + NM + EM)
+            foreach (var vrbnId in new[]
+            {
+                "00004", "00009", "00024", "00083", "00188", "00274", "00275",
+                "00276", "00286", "00287", "00288", "00904", "00905", "00906"
+            })
+            {
+                var bcTex = Resources.Load<Texture2D>($"Biomes/ManhattanGIS/VRBN/T_VRBN_{vrbnId}_BC");
+                var nmTex = Resources.Load<Texture2D>($"Biomes/ManhattanGIS/VRBN/T_VRBN_{vrbnId}_NM");
+                var emTex = Resources.Load<Texture2D>($"Biomes/ManhattanGIS/VRBN/T_VRBN_{vrbnId}_EM");
+                var vMat = MakeMaterial($"VRBN {vrbnId}", Color.white, 0.12f, 0.46f);
+                if (bcTex != null)
+                {
+                    bcTex.anisoLevel = 8;
+                    vMat.mainTexture = bcTex;
+                    if (vMat.HasProperty("_BaseMap")) vMat.SetTexture("_BaseMap", bcTex);
+                }
+                if (nmTex != null && vMat.HasProperty("_BumpMap"))
+                {
+                    vMat.SetTexture("_BumpMap", nmTex);
+                    vMat.SetFloat("_BumpScale", 1.0f);
+                    vMat.EnableKeyword("_NORMALMAP");
+                }
+                if (emTex != null)
+                {
+                    vMat.SetTexture("_EmissionMap", emTex);
+                    vMat.SetColor("_EmissionColor", new Color(0.75f, 0.65f, 0.45f));
+                    vMat.EnableKeyword("_EMISSION");
+                }
+            }
+
+            // CitySample NYC Autumn Amber & Golden Foliage Materials (matching Substrate renders 01..08)
+            BiomeCutoutMaterial("CS Tree Autumn", "Forest", "T_Broadleaf_D", "T_Broadleaf_N", new Color(0.95f, 0.48f, 0.28f), 0.33f);
+            BiomeCutoutMaterial("CS Tree Golden", "Forest", "T_Broadleaf_D", "T_Broadleaf_N", new Color(0.95f, 0.72f, 0.32f), 0.33f);
 
             var sand = BiomeSurface(BiomeMaterial("Canyon Sand", "RedCanyon", "T_sand_D", "T_sand_N", new Color(0.94f, 0.76f, 0.55f), 0f, 0.08f), "RedCanyon", "T_sand_MSO", 0.4f);
             sand.mainTextureScale = new Vector2(34f, 160f);
@@ -1920,6 +2016,8 @@ namespace RoadRage.UnityRemake
             RenderSettings.fogMode = FogMode.ExponentialSquared;
             RenderSettings.ambientMode = AmbientMode.Trilight;
 
+            if ((biomeName == Biomes[8] || biomeName == Biomes[FdrDriveIndex]) && ManhattanGoldenHour)
+                activeWeather = WeatherKind.Clear;
             var mood = Mood();
             // Weather modifies the biome's own palette rather than replacing it, so a
             // rainy Kowloon still looks like Kowloon.
@@ -1954,7 +2052,11 @@ namespace RoadRage.UnityRemake
             sun.intensity = mood.SunIntensity * weather.SunScale;
             sun.shadows = LightShadows.Soft;
             sun.shadowStrength = 0.82f;
-            sun.transform.rotation = Quaternion.Euler(54f, 32f, 0f);
+            sun.transform.rotation = (biomeName == Biomes[8] || biomeName == Biomes[FdrDriveIndex]) && ManhattanGoldenHour
+                ? Quaternion.Euler(14f, 178f, 0f)
+                : (biomeName == Biomes[8] || biomeName == Biomes[FdrDriveIndex])
+                    ? Quaternion.Euler(32f, 168f, 0f)
+                    : Quaternion.Euler(54f, 32f, 0f);
             RenderSettings.sun = sun;
 
 			var volume = new GameObject($"{biomeName} Post Processing").AddComponent<Volume>();
@@ -2075,8 +2177,10 @@ namespace RoadRage.UnityRemake
         /// editor, which persists so it survives entering play mode.
 #if UNITY_EDITOR
         private const string ManhattanDaylightPrefKey = "RoadRage.ManhattanDaylight";
+        private const string ManhattanGoldenHourPrefKey = "RoadRage.ManhattanGoldenHour";
 #endif
         private static bool? manhattanDaylightOverride;
+        private static bool? manhattanGoldenHourOverride;
 
         private static bool ManhattanDaylight
         {
@@ -2092,21 +2196,55 @@ namespace RoadRage.UnityRemake
             }
         }
 
+        private static bool ManhattanGoldenHour
+        {
+            get
+            {
+                if (manhattanGoldenHourOverride.HasValue) return manhattanGoldenHourOverride.Value;
+#if UNITY_EDITOR
+                if (UnityEditor.EditorPrefs.HasKey(ManhattanGoldenHourPrefKey))
+                    return UnityEditor.EditorPrefs.GetBool(ManhattanGoldenHourPrefKey);
+                if (UnityEditor.EditorPrefs.HasKey(ManhattanDaylightPrefKey) &&
+                    UnityEditor.EditorPrefs.GetBool(ManhattanDaylightPrefKey))
+                    return false;
+#endif
+                var cli = CommandLineValue("-manhattan=");
+                if (string.Equals(cli, "day", System.StringComparison.OrdinalIgnoreCase)
+                    || string.Equals(cli, "night", System.StringComparison.OrdinalIgnoreCase))
+                    return false;
+                return true;
+            }
+        }
+
         /// Read-only view for the editor menu's checkmark. Goes through ManhattanDaylight
         /// rather than the pref, so the menu shows what the world will actually build
         /// with - including a -manhattan=day command line and an in-session override,
         /// neither of which is in EditorPrefs.
         public static bool ManhattanIsDaylight => ManhattanDaylight;
+        public static bool ManhattanIsGoldenHour => ManhattanGoldenHour;
 
-        /// Switches Manhattan between its two moods. The world has to rebuild for the
-        /// change to show, the same as the detail budget.
+        /// Switches Manhattan & FDR Drive between Night, Counter-Sun Daylight, and Manhattanhenge Golden-Hour Dusk.
         public static void SetManhattanDaylight(bool daylight)
         {
             manhattanDaylightOverride = daylight;
+            if (daylight) manhattanGoldenHourOverride = false;
 #if UNITY_EDITOR
             UnityEditor.EditorPrefs.SetBool(ManhattanDaylightPrefKey, daylight);
+            if (daylight) UnityEditor.EditorPrefs.SetBool(ManhattanGoldenHourPrefKey, false);
 #endif
-            Debug.Log($"RR_MOOD Manhattan is now {(daylight ? "daylight" : "night")} " +
+            Debug.Log($"RR_MOOD Manhattan/FDR is now {(daylight ? "daylight" : "night")} " +
+                      "(re-enter play mode for the world to rebuild)");
+        }
+
+        public static void SetManhattanGoldenHour(bool goldenHour)
+        {
+            manhattanGoldenHourOverride = goldenHour;
+            if (goldenHour) manhattanDaylightOverride = false;
+#if UNITY_EDITOR
+            UnityEditor.EditorPrefs.SetBool(ManhattanGoldenHourPrefKey, goldenHour);
+            if (goldenHour) UnityEditor.EditorPrefs.SetBool(ManhattanDaylightPrefKey, false);
+#endif
+            Debug.Log($"RR_MOOD Manhattan/FDR is now {(goldenHour ? "Manhattanhenge golden-hour dusk" : "default")} " +
                       "(re-enter play mode for the world to rebuild)");
         }
 
@@ -2133,20 +2271,30 @@ namespace RoadRage.UnityRemake
                 // so the night stays a night. One number if it wants tuning.
                 Ground = new Color(0.30f, 0.31f, 0.33f), SunColor = new Color(0.94f, 0.96f, 1f),
                 SunIntensity = 1.45f, PostExposure = 0.22f, BloomIntensity = 0f, BloomThreshold = 5f,
-                RoadWetness = 0.62f, AmbientIntensity = 1.35f
+                RoadWetness = 0.68f, AmbientIntensity = 1.35f
+            };
+
+        private static BiomeMood ManhattanGoldenHourMood() =>
+            new BiomeMood // MANHATTAN / FDR DRIVE - CitySample Manhattanhenge golden-hour dusk with wet asphalt reflection
+            {
+                FogDensity = 0.0022f, Fog = new Color(0.68f, 0.50f, 0.36f),
+                Sky = new Color(0.36f, 0.42f, 0.58f), Equator = new Color(0.64f, 0.46f, 0.34f),
+                Ground = new Color(0.26f, 0.21f, 0.18f), SunColor = new Color(1.0f, 0.58f, 0.26f),
+                SunIntensity = 1.42f, PostExposure = 0.16f, BloomIntensity = 0.36f, BloomThreshold = 1.4f,
+                RoadWetness = 0.78f, AmbientIntensity = 1.22f, Saturation = -6f
             };
 
         private static BiomeMood ManhattanDayMood() =>
-            new BiomeMood // MANHATTAN - overcast hazy NYC daylight, desaturated concrete tones
+            new BiomeMood // MANHATTAN - CitySample counter-sun NYC daylight with wet asphalt specular
             {
                 FogDensity = 0.0018f, Fog = new Color(0.64f, 0.65f, 0.68f),
                 Sky = new Color(0.52f, 0.56f, 0.62f), Equator = new Color(0.54f, 0.56f, 0.58f),
-                Ground = new Color(0.28f, 0.28f, 0.29f), SunColor = new Color(1f, 0.98f, 0.95f),
-                SunIntensity = 1.30f, PostExposure = 0.10f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.12f,
+                Ground = new Color(0.28f, 0.28f, 0.29f), SunColor = new Color(1f, 0.96f, 0.90f),
+                SunIntensity = 1.35f, PostExposure = 0.10f, BloomIntensity = 0.12f, BloomThreshold = 3.5f, RoadWetness = 0.64f,
                 // Was -75 saturation plus Neutral tonemapping plus the old -20 global
                 // offset - effectively grayscale. Brought in line with the other muted
                 // biomes (-20 to -24) and back to ACES so it still reads as a colour city.
-                Saturation = -22f
+                Saturation = -16f
             };
 
         /// How far every biome palette is pulled towards its own luminance. The moods
@@ -2249,14 +2397,27 @@ namespace RoadRage.UnityRemake
         /// -weather= still forces the weather.
         public void RollRunConditions()
         {
+            var isNyc = biomeName == Biomes[8] || biomeName == Biomes[FdrDriveIndex];
+            SkyHorizonSync.Tint = (isNyc && ManhattanGoldenHour)
+                ? new Color(1.0f, 0.72f, 0.48f)
+                : Color.white;
             if (RoadPath.Route == null)
             {
-                SkyHorizonSync.Tint = Color.white;
-                SetHeadlights(false);
+                if (isNyc && weatherSystem != null && car != null)
+                {
+                    activeWeather = WeatherKind.Clear;
+                    var pm = Resources.Load<Material>("WeatherParticle");
+                    if (pm != null) weatherSystem.Configure(activeWeather, car, pm);
+                }
+                SetHeadlights(biomeName == Biomes[8] && !ManhattanDaylight);
                 return;
             }
             var forced = CommandLineValue("-daytime=");
-            if (!string.IsNullOrEmpty(forced) && System.Enum.TryParse(forced, true, out DayTime parsed))
+            if (biomeName == Biomes[FdrDriveIndex])
+            {
+                dayTime = ManhattanGoldenHour ? DayTime.Evening : DayTime.Morning;
+            }
+            else if (!string.IsNullOrEmpty(forced) && System.Enum.TryParse(forced, true, out DayTime parsed))
             {
                 dayTime = parsed;
             }
@@ -2267,7 +2428,9 @@ namespace RoadRage.UnityRemake
                     : roll < 0.80f ? DayTime.Evening : DayTime.Dusk;
             }
             var forcedWeather = ParseWeather(CommandLineValue("-weather="));
-            activeWeather = forcedWeather ?? WeatherSystem.Roll(0);
+            activeWeather = biomeName == Biomes[FdrDriveIndex]
+                ? (forcedWeather ?? WeatherKind.Clear)
+                : (forcedWeather ?? WeatherSystem.Roll(0));
             // Fog in the blue hour leaves a dark grey wall where the forest and the ridge
             // should be. Fog banks on the B500 are a daytime look: move the run to morning
             // or midday rather than drop the fog.
@@ -2487,13 +2650,13 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.25f, PostExposure = 0.02f, BloomIntensity = 0.12f, BloomThreshold = 4f,
                 AmbientIntensity = 1.1f, Saturation = 2f
             },
-            FdrDriveIndex => new BiomeMood // FDR DRIVE - bright, a little river haze between the towers
+            FdrDriveIndex => ManhattanGoldenHour ? ManhattanGoldenHourMood() : new BiomeMood // FDR DRIVE - CitySample counter-sun daylight with wet asphalt specular
             {
                 FogDensity = 0.0013f, Fog = new Color(0.74f, 0.79f, 0.85f),
                 Sky = new Color(0.42f, 0.60f, 0.90f), Equator = new Color(0.62f, 0.64f, 0.66f),
-                Ground = new Color(0.22f, 0.22f, 0.22f), SunColor = new Color(1f, 0.97f, 0.90f),
-                SunIntensity = 1.3f, PostExposure = 0.02f, BloomIntensity = 0.15f, BloomThreshold = 4f,
-                AmbientIntensity = 1.15f, Saturation = 0f
+                Ground = new Color(0.24f, 0.24f, 0.25f), SunColor = new Color(1f, 0.96f, 0.88f),
+                SunIntensity = 1.35f, PostExposure = 0.04f, BloomIntensity = 0.16f, BloomThreshold = 3.6f,
+                RoadWetness = 0.68f, AmbientIntensity = 1.18f, Saturation = 0f
             },
             TransfagarasanIndex => new BiomeMood // TRANSFAGARASAN - thin, clear mountain air
             {
@@ -2553,7 +2716,9 @@ namespace RoadRage.UnityRemake
                 SunIntensity = 1.18f, PostExposure = -0.08f, BloomIntensity = 0f, BloomThreshold = 5f, RoadWetness = 0.0f,
                 Saturation = -20f
             },
-            8 => ManhattanDaylight ? ManhattanDayMood() : ManhattanNightMood(),
+            8 => ManhattanGoldenHour ? ManhattanGoldenHourMood()
+               : ManhattanDaylight ? ManhattanDayMood()
+               : ManhattanNightMood(),
             _ => new BiomeMood // GREENWOOD
             {
                 // 0.0028, down from 0.0065. Fog here is exponential-squared, so visibility
@@ -2688,12 +2853,14 @@ namespace RoadRage.UnityRemake
             materials["Amalfi Ground"].SetFloat("_Macro", 1f);
             materials["Amalfi Ground"].SetFloat("_MacroMean", 0.052f);
 
-            // FDR Drive: city pavement (full-bright it read as snow), concrete where it is steep, a grey verge.
+            // FDR Drive: city pavement (full-bright it read as snow), scanned concrete where it is
+            // steep (the cuttings' retaining walls),
+            // park grass where the land cover says so (BuildTerrainGrid).
             Splat("Fdr Ground", "BigSur", new[]
             {
-                ("CyberpunkCity/T_concrete_floor", 0.25f, new Color(0.55f, 0.55f, 0.56f)),
-                ("T_sur_rock", 0.05f, new Color(1.05f, 1.1f, 1.18f)),
-                ("ForestFloor/T_forest_verge", 0.62f, new Color(0.62f, 0.63f, 0.65f)),
+                ("NewYork/T_pavement", 0.5f, new Color(0.9f, 0.9f, 0.9f)),
+                ("NewYork/T_concrete", 0.25f, new Color(0.9f, 0.9f, 0.9f)),
+                ("T_sur_grass", 0.1f, new Color(0.55f, 0.78f, 0.6f)),
             }, 0.08f);
             // No macro variation: its brightness mean is the grass's, and pavement went white.
             materials["Fdr Ground"].SetFloat("_Macro", 0f);
@@ -2706,9 +2873,23 @@ namespace RoadRage.UnityRemake
             }
             MakeMaterial("NY Roof", new Color(0.32f, 0.32f, 0.33f), 0f, 0.1f);
             MakeMaterial("NY Tank", new Color(0.30f, 0.22f, 0.16f), 0f, 0.1f);
+            MakeMaterial("NY Cornice", new Color(0.78f, 0.74f, 0.66f), 0f, 0.15f);
+            BiomeMaterial("NY Shopfront", "NewYork", "T_shopfront_D", "", Color.white, 0f, 0.55f);
+            // Side streets in the Megascans asphalt: a 2 m scan on VillageMesh's 4 m UVs.
+            BiomeMaterial("NY Street", "NewYork", "T_asphalt_D", "T_asphalt_N", new Color(0.68f, 0.69f, 0.72f), 0.08f, 0.74f)
+                .SetTextureScale("_BaseMap", new Vector2(2f, 2f));
+            // The Megascans pavement is a 1 m scan; VillageMesh UVs are 4 m each.
+            BiomeMaterial("NY Sidewalk", "NewYork", "T_pavement_D", "T_pavement_N", new Color(0.92f, 0.92f, 0.92f), 0f, 0.28f)
+                .SetTextureScale("_BaseMap", new Vector2(2f, 2f));
             // The East River bridges: Brooklyn's granite, Manhattan's pale blue steel, grey steel,
             // Queensboro's tan, the decks and the cables.
-            MakeMaterial("Bridge Stone", new Color(0.72f, 0.64f, 0.52f), 0f, 0.1f);
+            // Scanned concrete (Megascans): VillageMesh UVs are 4 m each, the scan 2 m by 1 m.
+            BiomeMaterial("Bridge Stone", "NewYork", "T_concrete_D", "T_concrete_N", new Color(0.86f, 0.80f, 0.70f), 0f, 0.1f)
+                .SetTextureScale("_BaseMap", new Vector2(2f, 4f));
+            // FDR Drive's asphalt (Megascans, a 2 m scan): the road ribbon's UVs are 12.5 m each,
+            // with wet specular reflections matching the CitySample NYC avenue look.
+            BiomeMaterial("Fdr Road", "NewYork", "T_asphalt_D", "T_asphalt_N", new Color(0.76f, 0.77f, 0.80f), 0.10f, 0.78f)
+                .SetTextureScale("_BaseMap", new Vector2(6.25f, 6.25f));
             MakeMaterial("Bridge Blue", new Color(0.52f, 0.62f, 0.72f), 0.2f, 0.3f);
             MakeMaterial("Bridge Steel", new Color(0.40f, 0.42f, 0.44f), 0.2f, 0.3f);
             MakeMaterial("Bridge Tan", new Color(0.62f, 0.58f, 0.50f), 0.1f, 0.2f);
@@ -2934,7 +3115,8 @@ namespace RoadRage.UnityRemake
                 }
             }
             // Main Asphalt Highway
-            var roadMaterial = biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex || biomeIndex == FdrDriveIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
+            var roadMaterial = biomeIndex == FdrDriveIndex ? materials["Road"]
+                : biomeIndex == MoselIndex || biomeIndex == BigSurIndex || biomeIndex == SeaToSkyIndex || biomeIndex == AmalfiIndex || biomeIndex == OceanRoadIndex || biomeIndex == TransfagarasanIndex ? CountrySurface("Forest Road", "Mosel Road", new Color(0.62f, 0.62f, 0.64f))
                 : biomeIndex == IcelandIndex ? CountrySurface("Forest Road", "Iceland Road", new Color(1.18f, 1.14f, 1.06f))
                 : biomeIndex == 0 ? materials["Forest Road"] : materials["Road"];
             EnableProbeReflections(BuildRibbon("Curved Asphalt Highway", -1f, 1f, 0.02f, roadMaterial, relative: true));
@@ -2945,7 +3127,7 @@ namespace RoadRage.UnityRemake
             // decides whether the road gets kerbs, because those are the same biomes that
             // place the lights - a stop line nobody can see a reason for reads as traffic
             // randomly halting on an open road.
-            TrafficCarController.SignalsActive = hasCityCurbs;
+            TrafficCarController.SignalsActive = hasCityCurbs || biomeIndex == FdrDriveIndex;
             // A head-on wreck on a one-lane road has nowhere to be passed, so traffic
             // behind it stacks into a wall across the whole carriageway.
             TrafficCarController.HeadOnWrecksAllowed = LaneCountFor(biomeIndex) >= 2;
@@ -2960,6 +3142,16 @@ namespace RoadRage.UnityRemake
                 var sidewalkMat = biomeIndex == 8 ? materials["Cyber Floor"] : (biomeIndex == 7 ? materials["Kowloon Ground"] : materials["Sidewalk"]);
                 BuildRibbon("Left Paved Sidewalk", -1.85f, -1.24f, 0.14f, sidewalkMat, relative: true);
                 BuildRibbon("Right Paved Sidewalk", 1.24f, 1.85f, 0.14f, sidewalkMat, relative: true);
+            }
+            else if (biomeIndex == FdrDriveIndex)
+            {
+                // FDR Drive waterfront: river shoulder on the left (side < 0), and a full
+                // granite city curb + wide paved Manhattan urban esplanade on the right (side > 0)
+                // covering the ground all the way to the Manhattan building frontages.
+                EnableProbeReflections(BuildRibbon("Left Curved Shoulder", -1.16f, -1f, 0.035f, materials["Shoulder"], relative: true));
+                EnableProbeReflections(BuildRibbon("Right Curved Shoulder", 1f, 1.18f, 0.035f, materials["Shoulder"], relative: true));
+                BuildRibbon("Right City Curb", 1.18f, 1.22f, 0.14f, materials["Cyber Trim"], relative: true);
+                BuildRibbon("Right Paved Sidewalk", 1.22f, 5.20f, 0.14f, materials["Cyber Floor"], relative: true);
             }
             else if (biomeIndex == CanalTownIndex)
             {
@@ -3101,7 +3293,8 @@ namespace RoadRage.UnityRemake
                     var p = profile[f + k];
                     var v = (i * faces + f) * 2 + k;
                     vertices[v] = RoadPath.Point(d, p.x, p.y);
-                    uv[v] = new Vector2(d * 0.25f, (f + k) * 0.2f);
+                    // The concrete scan covers 2 m along by 1 m up.
+                    uv[v] = new Vector2(d * 0.5f, p.y);
                 }
                 if (i == count - 1) continue;
                 for (var f = 0; f < faces; f++)
@@ -3559,12 +3752,22 @@ namespace RoadRage.UnityRemake
                     if (IsSeaRoute(RoadPath.Route) && j > 0 && j + 1 < across)
                     {
                         var slope = Mathf.Abs(GridCornerY(row, j + 1) - GridCornerY(row, j - 1)) / (columns[j + 1] - columns[j - 1]);
-                        var seaCliff = 1f - Mathf.InverseLerp(BigSurSeaCliffRock * 0.5f, BigSurSeaCliffRock, GridCornerY(row, j) - bigSurSeaLevel);
+                        // Big Sur's rocky shore; FDR Drive's landfill is low but not rock.
+                        var seaCliff = RoadPath.Route == fdrRoute ? 0f
+                            : 1f - Mathf.InverseLerp(BigSurSeaCliffRock * 0.5f, BigSurSeaCliffRock, GridCornerY(row, j) - bigSurSeaLevel);
                         // Sea to Sky's granite shows through on gentler slopes than Big Sur's grass.
                         var steep = RoadPath.Route == seaToSkyRoute || RoadPath.Route == transfagRoute ? Mathf.InverseLerp(0.28f, 0.55f, slope) : Mathf.InverseLerp(0.4f, 0.75f, slope);
                         w1 = Mathf.Clamp01(Mathf.SmoothStep(0f, 1f, steep) + seaCliff + (patch - 0.85f) * 3f) * (1f - verge);
                     }
                     var w2 = Mathf.Clamp01(verge * 1.15f + (detail - 0.72f) * 2f);
+                    // FDR Drive: grass where the land cover is park or trees, pavement where it is
+                    // built up; the noise alone made one grey plain of the whole city.
+                    if (RoadPath.Route == fdrRoute)
+                    {
+                        var cover = RoadPath.Route.CoverAt(distance, lateral);
+                        var green = cover == RoadRoute.CoverForest || cover == RoadRoute.CoverOpen;
+                        w2 = green ? Mathf.Clamp01(0.8f + (detail - 0.5f) * 0.8f) * (1f - w1) : 0f;
+                    }
                     var w0 = Mathf.Max(0.02f, 1f - w1 - w2);
                     var sum = w0 + w1 + w2;
                     colors[v] = new Color(w0 / sum, w1 / sum, w2 / sum, 1f);
@@ -3949,8 +4152,20 @@ namespace RoadRage.UnityRemake
             foreach (var child in model.GetComponentsInChildren<Transform>(true))
             {
                 if (child == null || child == model.transform) continue;
-                if (child.name.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                if (child.name.IndexOf("decal", System.StringComparison.OrdinalIgnoreCase) >= 0
+                    || child.name.StartsWith("UCX_", System.StringComparison.OrdinalIgnoreCase)
+                    || child.name.StartsWith("UBX_", System.StringComparison.OrdinalIgnoreCase)
+                    || child.name.StartsWith("USP_", System.StringComparison.OrdinalIgnoreCase))
                     DestroyImmediate(child.gameObject);
+            }
+            if (pack == "CitySampleNYC")
+            {
+                // Exported Unreal Engine 5.8 CitySample meshes have +Z as up (height) on their
+                // child LOD nodes; rotate direct child nodes by (-90, 0, 0) to convert to Y-up
+                // while leaving model.transform.rotation free for PlaceBiomeModelOnRoad.
+                var zUpToYUp = Quaternion.Euler(-90f, 0f, 0f);
+                for (var c = 0; c < model.transform.childCount; c++)
+                    model.transform.GetChild(c).localRotation = zUpToYUp;
             }
             foreach (var l in model.GetComponentsInChildren<Light>(true))
             {
@@ -3990,6 +4205,20 @@ namespace RoadRage.UnityRemake
                             ? materials["City Windows"]
                             : material;
                     }
+                    else if (pack == "ManhattanGIS" || resourceName.StartsWith("Biomes/ManhattanGIS/"))
+                    {
+                        assigned[i] = ManhattanGisMaterial(resourceName);
+                    }
+                    else if (pack == "NycKit" || resourceName.StartsWith("NycKit/"))
+                    {
+                        var facadePass = material != null && IsFacadeMaterial(material.name);
+                        if (sourceName.Contains("window") || sourceName.Contains("glass") || sourceName.Contains("light"))
+                            assigned[i] = materials["City Windows"];
+                        else if (sourceName.Contains("metal") || sourceName.Contains("aluminium") || sourceName.Contains("copper") || sourceName.Contains("steel") || sourceName.Contains("roof"))
+                            assigned[i] = materials["City Asphalt Trim"];
+                        else
+                            assigned[i] = facadePass ? material : materials["City Limestone"];
+                    }
                     else if (pack == "CyberpunkCity" || pack == "Buildings" || resourceName.Contains("Buildings/"))
                     {
                         // This tested material.name == "Cyber Skyline" exactly. Manhattan
@@ -4004,11 +4233,54 @@ namespace RoadRage.UnityRemake
                         else if (sourceName.Contains("fireplug") || sourceName.Contains("hydrant")) assigned[i] = materials["Car Orange"];
                         else if (sourceName.Contains("window_car") || sourceName.Contains("glass")) assigned[i] = materials["Glass"];
                         else if (sourceName.Contains("window") || sourceName.Contains("interior_light")) assigned[i] = materials["City Windows"];
-                        else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
+                        else if (sourceName.Contains("trim") || sourceName.Contains("metal") || sourceName.Contains("aluminium") || sourceName.Contains("copper") || sourceName.Contains("steel") || sourceName.Contains("roof") || sourceName.Contains("tejad")) assigned[i] = materials["City Asphalt Trim"];
+                        else if (resourceName.Contains("USA_VRBN/"))
+                        {
+                            if (sourceName.Contains("brick")) assigned[i] = materials["City Brick"];
+                            else if (sourceName.Contains("marble") || sourceName.Contains("granite") || sourceName.Contains("travertine")) assigned[i] = materials["City Limestone"];
+                            else if (sourceName.Contains("plaster") || sourceName.Contains("wood") || sourceName.Contains("tile")) assigned[i] = materials["City Sandstone"];
+                            else assigned[i] = facadePass ? material : materials["City Concrete"];
+                        }
                         else if (KeepPackWallMaterials && pack == "Buildings" && sourceMaterial != null)
                             assigned[i] = sourceMaterial;
                         else if (sourceName.Contains("concrete") || sourceName.Contains("concrate") || sourceName.Contains("brick") || sourceName.Contains("plaster") || sourceName.Contains("highrise") || sourceName.Contains("build")) assigned[i] = facadePass ? material : materials["City Concrete"];
                         else assigned[i] = material ?? materials["City Concrete"];
+                    }
+                    else if (pack == "CitySampleNYC")
+                    {
+                        if (sourceName.Contains("veh_carpaint")) assigned[i] = material ?? materials["CS Taxi Yellow"];
+                        else if (sourceName.Contains("veh_licenseplate")) assigned[i] = materials["CS Taxi Yellow"];
+                        else if (sourceName.Contains("veh_tire") || sourceName.Contains("veh_rubber") || sourceName.Contains("veh_undercar") || sourceName.Contains("veh_plastic") || sourceName.Contains("veh_interior") || sourceName.Contains("veh_engine"))
+                            assigned[i] = materials["CS Tire Rubber"];
+                        else if (sourceName.Contains("veh_rim") || sourceName.Contains("veh_metal") || sourceName.Contains("veh_mirror") || sourceName.Contains("veh_caliper"))
+                            assigned[i] = materials["CS Chrome"];
+                        else if (sourceName.Contains("veh_light") || sourceName.Contains("veh_bulb") || sourceName.Contains("veh_sign") || sourceName.Contains("emissive"))
+                            assigned[i] = materials["CS Signal Glow"];
+                        else if (sourceName.Contains("veh_window") || sourceName.Contains("veh_glass") || sourceName.Contains("prop_glass") || sourceName.Contains("lambert2"))
+                            assigned[i] = materials["Glass"];
+                        else if (sourceName.Contains("advertisment") || sourceName.Contains("ad1") || sourceName.Contains("ad2"))
+                            assigned[i] = materials["City Billboard"];
+                        else if (sourceName.Contains("umbra"))
+                            assigned[i] = materials["CS Sedan Red"];
+                        else if (sourceName.Contains("body") && (resourceName.Contains("StoneTable") || resourceName.Contains("Umbella")))
+                            assigned[i] = materials["CS Cafe Stone"];
+                        else if (sourceName.Contains("scaffolding") || sourceName.Contains("prop_metal_02") || sourceName.Contains("checker"))
+                            assigned[i] = materials["CS Brushed Steel"];
+                        else if (sourceName.Contains("garden_bench") || sourceName.Contains("signsstreetsmall") || sourceName.Contains("streetsign"))
+                            assigned[i] = materials["CS Newsstand Green"];
+                        else if (sourceName.Contains("prop_plastic") || sourceName.Contains("barrel"))
+                            assigned[i] = resourceName.Contains("NewsBooth") ? materials["CS Newsstand Green"] : materials["CS Safety Orange"];
+                        else if (sourceName.Contains("aspen_tree_bark"))
+                            assigned[i] = materials["Wood Bark"];
+                        else if (sourceName.Contains("aspen_tree_lit"))
+                            assigned[i] = materials["Broadleaf Canopy"];
+                        else if (sourceName.Contains("crosswalk"))
+                            assigned[i] = materials["Fdr Road"];
+                        else if (sourceName.Contains("worldgridmaterial") && resourceName.Contains("Sidewalk"))
+                            assigned[i] = materials["NY Sidewalk"];
+                        else if (resourceName.Contains("Manhole"))
+                            assigned[i] = materials["CS Manhole Iron"];
+                        else assigned[i] = material ?? materials["CS Black Iron"];
                     }
                     else if (pack == "HongKong")
                     {
@@ -4187,7 +4459,8 @@ namespace RoadRage.UnityRemake
         /// Scales by the longest horizontal axis instead of height - for things that are
         /// defined by how far they reach across the road (overpasses, fences, parked cars).
         /// Same road-relative rule as NormalizeModelHeight - see the note there.
-        private static void NormalizeModelSpan(GameObject model, float targetSpan, float baseHeight)
+        private static void NormalizeModelSpan(GameObject model, float targetSpan, float baseHeight,
+            bool enforceClearance = true)
         {
             if (!TryGetCombinedBounds(model, out var bounds)) return;
             var span = Mathf.Max(bounds.size.x, bounds.size.z);
@@ -4196,6 +4469,7 @@ namespace RoadRage.UnityRemake
             model.transform.localScale *= targetSpan / span;
             if (!TryGetCombinedBounds(model, out bounds)) return;
             model.transform.position += Vector3.up * (groundY - bounds.min.y);
+            if (!enforceClearance || model.name.StartsWith("CitySample ")) return;
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
             var roadCenter = RoadPath.Point(dist, 0f, 0f);
@@ -4327,45 +4601,83 @@ namespace RoadRage.UnityRemake
             }
         }
 
-        /// Built once per run from every mesh the city blocks can draw on, so placement
-        /// picks by measured fit instead of by list position.
+        private static Dictionary<string, string> gisStyleByMesh;
+
+        private Material ManhattanGisMaterial(string resourceOrName)
+        {
+            var shortName = resourceOrName;
+            var slash = shortName.LastIndexOf('/');
+            if (slash >= 0) shortName = shortName.Substring(slash + 1);
+            if (shortName.StartsWith("VRBN_") && shortName.Length >= 10)
+            {
+                var vid = shortName.Substring(5, 5);
+                if (materials.TryGetValue($"VRBN {vid}", out var vMat)) return vMat;
+            }
+            if (gisStyleByMesh == null)
+            {
+                gisStyleByMesh = new Dictionary<string, string>(System.StringComparer.OrdinalIgnoreCase);
+                var cat = Resources.Load<TextAsset>("Biomes/ManhattanGIS/catalog");
+                if (cat != null && !string.IsNullOrEmpty(cat.text))
+                {
+                    foreach (var rawLine in cat.text.Split('\n'))
+                    {
+                        var line = rawLine.Trim();
+                        if (string.IsNullOrEmpty(line)) continue;
+                        var parts = line.Split('|');
+                        if (parts.Length >= 2) gisStyleByMesh[parts[0]] = $"GIS {parts[1]}";
+                    }
+                }
+            }
+            if (gisStyleByMesh.TryGetValue(shortName, out var matKey) && materials.TryGetValue(matKey, out var found))
+                return found;
+            if (shortName.Contains("OneWTC") || shortName.Contains("Curtain")) return materials["GIS CurtainWall"];
+            if (shortName.Contains("SoHo")) return materials["GIS SoHoBrick"];
+            if (shortName.Contains("Brownstone")) return materials["GIS Brownstone"];
+            return materials["GIS ArtDeco"];
+        }
+
+        /// Built once per run from true 3D sculpted buildings (with 3D recessed windows,
+        /// 3D stone arches/pilasters, 3D cornices, and 2K/4K photogrammetry textures).
         private static List<BuildingEntry> BuildingCatalogue()
         {
             if (buildingCatalogue != null) return buildingCatalogue;
             buildingCatalogue = new List<BuildingEntry>();
 
-            // Buildings/USA/building is out. It is a detached, furnished American house -
-            // its own folder ships a sofa, a table and a carpet next to it - and
-            // AssignClasses ranks by width, so being the narrowest thing in the set put
-            // it straight into the Frontage bucket and onto a Manhattan avenue. The
-            // catalogue only serves BuildCyberSprawl, so nothing else loses it.
-            var candidates = new List<string>(NycVariants);
+            var candidates = new List<string>();
+
+            // 1. All 14 vrbn_studios 2K Photogrammetry 3D USA/NYC Buildings (3D recessed windows, stone/brick/terracotta, 2K BC+NM+EM)
+            foreach (var vrbnId in new[]
+            {
+                "00004", "00009", "00024", "00083", "00188", "00274", "00275",
+                "00276", "00286", "00287", "00288", "00904", "00905", "00906"
+            })
+            {
+                candidates.Add($"Biomes/ManhattanGIS/VRBN/VRBN_{vrbnId}");
+            }
+
+            // 2. Sculpted 3D NYC & DemoCity Architectural Buildings (Beaux-Arts stone, brick, glass)
             for (var i = 1; i <= 8; i++) candidates.Add($"Buildings/NYC/building_{i}");
             candidates.Add("Buildings/NYCBlock6/builds");
             candidates.Add("Buildings/NYCBlock6/shops");
-
-            // Architecture the NYC set does not contain.
-            //
-            // Everything above is the NYC-Like City Buildings Set: nineteen NYCVariants
-            // prefabs and eight FBXs, all assembled from the same eight part families -
-            // building_1..8 in bottom, middle and roof - wearing the same three materials.
-            // A street built from that is the same building over and over however it is
-            // recoloured, which is what tinting seven ways could not fix and what
-            // RR_CITY's counters proved was not a placement bug: the set is simply small.
-            //
-            // DemoCity is a whole city pack already in Resources, already used by this
-            // biome for its benches and trees, so its materials resolve. The mid-rise
-            // houses and office blocks are street-fronting buildings with silhouettes
-            // nothing in the NYC set has.
-            //
-            // Left out deliberately: small_house_1..3 for the same reason
-            // Buildings/USA/building was dropped, the factory buildings and chimney
-            // because an avenue is not an industrial estate, and the _bgr variants
-            // because those are flat background stand-ins.
             for (var i = 1; i <= 5; i++) candidates.Add($"Buildings/DemoCity/mid_house_{i}");
             candidates.Add("Buildings/DemoCity/mid_house_1_2");
             candidates.Add("Buildings/DemoCity/mid_house_4_2");
             for (var i = 1; i <= 4; i++) candidates.Add($"Buildings/DemoCity/office_building_{i}");
+            candidates.Add("NycKit/building_1_1");
+            candidates.Add("NycKit/building_1_3");
+            candidates.Add("NycKit/building_2_2");
+            candidates.Add("NycKit/building_3_2");
+            candidates.Add("NycKit/building_4_2");
+            candidates.Add("NycKit/building_5_3");
+            candidates.Add("NycKit/building_6_4");
+            candidates.Add("NycKit/building_8_3");
+
+            // 3. Multi-tier 3D Hero Skyscraper Landmarks for the skyline tier
+            candidates.Add("Biomes/ManhattanGIS/Meshes/SM_NYC_OneWTC");
+            candidates.Add("Biomes/ManhattanGIS/Meshes/SM_NYC_EmpireState");
+            candidates.Add("Biomes/ManhattanGIS/Meshes/SM_NYC_Flatiron");
+            candidates.Add("Biomes/ManhattanGIS/Meshes/SM_NYC_CurtainTower_A");
+            candidates.Add("Biomes/ManhattanGIS/Meshes/SM_NYC_CurtainTower_B");
 
             var rejected = 0;
             foreach (var resource in candidates)
@@ -4846,6 +5158,9 @@ namespace RoadRage.UnityRemake
         ///
         /// Here the mesh is chosen to fit the plot, scaled only within a band that keeps
         /// it recognisable, and then positioned by its street-facing face.
+        private readonly string[] recentPlotResources = new string[8];
+        private int recentPlotCursor;
+
         private GameObject PlaceBuildingOnPlot(BuildingClass wanted, Material material, string label,
             float distance, float side, float frontageLine, float plotWidth, int hash)
         {
@@ -4868,7 +5183,24 @@ namespace RoadRage.UnityRemake
                 Debug.Log($"RR_CITY {wanted} plots {plotWidth:0}m wide can use " +
                           $"{fitting.Count} of {catalogue.Count} catalogued buildings");
 
-            var chosen = fitting[Mathf.Abs(hash) % fitting.Count];
+            var startIdx = Mathf.Abs(hash) % fitting.Count;
+            var chosenIdx = startIdx;
+            for (var attempt = 0; attempt < fitting.Count; attempt++)
+            {
+                var cand = fitting[(startIdx + attempt * 7) % fitting.Count].Resource;
+                var usedRecently = false;
+                for (var r = 0; r < recentPlotResources.Length; r++)
+                {
+                    if (recentPlotResources[r] == cand) { usedRecently = true; break; }
+                }
+                if (!usedRecently)
+                {
+                    chosenIdx = (startIdx + attempt * 7) % fitting.Count;
+                    break;
+                }
+            }
+            var chosen = fitting[chosenIdx];
+            recentPlotResources[recentPlotCursor++ % recentPlotResources.Length] = chosen.Resource;
 
             // Scale to fill the plot's width, capped so a small mesh is not blown up and
             // a large one is not shrunk into a model. Height follows - the proportions
@@ -4915,7 +5247,13 @@ namespace RoadRage.UnityRemake
             if (materials.TryGetValue("City Windows", out var cityWindows))
                 VaryWindowLighting(model, cityWindows, hash);
             WeatherWalls(model, hash);
-            if (wanted == BuildingClass.MidBlock) AddSkylineImpostor(model, material);
+            if (wanted == BuildingClass.MidBlock)
+            {
+                var impostorMat = chosen.Resource.StartsWith("Biomes/ManhattanGIS/")
+                    ? ManhattanGisMaterial(chosen.Resource)
+                    : material;
+                AddSkylineImpostor(model, impostorMat);
+            }
             return model;
         }
 
@@ -4955,8 +5293,8 @@ namespace RoadRage.UnityRemake
             || (wanted == BuildingClass.Frontage && entry == BuildingClass.MidBlock)
             || (wanted == BuildingClass.MidBlock && entry != BuildingClass.NotABuilding);
 
-        private const float MinPlotScale = 0.55f;
-        private const float MaxPlotScale = 1.9f;
+        private const float MinPlotScale = 0.42f;
+        private const float MaxPlotScale = 2.15f;
 
         /// Mesh names already reported as badly sized.
         ///
@@ -5019,6 +5357,7 @@ namespace RoadRage.UnityRemake
                 }
             }
             model.transform.position += Vector3.up * (groundY - bounds.min.y + groundHeight);
+            if (model.name.StartsWith("CitySample ")) return;
             var dist = bounds.center.z;
             var roadRight = RoadPath.Right(dist);
             var roadCenter = RoadPath.Point(dist, 0f, 0f);
@@ -6002,8 +6341,8 @@ namespace RoadRage.UnityRemake
                 // shoulder line. World-axis bounds on a bend would push each section by a
                 // different amount and leave the rail jagged.
                 if (n == "Forest Guard Rail" || n == "Forest Cliff" || n == "Route Lake" || n == "Jersey Barrier") continue;
-                // B500 posts and signs stand just behind the rail on purpose.
-                if (n.StartsWith("B500 ") || n.StartsWith("Canal ")) continue;
+                // B500 posts, Canal props, and CitySample NYC street furniture/curbside cars stand at measured offsets.
+                if (n.StartsWith("B500 ") || n.StartsWith("Canal ") || n.StartsWith("CitySample ")) continue;
 
                 var distance = Mathf.Clamp(bounds.center.z, segStart - 20f, segEnd + 20f);
                 var centre = RoadPath.Center(distance);
@@ -6093,6 +6432,14 @@ namespace RoadRage.UnityRemake
                     var mesh = new VillageMesh();
                     FdrCity.BuildBridge(mesh, index, d, back, seaLevel);
                     mesh.Build(this);
+                    var towerModel = Resources.Load<GameObject>("Biomes/NewYork/Models/BrooklynTower");
+                    if (towerModel != null)
+                        foreach (var (foot, turn) in FdrCity.BrooklynTowers)
+                        {
+                            var tower = Instantiate(towerModel, foot, turn, root.transform);
+                            tower.name = "Brooklyn Bridge Tower";
+                            foreach (var r in tower.GetComponentsInChildren<Renderer>()) r.sharedMaterial = materials["Bridge Stone"];
+                        }
                     chunkRoot = null;
                 }
             ForgetFdrBridges(fdrBridgeWanted);
@@ -6901,28 +7248,408 @@ namespace RoadRage.UnityRemake
         private static readonly string[] BigSurHouses = { "cabin", "coasthouse", "store", "ranch", "bungalow", "aframe", "motel", "barn", "lodge" };
         private string bigSurLastHouse;
 
-        /// FDR Drive, Manhattan: the East River, the road's viaducts, park trees, and the city - every
-        /// OSM building near the road, extruded from its footprint (Tools/Terrain/build_fdr.py).
+        private static readonly string[] GisFidiPool =
+        {
+            "VRBN/VRBN_00274", "VRBN/VRBN_00275", "VRBN/VRBN_00276",
+            "VRBN/VRBN_00286", "VRBN/VRBN_00287", "VRBN/VRBN_00288",
+            "SM_NYC_OneWTC", "SM_NYC_CurtainTower_A", "SM_NYC_CurtainTower_B"
+        };
+
+        private static readonly string[] GisSohoPool =
+        {
+            "VRBN/VRBN_00004", "VRBN/VRBN_00009", "VRBN/VRBN_00024",
+            "VRBN/VRBN_00083", "VRBN/VRBN_00188", "VRBN/VRBN_00904",
+            "SM_NYC_SoHoLoft", "SM_NYC_Flatiron"
+        };
+
+        private static readonly string[] GisMidtownPool =
+        {
+            "VRBN/VRBN_00274", "VRBN/VRBN_00275", "VRBN/VRBN_00276",
+            "VRBN/VRBN_00286", "VRBN/VRBN_00287", "VRBN/VRBN_00288",
+            "SM_NYC_EmpireState", "SM_NYC_Flatiron", "SM_NYC_CurtainTower_A", "SM_NYC_CurtainTower_B", "SM_NYC_OneWTC"
+        };
+
+        private static readonly string[] GisUwsPool =
+        {
+            "VRBN/VRBN_00904", "VRBN/VRBN_00905", "VRBN/VRBN_00906",
+            "VRBN/VRBN_00004", "VRBN/VRBN_00009", "VRBN/VRBN_00188",
+            "SM_NYC_SanRemo", "SM_NYC_BrownstoneBlock", "SM_NYC_EmpireState"
+        };
+
+        private string[] GisPoolForRouteDistance(float routeD, bool isFdr)
+        {
+            var len = Mathf.Max(1000f, RoadPath.Route != null ? RoadPath.Route.Length : 13700f);
+            var folded = Mathf.Repeat(routeD, len * 2f);
+            if (folded > len) folded = len * 2f - folded;
+            var t = Mathf.Clamp01(folded / len);
+            if (isFdr)
+            {
+                if (t < 0.28f) return GisUwsPool;
+                if (t < 0.62f) return GisMidtownPool;
+                if (t < 0.82f) return GisSohoPool;
+                return GisFidiPool;
+            }
+            var phase = Mathf.FloorToInt(routeD / 600f) % 4;
+            return phase == 0 ? GisMidtownPool
+                 : phase == 1 ? GisFidiPool
+                 : phase == 2 ? GisSohoPool
+                 : GisUwsPool;
+        }
+
+        /// FDR Drive, Manhattan: East River & bridges on the left (side = -1), and the full
+        /// photorealistic Street-Level NYC & 4K VRBN/Beaux-Arts Manhattan avenue corridor on the
+        /// right (side = +1) with continuous raised SM_Sidewalk_6_3_A flagstone sidewalks, solid
+        /// paved concrete city-block ground (zero bare grass), autumn/golden/green street trees in
+        /// cast-iron grates, cantilever traffic lights, street furniture, curbside NYC vehicles,
+        /// 3D sculpted street-frontage buildings flush with the sidewalk, and Midtown/FiDi/SoHo/UWS
+        /// skyscraper & hero landmarks rising behind.
         private void BuildFdrDrive()
         {
             Random.InitState(40712 ^ chunkSeed);
             Physics.SyncTransforms();
             BuildMoselRiver();
             BuildMoselBridges();
-            var seaLevel = RiverLevel((long)Mathf.Round(((segStart + segEnd) * 0.5f - GridRowOffset) / GridRowStep));
-            for (var near = 25f; near < 300f; near += 40f)
+
+            var kerbEdge = RoadPath.HalfWidth + 1.2f;
+
+            var fdrFrontageSetback = kerbEdge + 5.6f;
+
+            // 1. Full CitySample Street-Level NYC sidewalk, paved concrete city-block ground apron,
+            //    autumn/golden street trees in grates, traffic signals, kiosks, cafes & curbside cars on side = +1
+            DressCitySampleStreetCorridor(kerbEdge, true);
+
+            var nycRooftops = new[]
             {
-                var from = near;
-                ScatterBand(9f, from, from + 40f, (d, l, s) =>
-                    RoadPath.Route.CoverAt(d, l) != RoadRoute.CoverForest ||
-                    (!float.IsNaN(seaLevel) && GridGroundY(RoadPath.Point(d, l)) < seaLevel + AboveSeaMetres) ? null
-                        : SpawnForestPiece($"External|b{Random.Range(0, 8)}", d, l, 0f, 8f, 15f, "Forest Tree"));
+                "Buildings/NYCBlock6/roof00", "Buildings/NYCBlock6/roof01",
+                "Buildings/NYCBlock6/roof02", "Buildings/NYCBlock6/roof03",
+                "Buildings/NYCBlock6/roof04", "Buildings/NYCBlock6/roof05",
+                "Buildings/NYCBlock6/roof06", "Buildings/NYCBlock6/roof07",
+                "Buildings/NYCBlock6/roof08"
+            };
+
+            // 2. Continuous 3D sculpted Manhattan street-frontage buildings flush with the raised concrete sidewalk
+            //    on side = +1, plus two tiers of 3D Midtown/FiDi skyscrapers & Hero Landmarks behind them.
+            var placed = 0;
+            for (var z = SegBegin(0f, 32f); z < segEnd; z += 32f)
+            {
+                var block = Mathf.FloorToInt(z / 32f);
+                const int side = 1;
+                const float facing = -90f;
+                var frontDistance = z + 4f;
+                var frontageHash = BlockHash(block * 11 + 1, 7);
+                var frontagePlot = 30f + (frontageHash >> 3 & 0x7fffffff) % 7 * 2f;
+
+                // Alternate between our 48-building 3D sculpted catalogue (with 2K VRBN photogrammetry &
+                // Beaux-Arts stone/brick/glass facades) and direct VRBN/Landmark 3D meshes flush with the sidewalk.
+                GameObject frontage = null;
+                if (block % 3 == 1)
+                {
+                    var pool = GisPoolForRouteDistance(z, true);
+                    var meshName = pool[(frontageHash & 0x7fffffff) % pool.Length];
+                    var gisMat = ManhattanGisMaterial(meshName);
+                    frontage = PlaceBiomeModelOnRoad("ManhattanGIS", meshName, gisMat,
+                        frontDistance, fdrFrontageSetback + 14f, 0.08f,
+                        new Vector3(0f, facing, 0f), Vector3.one,
+                        $"NYC Ground District Building {meshName}", enforceClearance: false);
+                    if (frontage != null && TryGetCombinedBounds(frontage, out var fBounds))
+                    {
+                        var roadRight = RoadPath.Right(frontDistance);
+                        var roadCenter = RoadPath.Point(frontDistance, 0f, 0f);
+                        var nearest = float.PositiveInfinity;
+                        for (var cx = -1; cx <= 1; cx += 2)
+                        for (var cy = -1; cy <= 1; cy += 2)
+                        for (var cz = -1; cz <= 1; cz += 2)
+                        {
+                            var corner = fBounds.center + Vector3.Scale(fBounds.extents, new Vector3(cx, cy, cz));
+                            var proj = Vector3.Dot(corner - roadCenter, roadRight);
+                            nearest = Mathf.Min(nearest, proj);
+                        }
+                        frontage.transform.position += roadRight * (fdrFrontageSetback - nearest);
+                        if (TryGetCombinedBounds(frontage, out fBounds))
+                            frontage.transform.position += Vector3.up *
+                                (RoadPath.Point(frontDistance, fdrFrontageSetback, 0f).y - fBounds.min.y + 0.08f);
+                    }
+                }
+                else
+                {
+                    frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
+                        "NYC Ground Street Frontage", frontDistance, side,
+                        frontageLine: fdrFrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
+                }
+
+                if (frontage != null) placed++;
+                BuildStorefrontAwning(frontage, frontDistance, side, BlockHash(block, 17));
+
+                // Iconic NYC Rooftop Water Tanks & HVAC units
+                if (block % 2 == 0 && RichDetailBudget)
+                {
+                    var roofMesh = nycRooftops[BlockHash(block, 11) % nycRooftops.Length];
+                    var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
+                        materials["City Asphalt Trim"], frontDistance, fdrFrontageSetback + Random.Range(8f, 15f), 34f,
+                        new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
+                    if (roofProp != null)
+                    {
+                        NormalizeModelHeight(roofProp, Random.Range(4.5f, 8.5f), 34f);
+                        CombineChildRenderers(roofProp);
+                    }
+                }
+
+                // Second Tier: Mid-Block 3D Skyscrapers & Towers (One WTC, Empire State, Flatiron, VRBN Highrises, NYC Towers)
+                var towerDistance = z + ((frontageHash >> 5) % 15) - 7f;
+                var towerHash = BlockHash(block * 19 + 3, 3);
+                var towerPlot = 42f + (towerHash >> 3 & 0x7fffffff) % 8 * 2f;
+                var midTower = PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
+                    "NYC Ground Midtown Skyscraper", towerDistance, side,
+                    frontageLine: fdrFrontageSetback + 28f, plotWidth: towerPlot, hash: towerHash);
+                if (midTower != null) placed++;
+
+                // Third Tier: Hero Skyline Landmarks every 2 blocks (Empire State, One WTC, Flatiron, Curtain Towers, San Remo)
+                if (block % 2 == 0)
+                {
+                    var heroPool = GisPoolForRouteDistance(z + 180f, true);
+                    var heroName = heroPool[((towerHash >> 4) & 0x7fffffff) % heroPool.Length];
+                    var heroMat = ManhattanGisMaterial(heroName);
+                    var hero = PlaceBiomeModelOnRoad("ManhattanGIS", heroName, heroMat,
+                        z + 16f, fdrFrontageSetback + 58f, 0.08f,
+                        new Vector3(0f, facing, 0f), Vector3.one,
+                        $"NYC Ground Hero Skyline {heroName}", enforceClearance: false);
+                    if (hero != null)
+                    {
+                        if (TryGetCombinedBounds(hero, out var hBounds))
+                            hero.transform.position += Vector3.up *
+                                (RoadPath.Point(z + 16f, fdrFrontageSetback + 58f, 0f).y - hBounds.min.y + 0.08f);
+                        placed++;
+                    }
+                }
             }
-            var mesh = new VillageMesh();
-            var placed = FdrCity.Build(mesh, segStart, segEnd, seaLevel);
-            mesh.Build(this);
-            BuildGuardRail(materials["Forest Guard Rail"]);
-            if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} buildings");
+
+            // 3. Guardrail ONLY on the East River side (side = -1)
+            BuildGuardRail(materials["Forest Guard Rail"], -1);
+            if (placed > 0) Debug.Log($"RR_CITY chunk at {segStart:0} m: {placed} 3D street-level NYC buildings");
+        }
+
+        /// FDR Drive's OSM footprints fitted with our 62 real Manhattan GIS & Landmark 3D meshes
+        /// (Biomes/ManhattanGIS/Meshes) plus the 14 intact 4K USA/NYC buildings (Biomes/ManhattanGIS/VRBN),
+        /// with hash-based candidate diversity so adjacent footprints never repeat the same building.
+        private static class FdrKit
+        {
+            public const float Lowest = 6f;
+            public const float Tallest = 500f;
+            public const float Reach = 480f;
+            public const int PerChunk = 54;
+            public const float Level = 14f;
+            private const float MinScale = 0.40f;
+            private const float MaxScale = 2.35f;
+
+            public struct Spot
+            {
+                public GameObject Prefab;
+                public Vector3 Position;
+                public Quaternion Rotation;
+                public Vector3 Scale;
+                public int FootprintIndex;
+            }
+
+            private static GameObject[] prefabs;
+            private static Bounds[] bounds;
+            private static readonly int[] recentPrefabIndices = { -1, -1, -1, -1, -1, -1, -1, -1 };
+            private static int recentPrefabCursor;
+
+            public static bool On => !Application.isMobilePlatform && Load();
+
+            private static bool Load()
+            {
+                if (prefabs != null) return prefabs.Length > 0;
+                var list = new List<GameObject>();
+                var gisMeshes = Resources.LoadAll<GameObject>("Biomes/ManhattanGIS/Meshes");
+                if (gisMeshes != null) list.AddRange(gisMeshes);
+                var gisVrbn = Resources.LoadAll<GameObject>("Biomes/ManhattanGIS/VRBN");
+                if (gisVrbn != null) list.AddRange(gisVrbn);
+                if (list.Count == 0)
+                {
+                    var usaVrbn = Resources.LoadAll<GameObject>("Buildings/USA_VRBN");
+                    if (usaVrbn != null) list.AddRange(usaVrbn);
+                }
+                prefabs = list.ToArray();
+                bounds = new Bounds[prefabs.Length];
+                for (var i = 0; i < prefabs.Length; i++) bounds[i] = LocalBounds(prefabs[i]);
+                return prefabs.Length > 0;
+            }
+
+            /// The prefab's bounds in its own space, from its meshes (a prefab asset has no
+            /// renderer bounds until it is in the scene).
+            private static Bounds LocalBounds(GameObject prefab)
+            {
+                var root = prefab.transform.worldToLocalMatrix;
+                var b = new Bounds();
+                var first = true;
+                foreach (var filter in prefab.GetComponentsInChildren<MeshFilter>(true))
+                {
+                    if (filter.sharedMesh == null) continue;
+                    var m = root * filter.transform.localToWorldMatrix;
+                    var mb = filter.sharedMesh.bounds;
+                    for (var c = 0; c < 8; c++)
+                    {
+                        var corner = m.MultiplyPoint3x4(mb.center + Vector3.Scale(mb.extents,
+                            new Vector3((c & 1) == 0 ? -1f : 1f, (c & 2) == 0 ? -1f : 1f, (c & 4) == 0 ? -1f : 1f)));
+                        if (first) { b = new Bounds(corner, Vector3.zero); first = false; }
+                        else b.Encapsulate(corner);
+                    }
+                }
+                return b;
+            }
+
+            private static readonly List<(int Index, float FitScore, bool AlongX, float Sl, float Sw, float Sh)> fitCandidates = new();
+
+            /// Fits a real Manhattan GIS or VRBN 3D building to this OSM footprint, selecting
+            /// among all well-fitting candidates using a spatial/index hash and anti-repeat ring
+            /// buffer so neighbouring footprints never instantiate the same building.
+            public static bool Fit(Vector3[] ring, float ground, float height, int footprintIndex, out Spot spot)
+            {
+                spot = default;
+                var best = float.PositiveInfinity;
+                Vector3 axis = Vector3.right, centre = Vector3.zero;
+                float length = 0f, width = 0f;
+                for (var e = 0; e < ring.Length; e++)
+                {
+                    var u = ring[(e + 1) % ring.Length] - ring[e];
+                    u.y = 0f;
+                    if (u.sqrMagnitude < 1f) continue;
+                    u.Normalize();
+                    var v = new Vector3(-u.z, 0f, u.x);
+                    float u0 = float.PositiveInfinity, u1 = float.NegativeInfinity, v0 = float.PositiveInfinity, v1 = float.NegativeInfinity;
+                    foreach (var p in ring)
+                    {
+                        var a = Vector3.Dot(p, u);
+                        var b = Vector3.Dot(p, v);
+                        u0 = Mathf.Min(u0, a); u1 = Mathf.Max(u1, a);
+                        v0 = Mathf.Min(v0, b); v1 = Mathf.Max(v1, b);
+                    }
+                    var area = (u1 - u0) * (v1 - v0);
+                    if (area >= best) continue;
+                    best = area;
+                    var longAlongU = u1 - u0 >= v1 - v0;
+                    axis = longAlongU ? u : v;
+                    length = Mathf.Max(u1 - u0, v1 - v0);
+                    width = Mathf.Min(u1 - u0, v1 - v0);
+                    centre = u * ((u0 + u1) * 0.5f) + v * ((v0 + v1) * 0.5f);
+                }
+                if (float.IsInfinity(best)) return false;
+
+                fitCandidates.Clear();
+                var bestFit = float.PositiveInfinity;
+                for (var i = 0; i < prefabs.Length; i++)
+                {
+                    var size = bounds[i].size;
+                    if (size.x < 1f || size.z < 1f || size.y < 1f) continue;
+                    var alongX = size.x >= size.z;
+                    var sl = length / (alongX ? size.x : size.z);
+                    var sw = width / (alongX ? size.z : size.x);
+                    var sh = height / Mathf.Max(1f, size.y);
+                    if (sl < MinScale || sl > MaxScale || sw < MinScale || sw > MaxScale || sh < 0.45f || sh > 1.85f) continue;
+                    var fit = Mathf.Abs(Mathf.Log(sl)) + Mathf.Abs(Mathf.Log(sw)) + 1.5f * Mathf.Abs(Mathf.Log(sh));
+                    if (fit < bestFit) bestFit = fit;
+                    fitCandidates.Add((i, fit, alongX, sl, sw, sh));
+                }
+                if (fitCandidates.Count == 0) return false;
+
+                // Keep all candidates within a generous fit window so all 76 buildings participate
+                var poolCount = 0;
+                for (var c = 0; c < fitCandidates.Count; c++)
+                {
+                    if (fitCandidates[c].FitScore <= bestFit + 1.15f)
+                        fitCandidates[poolCount++] = fitCandidates[c];
+                }
+                if (poolCount == 0) poolCount = fitCandidates.Count;
+
+                var hash = Mathf.Abs(unchecked(footprintIndex * 73856093 ^ Mathf.RoundToInt(centre.x * 19f) ^ Mathf.RoundToInt(centre.z * 37f)));
+                var chosenSlot = hash % poolCount;
+                for (var attempt = 0; attempt < poolCount; attempt++)
+                {
+                    var candSlot = (chosenSlot + attempt * 5) % poolCount;
+                    var prefabIdx = fitCandidates[candSlot].Index;
+                    var recent = false;
+                    for (var r = 0; r < recentPrefabIndices.Length; r++)
+                    {
+                        if (recentPrefabIndices[r] == prefabIdx) { recent = true; break; }
+                    }
+                    if (!recent)
+                    {
+                        chosenSlot = candSlot;
+                        break;
+                    }
+                }
+
+                var picked = fitCandidates[chosenSlot];
+                recentPrefabIndices[recentPrefabCursor++ % recentPrefabIndices.Length] = picked.Index;
+
+                var yaw = picked.AlongX
+                    ? -Mathf.Atan2(axis.z, axis.x) * Mathf.Rad2Deg
+                    : Mathf.Atan2(axis.x, axis.z) * Mathf.Rad2Deg;
+                var rotation = Quaternion.Euler(0f, yaw, 0f);
+                var scale = picked.AlongX
+                    ? new Vector3(picked.Sl, picked.Sh, picked.Sw)
+                    : new Vector3(picked.Sw, picked.Sh, picked.Sl);
+                var pickedBounds = bounds[picked.Index];
+                var position = centre - rotation * Vector3.Scale(pickedBounds.center, scale);
+                position.y = ground - 0.3f - pickedBounds.min.y * picked.Sh;
+                spot = new Spot
+                {
+                    Prefab = prefabs[picked.Index],
+                    Position = position,
+                    Rotation = rotation,
+                    Scale = scale,
+                    FootprintIndex = footprintIndex
+                };
+                return true;
+            }
+
+            public static void Place(Spot spot, Transform parent, RoadRageBootstrap owner = null)
+            {
+                var building = UnityEngine.Object.Instantiate(spot.Prefab, spot.Position, spot.Rotation, parent);
+                building.transform.localScale = spot.Scale;
+                building.name = $"NYC Ground Building {spot.Prefab.name}";
+                if (owner != null)
+                {
+                    var pname = spot.Prefab.name;
+                    if (pname.StartsWith("SM_"))
+                    {
+                        var gisMat = owner.ManhattanGisMaterial(pname);
+                        foreach (var renderer in building.GetComponentsInChildren<Renderer>(true))
+                        {
+                            var shared = renderer.sharedMaterials;
+                            var assigned = new Material[Mathf.Max(1, shared.Length)];
+                            for (var i = 0; i < assigned.Length; i++) assigned[i] = gisMat;
+                            renderer.sharedMaterials = assigned;
+                        }
+                    }
+                    else
+                    {
+                        foreach (var renderer in building.GetComponentsInChildren<Renderer>(true))
+                        {
+                            var shared = renderer.sharedMaterials;
+                            var assigned = new Material[Mathf.Max(1, shared.Length)];
+                            for (var i = 0; i < assigned.Length; i++)
+                            {
+                                var srcMat = i < shared.Length ? shared[i] : null;
+                                var sn = srcMat != null ? srcMat.name.ToLowerInvariant() : string.Empty;
+                                if (sn.Contains("glass") || sn.Contains("window"))
+                                    assigned[i] = owner.materials["City Windows"];
+                                else if (srcMat != null && srcMat.HasProperty("_BaseMap") && srcMat.GetTexture("_BaseMap") != null)
+                                    assigned[i] = srcMat;
+                                else if (sn.Contains("brick"))
+                                    assigned[i] = owner.materials["GIS SoHoBrick"];
+                                else
+                                    assigned[i] = owner.materials["GIS ArtDeco"];
+                            }
+                            renderer.sharedMaterials = assigned;
+                        }
+                        if (owner.materials.TryGetValue("City Windows", out var cw))
+                            VaryWindowLighting(building, cw, spot.FootprintIndex * 31 + 7);
+                    }
+                }
+                foreach (var collider in building.GetComponentsInChildren<Collider>(true)) UnityEngine.Object.Destroy(collider);
+            }
         }
 
         /// Each facade texture and the metres of wall it covers, counted in floors of about 3.5 m:
@@ -6983,6 +7710,7 @@ namespace RoadRage.UnityRemake
             public static int Build(VillageMesh mesh, float segStart, float segEnd, float seaLevel)
             {
                 if (!Load()) return 0;
+                candidates.Clear();
                 var length = RoadPath.Route.Length;
                 var placed = 0;
                 for (var i = 0; i < heights.Length; i++)
@@ -6999,6 +7727,7 @@ namespace RoadRage.UnityRemake
                         // building and the ground covered its lower floors. Its height counts
                         // from the mean ground along its walls, which reach down to the lowest point.
                         var low = float.PositiveInfinity;
+                        var high = float.NegativeInfinity;
                         var sum = 0f;
                         var samples = 0;
                         var wet = 0;
@@ -7007,6 +7736,7 @@ namespace RoadRage.UnityRemake
                         {
                             var y = GridGroundY(Vector3.Lerp(ring[k], ring[(k + 1) % ring.Length], s / 3f));
                             low = Mathf.Min(low, y);
+                            high = Mathf.Max(high, y);
                             sum += y;
                             samples++;
                             if (!float.IsNaN(seaLevel) && y < seaLevel + 0.3f) wet++;
@@ -7017,6 +7747,227 @@ namespace RoadRage.UnityRemake
                         if (wet * 4 > samples) continue;
                         var foot = Mathf.Min(low, ground) - 0.5f;
                         for (var k = 0; k < ring.Length; k++) ring[k].y = foot;
+                        var near = float.PositiveInfinity;
+                        for (var k = 0; k < counts[i]; k++) near = Mathf.Min(near, Mathf.Abs(corners[starts[i] + k].y));
+                        // Keep the highway carriageway itself clear, while building all real OSM footprints along the drive.
+                        if (near < RoadPath.HalfWidth + 4.5f) continue;
+                        // A kit building has a flat foot: only on level ground, or its ground floor is buried.
+                        if (FdrKit.On && heights[i] >= FdrKit.Lowest && heights[i] <= FdrKit.Tallest && near < FdrKit.Reach
+                            && high - low < FdrKit.Level)
+                            candidates.Add((near, i, ring, foot, ground));
+                        else Extrude(mesh, i, ring, foot, ground, near);
+                        placed++;
+                    }
+                }
+                // The front row, nearest the road first, as real modelled buildings (FdrKit);
+                // the rest, and any the kit has no fit for, as boxes.
+                candidates.Sort((a, b) => a.Near.CompareTo(b.Near));
+                KitSpots.Clear();
+                foreach (var c in candidates)
+                {
+                    if (KitSpots.Count < FdrKit.PerChunk && FdrKit.Fit(c.Ring, c.Ground, heights[c.Index], c.Index, out var spot))
+                    {
+                        KitSpots.Add(spot);
+                        Street(mesh, c.Ring, c.Ground, c.Near, false, 0f);
+                    }
+                    else Extrude(mesh, c.Index, c.Ring, c.Foot, c.Ground, c.Near);
+                }
+                return placed;
+            }
+
+            /// Modelled buildings for this chunk, from the last Build: placed by the caller.
+            public static readonly List<FdrKit.Spot> KitSpots = new();
+            private static readonly List<(float Near, int Index, Vector3[] Ring, float Foot, float Ground)> candidates = new();
+
+            /// Street level round a building: a pavement out from every wall (none beside the
+            /// drive, where it would lie over the road) and, for the boxes, shops along the foot:
+            /// a box's facade ran straight into the ground with no door or pavement and read as
+            /// sinking. The kit's buildings have their own ground floor.
+            private static void Street(VillageMesh mesh, Vector3[] ring, float ground, float near, bool shops, float u)
+            {
+                // Out of the footprint by its winding: Cross(up, along) points right of the
+                // edge, which is out on a counter-clockwise ring.
+                var flip = VillageMesh.SignedArea(ring) > 0f ? 1f : -1f;
+                for (var k = 0; k < ring.Length; k++)
+                {
+                    var a = ring[k];
+                    var b = ring[(k + 1) % ring.Length];
+                    var along = b - a;
+                    along.y = 0f;
+                    if (along.sqrMagnitude < 1f) continue;
+                    var outward = Vector3.Cross(Vector3.up, along).normalized * flip;
+                    // Shops where the wall faces a street (a housing tower in its lawn has none).
+                    if (shops && FacesStreet((a + b) * 0.5f + outward * 2f))
+                    {
+                        mesh.Storefront("NY Shopfront", a, b, outward, ground - ShopBelow, ground + ShopHeight, u, 1f / ShopRepeat);
+                        u += along.magnitude / ShopRepeat;
+                    }
+                    if (near > ApronClear) mesh.Apron("NY Sidewalk", a, b, outward, ApronWidth, 0.02f);
+                }
+            }
+
+            /// Manhattan's street grid (build_fdr.py streets, from OSM): per piece its kind and its
+            /// points in road distance and lateral, with the distances it spans.
+            private sealed class StreetPiece
+            {
+                public int Kind;
+                public Vector2[] Points;
+                public float From, To;
+            }
+
+            private static List<StreetPiece> streets;
+            private static Vector3[] trees;
+
+            /// Carriageway half-widths by kind (avenue, street, narrow street, pedestrian) and the
+            /// pavement either side.
+            private static readonly float[] StreetHalf = { 8f, 5f, 3.5f, 0f };
+            private const float PavementWidth = 3f;
+            private const float LampEvery = 32f;
+            private const int TreesPerChunk = 90;
+            /// Pieces of street in and around this chunk, as world segments with their half-width,
+            /// for the buildings' street test.
+            private static readonly List<(Vector3 A, Vector3 B, float Half)> nearbyStreets = new();
+            /// The street trees to plant in this chunk: road distance, lateral, height.
+            public static readonly List<(float D, float Lateral, float Height)> ChunkTrees = new();
+
+            private static void LoadStreets()
+            {
+                if (streets != null) return;
+                streets = new List<StreetPiece>();
+                var asset = Resources.Load<TextAsset>("Biomes/Routes/fdr_streets");
+                if (asset != null && asset.bytes.Length >= 8 && asset.bytes[3] == 'S')
+                {
+                    var b = asset.bytes;
+                    var count = System.BitConverter.ToInt32(b, 4);
+                    var at = 8;
+                    for (var i = 0; i < count; i++)
+                    {
+                        var piece = new StreetPiece { Kind = b[at], Points = new Vector2[System.BitConverter.ToUInt16(b, at + 1)] };
+                        at += 3;
+                        piece.From = float.PositiveInfinity;
+                        piece.To = float.NegativeInfinity;
+                        for (var k = 0; k < piece.Points.Length; k++, at += 8)
+                        {
+                            piece.Points[k] = new Vector2(System.BitConverter.ToSingle(b, at), System.BitConverter.ToSingle(b, at + 4));
+                            piece.From = Mathf.Min(piece.From, piece.Points[k].x);
+                            piece.To = Mathf.Max(piece.To, piece.Points[k].x);
+                        }
+                        streets.Add(piece);
+                    }
+                }
+                var treeAsset = Resources.Load<TextAsset>("Biomes/Routes/fdr_trees");
+                trees = System.Array.Empty<Vector3>();
+                if (treeAsset != null && treeAsset.bytes.Length >= 8 && treeAsset.bytes[3] == 'T')
+                {
+                    var b = treeAsset.bytes;
+                    trees = new Vector3[System.BitConverter.ToInt32(b, 4)];
+                    for (int i = 0, at = 8; i < trees.Length; i++, at += 9)
+                        trees[i] = new Vector3(System.BitConverter.ToSingle(b, at), System.BitConverter.ToSingle(b, at + 4), b[at + 8]);
+                }
+            }
+
+            /// Road distance `z` from the bake as the game road meets it in [from, to): on the way
+            /// there, or mirrored on the way back.
+            private static bool Meet(float z, float length, float from, float to, out float d, out bool back)
+            {
+                foreach (var (dd, b) in Passes(z, length, from, to)) { d = dd; back = b; return true; }
+                d = 0f; back = false;
+                return false;
+            }
+
+            /// The streets in this chunk: asphalt, a pavement either side and lamp posts; and the
+            /// street trees to plant, nearest the drive first.
+            public static void BuildStreets(VillageMesh mesh, float segStart, float segEnd)
+            {
+                LoadStreets();
+                nearbyStreets.Clear();
+                ChunkTrees.Clear();
+                var length = RoadPath.Route.Length;
+                const float margin = 60f;
+                for (var s = 0; s < streets.Count; s++)
+                {
+                    var piece = streets[s];
+                    var half = StreetHalf[piece.Kind];
+                    // Streets crossing one another: each a little higher than the last, so they do not flicker.
+                    var lift = 0.05f + (s % 7) * 0.004f;
+                    for (var k = 0; k + 1 < piece.Points.Length; k++)
+                    {
+                        var p = piece.Points[k];
+                        var q = piece.Points[k + 1];
+                        var mid = (p.x + q.x) * 0.5f;
+                        if (!Meet(mid, length, segStart - margin, segEnd + margin, out var d, out var back)) continue;
+                        var sign = back ? -1f : 1f;
+                        var a = RoadPath.Point(d + sign * (p.x - mid), p.y);
+                        var b = RoadPath.Point(d + sign * (q.x - mid), q.y);
+                        nearbyStreets.Add((a, b, half));
+                        if (d < segStart || d >= segEnd) continue;
+                        var along = b - a;
+                        along.y = 0f;
+                        if (along.sqrMagnitude < 0.25f) continue;
+                        var side = Vector3.Cross(Vector3.up, along).normalized;
+                        Vector3 On(Vector3 at, float y) { at.y = GridGroundY(at) + y; return at; }
+                        if (half > 0f)
+                        {
+                            mesh.Face("NY Street", On(a - side * half, lift), On(a + side * half, lift), On(b + side * half, lift), On(b - side * half, lift));
+                            for (var x = -1; x <= 1; x += 2)
+                            {
+                                var inner = side * (x * half);
+                                var outer = side * (x * (half + PavementWidth));
+                                mesh.Face("NY Sidewalk", On(a + inner, 0.03f), On(a + outer, 0.03f), On(b + outer, 0.03f), On(b + inner, 0.03f));
+                            }
+                            // Lamp posts at the kerb, staggered either side.
+                            var run = Vector3.Distance(a, b);
+                            if (Mathf.FloorToInt((s * 17 + k) * 10f / LampEvery) != Mathf.FloorToInt((s * 17 + k + 1) * 10f / LampEvery))
+                            {
+                                var x = (k & 1) == 0 ? 1f : -1f;
+                                var foot = On(a + side * (x * (half + 0.6f)) + along.normalized * (run * 0.5f), 0f);
+                                mesh.StreetLamp(foot, foot - side * x);
+                            }
+                        }
+                        else mesh.Face("NY Sidewalk", On(a - side * 3f, 0.03f), On(a + side * 3f, 0.03f), On(b + side * 3f, 0.03f), On(b - side * 3f, 0.03f));
+                    }
+                }
+                // The street trees, nearest the drive first: they are what is seen.
+                treeOrder.Clear();
+                for (var i = 0; i < trees.Length; i++)
+                    if (Meet(trees[i].x, length, segStart, segEnd, out var d, out var back))
+                        treeOrder.Add((Mathf.Abs(trees[i].y), d, trees[i].y, trees[i].z));
+                treeOrder.Sort((x, y) => x.Near.CompareTo(y.Near));
+                for (var i = 0; i < treeOrder.Count && i < TreesPerChunk; i++)
+                    ChunkTrees.Add((treeOrder[i].D, treeOrder[i].Lateral, Mathf.Clamp(5f + treeOrder[i].Dbh * 0.45f, 6f, 17f)));
+            }
+
+            private static readonly List<(float Near, float D, float Lateral, float Dbh)> treeOrder = new();
+
+            /// Whether a point is beside a street: within its pavement of a carriageway nearby.
+            private static bool FacesStreet(Vector3 at)
+            {
+                foreach (var (a, b, half) in nearbyStreets)
+                {
+                    var ab = new Vector2(b.x - a.x, b.z - a.z);
+                    var ap = new Vector2(at.x - a.x, at.z - a.z);
+                    var t = Mathf.Clamp01(Vector2.Dot(ap, ab) / Mathf.Max(0.01f, ab.sqrMagnitude));
+                    if ((ap - ab * t).magnitude < half + PavementWidth + 4f) return true;
+                }
+                return false;
+            }
+
+            /// The street-level storey's texture (Tools/Textures/make_shopfront.py): four 6 m shop
+            /// bays, 4.5 m above the pavement and 1 m below it.
+            private const float ShopRepeat = 24f;
+            private const float ShopHeight = 4.5f;
+            private const float ShopBelow = 1f;
+            private const float ApronWidth = 3.5f;
+            /// m from the road's centreline: nearer, a pavement would lie on the shoulder.
+            private const float ApronClear = 26f;
+
+            /// A building as an extruded box: walls with a photo facade, a flat roof, setbacks on
+            /// some towers, a cornice on mid-rise blocks, and water tanks.
+            private static void Extrude(VillageMesh mesh, int i, Vector3[] ring, float foot, float ground, float near)
+            {
+                Street(mesh, ring, ground, near, heights[i] >= 8f, (i % 16) * 0.25f);
+                {
+                    {
                         var h = heights[i] + ground - foot - 0.5f;
                         // By height, as the city is: walk-ups, brick and concrete blocks, office and
                         // residential towers, glass at the top.
@@ -7026,18 +7977,39 @@ namespace RoadRage.UnityRemake
                             : h < 150f ? new[] { 3, 2, 5, 1 }[pick % 4]
                             : new[] { 4, 3, 4, 5 }[pick % 4];
                         var (key, tile) = FdrFacades[facade];
-                        mesh.Building($"NY {key}", "NY Roof", ring, h + 0.5f, tile, pick / 16f);
+                        var centre = Vector3.zero;
+                        foreach (var p in ring) centre += p;
+                        centre /= ring.Length;
+                        Vector3[] Scaled(float k, float y)
+                        {
+                            var r = new Vector3[ring.Length];
+                            for (var k2 = 0; k2 < r.Length; k2++)
+                            {
+                                r[k2] = centre + (ring[k2] - centre) * k;
+                                r[k2].y = y;
+                            }
+                            return r;
+                        }
+                        var top = h + 0.5f;
+                        if (heights[i] > 60f && (pick & 1) == 0)
+                        {
+                            // A tower steps back: its upper third set in, as the zoning made them.
+                            var lower = top * 0.62f;
+                            mesh.Building($"NY {key}", "NY Roof", ring, lower, tile, pick / 16f);
+                            mesh.Building($"NY {key}", "NY Roof", Scaled(0.78f, foot + lower), top - lower, tile, pick / 16f);
+                        }
+                        else mesh.Building($"NY {key}", "NY Roof", ring, top, tile, pick / 16f);
+                        // A stone cornice at the roof line. (A shopfront band round the foot read as
+                        // a grey box the building sank into.)
+                        if (heights[i] >= 12f && heights[i] < 60f)
+                            mesh.Building("NY Cornice", "NY Cornice", Scaled(1.04f, foot + top - 0.9f), 0.9f, 4f, 0f);
                         // New York's wooden water tanks, on the roofs of mid-rise blocks.
                         if (heights[i] > TankFrom && heights[i] < TankTo && (pick & 3) == 0)
                         {
-                            var centre = Vector3.zero;
-                            foreach (var p in ring) centre += p;
-                            mesh.WaterTank(centre / ring.Length + Vector3.up * (h + 0.5f));
+                            mesh.WaterTank(centre + Vector3.up * top);
                         }
-                        placed++;
                     }
                 }
-                return placed;
             }
 
             /// One East River bridge (build_fdr.py bridges): deck points in road distance and
@@ -7090,10 +8062,14 @@ namespace RoadRage.UnityRemake
                     yield return (i, d, back);
             }
 
+            /// The Brooklyn Bridge's towers from the last BuildBridge: water-level foot and turn.
+            public static readonly List<(Vector3 Foot, Quaternion Rotation)> BrooklynTowers = new();
+
             /// One bridge, whole: deck, columns under the approaches, towers or piers, and
             /// cables with hangers or trusses.
             public static void BuildBridge(VillageMesh mesh, int index, float d, bool back, float seaLevel)
             {
+                BrooklynTowers.Clear();
                 var bridge = LoadBridges()[index];
                 var steel = bridge.Kind switch
                 {
@@ -7154,12 +8130,9 @@ namespace RoadRage.UnityRemake
                     var crown = seaLevel + height;
                     if (bridge.Kind == "brooklyn")
                     {
-                        // Granite: a base, three piers between the two Gothic arches, a block over them.
-                        var arch = deck[i].y + 32f;
-                        mesh.Box("Bridge Stone", foot + Vector3.down * 4f, across[i] * (half + 7f), along * 10f, deck[i].y - thick - foot.y + 4f);
-                        foreach (var x in new[] { -1f, 0f, 1f })
-                            mesh.Box("Bridge Stone", deck[i] + down + across[i] * (x * (half + 3f)), across[i] * (x == 0f ? 3f : 4f), along * 10f, arch - deck[i].y + thick);
-                        mesh.Box("Bridge Stone", new Vector3(deck[i].x, arch, deck[i].z), across[i] * (half + 7f), along * 10f, crown - arch);
+                        // The modelled granite tower (Tools/Blender/build_brooklyn_tower.py), from the
+                        // water up, its arches across the deck; placed by the caller.
+                        BrooklynTowers.Add((foot, Quaternion.LookRotation(along, Vector3.up)));
                     }
                     else
                     {
@@ -7879,13 +8852,16 @@ namespace RoadRage.UnityRemake
                 var up = Vector3.up * height;
                 var part = For(wall);
                 var run = 0f;
+                // Turned by the footprint's winding, not towards its middle: on an L- or U-shaped
+                // footprint the inner walls faced in, and the building showed as loose slabs.
+                var turn = SignedArea(ring) > 0f;
                 for (var k = 0; k < ring.Length; k++)
                 {
                     var a = ring[k];
                     var b = ring[(k + 1) % ring.Length];
                     var width = Vector3.Distance(a, b);
-                    // A quad (a, b, b + up) faces Cross(b - a, up): turn it to face away from the middle.
-                    if (Vector3.Dot(Vector3.Cross(b - a, Vector3.up), (a + b) * 0.5f - centre) < 0f) (a, b) = (b, a);
+                    // A quad (a, b, b + up) faces Cross(b - a, up), inward on a counter-clockwise ring.
+                    if (turn) (a, b) = (b, a);
                     var v = part.Vertices.Count;
                     part.Vertices.Add(a); part.Vertices.Add(b); part.Vertices.Add(b + up); part.Vertices.Add(a + up);
                     var u0 = shift + run / tile;
@@ -7896,23 +8872,82 @@ namespace RoadRage.UnityRemake
                     part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3);
                     run += width;
                 }
+                // The roof: the footprint itself, triangulated (a fan from the middle spilled
+                // outside a concave footprint).
                 var top = For(roof);
-                var mid = top.Vertices.Count;
-                top.Vertices.Add(centre + up);
-                top.Uv.Add(Vector2.zero);
+                var first = top.Vertices.Count;
                 for (var k = 0; k < ring.Length; k++)
                 {
                     top.Vertices.Add(ring[k] + up);
                     top.Uv.Add(new Vector2(ring[k].x - centre.x, ring[k].z - centre.z) * 0.1f);
                 }
+                var triangles = Triangulate(ring);
+                for (var t = 0; t + 2 < triangles.Count; t += 3)
+                {
+                    var a = first + triangles[t];
+                    var b = first + triangles[t + 1];
+                    var c = first + triangles[t + 2];
+                    // Facing up: Cross(b - a, c - a).y > 0 is the front face.
+                    if (Vector3.Cross(top.Vertices[b] - top.Vertices[a], top.Vertices[c] - top.Vertices[a]).y < 0f) (b, c) = (c, b);
+                    top.Triangles.Add(a); top.Triangles.Add(b); top.Triangles.Add(c);
+                }
+            }
+
+            /// Twice the area of a footprint seen from above, positive when it winds counter-clockwise
+            /// (x right, z up).
+            public static float SignedArea(Vector3[] ring)
+            {
+                var sum = 0f;
                 for (var k = 0; k < ring.Length; k++)
                 {
-                    var a = mid + 1 + k;
-                    var b = mid + 1 + (k + 1) % ring.Length;
-                    // Facing up: Cross(a - centre, b - centre).y > 0 is the front face.
-                    var up1 = Vector3.Cross(top.Vertices[a] - top.Vertices[mid], top.Vertices[b] - top.Vertices[mid]).y > 0f;
-                    top.Triangles.Add(mid); top.Triangles.Add(up1 ? a : b); top.Triangles.Add(up1 ? b : a);
+                    var a = ring[k];
+                    var b = ring[(k + 1) % ring.Length];
+                    sum += a.x * b.z - b.x * a.z;
                 }
+                return sum;
+            }
+
+            /// Triangles covering a simple polygon (ear clipping), as indices into `ring`; a fan if
+            /// the footprint is too broken to clip.
+            private static List<int> Triangulate(Vector3[] ring)
+            {
+                var result = new List<int>();
+                var left = new List<int>();
+                for (var k = 0; k < ring.Length; k++) left.Add(k);
+                var ccw = SignedArea(ring) > 0f;
+                float Cross2(Vector3 o, Vector3 a, Vector3 b) => (a.x - o.x) * (b.z - o.z) - (a.z - o.z) * (b.x - o.x);
+                var guard = ring.Length * ring.Length;
+                while (left.Count > 3 && guard-- > 0)
+                {
+                    var clipped = false;
+                    for (var i = 0; i < left.Count; i++)
+                    {
+                        var ia = left[(i + left.Count - 1) % left.Count];
+                        var ib = left[i];
+                        var ic = left[(i + 1) % left.Count];
+                        var turn = Cross2(ring[ia], ring[ib], ring[ic]);
+                        if (ccw ? turn <= 0f : turn >= 0f) continue;
+                        var inside = false;
+                        foreach (var j in left)
+                        {
+                            if (j == ia || j == ib || j == ic) continue;
+                            var p = ring[j];
+                            var d1 = Cross2(ring[ia], ring[ib], p);
+                            var d2 = Cross2(ring[ib], ring[ic], p);
+                            var d3 = Cross2(ring[ic], ring[ia], p);
+                            if (ccw ? d1 >= 0f && d2 >= 0f && d3 >= 0f : d1 <= 0f && d2 <= 0f && d3 <= 0f) { inside = true; break; }
+                        }
+                        if (inside) continue;
+                        result.Add(ia); result.Add(ib); result.Add(ic);
+                        left.RemoveAt(i);
+                        clipped = true;
+                        break;
+                    }
+                    if (!clipped) break;
+                }
+                if (left.Count == 3) { result.Add(left[0]); result.Add(left[1]); result.Add(left[2]); }
+                else for (var k = 1; k + 1 < left.Count; k++) { result.Add(left[0]); result.Add(left[k]); result.Add(left[k + 1]); }
+                return result;
             }
 
             /// A wooden water tank on its stand: an eight-sided barrel with a cone roof.
@@ -7968,6 +9003,44 @@ namespace RoadRage.UnityRemake
                 var other = Vector3.Cross(dir, side).normalized * half;
                 Face(material, a - side, a + side, b + side, b - side);
                 Face(material, a - other, a + other, b + other, b - other);
+            }
+
+            /// A wall's street-level storey from a to b, just out from the wall, between heights
+            /// `bottom` and `top`: the texture runs across from `u0`, `uPerMetre`, and once up.
+            public void Storefront(string material, Vector3 a, Vector3 b, Vector3 outward, float bottom, float top, float u0, float uPerMetre)
+            {
+                var part = For(material);
+                var o = outward * 0.06f;
+                var a0 = new Vector3(a.x, bottom, a.z) + o;
+                var b0 = new Vector3(b.x, bottom, b.z) + o;
+                var a1 = new Vector3(a.x, top, a.z) + o;
+                var b1 = new Vector3(b.x, top, b.z) + o;
+                var u1 = u0 + Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z)) * uPerMetre;
+                for (var side = 0; side < 2; side++)
+                {
+                    var v = part.Vertices.Count;
+                    part.Vertices.Add(a0); part.Vertices.Add(b0); part.Vertices.Add(b1); part.Vertices.Add(a1);
+                    part.Uv.Add(new Vector2(u0, 0f)); part.Uv.Add(new Vector2(u1, 0f));
+                    part.Uv.Add(new Vector2(u1, 1f)); part.Uv.Add(new Vector2(u0, 1f));
+                    if (side == 0) { part.Triangles.Add(v); part.Triangles.Add(v + 1); part.Triangles.Add(v + 2); part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 3); }
+                    else { part.Triangles.Add(v); part.Triangles.Add(v + 2); part.Triangles.Add(v + 1); part.Triangles.Add(v); part.Triangles.Add(v + 3); part.Triangles.Add(v + 2); }
+                }
+            }
+
+            /// A strip of pavement `width` wide out from a wall a to b, on the ground.
+            public void Apron(string material, Vector3 a, Vector3 b, Vector3 outward, float width, float lift)
+            {
+                var steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 4f));
+                for (var i = 0; i < steps; i++)
+                {
+                    var p0 = Vector3.Lerp(a, b, i / (float)steps);
+                    var p1 = Vector3.Lerp(a, b, (i + 1) / (float)steps);
+                    var q0 = p0 + outward * width;
+                    var q1 = p1 + outward * width;
+                    p0.y = GridGroundY(p0) + lift; p1.y = GridGroundY(p1) + lift;
+                    q0.y = GridGroundY(q0) + lift; q1.y = GridGroundY(q1) + lift;
+                    Face(material, p0, p1, q1, q0);
+                }
             }
 
             /// A surface seen from both sides.
@@ -9459,8 +10532,8 @@ namespace RoadRage.UnityRemake
                 var along = distance + (i < 2 ? -1f : 1f) * (width * 0.32f);
                 var across = centreLateral + side * (i % 2 == 0 ? -depth * 0.3f : depth * 0.3f);
 
-                var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
-                    materials["City Palm"], along, across, pavingHeight,
+                var tree = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Aspen_Tree_01",
+                    (i & 1) == 0 ? materials["CS Tree Autumn"] : materials["CS Tree Golden"], along, across, pavingHeight,
                     new Vector3(0f, (BlockHash(block, i * 13) & 0x7fffffff) % 360, 0f), Vector3.one,
                     "Manhattan Plaza Tree", false);
                 if (tree != null)
@@ -9496,75 +10569,259 @@ namespace RoadRage.UnityRemake
         /// by on guesswork; a count is two lines and settles it.
         private int builtSkybridges, builtPlazas, builtFrontages, tintedWalls;
 
+        private static readonly (string Mesh, string MaterialKey, float Span)[] CitySampleVehicles =
+        {
+            ("SM_vehCar_vehicle02", "CS Taxi Yellow", 4.65f),
+            ("SM_vehCar_vehicle06", "CS Sedan Red", 4.55f),
+            ("SM_vehCar_vehicle07", "CS Sedan Blue", 4.60f),
+            ("SM_vehCar_vehicle12", "CS Taxi Yellow", 4.75f),
+            ("SM_vehCar_vehicle13", "CS Cruiser Black", 4.70f),
+            ("SM_vehVan_vehicle01", "CS Brushed Steel", 5.20f),
+            ("SM_vehBus_vehicle10", "CS Bus White", 11.40f),
+        };
+
+        private int lastParkedVehicleIdx = -1;
+
+        /// Dresses a Manhattan avenue or FDR Drive waterfront corridor with the exported Epic Games
+        /// CitySample (The Matrix Awakens NYC) street-level kit, including continuous 3D SM_Sidewalk_6_3_A
+        /// flagstone sidewalks, a continuous 92m-deep paved concrete city-block apron (so no building ever
+        /// sits on bare green grass), continental crosswalks, autumn/golden/green trees in cast-iron grates,
+        /// cantilever traffic signals, street furniture, and irregularly spaced curbside NYC vehicles.
+        private void DressCitySampleStreetCorridor(float kerbEdge, bool isFdr)
+        {
+            var sidewalkY = 0.16f;
+
+            // 1. Cast-iron ConEd manhole covers along the wet asphalt road lanes (irregular spacing)
+            for (var d = SegBegin(9f, 37f); d < segEnd; d += 37f)
+            {
+                var mhHash = BlockHash(Mathf.FloorToInt(d / 37f), 71);
+                var dJitter = d + ((mhHash >> 3) % 11) - 5f;
+                var laneOffset = ((mhHash & 1) == 0 ? 1f : -1f) * (2.2f + (mhHash & 3) * 1.15f);
+                var manhole = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Kit_ManholeCover_A_01",
+                    materials["CS Manhole Iron"], dJitter, laneOffset, 0.02f,
+                    new Vector3(0f, mhHash & 0xff, 0f), Vector3.one, "CitySample Road Manhole", false);
+                if (manhole != null) NormalizeModelSpan(manhole, 0.95f, 0.02f, false);
+            }
+
+            // 2. Manhattan Avenue / FDR Waterfront Corridor sidewalks, street furniture, curbside cars & street life
+            for (var z = SegBegin(0f, 32f); z < segEnd; z += 32f)
+            {
+                var block = Mathf.FloorToInt(z / 32f);
+
+                // Continental Crosswalk at every 4th block intersection
+                if (block % 4 == 0)
+                {
+                    var xwalk = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_ROAD_27_3_0_27_crosswalk",
+                        materials["Road Marking"], z + 29.5f, 0f, 0.025f,
+                        new Vector3(0f, 90f, 0f), Vector3.one, "CitySample Crosswalk", false);
+                    if (xwalk != null) NormalizeModelSpan(xwalk, kerbEdge * 1.85f, 0.025f, false);
+                }
+
+                for (var side = -1; side <= 1; side += 2)
+                {
+                    // On FDR Drive, side = -1 is the East River; side = +1 is the Manhattan street-level corridor
+                    if (isFdr && side < 0) continue;
+
+                    var facing = side > 0f ? -90f : 90f;
+                    var armOverRoad = side > 0f ? 0f : 180f;
+                    var hash = BlockHash(block * 13 + (side > 0 ? 1 : 2), side * 19);
+
+                    // A0. Continuous Paved Concrete Urban Block Apron (eliminates ALL bare green grass under buildings)
+                    PrimitiveOnRoad(PrimitiveType.Cube, "NYC Ground Concrete Block Slab",
+                        z + 16f, side * (kerbEdge + 45f), 0.04f,
+                        new Vector3(92f, 0.14f, 33.2f), materials["NY Sidewalk"], Vector3.zero, false);
+
+                    // A1. Continuous Raised 3D SM_Sidewalk_6_3_A Flagstone Sidewalk along the kerb
+                    for (var sw = 0; sw < 4; sw++)
+                    {
+                        var swDist = z + 4f + sw * 8f;
+                        var swMesh = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Sidewalk_6_3_A",
+                            materials["CS Sidewalk Concrete"], swDist, side * (kerbEdge + 2.8f), 0.08f,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Raised Flagstone Sidewalk", false);
+                        if (swMesh != null) NormalizeModelSpan(swMesh, 8.2f, 0.08f, false);
+                    }
+
+                    // A. Streetlamps (alternating Modern Cobrahead and Historic Bishop's Crook by district)
+                    var lampDist = z + (side > 0 ? 11f : -7f);
+                    var lampMesh = ((block / 6) % 2 == 0) ? "SM_StreetLamp_A_Pole_Large" : "SM_StreetLamp_B";
+                    var lamp = PlaceBiomeModelOnRoad("CitySampleNYC", lampMesh, materials["CS Black Iron"],
+                        lampDist, side * (kerbEdge + 1.2f), sidewalkY,
+                        new Vector3(0f, armOverRoad, 0f), Vector3.one, "CitySample StreetLamp", false);
+                    if (lamp != null)
+                    {
+                        NormalizeModelHeight(lamp, 7.6f, sidewalkY);
+                        CreateLocalLight(RoadPath.Point(lampDist, side * (kerbEdge + 1.2f), 6.8f),
+                            new Color(1f, 0.92f, 0.78f), 8f, 15f);
+                    }
+
+                    // B. Parallel-parked CitySample NYC vehicle at irregular prime-hashed intervals (~42% of bays, never repeating consecutive cars)
+                    if (((hash >> 2) & 7) < 3)
+                    {
+                        var vIdx = (BlockHash(block * 17, side * 23) & 0x7fffffff) % CitySampleVehicles.Length;
+                        if (vIdx == lastParkedVehicleIdx)
+                            vIdx = (vIdx + 1 + ((hash >> 5) & 3)) % CitySampleVehicles.Length;
+                        if (vIdx == CitySampleVehicles.Length - 1 && (block % 7 != 0))
+                            vIdx = (vIdx + 2) % (CitySampleVehicles.Length - 1);
+                        lastParkedVehicleIdx = vIdx;
+
+                        var carOffset = 5.5f + ((hash >> 6) & 0x7fffffff) % 18;
+                        var spec = CitySampleVehicles[vIdx];
+                        var veh = PlaceBiomeModelOnRoad("CitySampleNYC", spec.Mesh, materials[spec.MaterialKey],
+                            z + carOffset, side * (kerbEdge - 1.15f), 0.04f,
+                            new Vector3(0f, facing, 0f), Vector3.one,
+                            "CitySample Parked Vehicle", false);
+                        if (veh != null) NormalizeModelSpan(veh, spec.Span, 0.04f, false);
+                    }
+
+                    // C. Street trees in CitySample cast-iron square tree grates (Autumn Amber, Golden Ochre & Lush Green)
+                    var treeDist = z + 2.5f + ((hash >> 3) & 7);
+                    var treeLat = side * (kerbEdge + 1.65f);
+                    var grate = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_TreeBase_SquareGrill_A",
+                        materials["CS Black Iron"], treeDist, treeLat, sidewalkY + 0.01f,
+                        new Vector3(0f, facing, 0f), Vector3.one, "CitySample Tree Grate", false);
+                    if (grate != null) NormalizeModelSpan(grate, 1.55f, sidewalkY + 0.01f, false);
+
+                    var treeSeason = (hash >> 4) % 3;
+                    var treeMat = treeSeason == 0 ? materials["CS Tree Autumn"]
+                                : treeSeason == 1 ? materials["CS Tree Golden"]
+                                : materials["Broadleaf Canopy"];
+                    var tree = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Aspen_Tree_01",
+                        treeMat, treeDist, treeLat, sidewalkY,
+                        new Vector3(0f, (hash & 0xff), 0f), Vector3.one, "CitySample Street Tree", false);
+                    if (tree != null) NormalizeModelHeight(tree, 7.2f + (hash & 3) * 0.85f, sidewalkY);
+
+                    // D. NYC Cantilever Traffic Signals, Street Signs & Stop Signs at cross-street corners
+                    if (block % 2 == 1)
+                    {
+                        var sigDist = z + 26.5f;
+                        var signal = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_StreetLamp_A_StopLight_A",
+                            materials["CS Black Iron"], sigDist, side * (kerbEdge + 1.05f), sidewalkY,
+                            new Vector3(0f, armOverRoad, 0f), Vector3.one, "CitySample Traffic Signal", false);
+                        if (signal != null) NormalizeModelHeight(signal, 6.8f, sidewalkY);
+
+                        var stSign = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_CTY_StreetSign_A01_N1",
+                            materials["CS Newsstand Green"], sigDist + 1.4f, side * (kerbEdge + 1.25f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Street Sign", false);
+                        if (stSign != null) NormalizeModelHeight(stSign, 3.1f, sidewalkY);
+
+                        var trash = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Trashcan_A_01",
+                            materials["CS Black Iron"], sigDist - 1.5f, side * (kerbEdge + 1.25f), sidewalkY,
+                            new Vector3(0f, (hash >> 4) & 0xff, 0f), Vector3.one, "CitySample Wire Trashcan", false);
+                        if (trash != null) NormalizeModelHeight(trash, 1.05f, sidewalkY);
+                    }
+
+                    // E. LinkNYC Standing Digital Ad Totem along the kerb
+                    if ((hash & 7) == 1)
+                    {
+                        var linkTotem = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_StandingSignAd_A01_N1",
+                            materials["CS Brushed Steel"], z + 9.5f, side * (kerbEdge + 1.45f), sidewalkY,
+                            new Vector3(0f, side > 0 ? 180f : 0f, 0f), Vector3.one, "CitySample LinkNYC Kiosk", false);
+                        if (linkTotem != null) NormalizeModelHeight(linkTotem, 2.95f, sidewalkY);
+                    }
+
+                    // F. Paired NYC Newspaper Dispensers & Commuter Bicycles
+                    if ((hash & 5) == 4)
+                    {
+                        var dispLarge = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_NewsDispenser_Large_A_01",
+                            materials["CS Sedan Blue"], z + 6.8f, side * (kerbEdge + 1.65f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample News Dispenser Large", false);
+                        if (dispLarge != null) NormalizeModelHeight(dispLarge, 1.25f, sidewalkY);
+
+                        var dispSmall = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_NewsDispenser_Small_A_01",
+                            materials["CS Sedan Red"], z + 7.7f, side * (kerbEdge + 1.65f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample News Dispenser Small", false);
+                        if (dispSmall != null) NormalizeModelHeight(dispSmall, 1.08f, sidewalkY);
+
+                        var bike = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Bicycle_A_01",
+                            materials["CS Brushed Steel"], z + 9.2f, side * (kerbEdge + 1.55f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Parked Bicycle", false);
+                        if (bike != null) NormalizeModelHeight(bike, 1.08f, sidewalkY);
+                    }
+
+                    // G. Glass Bus Shelters & Bus Stop Signs or Green NYC Newsstands
+                    if (block % 7 == 2 && side > 0)
+                    {
+                        var shelter = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_CTY_BusStop_A01_N1",
+                            materials["CS Black Iron"], z + 18.5f, side * (kerbEdge + 2.6f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Bus Shelter", false);
+                        if (shelter != null) NormalizeModelHeight(shelter, 3.35f, sidewalkY);
+
+                        var busSign = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_BusStopSign_A",
+                            materials["CS Black Iron"], z + 22.2f, side * (kerbEdge + 1.35f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Bus Stop Sign", false);
+                        if (busSign != null) NormalizeModelHeight(busSign, 2.85f, sidewalkY);
+                    }
+                    else if (block % 7 == 5 && (side < 0 || isFdr))
+                    {
+                        var booth = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_NewsBooth_A_01",
+                            materials["CS Newsstand Green"], z + 18.0f, side * (kerbEdge + 2.7f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Newsstand", false);
+                        if (booth != null) NormalizeModelHeight(booth, 2.85f, sidewalkY);
+                    }
+
+                    // H. Sidewalk Cafe Tables & Red Umbrellas (in SoHo/Midtown blocks)
+                    if (block % 5 == 1 && ((hash >> 5) & 1) == 0)
+                    {
+                        for (var c = 0; c < 2; c++)
+                        {
+                            var cafeDist = z + 11.0f + c * 3.6f;
+                            var cafeLat = side * (kerbEdge + 3.4f);
+                            var table = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_StoneTable_Circle_A",
+                                materials["CS Cafe Stone"], cafeDist, cafeLat, sidewalkY,
+                                Vector3.zero, Vector3.one, "CitySample Cafe Table", false);
+                            if (table != null) NormalizeModelHeight(table, 0.82f, sidewalkY);
+
+                            var umbrella = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Umbella_A",
+                                materials["CS Sedan Red"], cafeDist, cafeLat, sidewalkY,
+                                new Vector3(0f, c * 45f, 0f), Vector3.one, "CitySample Cafe Umbrella", false);
+                            if (umbrella != null) NormalizeModelHeight(umbrella, 2.45f, sidewalkY);
+                        }
+                    }
+
+                    // I. Sidewalk Scaffolding Sheds & ConEd Barricade/Cone Workzones
+                    if (block % 8 == 3 && (side < 0 || isFdr))
+                    {
+                        var scaffold = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Scaffolding_metal_N1",
+                            materials["CS Brushed Steel"], z + 14f, side * (kerbEdge + 2.8f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Sidewalk Scaffolding", false);
+                        if (scaffold != null) NormalizeModelHeight(scaffold, 4.4f, sidewalkY);
+                    }
+                    else if (block % 9 == 5 && side > 0)
+                    {
+                        var barricade = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Barricade_A",
+                            materials["CS Taxi Yellow"], z + 14.0f, side * (kerbEdge + 1.4f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Barricade", false);
+                        if (barricade != null) NormalizeModelHeight(barricade, 1.05f, sidewalkY);
+
+                        for (var k = 0; k < 2; k++)
+                        {
+                            var cone = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_Cone_C_A",
+                                materials["CS Safety Orange"], z + 12.8f + k * 2.4f, side * (kerbEdge + 1.25f), sidewalkY,
+                                Vector3.zero, Vector3.one, "CitySample Traffic Cone", false);
+                            if (cone != null) NormalizeModelHeight(cone, 0.78f, sidewalkY);
+                        }
+                    }
+
+                    // J. Park Benches every 5 blocks
+                    if (block % 5 == 0)
+                    {
+                        var bench = PlaceBiomeModelOnRoad("CitySampleNYC", "SM_street_bench",
+                            materials["CS Newsstand Green"], z + 12.5f, side * (kerbEdge + 3.1f), sidewalkY,
+                            new Vector3(0f, facing, 0f), Vector3.one, "CitySample Street Bench", false);
+                        if (bench != null) NormalizeModelHeight(bench, 0.92f, sidewalkY);
+                    }
+                }
+            }
+        }
+
         private void BuildCyberSprawl()
         {
             Random.InitState(41903 ^ chunkSeed);
             builtSkybridges = builtPlazas = builtFrontages = tintedWalls = 0;
 
-            // Ground-level NYC sidewalk clutter: fire hydrants, newspaper boxes, parking meters, chairs
-            //
-            // Thinned to 16 m once on the theory that the props were what Manhattan was
-            // submitting, then put back: RR_PLACEMENT measured this band at 139 renderers,
-            // 1.2% of the biome, and the thinning bought 0.9% of the renderer count in
-            // total. The submissions were never here.
-            ScatterBand(10f, 17.6f, 21.4f, (d, l, s) =>
-            {
-                var pick = Random.value;
-                var propName = pick > 0.65f ? "Buildings/NYCBlock6/Fireplug"
-                             : pick > 0.45f ? "Buildings/NYCBlock6/Newspapers"
-                             : pick > 0.25f ? "Buildings/NYCBlock6/Parkimeter"
-                             : "Buildings/NYCBlock6/Chairs";
-                var junk = PlaceBiomeModelOnRoad("Buildings", propName,
-                    materials["City Props"], d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one, "NYC Street Furniture");
-                if (junk != null) NormalizeModelHeight(junk, Random.Range(1.1f, 1.8f), 0.14f);
-                return junk;
-            });
-
-            // Parked cars along the kerb.
-            //
-            // An empty kerb is the strongest single tell that a street was generated. They
-            // sit at 14.9 m: outside the carriageway edge at 13.5 and inside the kerb at
-            // 16.2, which is the parking lane, and clear of the outermost traffic lane at
-            // 0.85 x half width. Facing along the road rather than across it, and not
-            // height-normalised - these are the game's own vehicles and already the right
-            // size, which is the whole reason for using them rather than a prop.
-            ScatterBand(15f, 14.6f, 15.2f, (d, l, s) =>
-            {
-                var parked = ParkedCars[(BlockHash(Mathf.FloorToInt(d / 15f), Mathf.RoundToInt(s) * 23) & 0x7fffffff) % ParkedCars.Length];
-                return PlaceBiomeModelOnRoad("Vehicles", parked, materials["City Props"],
-                    d, l, 0.05f, new Vector3(0f, s > 0 ? 180f : 0f, 0f), Vector3.one,
-                    "Parked Car", false);
-            });
-
-            // Pavement clutter. All of this shipped with the NYCBlock6 pack and none of it
-            // was ever placed: bin bags, wire baskets, bollards and a sewer grate. It is
-            // the small stuff at ankle height that stops a pavement reading as a ramp.
-            ScatterBand(13f, 17.8f, 21.2f, (d, l, s) =>
-            {
-                var junk = PavementClutter[(BlockHash(Mathf.FloorToInt(d / 13f), Mathf.RoundToInt(s) * 29) & 0x7fffffff) % PavementClutter.Length];
-                var piece = PlaceBiomeModelOnRoad("Buildings", junk, materials["City Props"],
-                    d, l, 0.14f, new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one,
-                    "NYC Pavement Clutter");
-                if (piece != null) NormalizeModelHeight(piece, Random.Range(0.6f, 1.15f), 0.14f);
-                return piece;
-            });
-
-            // The skyscraper and frontage rosters that used to live here are gone.
-            // Picking a mesh from a list and scaling it to a target height is what
-            // produced 93x-wide frontages and 167 m-deep towers; BuildingCatalogue
-            // measures every candidate instead and PlaceBuildingOnPlot picks by fit.
-
-            // Street trees, in front of the frontage line rather than behind it. Manhattan
-            // reads as canyon walls without something breaking the vertical, and a tree is
-            // the cheapest thing that does it at eye level.
-            ScatterBand(18f, 17.4f, 18.6f, (d, l, s) =>
-            {
-                var tree = PlaceBiomeModelOnRoad("Buildings", "DemoCity/tree_1",
-                    materials["City Palm"], d, l, 0.14f,
-                    new Vector3(0f, Random.Range(0f, 360f), 0f), Vector3.one, "Street Tree");
-                if (tree != null) NormalizeModelHeight(tree, Random.Range(5f, 9f), 0.14f);
-                return tree;
-            });
+            // Dress the Manhattan avenue and sidewalks with the Epic Games CitySample NYC
+            // street-level kit using irregular, non-repeating spacing.
+            DressCitySampleStreetCorridor(16.2f, false);
 
             var nycRooftops = new[]
             {
@@ -9575,58 +10832,75 @@ namespace RoadRage.UnityRemake
                 "Buildings/NYCBlock6/roof08"
             };
 
-            for (var z = SegBegin(0f, 22f); z < segEnd; z += 22f)
+            for (var z = SegBegin(0f, 32f); z < segEnd; z += 32f)
             {
-                var block = Mathf.FloorToInt(z / 22f);
+                var block = Mathf.FloorToInt(z / 32f);
 
-                // One skybridge every five blocks, spanning the avenue overhead.
-                if (block % 5 == 3) { BuildManhattanSkybridge(z); builtSkybridges++; }
+                // One skybridge every six blocks, spanning the avenue overhead.
+                if (block % 6 == 3) { BuildManhattanSkybridge(z); builtSkybridges++; }
 
                 for (var side = -1; side <= 1; side += 2)
                 {
                     var facing = side > 0f ? -90f : 90f;
-                    var frontDistance = z + (side > 0 ? 3f : -4f);
+                    var frontDistance = z + (side > 0 ? 4f : -5f);
 
-                    // 1. Street frontage, on a plot, meeting a continuous facade line.
-                    // Facade picked per plot, so neighbours differ the way a real street
-                    // does. The hash is the block's, so a chunk rebuilt later is identical.
-                    var frontageHash = BlockHash(block, side * 7);
-                    // Plot width varies by block rather than being 30 m everywhere. It
-                    // feeds the scale clamp, so the same mesh comes out a different size
-                    // on a different lot - which is what a real street does, and what a
-                    // fixed width made impossible. Narrow enough a range that the facade
-                    // line still reads as continuous.
-                    var frontagePlot = 26f + (frontageHash >> 3 & 0x7fffffff) % 5 * 2f;
+                    var frontageHash = BlockHash(block * 11 + (side > 0 ? 0 : 5), side * 7);
+                    var frontagePlot = 30f + (frontageHash >> 3 & 0x7fffffff) % 7 * 2f;
 
-                    // Every seventh block on a side opens out instead of building up. A
-                    // canyon with no break in it reads as a corridor however many
-                    // different buildings line it, so the variety work above needs
-                    // somewhere for the eye to rest as much as it needs more meshes.
-                    // Offset by side so the two pavements never open opposite each other
-                    // and leave the street with no walls at all.
-                    if ((block + (side > 0 ? 0 : 3)) % 7 == 4)
+                    if ((block + (side > 0 ? 0 : 3)) % 8 == 4)
                     {
                         BuildManhattanPlaza(frontDistance, side, block);
                         builtPlazas++;
                         continue;
                     }
 
-                    var frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
-                        "NYC Street Frontage", frontDistance, side,
-                        frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
+                    // Alternate between plot-fitted 3D catalogue buildings (48 sculpted NYC/VRBN/Hero buildings)
+                    // and direct district-specific VRBN 2K photogrammetry & Hero Landmark meshes flush with the sidewalk.
+                    GameObject frontage = null;
+                    if ((block + (side > 0 ? 0 : 1)) % 3 == 1)
+                    {
+                        var pool = GisPoolForRouteDistance(z, false);
+                        var meshName = pool[(frontageHash & 0x7fffffff) % pool.Length];
+                        var gisMat = ManhattanGisMaterial(meshName);
+                        frontage = PlaceBiomeModelOnRoad("ManhattanGIS", meshName, gisMat,
+                            frontDistance, side * (FrontageSetback + 14f), 0.08f,
+                            new Vector3(0f, facing, 0f), Vector3.one,
+                            $"ManhattanGIS District Building {meshName}", enforceClearance: false);
+                        if (frontage != null && TryGetCombinedBounds(frontage, out var fBounds))
+                        {
+                            var roadRight = RoadPath.Right(frontDistance);
+                            var roadCenter = RoadPath.Point(frontDistance, 0f, 0f);
+                            var nearest = float.PositiveInfinity;
+                            for (var cx = -1; cx <= 1; cx += 2)
+                            for (var cy = -1; cy <= 1; cy += 2)
+                            for (var cz = -1; cz <= 1; cz += 2)
+                            {
+                                var corner = fBounds.center + Vector3.Scale(fBounds.extents, new Vector3(cx, cy, cz));
+                                var proj = Vector3.Dot(corner - roadCenter, roadRight) * side;
+                                nearest = Mathf.Min(nearest, proj);
+                            }
+                            frontage.transform.position += roadRight * (side * (FrontageSetback - nearest));
+                            if (TryGetCombinedBounds(frontage, out fBounds))
+                                frontage.transform.position += Vector3.up *
+                                    (RoadPath.Point(frontDistance, 0f, 0f).y - fBounds.min.y + 0.08f);
+                        }
+                    }
+                    else
+                    {
+                        frontage = PlaceBuildingOnPlot(BuildingClass.Frontage, FacadeMaterial(frontageHash),
+                            "NYC Street Frontage", frontDistance, side,
+                            frontageLine: FrontageSetback, plotWidth: frontagePlot, hash: frontageHash);
+                    }
                     if (frontage != null) builtFrontages++;
 
-                    // Every frontage gets a shop; the awning over it is decided inside.
                     BuildStorefrontAwning(frontage, frontDistance, side, BlockHash(block, side * 17));
 
                     // 2. Iconic NYC Rooftop Water Tanks & HVAC units
-                    // Decoration sitting at 35 m and normalised down to 4.5-8.5 m, so it
-                    // reads as silhouette texture at best. First thing to go on a budget.
                     if (block % 2 == 0 && RichDetailBudget)
                     {
                         var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
                         var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(23.5f, 29.5f), 35f,
+                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(24.5f, 31.5f), 35f,
                             new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
                         if (roofProp != null)
                         {
@@ -9635,89 +10909,27 @@ namespace RoadRage.UnityRemake
                         }
                     }
 
-                    // Rooftop water tanks on frontage buildings
-                    if (block % 3 == 0)
-                    {
-                        var roofMesh = nycRooftops[BlockHash(block, side * 11) % nycRooftops.Length];
-                        var roofProp = PlaceBiomeModelOnRoad("Buildings", roofMesh,
-                            materials["City Asphalt Trim"], frontDistance, side * Random.Range(23.5f, 29.5f), 28f,
-                            new Vector3(0f, facing, 0f), Vector3.one, "NYC Rooftop Water Tank");
-                        if (roofProp != null)
-                        {
-                            NormalizeModelHeight(roofProp, Random.Range(3.5f, 6.5f), 28f);
-                            CombineChildRenderers(roofProp);
-                        }
-                    }
+                    // 3. Second Tier: Mid-Block 3D Manhattan Skyscrapers & Towers
+                    var towerDistance = z + Random.Range(-10f, 10f);
+                    var towerHash = BlockHash(block * 19 + (side > 0 ? 3 : 7), side * 3);
+                    var towerPlot = 44f + (towerHash >> 3 & 0x7fffffff) % 8 * 2f;
+                    PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
+                        "Manhattan Midtown Skyscraper", towerDistance, side,
+                        frontageLine: FrontageSetback + 28f, plotWidth: towerPlot, hash: towerHash);
 
-                    // 3. Towering Background Manhattan Midtown Skyscrapers (65m to 160m)
-                    //
-                    // Thinned rather than dropped on a low budget. Measured cost: the
-                    // NYCVariants prefabs stack a mean of 5.1 sections of 18-25k triangles
-                    // each, so one placed tower is around 100k triangles, and RR_MESH found
-                    // building_8_middle and building_6_middle alone carrying 55% of
-                    // Manhattan's 25.3M triangles across 668 instances. Nothing here has an
-                    // LODGroup, so a background tower costs the same at 200 m as at 20 m.
-                    //
-                    // These sit at FrontageSetback + 26 m - behind the frontage line, read
-                    // as skyline rather than as street - so halving them is the cheapest
-                    // large cut available. Keeping every other block preserves the ragged
-                    // skyline; dropping them entirely leaves a visible flat horizon.
-                    if (RichDetailBudget || block % 2 == 0)
+                    // 4. Third Tier: Hero Skyline Landmarks (One WTC, Empire State, Flatiron, Curtain Towers, San Remo)
+                    if (block % 2 == 0)
                     {
-                        var towerDistance = z + Random.Range(-10f, 10f);
-                        // Salted differently from the frontage so a block's tower and its
-                        // street building are not cut from the same stone.
-                        var towerHash = BlockHash(block, side * 3);
-                        var towerPlot = 40f + (towerHash >> 3 & 0x7fffffff) % 5 * 2f;
-                        PlaceBuildingOnPlot(BuildingClass.MidBlock, FacadeMaterial(towerHash + 2),
-                            "Manhattan Midtown Skyscraper", towerDistance, side,
-                            frontageLine: FrontageSetback + 26f, plotWidth: towerPlot, hash: towerHash);
-                    }
-
-                    // 4. NYC Street Lamposts with warm amber glow
-                    var lampDistance = z + (side > 0 ? 10f : -7f);
-                    var lamp = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/lampost2", materials["City Asphalt Trim"],
-                        lampDistance, side * 17.5f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Lamp");
-                    if (lamp != null)
-                    {
-                        NormalizeModelHeight(lamp, 7.5f, 0.14f);
-                        CreateLocalLight(RoadPath.Point(lampDistance, side * 17.5f, 6.8f),
-                            new Color(1f, 0.95f, 0.85f), 8f, 14f);
-                    }
-
-                    // Traffic lights at intersections. Every second block rather than
-                    // every fourth: at 22 m blocks that is a signal every 44 m, which is
-                    // roughly a Manhattan cross street, and a lit avenue with a signal
-                    // every 88 m read as a road with occasional furniture on it.
-                    if (block % 2 == 1)
-                    {
-                        var trafficLight = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Trafficlight", materials["City Props"],
-                            z + 12f, side * 17.2f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Traffic Light");
-                        if (trafficLight != null) NormalizeModelHeight(trafficLight, 6.5f, 0.14f);
-                    }
-
-                    // Bus shelters and advertising billboards
-                    if (block % 5 == 2)
-                    {
-                        var shelter = PlaceBiomeModelOnRoad("Buildings", "NYCBlock6/Busstop", materials["City Props"],
-                            z + 16f, side * 18.6f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Bus Shelter");
-                        if (shelter != null) NormalizeModelHeight(shelter, 3.4f, 0.14f);
-                    }
-                    else if (block % 4 == 3)
-                    {
-                        var panelName = Random.value > 0.5f ? "NYCBlock6/Panel00" : "NYCBlock6/Panel01";
-                        var panel = PlaceBiomeModelOnRoad("Buildings", panelName, materials["City Billboard"],
-                            z + 16f, side * 19.8f, 0.14f, new Vector3(0f, facing, 0f), Vector3.one, "NYC Street Billboard");
-                        if (panel != null) NormalizeModelHeight(panel, 4.2f, 0.14f);
-                    }
-
-                    // Benches every few blocks
-                    if (block % 6 == 0)
-                    {
-                        var bench = PlaceBiomeModelOnRoad("Buildings", "DemoCity/bench",
-                            materials["City Props"], z + 8f, side * 19.2f, 0.14f,
-                            new Vector3(0f, facing, 0f), Vector3.one, "City Bench");
-                        if (bench != null) NormalizeModelHeight(bench, 1.0f, 0.14f);
+                        var heroPool = GisPoolForRouteDistance(z + 180f, false);
+                        var heroName = heroPool[((towerHash >> 4) & 0x7fffffff) % heroPool.Length];
+                        var heroMat = ManhattanGisMaterial(heroName);
+                        var hero = PlaceBiomeModelOnRoad("ManhattanGIS", heroName, heroMat,
+                            z + 16f, side * (FrontageSetback + 58f), 0.08f,
+                            new Vector3(0f, facing, 0f), Vector3.one,
+                            $"ManhattanGIS Hero Skyline {heroName}", enforceClearance: false);
+                        if (hero != null && TryGetCombinedBounds(hero, out var hBounds))
+                            hero.transform.position += Vector3.up *
+                                (RoadPath.Point(z + 16f, side * (FrontageSetback + 58f), 0f).y - hBounds.min.y + 0.08f);
                     }
                 }
             }
@@ -12146,7 +13358,7 @@ namespace RoadRage.UnityRemake
         /// Instead each side's rail line is measured along its true length and cut into
         /// equal pieces, each stretched a few percent to fit exactly. The chunk's end
         /// points are shared with its neighbours, so the rail also meets across chunks.
-        private void BuildGuardRail(Material material)
+        private void BuildGuardRail(Material material, int onlySide = 0)
         {
             const float sampleStep = 0.5f;
             var placed = 0;
@@ -12155,6 +13367,7 @@ namespace RoadRage.UnityRemake
             var arc = new float[count];
             for (var side = -1; side <= 1; side += 2)
             {
+                if (onlySide != 0 && side != onlySide) continue;
                 var previous = Vector3.zero;
                 for (var i = 0; i < count; i++)
                 {
@@ -13823,7 +15036,11 @@ namespace RoadRage.UnityRemake
                     "Vehicles/PolygonStreetRacer_Veh_Tex_03_Carbon_Fibre",
                     "Vehicles/PolygonStreetRacer_Veh_Tex_24_Rust"
                 };
-                var chosenLiveryTex = Resources.Load<Texture2D>(liveries[Mathf.Abs(name.GetHashCode()) % liveries.Length])
+                // A cab's tint was lost under the livery and it came out the atlas's dark blue:
+                // cabs wear the atlas repainted taxi yellow.
+                var chosenLiveryTex = Resources.Load<Texture2D>(tint == TaxiYellow
+                                          ? "Vehicles/PolygonStreetRacer_Veh_Tex_Taxi"
+                                          : liveries[Mathf.Abs(name.GetHashCode()) % liveries.Length])
                                       ?? materials["Street Racer Atlas"].mainTexture;
 
                 var paint = new Material(materials["Street Racer Atlas"]) { name = $"{name} Paint" };
@@ -14401,6 +15618,8 @@ namespace RoadRage.UnityRemake
         public Transform target;
         public ArcadeCarController player;
         public static bool LogCamera;
+        /// Captures only (-aerial): the camera 70 m up and back, to see the street level around the road.
+        public static bool Aerial;
 
         private const float Trail = 8.2f;
         private const float Rise = 4.7f;
@@ -14455,7 +15674,7 @@ namespace RoadRage.UnityRemake
             }
 
             if (target == null) return;
-			var desired = target.position + target.up * Rise - target.forward * Trail;
+			var desired = target.position + target.up * (Aerial ? 70f : Rise) - target.forward * (Aerial ? 45f : Trail);
             var next = (transform.position - desired).sqrMagnitude > 2500f
                 ? desired
                 : Vector3.Lerp(transform.position, desired, 1f - Mathf.Exp(-7f * Time.deltaTime));

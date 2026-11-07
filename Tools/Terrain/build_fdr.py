@@ -60,7 +60,8 @@ bake.ROAD_HALF = 20.0   # the DEM has 30 m cells
 DECK_MARGIN = 20.0
 TUNNEL_MARGIN = 40.0    # m of cutting beyond each portal
 TUNNEL_FLOOR = 14.0     # m either side of the centreline kept level with the road
-TUNNEL_SLOPE = 1.2      # rise per metre out from there
+TUNNEL_SLOPE = 6.0      # rise per metre out from there: a retaining wall, as the real underpasses have
+                        # (1.2 made grass banks that climbed the buildings beside them)
 GROUND_LIMIT = 900.0    # the game's SeaToSkyGroundLimit: it squeezes heights by tanh
 SEA_HEIGHT = 1.5        # m: the DEM has the sea at about 0
 SEA_BELOW_ROAD = 6.0    # m under the road's lowest point: FDR Drive runs just above the river
@@ -353,8 +354,78 @@ def bake_bridges():
     print("wrote", BRIDGES_ASSET)
 
 
+STREETS_ASSET = os.path.join(ROUTES, "fdr_streets.bytes")
+TREES_ASSET = os.path.join(ROUTES, "fdr_trees.bytes")
+STREET_STEP = 10.0          # m between street points
+STREET_CLEAR = 20.0         # m: no street nearer the drive's centreline (the drive's own ramps)
+# Kinds, as the game draws them: 0 avenue, 1 street, 2 narrow street, 3 pedestrian.
+STREET_KINDS = {"primary": 0, "secondary": 0, "tertiary": 1, "residential": 1, "unclassified": 1,
+                "living_street": 2, "pedestrian": 3}
+
+
+def to_road(e, n, z, east, north, de, dn):
+    """Road distance and lateral offset of points (e, n), by the nearest road sample, in batches."""
+    zz, ll = np.empty(len(e)), np.empty(len(e))
+    for a in range(0, len(e), 2000):
+        b = slice(a, a + 2000)
+        i = ((e[b, None] - east[None, :]) ** 2 + (n[b, None] - north[None, :]) ** 2).argmin(axis=1)
+        zz[b] = z[i] + (e[b] - east[i]) * de[i] + (n[b] - north[i]) * dn[i]
+        ll[b] = (e[b] - east[i]) * dn[i] - (n[b] - north[i]) * de[i]
+    return zz, ll
+
+
+def bake_streets():
+    """FDRS: int count, then per street: byte kind, ushort points, points x (float z, float lateral);
+    FDRT: int count, then per street tree: float z, float lateral, byte trunk diameter (inches)."""
+    rm = np.loadtxt(realmap.OUT, delimiter=",", skiprows=1)
+    z, east, north, de, dn = rm.T
+    out = []
+    for way in fetch.streets():
+        tags = way.get("tags", {})
+        kind = STREET_KINDS.get(tags.get("highway"))
+        if kind is None or tags.get("bridge") or tags.get("tunnel") or tags.get("layer", "0") != "0":
+            continue
+        pts = np.array([local(g["lat"], g["lon"]) for g in way.get("geometry", [])])
+        if len(pts) < 2:
+            continue
+        # Resampled, so the road's bends carry the street with them.
+        seg = np.hypot(*np.diff(pts, axis=0).T)
+        t = np.concatenate([[0.0], np.cumsum(seg)])
+        if t[-1] < 5.0:
+            continue
+        ts = np.linspace(0.0, t[-1], max(2, int(t[-1] / STREET_STEP) + 1))
+        e, n = np.interp(ts, t, pts[:, 0]), np.interp(ts, t, pts[:, 1])
+        zz, ll = to_road(e, n, z, east, north, de, dn)
+        keep = (np.abs(ll) > STREET_CLEAR) & (np.abs(ll) < BUILDING_REACH)
+        # Each run of kept points is one street piece.
+        start = None
+        for k in range(len(keep) + 1):
+            if k < len(keep) and keep[k]:
+                start = k if start is None else start
+            elif start is not None:
+                if k - start >= 2:
+                    out.append(struct.pack("<BH", kind, k - start) + np.column_stack([zz[start:k], ll[start:k]]).astype("<f4").tobytes())
+                start = None
+    with open(STREETS_ASSET, "wb") as f:
+        f.write(b"FDRS" + struct.pack("<i", len(out)) + b"".join(out))
+    print(f"wrote {STREETS_ASSET}: {len(out)} street pieces, {os.path.getsize(STREETS_ASSET) // 1024} KB")
+    rows = fetch.trees()
+    tl = np.array([[float(r["latitude"]), float(r["longitude"]), float(r.get("tree_dbh") or 6)] for r in rows])
+    e, n = local(tl[:, 0], tl[:, 1])
+    zz, ll = to_road(np.asarray(e), np.asarray(n), z, east, north, de, dn)
+    keep = (np.abs(ll) > STREET_CLEAR) & (np.abs(ll) < BUILDING_REACH) & (zz > z.min()) & (zz < z.max())
+    with open(TREES_ASSET, "wb") as f:
+        f.write(b"FDRT" + struct.pack("<i", int(keep.sum())))
+        for a, b, c in zip(zz[keep], ll[keep], tl[keep, 2]):
+            f.write(struct.pack("<ffB", a, b, int(min(255, max(1, c)))))
+    print(f"wrote {TREES_ASSET}: {int(keep.sum())} street trees, {os.path.getsize(TREES_ASSET) // 1024} KB")
+
+
 if __name__ == "__main__":
     os.makedirs(road.OUT, exist_ok=True)
+    if sys.argv[1:] == ["streets"]:
+        bake_streets()
+        sys.exit()
     if sys.argv[1:] == ["bridges"]:
         bake_bridges()
         sys.exit()
